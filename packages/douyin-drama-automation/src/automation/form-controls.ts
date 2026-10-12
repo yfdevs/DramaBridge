@@ -1746,6 +1746,47 @@ async function fillRoleDialogField(dialog: Locator, labels: string[], value?: st
   return false;
 }
 
+export async function fillDouyinRoleNameWithoutSuggestion(
+  page: Page,
+  dialog: Locator,
+  roleName: string,
+) {
+  const roleNameInput = dialog.locator([
+    "#role input:not([disabled])",
+    "input[placeholder='请输入角色姓名']:not([disabled])",
+    "input[placeholder='请输入角色名称']:not([disabled])",
+  ].join(", ")).filter({ visible: true }).first();
+  await roleNameInput.waitFor({ state: "visible", timeout: 10_000 });
+  await roleNameInput.fill(roleName);
+
+  // 姓名允许直接创建。点击弹窗标题使输入框失焦，不按 Tab、不点击联想项，
+  // 避免浏览器把当前高亮的搜索结果提交成已有角色。
+  const dialogTitle = dialog.locator(".arco-modal-title").first();
+  if (await dialogTitle.isVisible().catch(() => false)) {
+    await dialogTitle.click();
+  } else {
+    await roleNameInput.blur();
+  }
+
+  const suggestionPopup = page.locator([
+    ".arco-auto-complete-popup:visible",
+    ".arco-trigger-popup:visible",
+    ".arco-dropdown:visible",
+    "[role='listbox']:visible",
+  ].join(", ")).last();
+  if (await suggestionPopup.isVisible().catch(() => false)) {
+    await page.keyboard.press("Escape");
+    await suggestionPopup.waitFor({ state: "hidden", timeout: 2_000 }).catch(() => undefined);
+  }
+
+  if (!(await dialog.isVisible().catch(() => false))) {
+    throw new Error(`DOUYIN_DRAMA_ROLE_DIALOG_CLOSED_WHILE_WRITING_NAME: ${roleName}`);
+  }
+  if ((await roleNameInput.inputValue()).trim() !== roleName.trim()) {
+    throw new Error(`DOUYIN_DRAMA_ROLE_NAME_WRITE_FAILED: ${roleName}`);
+  }
+}
+
 export async function addDouyinRole(page: Page, role: DouyinDramaRole) {
   const addButton = page
     .getByRole("button", { name: /添加角色弹窗|至少添加2个角色/ })
@@ -1756,21 +1797,13 @@ export async function addDouyinRole(page: Page, role: DouyinDramaRole) {
   const dialog = page.locator("[role='dialog']:visible, .arco-modal:visible").last();
   await dialog.waitFor({ state: "visible", timeout: 10_000 });
 
-  const filledRoleName = await fillRoleDialogField(
-    dialog,
-    ["角色姓名", "角色名称", "角色名", "角色"],
-    role.name,
-  );
-  const filledActorName = await fillRoleDialogField(
+  await fillDouyinRoleNameWithoutSuggestion(page, dialog, role.name);
+
+  await fillRoleDialogField(
     dialog,
     ["演员姓名", "演员", "配音演员"],
     role.actorName,
   );
-  const inputs = dialog.locator("input:visible, textarea:visible");
-  if (!filledRoleName && (await inputs.count()) > 0) await inputs.nth(0).fill(role.name);
-  if (!filledActorName && role.actorName && (await inputs.count()) > 1) {
-    await inputs.nth(1).fill(role.actorName);
-  }
   const roleType = role.roleType ?? "配角";
   const roleTypeTrigger = dialog.locator("#role_type_input, [role='combobox']").first();
   await roleTypeTrigger.waitFor({ state: "visible", timeout: 10_000 });

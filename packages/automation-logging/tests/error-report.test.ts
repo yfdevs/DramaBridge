@@ -51,6 +51,17 @@ test("explains a Baidu cover upload that never becomes confirmable", () => {
   assert.match(report, /错误码：BAIDU_DRAMA_COVER_CONFIRM_NOT_READY/);
 });
 
+test("explains a Taobao video rejection without suggesting a retry", () => {
+  const report = formatAutomationErrorReport(
+    "TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: 上传失败 上传视频的宽高是720x1280不符合要求，视频宽高均要大于1080 我知道了",
+  );
+
+  assert.match(report, /淘宝拒绝上传视频/);
+  assert.match(report, /不会自动删除或重新上传/);
+  assert.match(report, /720x1280/);
+  assert.match(report, /错误码：TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED/);
+});
+
 test("removes unknown internal prefixes and remains stable when formatted twice", () => {
   const formatted = formatAutomationErrorReport("[local-video-invalid] 第 3 集视频不存在");
   assert.equal(formatted, "任务执行失败：第 3 集视频不存在（错误码：local-video-invalid）");

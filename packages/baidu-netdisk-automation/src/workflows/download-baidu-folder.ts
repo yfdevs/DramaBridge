@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { Effect } from "effect";
@@ -27,10 +26,7 @@ import {
   errorMessage,
   type BaiduNetdiskAutomationError,
 } from "../domain/errors.js";
-import {
-  retryWithDelays,
-  runPromisePreservingFailure,
-} from "../runtime/effect-runtime.js";
+import { runPromisePreservingFailure } from "../runtime/effect-runtime.js";
 import { parseBaiduNetdiskShareText, readShareInfo, sanitizeWindowsName } from "../domain/share-text.js";
 import type {
   BaiduNetdiskDownloadTaskStatus,
@@ -347,63 +343,6 @@ export function compareRemoteVideoDirectoryCandidates(
   }
   if (left.depth !== right.depth) return left.depth - right.depth;
   return left.path.localeCompare(right.path);
-}
-
-async function copyToClipboardOnce(text: string) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        [
-          "$ErrorActionPreference = 'Stop'",
-          "$utf8 = [Text.UTF8Encoding]::new($false)",
-          "[Console]::InputEncoding = $utf8",
-          "[Console]::OutputEncoding = $utf8",
-          "$OutputEncoding = $utf8",
-          "Set-Clipboard -Value ([Console]::In.ReadToEnd())",
-        ].join("; "),
-      ],
-      { stdio: ["pipe", "ignore", "pipe"], windowsHide: true },
-    );
-
-    let errorOutput = "";
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk: string) => {
-      errorOutput += chunk;
-    });
-    child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(errorOutput.trim() || `Set-Clipboard exited with ${code}`));
-    });
-    child.stdin.end(text, "utf8");
-  });
-}
-
-async function copyToClipboard(text: string) {
-  if (process.platform !== "win32") {
-    log("当前不是 Windows，跳过 Set-Clipboard。");
-    return { copied: false, error: "当前不是 Windows。" };
-  }
-
-  return Effect.runPromise(
-    retryWithDelays(
-      () => Effect.tryPromise({
-        try: () => copyToClipboardOnce(text),
-        catch: (error) => error,
-      }),
-      { delaysMs: [150, 400, 800, 1500] },
-    ).pipe(
-      Effect.as({ copied: true as const }),
-      Effect.catchAll((error) => Effect.succeed({
-        copied: false as const,
-        error: errorMessage(error),
-      })),
-    ),
-  );
 }
 
 function shareId(link: string) {
@@ -3780,14 +3719,11 @@ async function downloadBaiduNetdiskSharePromise(
   const port = options.port ?? 9337;
   const downloadDir = options.downloadDir?.trim() || DEFAULT_BAIDU_NETDISK_DOWNLOAD_DIR;
 
-  let content: string;
   let share: ShareInfo;
   if (typeof options.shareText === "string" && options.shareText.trim()) {
-    content = options.shareText;
-    share = parseBaiduNetdiskShareText(content);
+    share = parseBaiduNetdiskShareText(options.shareText);
   } else if (typeof options.shareFile === "string" && options.shareFile.trim()) {
     const loaded = await readShareInfo(options.shareFile);
-    content = loaded.content;
     share = loaded.share;
   } else {
     throw new Error("必须提供 shareText 或 --share-file，不能使用默认分享文件。");
@@ -3804,13 +3740,6 @@ async function downloadBaiduNetdiskSharePromise(
 
   log(`读取分享：${share.name}`);
   log(`默认下载目录：${downloadDir}`);
-
-  const clipboardResult = await copyToClipboard(content);
-  if (clipboardResult.copied) {
-    log("已复制分享内容到剪贴板");
-  } else {
-    log(`复制分享内容到剪贴板失败，继续使用已解析的分享链接：${clipboardResult.error}`);
-  }
 
   await ensureBaiduCdpPort(port);
   options.signal?.throwIfAborted();

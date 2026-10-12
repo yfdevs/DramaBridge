@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 
 export type JianyingDraftTrackResult = {
   success: true;
+  mediaLibraryWritten: true;
   videoCount: number;
   duration: number;
   segmentDurations: number[];
@@ -17,6 +18,7 @@ export type JianyingDraftTrackResult = {
   subtitleTrackSegmentCount: number;
   subtitleGapCount: number;
   subtitleFreeRanges: Array<[number, number]>;
+  removedMissingAudioCount: number;
   sha256: string;
   updatedFiles: string[];
 };
@@ -96,6 +98,7 @@ export async function writeJianyingDraftVideoTrack(input: {
   installDirectory: string;
   segmentFiles: string[];
   preferredTimelineTime?: number;
+  registerAsNewDraft?: boolean;
 }) {
   if (process.platform !== "win32") throw new Error("剪映草稿写入仅支持 Windows");
   if (!input.segmentFiles.length) throw new Error("没有可写入轨道的分段视频");
@@ -118,6 +121,7 @@ export async function writeJianyingDraftVideoTrack(input: {
         codecInstallDirectory,
         "--input",
         inputPath,
+        ...(input.registerAsNewDraft ? ["--register-as-new-draft"] : []),
       ], {
         encoding: null,
         timeout: 5 * 60_000,

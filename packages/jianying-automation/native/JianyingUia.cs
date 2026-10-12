@@ -73,6 +73,24 @@ internal static class JianyingUia
                 return 0;
             }
 
+            if (command == "open-first-draft")
+            {
+                WriteJson(OpenFirstDraft(ReadArgument(args, "--draft-name")));
+                return 0;
+            }
+
+            if (command == "close-missing-media-window")
+            {
+                WriteJson(CloseMissingMediaWindow());
+                return 0;
+            }
+
+            if (command == "close-editor-window")
+            {
+                WriteJson(CloseEditorWindow());
+                return 0;
+            }
+
             if (command == "press-space")
             {
                 WriteJson(PressSpace());
@@ -136,11 +154,7 @@ internal static class JianyingUia
         IntPtr handle = new IntPtr(SafeInt(delegate { return root.Current.NativeWindowHandle; }));
         if (handle == IntPtr.Zero) throw new InvalidOperationException("无法读取剪映窗口句柄");
 
-        if (IsIconic(handle))
-        {
-            ShowWindow(handle, 9);
-            Thread.Sleep(300);
-        }
+        EnsureMaximized(handle);
         NativeRect rect;
         if (!GetWindowRect(handle, out rect)) throw new InvalidOperationException("无法读取剪映窗口范围");
         int width = rect.Right - rect.Left;
@@ -234,6 +248,7 @@ internal static class JianyingUia
 
         AutomationElement root = null;
         AutomationElement ruler = null;
+        AutomationElement timelineRoot = null;
         System.Windows.Rect rootBounds = System.Windows.Rect.Empty;
         IntPtr handle = IntPtr.Zero;
 
@@ -263,7 +278,7 @@ internal static class JianyingUia
                 Thread.Sleep(250);
                 continue;
             }
-            if (IsIconic(handle)) ShowWindow(handle, 9);
+            EnsureMaximized(handle);
             try { rootBounds = root.Current.BoundingRectangle; }
             catch
             {
@@ -274,35 +289,64 @@ internal static class JianyingUia
             double rulerTop = Double.MaxValue;
             Walk(root, 0, 24, 5000, delegate(AutomationElement element)
             {
-                string className = SafeString(delegate { return element.Current.ClassName; });
-                if (!String.Equals(className, "QQuickItem", StringComparison.OrdinalIgnoreCase)) return;
+                string automationId = SafeString(delegate { return element.Current.AutomationId; });
+                if (String.Equals(
+                    automationId,
+                    "timeline_docker_layout.timelineContainer.main_timeline_root",
+                    StringComparison.OrdinalIgnoreCase))
+                    timelineRoot = element;
                 System.Windows.Rect bounds;
                 try { bounds = element.Current.BoundingRectangle; }
                 catch { return; }
-                bool inTimeline = bounds.Left >= rootBounds.Left + rootBounds.Width * 0.12
-                    && bounds.Top >= rootBounds.Top + rootBounds.Height * 0.35
-                    && bounds.Top <= rootBounds.Top + rootBounds.Height * 0.9;
+                bool inTimeline = bounds.Left >= rootBounds.Left + rootBounds.Width * 0.28
+                    && bounds.Top >= rootBounds.Top + rootBounds.Height * 0.55
+                    && bounds.Top <= rootBounds.Top + rootBounds.Height * 0.92;
                 bool rulerShape = bounds.Width >= rootBounds.Width * 0.45
-                    && bounds.Height >= 14 && bounds.Height <= 40;
+                    && bounds.Height >= 12 && bounds.Height <= 50;
                 if (inTimeline && rulerShape && bounds.Top < rulerTop)
                 {
                     ruler = element;
                     rulerTop = bounds.Top;
                 }
             });
-            if (ruler == null) Thread.Sleep(250);
+            if (ruler == null)
+            {
+                // The timeline container is a stable public automation ID in
+                // Jianying 11.x, while its canvas children use versioned QML
+                // class names. Give child controls a short mount window, then
+                // use the maximized container geometry as a safe fallback.
+                if (timelineRoot != null && attempt >= 11) break;
+                Thread.Sleep(250);
+            }
         }
-        if (ruler == null) throw new InvalidOperationException("剪映时间轴尚未加载，请稍后重试");
-
-        System.Windows.Rect rulerBounds = ruler.Current.BoundingRectangle;
-        double padding = Math.Min(8, rulerBounds.Width * 0.01);
-        double usableWidth = Math.Max(1, rulerBounds.Width - padding * 2);
         double ratio = Math.Max(0, Math.Min(1, (double)timeUs / durationUs));
-        int x = (int)Math.Round(rulerBounds.Left + padding + usableWidth * ratio);
-        // UI Automation exposes the first track row, while the ruler itself is
-        // a canvas immediately above it. Clicking the ruler moves the playhead
-        // without selecting a clip.
-        int y = (int)Math.Round(rulerBounds.Top - 10);
+        int x;
+        int y;
+        if (ruler != null)
+        {
+            System.Windows.Rect rulerBounds = ruler.Current.BoundingRectangle;
+            double padding = Math.Min(8, rulerBounds.Width * 0.01);
+            double usableWidth = Math.Max(1, rulerBounds.Width - padding * 2);
+            x = (int)Math.Round(rulerBounds.Left + padding + usableWidth * ratio);
+            // UI Automation exposes the first track row, while the ruler
+            // itself is a canvas immediately above it.
+            y = (int)Math.Round(rulerBounds.Top - 10);
+        }
+        else if (timelineRoot != null)
+        {
+            // Jianying 11.5 exposes the timeline container but can omit the
+            // ruler canvas from UIA. In the maximized editor, the canvas uses
+            // the rightmost 65% of the window and its ruler sits at 60.5% of
+            // the window height. These ratios remain stable under DPI scaling.
+            double timelineLeft = rootBounds.Left + rootBounds.Width * 0.335;
+            double timelineRight = rootBounds.Right - rootBounds.Width * 0.012;
+            x = (int)Math.Round(timelineLeft + (timelineRight - timelineLeft) * ratio);
+            y = (int)Math.Round(rootBounds.Top + rootBounds.Height * 0.605);
+        }
+        else
+        {
+            throw new InvalidOperationException("剪映时间轴容器尚未加载，请稍后重试");
+        }
         ClickWindowAtScreenPoint(handle, x, y, 1);
         Thread.Sleep(500);
 
@@ -314,6 +358,168 @@ internal static class JianyingUia
             { "durationUs", durationUs },
             { "x", x - (int)Math.Round(rootBounds.Left) },
             { "y", y - (int)Math.Round(rootBounds.Top) }
+        };
+    }
+
+    private static Dictionary<string, object> OpenFirstDraft(string draftName)
+    {
+        if (String.IsNullOrWhiteSpace(draftName))
+            throw new ArgumentException("open-first-draft requires --draft-name");
+        // Jianying 11.5 silently truncates long values in the home search
+        // field. Search by a stable tail that still contains the episode
+        // suffix, so 第1集 cannot be confused with 第10集.
+        string expectedSearch = draftName.Length > 16
+            ? draftName.Substring(draftName.Length - 16)
+            : draftName;
+
+        List<AutomationElement> roots = FindWindowRoots(Process.GetProcessesByName("JianyingPro"));
+        AutomationElement root = roots.Find(delegate(AutomationElement element)
+        {
+            return String.Equals(
+                SafeString(delegate { return element.Current.AutomationId; }),
+                "HomeWindow",
+                StringComparison.OrdinalIgnoreCase);
+        });
+        if (root == null) throw new InvalidOperationException("未找到剪映草稿首页");
+
+        IntPtr handle = new IntPtr(SafeInt(delegate { return root.Current.NativeWindowHandle; }));
+        if (handle == IntPtr.Zero) throw new InvalidOperationException("无法读取剪映窗口句柄");
+        if (IsIconic(handle)) ShowWindow(handle, 9);
+        SetForegroundWindow(handle);
+        Thread.Sleep(150);
+
+        bool searchMatches = false;
+        AutomationElement card = null;
+        double cardArea = 0;
+        System.Windows.Rect rootBounds = root.Current.BoundingRectangle;
+        Walk(root, 0, 24, 5000, delegate(AutomationElement element)
+        {
+            string controlType = SafeString(delegate
+            {
+                return element.Current.ControlType.ProgrammaticName.Replace("ControlType.", "");
+            });
+            if (controlType == "Edit")
+            {
+                object valuePattern;
+                if (element.TryGetCurrentPattern(ValuePattern.Pattern, out valuePattern))
+                {
+                    string value = SafeString(delegate { return ((ValuePattern)valuePattern).Current.Value; });
+                    if (String.Equals(value, expectedSearch, StringComparison.OrdinalIgnoreCase))
+                        searchMatches = true;
+                }
+            }
+
+            string className = SafeString(delegate { return element.Current.ClassName; });
+            if (!className.StartsWith("HomePageOpenProjectItem", StringComparison.OrdinalIgnoreCase)) return;
+            System.Windows.Rect bounds;
+            try { bounds = element.Current.BoundingRectangle; }
+            catch { return; }
+            bool visibleCard = bounds.Width >= 60 && bounds.Width <= 500
+                && bounds.Height >= 80 && bounds.Height <= 600
+                && bounds.Left >= rootBounds.Left && bounds.Right <= rootBounds.Right
+                && bounds.Top >= rootBounds.Top + 100 && bounds.Bottom <= rootBounds.Bottom;
+            double area = bounds.Width * bounds.Height;
+            if (visibleCard && area > cardArea)
+            {
+                card = element;
+                cardArea = area;
+            }
+        });
+        if (!searchMatches) throw new InvalidOperationException("剪映搜索框中的草稿关键词不匹配");
+        if (card == null) throw new InvalidOperationException("未找到可打开的剪映草稿卡片");
+
+        System.Windows.Point point;
+        try { point = card.GetClickablePoint(); }
+        catch
+        {
+            System.Windows.Rect bounds = card.Current.BoundingRectangle;
+            point = new System.Windows.Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
+        }
+        ClickWindowAtScreenPoint(
+            handle,
+            (int)Math.Round(point.X),
+            (int)Math.Round(point.Y),
+            2);
+        Thread.Sleep(250);
+
+        return new Dictionary<string, object>
+        {
+            { "success", true },
+            { "message", "已双击剪映草稿卡片" },
+            { "draftName", draftName },
+            { "x", (int)Math.Round(point.X) },
+            { "y", (int)Math.Round(point.Y) }
+        };
+    }
+
+    private static Dictionary<string, object> CloseMissingMediaWindow()
+    {
+        List<AutomationElement> roots = FindWindowRoots(Process.GetProcessesByName("JianyingPro"));
+        int closedCount = 0;
+        foreach (AutomationElement root in roots)
+        {
+            string automationId = SafeString(delegate { return root.Current.AutomationId; });
+            if (String.Equals(automationId, "MainWindow", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(automationId, "HomeWindow", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            string rootText = SafeString(delegate { return root.Current.Name; });
+            bool isMissingMediaWindow = rootText.IndexOf("链接媒体", StringComparison.OrdinalIgnoreCase) >= 0
+                || rootText.IndexOf("媒体丢失", StringComparison.OrdinalIgnoreCase) >= 0;
+            Walk(root, 0, 16, 2500, delegate(AutomationElement element)
+            {
+                if (isMissingMediaWindow) return;
+                string text = SafeString(delegate { return element.Current.Name; });
+                if (text.IndexOf("链接媒体", StringComparison.OrdinalIgnoreCase) >= 0
+                    || text.IndexOf("媒体丢失", StringComparison.OrdinalIgnoreCase) >= 0
+                    || text.IndexOf("重新链接后再剪辑", StringComparison.OrdinalIgnoreCase) >= 0)
+                    isMissingMediaWindow = true;
+            });
+            if (!isMissingMediaWindow) continue;
+
+            IntPtr handle = new IntPtr(SafeInt(delegate { return root.Current.NativeWindowHandle; }));
+            if (handle == IntPtr.Zero) continue;
+            PostMessage(handle, 0x0010, IntPtr.Zero, IntPtr.Zero);
+            closedCount++;
+        }
+        if (closedCount > 0) Thread.Sleep(300);
+        return new Dictionary<string, object>
+        {
+            { "success", true },
+            { "message", closedCount > 0 ? "已关闭链接媒体窗口" : "未发现独立链接媒体窗口" },
+            { "closedCount", closedCount }
+        };
+    }
+
+    private static Dictionary<string, object> CloseEditorWindow()
+    {
+        List<AutomationElement> roots = FindWindowRoots(Process.GetProcessesByName("JianyingPro"));
+        AutomationElement editor = roots.Find(delegate(AutomationElement root)
+        {
+            return String.Equals(
+                SafeString(delegate { return root.Current.AutomationId; }),
+                "MainWindow",
+                StringComparison.OrdinalIgnoreCase);
+        });
+        if (editor == null)
+        {
+            return new Dictionary<string, object>
+            {
+                { "success", true },
+                { "message", "剪映编辑器窗口未打开" },
+                { "closed", false }
+            };
+        }
+
+        IntPtr handle = new IntPtr(SafeInt(delegate { return editor.Current.NativeWindowHandle; }));
+        if (handle == IntPtr.Zero) throw new InvalidOperationException("无法读取剪映编辑器窗口句柄");
+        PostMessage(handle, 0x0010, IntPtr.Zero, IntPtr.Zero);
+        Thread.Sleep(300);
+        return new Dictionary<string, object>
+        {
+            { "success", true },
+            { "message", "已关闭剪映编辑器窗口" },
+            { "closed", true }
         };
     }
 
@@ -373,39 +579,73 @@ internal static class JianyingUia
 
         List<AutomationElement> roots = FindWindowRoots(Process.GetProcessesByName("JianyingPro"));
         if (roots.Count == 0) throw new InvalidOperationException("未找到剪映主窗口");
-        AutomationElement mainWindow = LargestWindow(roots);
+        AutomationElement mainWindow = roots.Find(delegate(AutomationElement root)
+        {
+            return String.Equals(
+                SafeString(delegate { return root.Current.AutomationId; }),
+                "MainWindow",
+                StringComparison.OrdinalIgnoreCase);
+        }) ?? LargestWindow(roots);
         IntPtr mainHandle = new IntPtr(SafeInt(delegate { return mainWindow.Current.NativeWindowHandle; }));
         if (mainHandle == IntPtr.Zero) throw new InvalidOperationException("无法读取剪映窗口句柄");
         SetForegroundWindow(mainHandle);
         Thread.Sleep(250);
 
         AutomationElement dialog = FindFileDialog(roots);
-        if (dialog == null)
+        for (int clickAttempt = 0; clickAttempt < 3 && dialog == null; clickAttempt++)
         {
+            // The missing-media window can appear a few seconds after the
+            // editor itself. Close it immediately before every import click.
+            CloseMissingMediaWindow();
+            Thread.Sleep(clickAttempt == 0 ? 250 : 500);
+            roots = FindWindowRoots(Process.GetProcessesByName("JianyingPro"));
+            mainWindow = roots.Find(delegate(AutomationElement root)
+            {
+                return String.Equals(
+                    SafeString(delegate { return root.Current.AutomationId; }),
+                    "MainWindow",
+                    StringComparison.OrdinalIgnoreCase);
+            });
+            if (mainWindow == null) throw new InvalidOperationException("剪映编辑器窗口未打开");
+            mainHandle = new IntPtr(SafeInt(delegate { return mainWindow.Current.NativeWindowHandle; }));
+            if (mainHandle == IntPtr.Zero) throw new InvalidOperationException("无法读取剪映编辑器窗口句柄");
+            if (IsIconic(mainHandle)) ShowWindow(mainHandle, 9);
+            SetForegroundWindow(mainHandle);
+
             AutomationElement importButton = null;
+            int importButtonScore = -1;
             Walk(mainWindow, 0, 20, 2000, delegate(AutomationElement element)
             {
-                if (importButton != null) return;
                 string className = SafeString(delegate { return element.Current.ClassName; });
+                string name = SafeString(delegate { return element.Current.Name; }).Trim();
+                string controlType = SafeString(delegate { return element.Current.ControlType.ProgrammaticName; });
                 System.Windows.Rect bounds;
                 try { bounds = element.Current.BoundingRectangle; }
                 catch { return; }
-                if (className.StartsWith("SubtitlesImportItem", StringComparison.OrdinalIgnoreCase)
-                    && bounds.Width >= 50 && bounds.Height >= 20)
+                if (bounds.Width < 40 || bounds.Height < 18) return;
+                int score = -1;
+                if (name == "导入" && controlType == "ControlType.Button") score = 4;
+                else if (name == "导入") score = 3;
+                else if (className.StartsWith("SubtitlesImportItem", StringComparison.OrdinalIgnoreCase)) score = 2;
+                if (score > importButtonScore)
+                {
                     importButton = element;
+                    importButtonScore = score;
+                }
             });
             if (importButton == null) throw new InvalidOperationException("未找到剪映素材导入按钮");
             System.Windows.Rect importBounds = importButton.Current.BoundingRectangle;
-            SetCursorPos((int)Math.Round(importBounds.Left + Math.Min(34, importBounds.Width / 2)),
-                (int)Math.Round(importBounds.Top + importBounds.Height / 2));
-            ClickMouse();
-        }
-
-        for (int attempt = 0; attempt < 30 && dialog == null; attempt++)
-        {
-            Thread.Sleep(200);
-            roots = FindWindowRoots(Process.GetProcessesByName("JianyingPro"));
-            dialog = FindFileDialog(roots);
+            ClickWindowAtScreenPoint(
+                mainHandle,
+                (int)Math.Round(importBounds.Left + Math.Min(34, importBounds.Width / 2)),
+                (int)Math.Round(importBounds.Top + importBounds.Height / 2),
+                1);
+            for (int attempt = 0; attempt < 15 && dialog == null; attempt++)
+            {
+                Thread.Sleep(200);
+                roots = FindWindowRoots(Process.GetProcessesByName("JianyingPro"));
+                dialog = FindFileDialog(roots);
+            }
         }
         if (dialog == null) throw new InvalidOperationException("剪映未打开媒体文件选择框");
 
@@ -705,12 +945,30 @@ internal static class JianyingUia
         int packed = ((point.Y & 0xFFFF) << 16) | (point.X & 0xFFFF);
         IntPtr location = new IntPtr(packed);
         PostMessage(handle, 0x0200, IntPtr.Zero, location);
-        for (int index = 0; index < count; index++)
+        PostMessage(handle, 0x0201, new IntPtr(1), location);
+        PostMessage(handle, 0x0202, IntPtr.Zero, location);
+        for (int index = 1; index < count; index++)
         {
-            PostMessage(handle, 0x0201, new IntPtr(1), location);
+            Thread.Sleep(100);
+            PostMessage(handle, 0x0203, new IntPtr(1), location);
             PostMessage(handle, 0x0202, IntPtr.Zero, location);
-            if (index + 1 < count) Thread.Sleep(100);
         }
+    }
+
+    private static void EnsureMaximized(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) throw new InvalidOperationException("无法读取剪映窗口句柄");
+        if (IsIconic(handle))
+        {
+            ShowWindow(handle, 9);
+            Thread.Sleep(150);
+        }
+        if (!IsZoomed(handle))
+        {
+            ShowWindow(handle, 3);
+            Thread.Sleep(350);
+        }
+        SetForegroundWindow(handle);
     }
 
     private static void SendUnicodeText(string text)
@@ -758,6 +1016,9 @@ internal static class JianyingUia
 
     [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr windowHandle);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsZoomed(IntPtr windowHandle);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessage(IntPtr windowHandle, uint message, IntPtr wParam, string lParam);

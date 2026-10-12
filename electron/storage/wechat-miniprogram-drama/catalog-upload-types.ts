@@ -15,6 +15,12 @@ export type WechatMiniProgramCatalogEpisodeStatus = {
   error?: string
 }
 
+export type WechatMiniProgramCatalogCoverStatus =
+  | "pending"
+  | "uploaded"
+  | "existing"
+  | "failed"
+
 export type WechatMiniProgramCatalogUploadTask = {
   id: string
   dramaId: number
@@ -23,6 +29,7 @@ export type WechatMiniProgramCatalogUploadTask = {
   episodeCount: number
   baiduNetdiskUrl?: string
   hasFirstFourEpisodes: boolean
+  hasCover: boolean
   lifecycleStatus?: string
   auditStatus?: number
   expectedPublishStatus?: string
@@ -32,6 +39,11 @@ export type WechatMiniProgramCatalogUploadTask = {
   targetEpisodeCount: number
   uploadedEpisodeCount: number
   episodeStatuses: WechatMiniProgramCatalogEpisodeStatus[]
+  coverStatus: WechatMiniProgramCatalogCoverStatus
+  coverMaterialId?: string
+  coverFileName?: string
+  coverError?: string
+  workflowVersion: number
   localPath?: string
   error?: string
   retryCount: number
@@ -43,19 +55,24 @@ export type WechatMiniProgramCatalogUploadTask = {
 
 export type WechatMiniProgramCatalogUploadTaskRow = Omit<
   WechatMiniProgramCatalogUploadTask,
-  "wxDramaId" | "baiduNetdiskUrl" | "hasFirstFourEpisodes" | "lifecycleStatus" |
+  "wxDramaId" | "baiduNetdiskUrl" | "hasFirstFourEpisodes" | "hasCover" | "lifecycleStatus" |
   "auditStatus" | "expectedPublishStatus" | "actualPublishStatus" | "operationStatus" |
-  "episodeStatuses" | "localPath" | "error" | "startedAt" | "finishedAt"
+  "episodeStatuses" | "coverMaterialId" | "coverFileName" | "coverError" |
+  "localPath" | "error" | "startedAt" | "finishedAt"
 > & {
   wxDramaId: number | null
   baiduNetdiskUrl: string | null
   hasFirstFourEpisodes: number
+  hasCover: number
   lifecycleStatus: string | null
   auditStatus: number | null
   expectedPublishStatus: string | null
   actualPublishStatus: string | null
   operationStatus: string | null
   episodeStatusesJson: string
+  coverMaterialId: string | null
+  coverFileName: string | null
+  coverError: string | null
   localPath: string | null
   error: string | null
   startedAt: string | null

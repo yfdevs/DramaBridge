@@ -281,7 +281,7 @@ async function uploadEpisodes(
   try {
     await runAction("检查短视频并执行0.9倍速处理", () =>
       prepareShortDouyinEpisodeVideos(prepared.files, {
-        thresholdSeconds: 35,
+        thresholdSeconds: 30,
         speed: 0.9,
         concurrency: 2,
         onLog: (message) => log(options, message, { accountTaskId: task.accountTaskId }, "upload"),

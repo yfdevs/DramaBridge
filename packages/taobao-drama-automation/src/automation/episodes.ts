@@ -6,7 +6,11 @@ import {
   TAOBAO_DRAMA_MIN_SETTLE_MS,
   taobaoEpisodeBatchPagePlan,
 } from "../shared/constants.js";
-import { findTaobaoEpisodeVideos, validateTaobaoEpisodeVideos } from "../shared/local-materials.js";
+import {
+  cleanupEpisodeUploadFiles,
+  findTaobaoEpisodeVideos,
+  prepareTaobaoEpisodeVideos,
+} from "../shared/local-materials.js";
 import { log } from "../shared/logger.js";
 import type { TaobaoBatchUploadTask, TaobaoDramaRuntimeOptions } from "../shared/types.js";
 import {
@@ -244,6 +248,31 @@ export function isTaobaoUploadReady(input: {
     input.matchedFileCount >= input.expectedFileCount;
 }
 
+export function taobaoFatalUploadDialogReason(texts: string[]) {
+  return texts
+    .map((text) => text.replace(/\s+/g, " ").trim())
+    .find((text) =>
+      /上传失败/.test(text) &&
+      (/我知道了/.test(text) || /不符合要求|宽高|分辨率|视频格式/.test(text))
+    );
+}
+
+async function throwIfTaobaoUploadRejected(scopes: TaobaoDomScope[]) {
+  for (const scope of scopes) {
+    const dialogs = scope.locator([
+      ".next-dialog:visible",
+      ".ant-modal:visible",
+      ".semi-modal:visible",
+      "[role='dialog']:visible",
+    ].join(", "));
+    const texts = await dialogs.allInnerTexts().catch(() => [] as string[]);
+    const reason = taobaoFatalUploadDialogReason(texts);
+    if (reason) {
+      throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: ${reason}`);
+    }
+  }
+}
+
 async function videoInput(scope: TaobaoDomScope): Promise<Locator> {
   const inputs = scope.locator("input[type='file']:not([disabled])");
   const count = await inputs.count();
@@ -279,6 +308,7 @@ async function findLiveTaobaoBatchScope(
     const scopes = page.context().pages()
       .filter((candidate) => !candidate.isClosed())
       .flatMap((candidate) => candidate.frames());
+    await throwIfTaobaoUploadRejected(scopes);
     for (const scope of scopes) {
       const matchingItems = scope
         .locator("#publish-container .batchItemWrap")
@@ -307,6 +337,7 @@ async function waitForUploadComplete(
     const scopes = page.context().pages()
       .filter((candidate) => !candidate.isClosed())
       .flatMap((candidate) => candidate.frames());
+    await throwIfTaobaoUploadRejected(scopes);
     const pageStates = await Promise.all(scopes.map(async (scope) => ({
       scope,
       url: scope.url(),
@@ -1048,82 +1079,85 @@ export async function uploadAndPublishTaobaoEpisodes(
   metadata: TaobaoEpisodeMetadata,
   options: TaobaoDramaRuntimeOptions,
 ) {
-  await validateTaobaoEpisodeVideos(task, options);
-  const episodes = await findTaobaoEpisodeVideos(task, options);
-  const ranges = taobaoEpisodeBatchPagePlan(episodes.length);
-  log(
-    options,
-    `[taobao-drama] 准备上传 ${episodes.length} 个剧集视频，共 ${ranges.length} 个发布批次`,
-  );
+  const { episodes, prepared } = await prepareTaobaoEpisodeVideos(task, options);
+  try {
+    const ranges = taobaoEpisodeBatchPagePlan(episodes.length);
+    log(
+      options,
+      `[taobao-drama] 准备上传 ${episodes.length} 个剧集视频，共 ${ranges.length} 个发布批次`,
+    );
 
-  let batchPage = page;
-  for (const [batchIndex, range] of ranges.entries()) {
-    let previousBatchPage: Page | undefined;
-    if (range.openNewPage) {
-      previousBatchPage = batchPage;
-      batchPage = await page.context().newPage();
-      await waitForTaobaoPage(batchPage, "batch", options);
+    let batchPage = page;
+    for (const [batchIndex, range] of ranges.entries()) {
+      let previousBatchPage: Page | undefined;
+      if (range.openNewPage) {
+        previousBatchPage = batchPage;
+        batchPage = await page.context().newPage();
+        await waitForTaobaoPage(batchPage, "batch", options);
+        log(
+          options,
+          `[taobao-drama] 已打开新标签页，准备上传第${range.start}-${range.end}集`,
+        );
+      }
+      await waitForTaobaoHumanVerification(batchPage, options);
+      const batchEpisodes = episodes.filter(
+        (episode) => episode.index >= range.start && episode.index <= range.end,
+      );
+      const expectedBatchCount = range.end - range.start + 1;
+      if (batchEpisodes.length !== expectedBatchCount) {
+        throw new Error(
+          `TAOBAO_DRAMA_EPISODE_BATCH_INCOMPLETE: range=${range.start}-${range.end} actual=${batchEpisodes.length}`,
+        );
+      }
+      const batch = batchEpisodes.map((episode) => episode.file);
+      const input = await videoInput(batchPage);
+      await input.setInputFiles(batch, { timeout: 120_000 });
       log(
         options,
-        `[taobao-drama] 已打开新标签页，准备上传第${range.start}-${range.end}集`,
+        `[taobao-drama] 已选择发布批次 ${batchIndex + 1}/${ranges.length}：` +
+          `第${range.start}-${range.end}集，共 ${batch.length} 个视频`,
       );
-    }
-    await waitForTaobaoHumanVerification(batchPage, options);
-    const batchEpisodes = episodes.filter(
-      (episode) => episode.index >= range.start && episode.index <= range.end,
-    );
-    const expectedBatchCount = range.end - range.start + 1;
-    if (batchEpisodes.length !== expectedBatchCount) {
-      throw new Error(
-        `TAOBAO_DRAMA_EPISODE_BATCH_INCOMPLETE: range=${range.start}-${range.end} actual=${batchEpisodes.length}`,
-      );
-    }
-    const batch = batchEpisodes.map((episode) => episode.file);
-    const input = await videoInput(batchPage);
-    await input.setInputFiles(batch, { timeout: 120_000 });
-    log(
-      options,
-      `[taobao-drama] 已选择发布批次 ${batchIndex + 1}/${ranges.length}：` +
-        `第${range.start}-${range.end}集，共 ${batch.length} 个视频`,
-    );
-    if (
-      range.closePreviousPageAfterSelection &&
-      previousBatchPage &&
-      !previousBatchPage.isClosed()
-    ) {
-      await previousBatchPage.close();
-      log(
-        options,
-        `[taobao-drama] 后续批次已开始上传，已关闭上一批次标签页`,
-      );
-    }
-    await waitForTaobaoHumanVerification(batchPage, options);
-    await batchPage.waitForTimeout(500);
-    // Taobao internally queues up to 100 selected videos. Selecting them in small
-    // follow-up batches can leave later files permanently stuck at “等待上传中”.
-    const uploadResult = await waitForUploadComplete(batchPage, batch, options, true);
-    if (uploadResult.failedFileNames.length > 0) {
-      await retryFailedTaobaoEpisodes(
+      if (
+        range.closePreviousPageAfterSelection &&
+        previousBatchPage &&
+        !previousBatchPage.isClosed()
+      ) {
+        await previousBatchPage.close();
+        log(
+          options,
+          `[taobao-drama] 后续批次已开始上传，已关闭上一批次标签页`,
+        );
+      }
+      await waitForTaobaoHumanVerification(batchPage, options);
+      await batchPage.waitForTimeout(500);
+      // Taobao internally queues up to 100 selected videos. Selecting them in small
+      // follow-up batches can leave later files permanently stuck at “等待上传中”.
+      const uploadResult = await waitForUploadComplete(batchPage, batch, options, true);
+      if (uploadResult.failedFileNames.length > 0) {
+        await retryFailedTaobaoEpisodes(
+          batchPage,
+          batch,
+          uploadResult.failedFileNames,
+          options,
+        );
+        await waitForUploadComplete(batchPage, batch, options);
+      }
+      await fillEpisodeMetadata(batchPage, batchEpisodes, metadata, task, options);
+      const publishScope = await findLiveTaobaoBatchScope(
         batchPage,
-        batch,
-        uploadResult.failedFileNames,
-        options,
+        path.basename(batch[batch.length - 1] ?? batch[0] ?? ""),
       );
-      await waitForUploadComplete(batchPage, batch, options);
+      await runWithTaobaoVerificationRetry(
+        batchPage,
+        options,
+        () => clickBatchPublish(publishScope, options),
+      );
+      log(
+        options,
+        `[taobao-drama] 发布批次 ${batchIndex + 1}/${ranges.length} 已完成：第${range.start}-${range.end}集`,
+      );
     }
-    await fillEpisodeMetadata(batchPage, batchEpisodes, metadata, task, options);
-    const publishScope = await findLiveTaobaoBatchScope(
-      batchPage,
-      path.basename(batch[batch.length - 1] ?? batch[0] ?? ""),
-    );
-    await runWithTaobaoVerificationRetry(
-      batchPage,
-      options,
-      () => clickBatchPublish(publishScope, options),
-    );
-    log(
-      options,
-      `[taobao-drama] 发布批次 ${batchIndex + 1}/${ranges.length} 已完成：第${range.start}-${range.end}集`,
-    );
+  } finally {
+    await cleanupEpisodeUploadFiles(prepared);
   }
 }

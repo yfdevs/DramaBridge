@@ -17,6 +17,12 @@ export type WechatMiniProgramCatalogEpisodeStatus = {
   error?: string
 }
 
+export type WechatMiniProgramCatalogCoverStatus =
+  | "pending"
+  | "uploaded"
+  | "existing"
+  | "failed"
+
 export type WechatMiniProgramCatalogUploadTask = {
   id: string
   dramaId: number
@@ -25,6 +31,7 @@ export type WechatMiniProgramCatalogUploadTask = {
   episodeCount: number
   baiduNetdiskUrl?: string
   hasFirstFourEpisodes: boolean
+  hasCover: boolean
   lifecycleStatus?: string
   auditStatus?: number
   expectedPublishStatus?: string
@@ -34,6 +41,11 @@ export type WechatMiniProgramCatalogUploadTask = {
   targetEpisodeCount: number
   uploadedEpisodeCount: number
   episodeStatuses: WechatMiniProgramCatalogEpisodeStatus[]
+  coverStatus: WechatMiniProgramCatalogCoverStatus
+  coverMaterialId?: string
+  coverFileName?: string
+  coverError?: string
+  workflowVersion: number
   localPath?: string
   error?: string
   retryCount: number
@@ -64,7 +76,7 @@ export type WechatMiniProgramCatalogUploadWorkspace = {
 }
 
 function ipc() {
-  if (!window.ipcRenderer) throw new Error("前四集入库仅在 Electron 应用内可用。")
+  if (!window.ipcRenderer) throw new Error("前四集与封面入库仅在 Electron 应用内可用。")
   return window.ipcRenderer
 }
 
@@ -80,6 +92,7 @@ export const wechatMiniProgramCatalogUploadService = {
   pauseQueue: () => invoke("wechat-miniprogram-drama:catalog-upload:queue:pause"),
   cancelActiveTask: () => invoke("wechat-miniprogram-drama:catalog-upload:task:cancel-active"),
   retryTask: (id: string) => invoke("wechat-miniprogram-drama:catalog-upload:task:retry", id),
+  retryTasks: (ids: string[]) => invoke("wechat-miniprogram-drama:catalog-upload:tasks:retry", ids),
   onWorkspaceChanged(listener: (workspace: WechatMiniProgramCatalogUploadWorkspace) => void) {
     if (!window.ipcRenderer) return () => undefined
     const ipcListener = (_event: IpcRendererEvent, workspace: WechatMiniProgramCatalogUploadWorkspace) => listener(workspace)

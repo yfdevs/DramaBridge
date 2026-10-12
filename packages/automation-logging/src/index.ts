@@ -91,6 +91,8 @@ const errorCodeDescriptions: Readonly<Record<string, string>> = {
   TENCENT_HUOLONG_DRAMA_AI_COVER_GENERATION_FAILED: "腾讯火龙 AI 封面生成失败",
   TAOBAO_DRAMA_AI_COVER_GENERATION_FAILED: "淘宝短剧 AI 封面生成失败",
   TAOBAO_DRAMA_AI_COVER_RESPONSE_MISSING: "淘宝短剧 AI 封面生成服务未返回图片",
+  TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED:
+    "淘宝拒绝上传视频，已终止本次任务且不会自动删除或重新上传",
   AI_POSTER_GENERATION_FAILED: "AI 海报生成失败",
   AI_POSTER_IMAGE_EMPTY: "AI 海报生成服务未返回图片",
   AI_POSTER_IMAGE_INVALID: "AI 生成的海报图片无效",

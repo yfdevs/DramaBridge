@@ -22,7 +22,7 @@ export async function prepareShortDouyinEpisodeVideos(
     adjustSpeed?: typeof adjustVideoPlaybackSpeed;
   } = {},
 ) {
-  const thresholdSeconds = options.thresholdSeconds ?? 35;
+  const thresholdSeconds = options.thresholdSeconds ?? 30;
   const speed = options.speed ?? 0.9;
   const readDuration = options.readDuration ?? readVideoDurationSeconds;
   const adjustSpeed = options.adjustSpeed ?? adjustVideoPlaybackSpeed;
@@ -37,7 +37,7 @@ export async function prepareShortDouyinEpisodeVideos(
       cursor += 1;
       const file = files[position];
       const sourceDurationSeconds = await readDuration(file, options.signal);
-      if (sourceDurationSeconds >= thresholdSeconds) {
+      if (sourceDurationSeconds > thresholdSeconds) {
         results[position] = { file, sourceDurationSeconds };
         continue;
       }

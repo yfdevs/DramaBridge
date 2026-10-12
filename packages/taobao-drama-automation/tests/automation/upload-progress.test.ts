@@ -14,6 +14,7 @@ import {
   scoreTaobaoContentTagMatch,
   summarizeTaobaoBatchItems,
   summarizeTaobaoUploadText,
+  taobaoFatalUploadDialogReason,
   TAOBAO_DROPDOWN_END_SETTLE_MS,
   TAOBAO_DROPDOWN_SEARCH_TIMEOUT_MS,
   TAOBAO_MAX_FILES_PER_SELECTION,
@@ -133,6 +134,16 @@ test("waits for every Taobao item to settle before handling failed uploads", () 
     "D:\\episodes\\测试剧 - 第2集.mp4",
     "D:\\episodes\\测试剧 - 第3集.mp4",
   ]).settled, true);
+});
+
+test("treats Taobao upload failure dialogs as fatal instead of retryable item failures", () => {
+  assert.match(
+    taobaoFatalUploadDialogReason([
+      "上传失败 上传视频的宽高是720x1280不符合要求，视频宽高均要大于1080 我知道了",
+    ]) ?? "",
+    /720x1280/,
+  );
+  assert.equal(taobaoFatalUploadDialogReason(["正在上传 42%"]), undefined);
 });
 
 test("matches Taobao content tags case-insensitively with an approximate fallback", () => {

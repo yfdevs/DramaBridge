@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -25,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import {
   wechatMiniProgramCatalogUploadService,
+  type WechatMiniProgramCatalogUploadTask,
   type WechatMiniProgramCatalogUploadState,
   type WechatMiniProgramCatalogUploadWorkspace,
 } from "@/platforms/wechat-miniprogram-drama/catalog-upload-service";
@@ -32,8 +32,8 @@ import {
 const stateLabels: Record<WechatMiniProgramCatalogUploadState, string> = {
   discovered: "等待处理",
   "missing-source": "缺少网盘链接",
-  downloading: "下载前四集",
-  uploading: "上传入库",
+  downloading: "下载素材",
+  uploading: "上传素材",
   completed: "已完成",
   failed: "失败",
   interrupted: "已中断",
@@ -73,10 +73,15 @@ function formatDateTime(value: string) {
 
 const lifecycleLabels: Record<string, string> = {
   DRAFT: "草稿",
+  MATERIAL_PENDING: "素材待完善",
+  READY_TO_SUBMIT: "待提交",
+  SUBMITTING: "提交中",
   UNDER_REVIEW: "审核中",
   APPROVED: "审核通过",
+  PENDING_PUBLISH: "待发布",
   REJECTED: "审核驳回",
   PUBLISHED: "已发布",
+  REMOTE_SYNCED: "已同步",
 };
 
 const publishStatusLabels: Record<string, string> = {
@@ -85,7 +90,8 @@ const publishStatusLabels: Record<string, string> = {
 };
 
 type StateFilter = "all" | WechatMiniProgramCatalogUploadState;
-type InventoryFilter = "all" | "stocked" | "unstocked" | "has-source" | "missing-source";
+type MaterialFilter = "all" | "complete" | "pending" | "failed";
+type SourceFilter = "all" | "available" | "missing";
 type SelectOption<T extends string | number> = { value: T; label: string };
 
 const autoSyncOptions = [15, 30, 60, 300, 0] as const;
@@ -105,13 +111,55 @@ const stateFilterOptions: SelectOption<StateFilter>[] = [
   })),
 ];
 
-const inventoryFilterOptions: SelectOption<InventoryFilter>[] = [
-  { value: "all", label: "全部资源状态" },
-  { value: "stocked", label: "前四集已入库" },
-  { value: "unstocked", label: "前四集待入库" },
-  { value: "has-source", label: "已有网盘链接" },
-  { value: "missing-source", label: "缺少网盘链接" },
+const episodeFilterOptions: SelectOption<MaterialFilter>[] = [
+  { value: "all", label: "全部前四集" },
+  { value: "complete", label: "前四集已入库" },
+  { value: "pending", label: "前四集待入库" },
+  { value: "failed", label: "前四集失败" },
 ];
+
+const coverFilterOptions: SelectOption<MaterialFilter>[] = [
+  { value: "all", label: "全部封面" },
+  { value: "complete", label: "封面已入库" },
+  { value: "pending", label: "封面待入库" },
+  { value: "failed", label: "封面失败" },
+];
+
+const sourceFilterOptions: SelectOption<SourceFilter>[] = [
+  { value: "all", label: "全部网盘资源" },
+  { value: "available", label: "已有网盘链接" },
+  { value: "missing", label: "缺少网盘链接" },
+];
+
+function episodesComplete(task: WechatMiniProgramCatalogUploadTask) {
+  return (
+    task.hasFirstFourEpisodes ||
+    (task.targetEpisodeCount > 0 && task.uploadedEpisodeCount >= task.targetEpisodeCount)
+  );
+}
+
+function coverComplete(task: WechatMiniProgramCatalogUploadTask) {
+  return task.hasCover || ["uploaded", "existing"].includes(task.coverStatus);
+}
+
+function episodesFailed(task: WechatMiniProgramCatalogUploadTask) {
+  return task.episodeStatuses.some((episode) => episode.state === "failed");
+}
+
+function taskStateLabel(task: WechatMiniProgramCatalogUploadTask) {
+  if (task.state === "downloading" || task.state === "uploading") {
+    const action = task.state === "downloading" ? "下载" : "上传";
+    if (episodesComplete(task) && !coverComplete(task)) return `${action}封面`;
+    if (!episodesComplete(task) && coverComplete(task)) return `${action}前四集`;
+    return `${action}前四集与封面`;
+  }
+  return stateLabels[task.state];
+}
+
+function lifecycleLabel(value?: string) {
+  if (!value) return "未知";
+  return lifecycleLabels[value.toUpperCase()] ?? value;
+}
 
 function CompactSelect<T extends string | number>({
   ariaLabel,
@@ -161,7 +209,9 @@ export function WechatMiniProgramCatalogUploadWindow() {
   const [autoSyncSeconds, setAutoSyncSeconds] = useState(15);
   const [keyword, setKeyword] = useState("");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
-  const [inventoryFilter, setInventoryFilter] = useState<InventoryFilter>("all");
+  const [episodeFilter, setEpisodeFilter] = useState<MaterialFilter>("all");
+  const [coverFilter, setCoverFilter] = useState<MaterialFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
   const autoSyncInFlight = useRef(false);
@@ -170,7 +220,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
     try {
       setWorkspace(await wechatMiniProgramCatalogUploadService.workspace());
     } catch (error) {
-      toast.error("无法读取前四集入库记录", {
+      toast.error("无法读取前四集与封面入库记录", {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -209,40 +259,68 @@ export function WechatMiniProgramCatalogUploadWindow() {
   const counts = useMemo(() => {
     const tasks = workspace?.tasks ?? [];
     return {
-      completed: tasks.filter((task) => task.state === "completed").length,
+      episodesComplete: tasks.filter(episodesComplete).length,
+      coversComplete: tasks.filter(coverComplete).length,
       failed: tasks.filter((task) => ["failed", "interrupted"].includes(task.state)).length,
-      missing: tasks.filter((task) => task.state === "missing-source").length,
+      missing: tasks.filter((task) => !task.baiduNetdiskUrl?.trim()).length,
     };
   }, [workspace]);
+
+  const retryableTasks = useMemo(
+    () =>
+      (workspace?.tasks ?? []).filter(
+        (task) =>
+          ["failed", "interrupted"].includes(task.state) && Boolean(task.baiduNetdiskUrl?.trim()),
+      ),
+    [workspace],
+  );
 
   const filteredTasks = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase("zh-CN");
     return (workspace?.tasks ?? []).filter((task) => {
       if (stateFilter !== "all" && task.state !== stateFilter) return false;
-      if (inventoryFilter === "stocked" && !task.hasFirstFourEpisodes) return false;
-      if (inventoryFilter === "unstocked" && task.hasFirstFourEpisodes) return false;
-      if (inventoryFilter === "has-source" && !task.baiduNetdiskUrl) return false;
-      if (inventoryFilter === "missing-source" && task.baiduNetdiskUrl) return false;
+      const episodeComplete = episodesComplete(task);
+      const episodeFailed = episodesFailed(task);
+      const isCoverComplete = coverComplete(task);
+      if (episodeFilter === "complete" && !episodeComplete) return false;
+      if (episodeFilter === "pending" && (episodeComplete || episodeFailed)) return false;
+      if (episodeFilter === "failed" && !episodeFailed) return false;
+      if (coverFilter === "complete" && !isCoverComplete) return false;
+      if (coverFilter === "pending" && (isCoverComplete || task.coverStatus === "failed")) return false;
+      if (coverFilter === "failed" && task.coverStatus !== "failed") return false;
+      if (sourceFilter === "available" && !task.baiduNetdiskUrl) return false;
+      if (sourceFilter === "missing" && task.baiduNetdiskUrl) return false;
       if (!normalizedKeyword) return true;
-      return [task.dramaName, task.dramaId, task.wxDramaId, task.baiduNetdiskUrl, task.error].some(
-        (value) =>
-          String(value ?? "")
-            .toLocaleLowerCase("zh-CN")
-            .includes(normalizedKeyword),
+      return [
+        task.dramaName,
+        task.dramaId,
+        task.wxDramaId,
+        task.baiduNetdiskUrl,
+        task.error,
+        task.lifecycleStatus,
+      ].some((value) =>
+        String(value ?? "")
+          .toLocaleLowerCase("zh-CN")
+          .includes(normalizedKeyword),
       );
     });
-  }, [inventoryFilter, keyword, stateFilter, workspace]);
+  }, [coverFilter, episodeFilter, keyword, sourceFilter, stateFilter, workspace]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
   const pagedTasks = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredTasks.slice(start, start + pageSize);
   }, [currentPage, filteredTasks, pageSize]);
-  const hasFilters = Boolean(keyword.trim()) || stateFilter !== "all" || inventoryFilter !== "all";
+  const hasFilters =
+    Boolean(keyword.trim()) ||
+    stateFilter !== "all" ||
+    episodeFilter !== "all" ||
+    coverFilter !== "all" ||
+    sourceFilter !== "all";
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [inventoryFilter, keyword, pageSize, stateFilter]);
+  }, [coverFilter, episodeFilter, keyword, pageSize, sourceFilter, stateFilter]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, totalPages));
@@ -251,7 +329,9 @@ export function WechatMiniProgramCatalogUploadWindow() {
   const resetFilters = () => {
     setKeyword("");
     setStateFilter("all");
-    setInventoryFilter("all");
+    setEpisodeFilter("all");
+    setCoverFilter("all");
+    setSourceFilter("all");
   };
 
   const runAction = async (
@@ -292,10 +372,10 @@ export function WechatMiniProgramCatalogUploadWindow() {
                 className="size-5"
                 src={`${import.meta.env.BASE_URL}wechat-miniprogram.svg`}
               />
-              <h1 className="text-base font-semibold">剧目前四集入库</h1>
+              <h1 className="text-base font-semibold">剧目前四集与封面入库</h1>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -310,6 +390,29 @@ export function WechatMiniProgramCatalogUploadWindow() {
             >
               {pendingAction === "sync" || workspace?.sync.running ? <Spinner /> : null}
               {workspace?.sync.running ? "正在获取全部剧目" : "获取全部剧目"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                pendingAction !== null ||
+                retryableTasks.length === 0 ||
+                Boolean(workspace?.queue.running) ||
+                Boolean(workspace?.sync.running)
+              }
+              onClick={() =>
+                void runAction(
+                  "retry-all",
+                  () =>
+                    wechatMiniProgramCatalogUploadService.retryTasks(
+                      retryableTasks.map((task) => task.id),
+                    ),
+                  `已重新加入 ${retryableTasks.length} 个失败任务`,
+                )
+              }
+            >
+              {pendingAction === "retry-all" ? <Spinner /> : null}
+              重试全部{retryableTasks.length ? ` (${retryableTasks.length})` : ""}
             </Button>
             <Button
               size="sm"
@@ -360,7 +463,8 @@ export function WechatMiniProgramCatalogUploadWindow() {
               处理进度 {workspace.queue.processedCount}/{workspace.queue.totalCount}
             </span>
           ) : null}
-          <span>已完成 {counts.completed}</span>
+          <span>前四集已入库 {counts.episodesComplete}</span>
+          <span>封面已入库 {counts.coversComplete}</span>
           <span className="text-muted-foreground">缺链接 {counts.missing}</span>
           <span className={counts.failed ? "text-destructive" : "text-muted-foreground"}>
             失败 {counts.failed}
@@ -418,11 +522,25 @@ export function WechatMiniProgramCatalogUploadWindow() {
             onValueChange={setStateFilter}
           />
           <CompactSelect
-            ariaLabel="资源状态筛选"
-            className="w-40"
-            options={inventoryFilterOptions}
-            value={inventoryFilter}
-            onValueChange={setInventoryFilter}
+            ariaLabel="前四集状态筛选"
+            className="w-36"
+            options={episodeFilterOptions}
+            value={episodeFilter}
+            onValueChange={setEpisodeFilter}
+          />
+          <CompactSelect
+            ariaLabel="封面状态筛选"
+            className="w-32"
+            options={coverFilterOptions}
+            value={coverFilter}
+            onValueChange={setCoverFilter}
+          />
+          <CompactSelect
+            ariaLabel="网盘资源筛选"
+            className="w-36"
+            options={sourceFilterOptions}
+            value={sourceFilter}
+            onValueChange={setSourceFilter}
           />
           {hasFilters ? (
             <Button type="button" size="xs" variant="ghost" onClick={resetFilters}>
@@ -438,7 +556,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
             <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
               <Table
                 containerClassName="h-full overflow-auto overscroll-contain"
-                className="min-w-[1480px] table-fixed"
+                className="min-w-[1450px] table-fixed"
               >
                 <TableHeader className="sticky top-0 z-10 bg-muted">
                   <TableRow className="bg-muted/80 hover:bg-muted/80">
@@ -447,11 +565,11 @@ export function WechatMiniProgramCatalogUploadWindow() {
                     <TableHead className="h-9 w-52">剧目</TableHead>
                     <TableHead className="h-9 w-16 text-right">总集数</TableHead>
                     <TableHead className="h-9 w-28">网盘资源</TableHead>
-                    <TableHead className="h-9 w-32">入库状态</TableHead>
+                    <TableHead className="h-9 w-32">前四集</TableHead>
+                    <TableHead className="h-9 w-32">封面</TableHead>
                     <TableHead className="h-9 w-28">生命周期</TableHead>
                     <TableHead className="h-9 w-24">发布状态</TableHead>
-                    <TableHead className="h-9 w-28">任务状态</TableHead>
-                    <TableHead className="h-9 w-40">处理进度</TableHead>
+                    <TableHead className="h-9 w-32">处理状态</TableHead>
                     <TableHead className="h-9 w-56">异常信息</TableHead>
                     <TableHead className="h-9 w-28">最近更新</TableHead>
                     <TableHead className="h-9 w-20 text-right">操作</TableHead>
@@ -460,9 +578,13 @@ export function WechatMiniProgramCatalogUploadWindow() {
                 <TableBody>
                   {pagedTasks.map((task) => {
                     const active = workspace.queue.activeTaskId === task.id;
-                    const progress = Math.round(
-                      (task.uploadedEpisodeCount / Math.max(1, task.targetEpisodeCount)) * 100,
-                    );
+                    const episodeComplete = episodesComplete(task);
+                    const episodeFailed = episodesFailed(task);
+                    const isCoverComplete = coverComplete(task);
+                    const episodeError = task.episodeStatuses.find(
+                      (episode) => episode.state === "failed",
+                    )?.error;
+                    const error = task.error ?? task.coverError ?? episodeError;
                     return (
                       <TableRow key={task.id} className={active ? "bg-sky-500/5" : undefined}>
                         <TableCell className="py-2 text-xs tabular-nums text-muted-foreground">
@@ -492,21 +614,59 @@ export function WechatMiniProgramCatalogUploadWindow() {
                           </div>
                         </TableCell>
                         <TableCell className="py-2">
-                          <Badge
-                            variant={task.hasFirstFourEpisodes ? "secondary" : "outline"}
-                            className={
-                              task.hasFirstFourEpisodes
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                : undefined
-                            }
-                          >
-                            {task.hasFirstFourEpisodes ? "已入库" : "待入库"}
-                          </Badge>
+                          <div className="grid gap-0.5 text-xs">
+                            <span
+                              className={
+                                episodeComplete
+                                  ? "text-emerald-700 dark:text-emerald-300"
+                                  : episodeFailed
+                                    ? "text-destructive"
+                                    : "text-foreground"
+                              }
+                            >
+                              {episodeComplete
+                                ? "已入库"
+                                : episodeFailed
+                                  ? "上传失败"
+                                  : "待入库"}
+                            </span>
+                            <span className="tabular-nums text-muted-foreground">
+                              {Math.min(task.uploadedEpisodeCount, task.targetEpisodeCount)}/
+                              {task.targetEpisodeCount} 集
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <div className="grid min-w-0 gap-0.5 text-xs">
+                            <span
+                              className={
+                                isCoverComplete
+                                  ? "text-emerald-700 dark:text-emerald-300"
+                                  : task.coverStatus === "failed"
+                                    ? "text-destructive"
+                                    : "text-foreground"
+                              }
+                            >
+                              {isCoverComplete
+                                ? "已入库"
+                                : task.coverStatus === "failed"
+                                  ? "上传失败"
+                                  : "待入库"}
+                            </span>
+                            <span
+                              className="truncate text-muted-foreground"
+                              title={task.coverFileName}
+                            >
+                              {task.coverStatus === "existing" || task.hasCover
+                                ? "后台已有"
+                                : task.coverStatus === "uploaded"
+                                  ? task.coverFileName ?? "本次上传"
+                                  : "—"}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="truncate py-2 text-xs" title={task.lifecycleStatus}>
-                          {lifecycleLabels[task.lifecycleStatus ?? ""] ??
-                            task.lifecycleStatus ??
-                            "未知"}
+                          {lifecycleLabel(task.lifecycleStatus)}
                         </TableCell>
                         <TableCell
                           className="truncate py-2 text-xs"
@@ -529,28 +689,14 @@ export function WechatMiniProgramCatalogUploadWindow() {
                             ) : ["failed", "interrupted"].includes(task.state) ? (
                               <DangerTriangle className="size-3" />
                             ) : null}
-                            {stateLabels[task.state]}
+                            {taskStateLabel(task)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="py-2">
-                          <div className="grid gap-1.5">
-                            <div className="flex justify-between text-[11px] tabular-nums">
-                              <span>
-                                {task.uploadedEpisodeCount} / {task.targetEpisodeCount} 集
-                              </span>
-                              <span className="text-muted-foreground">{progress}%</span>
-                            </div>
-                            <Progress
-                              aria-label={`${task.dramaName}上传进度${progress}%`}
-                              value={progress}
-                            />
-                          </div>
-                        </TableCell>
                         <TableCell
-                          className={`truncate py-2 text-xs ${task.error ? "text-destructive" : "text-muted-foreground"}`}
-                          title={task.error}
+                          className={`truncate py-2 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}
+                          title={error}
                         >
-                          {task.error ?? "—"}
+                          {error ?? "—"}
                         </TableCell>
                         <TableCell className="py-2 text-xs tabular-nums text-muted-foreground">
                           {formatDateTime(task.updatedAt)}

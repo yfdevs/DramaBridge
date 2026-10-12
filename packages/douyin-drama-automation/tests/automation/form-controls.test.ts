@@ -11,6 +11,7 @@ import {
   assertNoDouyinFormError,
   DOUYIN_DRAMA_VIDEO_TOPICS,
   fillDouyinEpisodeBatchEdit,
+  fillDouyinRoleNameWithoutSuggestion,
   fillNearestDouyinCompletionPromiseDateTime,
   fillDouyinPublishDateTime,
   hasInvalidDouyinEpisodeDuration,
@@ -646,6 +647,50 @@ test("captures a transient Arco error message after it disappears", async () => 
       /DOUYIN_DRAMA_FORM_ERROR: 上传红果封面图: 图片高度不能大于2000/u,
     );
     await assert.doesNotReject(() => assertNoDouyinFormError(page, "下一步"));
+  } finally {
+    await browser.close();
+  }
+});
+
+test("fills a new Douyin role name without selecting an autocomplete suggestion", async () => {
+  const browser = await launchTestBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(`
+      <div role="dialog" class="arco-modal role-add-modal">
+        <div class="arco-modal-title">添加角色</div>
+        <div id="role"><input placeholder="请输入角色姓名"></div>
+        <div id="role_type_input" role="combobox">请选择角色性质</div>
+      </div>
+      <div id="role-suggestions" class="arco-auto-complete-popup" role="listbox" style="display:none">
+        <div role="option">小宇（已有角色）</div>
+      </div>
+      <script>
+        window.roleSuggestionSelectionCount = 0;
+        const input = document.querySelector('#role input');
+        const popup = document.querySelector('#role-suggestions');
+        input.addEventListener('input', () => { popup.style.display = 'block'; });
+        popup.querySelector('[role=option]').addEventListener('click', () => {
+          window.roleSuggestionSelectionCount += 1;
+          input.value = '小宇（已有角色）';
+        });
+        document.querySelector('.arco-modal-title').addEventListener('click', () => {
+          popup.style.display = 'none';
+        });
+      </script>
+    `);
+
+    const dialog = page.locator("[role='dialog']");
+    await fillDouyinRoleNameWithoutSuggestion(page, dialog, "小宇");
+
+    assert.equal(await dialog.locator("#role input").inputValue(), "小宇");
+    assert.equal(await page.locator("#role-suggestions").isVisible(), false);
+    assert.equal(
+      await page.evaluate(() => (window as unknown as { roleSuggestionSelectionCount: number })
+        .roleSuggestionSelectionCount),
+      0,
+    );
+    assert.equal(await dialog.isVisible(), true);
   } finally {
     await browser.close();
   }

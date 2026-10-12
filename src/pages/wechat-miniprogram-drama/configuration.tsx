@@ -117,7 +117,7 @@ const sections: Array<{
         key: "catalogApiBaseUrl",
         label: "剧目与素材接口地址",
         type: "url",
-        description: "前四集入库的剧目列表、素材查询和视频上传统一使用此接口地址，无需访问令牌。",
+        description: "前四集与封面入库的剧目列表、素材查询和上传统一使用此接口地址，无需访问令牌。",
       },
     ],
   },

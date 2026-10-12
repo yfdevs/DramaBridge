@@ -53,9 +53,24 @@ export type AdjustedVideoPlaybackSpeed = {
   outputDurationSeconds: number;
 };
 
+export type VideoDimensions = {
+  width: number;
+  height: number;
+};
+
+export type EnsureVideoMinimumDimensionsRequest = {
+  inputFile: string;
+  outputFile: string;
+  minimumWidth: number;
+  minimumHeight: number;
+  signal?: AbortSignal;
+  onLog?: (message: string) => void;
+};
+
 const defaultAudioBitrateKbps = 128;
 const minimumVideoBitrateKbps = 100;
 const durationPattern = /Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/;
+const videoDimensionsPattern = /Video:[^\r\n]*?\b(\d{2,5})x(\d{2,5})\b/u;
 
 function assertPolicy(policy: VideoSizePolicy) {
   if (!Number.isFinite(policy.maxFileBytes) || policy.maxFileBytes <= 0) {
@@ -155,6 +170,85 @@ export async function readVideoDurationSeconds(inputFile: string, signal?: Abort
     throw new Error(`[video-transcode-failed] 视频时长无效: ${inputFile}`);
   }
   return durationSeconds;
+}
+
+export async function readVideoDimensions(
+  inputFile: string,
+  signal?: AbortSignal,
+): Promise<VideoDimensions> {
+  const result = await runFfmpeg(
+    ["-hide_banner", "-i", inputFile],
+    { signal, acceptExitCode: (code) => code === 1 },
+  );
+  const match = videoDimensionsPattern.exec(result.stderr);
+  const width = Number(match?.[1]);
+  const height = Number(match?.[2]);
+  if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
+    throw new Error(`[video-transcode-failed] 无法读取视频分辨率: ${inputFile}`);
+  }
+  return { width, height };
+}
+
+export async function ensureVideoMinimumDimensions(
+  request: EnsureVideoMinimumDimensionsRequest,
+) {
+  const minimumWidth = Math.floor(request.minimumWidth);
+  const minimumHeight = Math.floor(request.minimumHeight);
+  if (minimumWidth <= 0 || minimumHeight <= 0) {
+    throw new Error("[video-transcode-failed] 视频最小宽高必须为正整数。");
+  }
+  const source = await readVideoDimensions(request.inputFile, request.signal);
+  if (source.width >= minimumWidth && source.height >= minimumHeight) {
+    return { file: request.inputFile, source, output: source, transcoded: false };
+  }
+
+  const targetShortEdge = Math.max(minimumWidth, minimumHeight);
+  const temporaryOutput = `${request.outputFile}.${process.pid}-${Date.now()}.tmp.mp4`;
+  await mkdir(path.dirname(request.outputFile), { recursive: true });
+  await rm(temporaryOutput, { force: true }).catch(() => undefined);
+  request.onLog?.(
+    `[video-dimensions] ${path.basename(request.inputFile)} ${source.width}x${source.height} ` +
+      `不符合最小 ${minimumWidth}x${minimumHeight}，开始转换`,
+  );
+  try {
+    await runFfmpeg([
+      "-y",
+      "-hide_banner",
+      "-i", request.inputFile,
+      "-map", "0:v:0",
+      "-map", "0:a:0?",
+      "-filter:v",
+      `scale='if(lt(iw,ih),${targetShortEdge},-2)':'if(gte(iw,ih),${targetShortEdge},-2)'`,
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "18",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-b:a", "128k",
+      "-movflags", "+faststart",
+      temporaryOutput,
+    ], { signal: request.signal });
+    const output = await readVideoDimensions(temporaryOutput, request.signal);
+    if (output.width < minimumWidth || output.height < minimumHeight) {
+      throw new Error(
+        `[video-transcode-failed] 转换后分辨率仍不符合要求: ` +
+          `${output.width}x${output.height}, minimum=${minimumWidth}x${minimumHeight}`,
+      );
+    }
+    const outputStat = await stat(temporaryOutput);
+    if (!outputStat.isFile() || outputStat.size <= 0) {
+      throw new Error(`[video-transcode-failed] FFmpeg 未生成有效视频: ${request.inputFile}`);
+    }
+    await rm(request.outputFile, { force: true }).catch(() => undefined);
+    await rename(temporaryOutput, request.outputFile);
+    request.onLog?.(
+      `[video-dimensions] ${path.basename(request.inputFile)} 转换完成：` +
+        `${source.width}x${source.height} -> ${output.width}x${output.height}`,
+    );
+    return { file: request.outputFile, source, output, transcoded: true };
+  } finally {
+    await rm(temporaryOutput, { force: true }).catch(() => undefined);
+  }
 }
 
 async function videoHasAudioStream(inputFile: string, signal?: AbortSignal) {

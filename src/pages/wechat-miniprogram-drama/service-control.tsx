@@ -64,7 +64,7 @@ export function WechatMiniProgramServiceControlPage() {
     try {
       await wechatMiniProgramCatalogUploadService.openWindow()
     } catch (error) {
-      toast.error("无法打开前四集入库", {
+      toast.error("无法打开前四集与封面入库", {
         description: error instanceof Error ? error.message : String(error),
       })
     } finally {
@@ -99,7 +99,7 @@ export function WechatMiniProgramServiceControlPage() {
             disabled={openingCatalogUpload}
             onClick={() => void openCatalogUpload()}
           >
-            {openingCatalogUpload ? "正在打开…" : "前四集入库"}
+            {openingCatalogUpload ? "正在打开…" : "前四集与封面入库"}
           </Button>
         </div>
       }

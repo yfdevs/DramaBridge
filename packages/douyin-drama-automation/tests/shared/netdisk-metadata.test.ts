@@ -175,3 +175,21 @@ test("collects preserved original image names and TXT content", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("collects RTF synopsis content and prioritizes synopsis directories", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "douyin-netdisk-rtf-"));
+  const unrelated = path.join(root, "其他", "说明.txt");
+  const synopsis = path.join(root, "海报封面", "剧情资料", "剧情简介.rtf");
+  await mkdir(path.dirname(unrelated), { recursive: true });
+  await mkdir(path.dirname(synopsis), { recursive: true });
+  await writeFile(unrelated, "无关说明", "utf8");
+  await writeFile(synopsis, String.raw`{\rtf1\ansi \u21095?\u24773?\u31616?\u20171?\par \u20027?\u35201?\u35282?\u33394?}`, "ascii");
+  try {
+    const inputs = await collectDouyinNetdiskMetadataInputs(root);
+    assert.equal(inputs.texts[0]?.fileName, "剧情简介.rtf");
+    assert.match(inputs.texts[0]?.content ?? "", /剧情简介/u);
+    assert.match(inputs.texts[0]?.content ?? "", /主要角色/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

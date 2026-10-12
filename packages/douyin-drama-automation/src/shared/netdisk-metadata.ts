@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import * as mammoth from "mammoth";
 import { z } from "zod";
 import { listLocalPosterImages } from "@drama/drama-media-assets";
 import { log, warn } from "./logger.js";
@@ -12,10 +13,11 @@ import type {
 } from "./types.js";
 
 const imageExtensions = new Set([".jpg", ".jpeg", ".png", ".bmp", ".webp"]);
-const textExtensions = new Set([".txt", ".md"]);
+const textExtensions = new Set([".txt", ".md", ".doc", ".docx", ".rtf"]);
 const MAX_TEXT_FILES = 10;
 const MAX_TOTAL_TEXT_CHARACTERS = 30_000;
 const MAX_IMAGE_CANDIDATES = 100;
+const MAX_TEXT_FILE_BYTES = 8 * 1024 * 1024;
 
 function parseAiJsonObject(text: string): Record<string, unknown> {
   const trimmed = text.trim().replace(/^\uFEFF/, "");
@@ -84,6 +86,52 @@ function decodeText(buffer: Buffer) {
   }
 }
 
+function decodeRtf(buffer: Buffer) {
+  const source = buffer.toString("latin1");
+  return source
+    .replace(/\\u(-?\d+)\??/gi, (_match, value: string) => {
+      const codeUnit = Number.parseInt(value, 10);
+      return String.fromCharCode(codeUnit < 0 ? codeUnit + 65_536 : codeUnit);
+    })
+    .replace(/(?:\\'[0-9a-f]{2})+/gi, (encoded) => {
+      const bytes = Buffer.from(encoded.match(/[0-9a-f]{2}/gi)?.join("") ?? "", "hex");
+      try {
+        return new TextDecoder("gb18030").decode(bytes);
+      } catch {
+        return bytes.toString("latin1");
+      }
+    })
+    .replace(/\\par[d]?\b/gi, "\n")
+    .replace(/\\tab\b/gi, "\t")
+    .replace(/\\[a-z]+-?\d* ?/gi, "")
+    .replace(/\\([{}\\])/g, "$1")
+    .replace(/[{}]/g, "")
+    .replace(/\0/g, "")
+    .trim();
+}
+
+async function readMetadataText(file: string) {
+  const info = await stat(file).catch(() => undefined);
+  if (!info?.isFile() || info.size <= 0 || info.size > MAX_TEXT_FILE_BYTES) return "";
+  const extension = path.extname(file).toLowerCase();
+  if (extension === ".docx") {
+    return (await mammoth.extractRawText({ path: file })).value.replace(/\0/g, "").trim();
+  }
+  if (extension === ".doc") {
+    // Legacy binary DOC is discovered and downloaded, but cannot be decoded safely by Mammoth.
+    return "";
+  }
+  const buffer = await readFile(file);
+  return extension === ".rtf"
+    ? decodeRtf(buffer)
+    : decodeText(buffer).replace(/\0/g, "").trim();
+}
+
+function metadataTextPriority(file: string) {
+  const normalized = file.replace(/\\/g, "/");
+  return Number(!/剧情资料|简介|剧情|梗概|故事|介绍/u.test(normalized));
+}
+
 async function walkFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
   const files: string[] = [];
@@ -116,13 +164,14 @@ export async function collectDouyinNetdiskMetadataInputs(
 
   let remainingCharacters = MAX_TOTAL_TEXT_CHARACTERS;
   const textFiles = files
-    .filter((file) => textExtensions.has(path.extname(file).toLowerCase()))
-    .sort((left, right) => left.localeCompare(right, "zh-CN", { numeric: true }))
+    .filter((file) => textExtensions.has(path.extname(file).toLowerCase()) && !path.basename(file).startsWith("~$"))
+    .sort((left, right) => metadataTextPriority(left) - metadataTextPriority(right)
+      || left.localeCompare(right, "zh-CN", { numeric: true }))
     .slice(0, MAX_TEXT_FILES);
   const texts: MetadataInputs["texts"] = [];
   for (const file of textFiles) {
     if (remainingCharacters <= 0) break;
-    const content = decodeText(await readFile(file)).replace(/\0/g, "").trim();
+    const content = await readMetadataText(file).catch(() => "");
     if (!content) continue;
     const clipped = content.slice(0, remainingCharacters);
     remainingCharacters -= clipped.length;
@@ -201,7 +250,7 @@ function buildPrompt(task: ClaimedDouyinDramaTask, inputs: MetadataInputs) {
     `剧名：${task.playlet.title}`,
     `后端简介：${task.playlet.summary || "（未提供）"}`,
     `后端角色：${JSON.stringify(task.playlet.roles)}`,
-    `TXT资料：${JSON.stringify(inputs.texts.map((text) => ({
+    `剧情资料：${JSON.stringify(inputs.texts.map((text) => ({
       fileName: text.fileName,
       relativePath: text.relativePath,
       content: text.content,
@@ -321,7 +370,7 @@ export async function enrichDouyinTaskFromNetdisk(
   const resourceDir = path.join(root, task.originalTitle.trim());
   const inputs = await collectDouyinNetdiskMetadataInputs(resourceDir);
   if (task.playlet.summary.trim().length <= 100 && inputs.texts.length === 0) {
-    throw new Error("DOUYIN_DRAMA_NETDISK_TEXT_REQUIRED: 后端未提供合格简介，网盘素材中也没有找到可读取的 TXT 文件");
+    throw new Error("DOUYIN_DRAMA_NETDISK_TEXT_REQUIRED: 后端未提供合格简介，网盘素材中也没有找到可读取的 TXT、MD、DOCX 或 RTF 文件");
   }
   if (!options.aiClientFactory) {
     throw new Error("DOUYIN_DRAMA_AI_CLIENT_REQUIRED: 网盘简介和角色资料需要全局 AI 配置");

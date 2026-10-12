@@ -76,12 +76,16 @@ export type PreparedEpisodeUploadFiles = {
 
 export {
   adjustVideoPlaybackSpeed,
+  ensureVideoMinimumDimensions,
   prepareEpisodeVideos,
   readVideoDurationSeconds,
+  readVideoDimensions,
   resolveFfmpegExecutablePath,
   VideoTranscodeQueue,
   type AdjustedVideoPlaybackSpeed,
+  type EnsureVideoMinimumDimensionsRequest,
   type PreparedVideoFile,
+  type VideoDimensions,
   type VideoPlaybackSpeedRequest,
   type VideoSizePolicy,
   type VideoTranscodeQueueOptions,

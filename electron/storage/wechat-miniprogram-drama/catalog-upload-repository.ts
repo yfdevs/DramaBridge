@@ -30,6 +30,7 @@ function readTask(row: WechatMiniProgramCatalogUploadTaskRow): WechatMiniProgram
     episodeCount: row.episodeCount,
     baiduNetdiskUrl: row.baiduNetdiskUrl ?? undefined,
     hasFirstFourEpisodes: Boolean(row.hasFirstFourEpisodes),
+    hasCover: Boolean(row.hasCover),
     lifecycleStatus: row.lifecycleStatus ?? undefined,
     auditStatus: row.auditStatus ?? undefined,
     expectedPublishStatus: row.expectedPublishStatus ?? undefined,
@@ -39,6 +40,11 @@ function readTask(row: WechatMiniProgramCatalogUploadTaskRow): WechatMiniProgram
     targetEpisodeCount: row.targetEpisodeCount,
     uploadedEpisodeCount: row.uploadedEpisodeCount,
     episodeStatuses: parseEpisodeStatuses(row.episodeStatusesJson),
+    coverStatus: row.coverStatus,
+    coverMaterialId: row.coverMaterialId ?? undefined,
+    coverFileName: row.coverFileName ?? undefined,
+    coverError: row.coverError ?? undefined,
+    workflowVersion: row.workflowVersion,
     localPath: row.localPath ?? undefined,
     error: row.error ?? undefined,
     retryCount: row.retryCount,
@@ -55,12 +61,16 @@ function writeParams(task: WechatMiniProgramCatalogUploadTask) {
     wxDramaId: task.wxDramaId ?? null,
     baiduNetdiskUrl: task.baiduNetdiskUrl ?? null,
     hasFirstFourEpisodes: task.hasFirstFourEpisodes ? 1 : 0,
+    hasCover: task.hasCover ? 1 : 0,
     lifecycleStatus: task.lifecycleStatus ?? null,
     auditStatus: task.auditStatus ?? null,
     expectedPublishStatus: task.expectedPublishStatus ?? null,
     actualPublishStatus: task.actualPublishStatus ?? null,
     operationStatus: task.operationStatus ?? null,
     episodeStatusesJson: JSON.stringify(task.episodeStatuses),
+    coverMaterialId: task.coverMaterialId ?? null,
+    coverFileName: task.coverFileName ?? null,
+    coverError: task.coverError ?? null,
     localPath: task.localPath ?? null,
     error: task.error ?? null,
     startedAt: task.startedAt ?? null,
@@ -111,6 +121,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
     episodeCount: number
     baiduNetdiskUrl?: string
     hasFirstFourEpisodes: boolean
+    hasCover: boolean
     lifecycleStatus?: string
     auditStatus?: number
     expectedPublishStatus?: string
@@ -121,42 +132,58 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
     const current = this.findByDramaId(input.dramaId)
     if (current) {
       const sourceAvailable = Boolean(input.baiduNetdiskUrl?.trim())
+      const episodeStatuses = input.hasFirstFourEpisodes
+        ? Array.from({ length: input.targetEpisodeCount }, (_, index) => {
+            const existing = current.episodeStatuses.find((status) => status.episodeNo === index + 1)
+            return existing ?? { episodeNo: index + 1, state: "existing" as const }
+          })
+        : current.episodeStatuses.filter((status) => status.episodeNo <= input.targetEpisodeCount)
+      const uploadedEpisodeCount = episodeStatuses.filter(
+        (status) => status.state === "uploaded" || status.state === "existing",
+      ).length
+      const coverComplete = input.hasCover
+        || current.coverStatus === "uploaded"
+        || current.coverStatus === "existing"
+      const complete = uploadedEpisodeCount >= input.targetEpisodeCount && coverComplete
       return this.update(current.id, {
         wxDramaId: input.wxDramaId,
         dramaName: input.dramaName,
         episodeCount: input.episodeCount,
         baiduNetdiskUrl: input.baiduNetdiskUrl,
         hasFirstFourEpisodes: input.hasFirstFourEpisodes,
+        hasCover: input.hasCover || coverComplete,
         lifecycleStatus: input.lifecycleStatus,
         auditStatus: input.auditStatus,
         expectedPublishStatus: input.expectedPublishStatus,
         actualPublishStatus: input.actualPublishStatus,
         operationStatus: input.operationStatus,
         targetEpisodeCount: input.targetEpisodeCount,
-        state: input.hasFirstFourEpisodes
-          ? "completed"
-          : current.state === "missing-source" && sourceAvailable
-            ? "discovered"
-            : current.state,
-        uploadedEpisodeCount: input.hasFirstFourEpisodes
-          ? input.targetEpisodeCount
-          : current.uploadedEpisodeCount,
-        error: input.hasFirstFourEpisodes || (current.state === "missing-source" && sourceAvailable)
-          ? undefined
-          : current.error,
+        state: complete ? "completed" : sourceAvailable ? "discovered" : "missing-source",
+        episodeStatuses,
+        uploadedEpisodeCount,
+        coverStatus: coverComplete ? (current.coverStatus === "uploaded" ? "uploaded" : "existing") : "pending",
+        error: complete || sourceAvailable ? undefined : "剧列表未提供百度网盘链接。",
       })
     }
     const now = new Date().toISOString()
     const task: WechatMiniProgramCatalogUploadTask = {
       id: randomUUID(),
       ...input,
-      state: input.hasFirstFourEpisodes
+      state: input.hasFirstFourEpisodes && input.hasCover
         ? "completed"
         : input.baiduNetdiskUrl?.trim() ? "discovered" : "missing-source",
       uploadedEpisodeCount: input.hasFirstFourEpisodes ? input.targetEpisodeCount : 0,
-      episodeStatuses: [],
+      episodeStatuses: input.hasFirstFourEpisodes
+        ? Array.from({ length: input.targetEpisodeCount }, (_, index) => ({
+            episodeNo: index + 1,
+            state: "existing" as const,
+          }))
+        : [],
+      coverStatus: input.hasCover ? "existing" : "pending",
+      workflowVersion: 3,
       retryCount: 0,
-      error: input.hasFirstFourEpisodes || input.baiduNetdiskUrl?.trim()
+      error: input.baiduNetdiskUrl?.trim()
+        || (input.hasFirstFourEpisodes && input.hasCover)
         ? undefined
         : "剧列表未提供百度网盘链接。",
       createdAt: now,
@@ -189,7 +216,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
     patch: Partial<Omit<WechatMiniProgramCatalogUploadTask, "id" | "createdAt">>,
   ): WechatMiniProgramCatalogUploadTask {
     const current = this.findById(id)
-    if (!current) throw new Error(`前四集上传记录不存在：${id}`)
+    if (!current) throw new Error(`前四集与封面上传记录不存在：${id}`)
     const task = {
       ...current,
       ...patch,
@@ -203,7 +230,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
 
   retry(id: string): WechatMiniProgramCatalogUploadTask {
     const current = this.findById(id)
-    if (!current) throw new Error(`前四集上传记录不存在：${id}`)
+    if (!current) throw new Error(`前四集与封面上传记录不存在：${id}`)
     if (!current.baiduNetdiskUrl?.trim()) throw new Error("当前剧目没有百度网盘链接，无法重试。")
     return this.update(id, {
       state: "discovered",
@@ -227,28 +254,34 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
     this.database.prepare(`
       INSERT INTO wechat_miniprogram_catalog_upload_tasks (
         id, drama_id, wx_drama_id, drama_name, episode_count, baidu_netdisk_url,
-        has_first_four_episodes, lifecycle_status, audit_status,
+        has_first_four_episodes, has_cover, lifecycle_status, audit_status,
         expected_publish_status, actual_publish_status, operation_status,
         state, target_episode_count, uploaded_episode_count, episode_statuses_json,
+        cover_status, cover_material_id, cover_file_name, cover_error, workflow_version,
         local_path, error, retry_count, created_at, updated_at, started_at, finished_at
       ) VALUES (
         @id, @dramaId, @wxDramaId, @dramaName, @episodeCount, @baiduNetdiskUrl,
-        @hasFirstFourEpisodes, @lifecycleStatus, @auditStatus,
+        @hasFirstFourEpisodes, @hasCover, @lifecycleStatus, @auditStatus,
         @expectedPublishStatus, @actualPublishStatus, @operationStatus,
         @state, @targetEpisodeCount, @uploadedEpisodeCount, @episodeStatusesJson,
+        @coverStatus, @coverMaterialId, @coverFileName, @coverError, @workflowVersion,
         @localPath, @error, @retryCount, @createdAt, @updatedAt, @startedAt, @finishedAt
       )
       ON CONFLICT(id) DO UPDATE SET
         wx_drama_id=excluded.wx_drama_id, drama_name=excluded.drama_name,
         episode_count=excluded.episode_count, baidu_netdisk_url=excluded.baidu_netdisk_url,
         has_first_four_episodes=excluded.has_first_four_episodes,
+        has_cover=excluded.has_cover,
         lifecycle_status=excluded.lifecycle_status, audit_status=excluded.audit_status,
         expected_publish_status=excluded.expected_publish_status,
         actual_publish_status=excluded.actual_publish_status,
         operation_status=excluded.operation_status,
         state=excluded.state, target_episode_count=excluded.target_episode_count,
         uploaded_episode_count=excluded.uploaded_episode_count,
-        episode_statuses_json=excluded.episode_statuses_json, local_path=excluded.local_path,
+        episode_statuses_json=excluded.episode_statuses_json,
+        cover_status=excluded.cover_status, cover_material_id=excluded.cover_material_id,
+        cover_file_name=excluded.cover_file_name, cover_error=excluded.cover_error,
+        workflow_version=excluded.workflow_version, local_path=excluded.local_path,
         error=excluded.error, retry_count=excluded.retry_count, updated_at=excluded.updated_at,
         started_at=excluded.started_at, finished_at=excluded.finished_at
     `).run(writeParams(task))

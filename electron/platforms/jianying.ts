@@ -8,17 +8,20 @@ import { app, ipcMain } from "electron";
 import Store from "electron-store";
 import {
   captureJianyingWindow,
-  doubleClickJianyingElement,
+  closeJianyingEditorWindow,
+  dismissJianyingMissingMediaDialog,
   findDramaEpisodes,
   inspectJianyingPreset,
+  importJianyingMedia,
   installJianyingPreset,
   launchJianyingWithUia,
+  markPreparedEpisodeMediaLibraryWritten,
   markPreparedEpisodeTrackWritten,
+  openFirstJianyingDraftResult,
   prepareEpisodeDraft,
   probeJianyingUia,
   readJianyingUiaTree,
   readPreparedEpisodeDraft,
-  returnJianyingHome,
   seekJianyingTimeline,
   setJianyingElementValue,
   writeJianyingDraftVideoTrack,
@@ -447,14 +450,19 @@ async function openJianyingPreset(presetName: string) {
 async function openJianyingDraft(draftName: string) {
   await launchJianying(false);
   const currentProbe = await readJianyingUiaTree(2_000);
-  const editorIsOpen = currentProbe.samples.some(
-    (element) => element.automationId === "editPanelLoader.editWin",
+  const editorIsOpen = currentProbe.windows.some(
+    (window) => window.automationId === "MainWindow",
   );
   if (editorIsOpen) {
-    try {
-      await returnJianyingToHome();
-    } catch {
-      // Restart only as a recovery path when the editor cannot return home.
+    await dismissJianyingMissingMediaDialog(300).catch(() => undefined);
+    await closeJianyingEditorWindow();
+    const homeProbe = await waitForJianyingProbe(
+      (nextProbe) => nextProbe.windows.some((window) => window.automationId === "HomeWindow"),
+      5_000,
+    );
+    if (!homeProbe.windows.some((window) => window.automationId === "HomeWindow")) {
+      // Closing the editor normally reveals Jianying's already-running home
+      // window. Restart only as a recovery path when that handoff fails.
       await launchJianying(true);
     }
   }
@@ -469,22 +477,34 @@ async function openJianyingDraft(draftName: string) {
   if (!searchProbe.samples.some((element) => element.className === "QQuickMouseArea")) {
     throw new Error(`剪映未在本地草稿中找到：${draftName}`);
   }
-  await doubleClickJianyingElement({ className: "QQuickMouseArea" });
-  const probe = await waitForJianyingProbe(
-    (nextProbe) => nextProbe.windows.some((window) => window.automationId === "MainWindow")
-      && nextProbe.controlCount > 50,
-    8_000,
+  await openFirstJianyingDraftResult(draftName);
+  const editorIsReady = (nextProbe: JianyingUiaProbe) => nextProbe.windows.some(
+    (window) => window.automationId === "MainWindow",
   );
-  const editorOpened = probe.windows.some((window) => window.automationId === "MainWindow")
-    && probe.controlCount > 50;
-  if (!editorOpened) throw new Error("预设已安装，但剪映未进入编辑器");
+  let probe = await waitForJianyingProbe(editorIsReady, 15_000);
+  if (!editorIsReady(probe)) {
+    // A cold Jianying start can ignore the first synthetic double-click while
+    // its draft card is still settling. Retry the selected search result once.
+    searchProbe = await searchJianyingDraft(draftName);
+    if (searchProbe.samples.some((element) => element.className === "QQuickMouseArea")) {
+      await openFirstJianyingDraftResult(draftName);
+      probe = await waitForJianyingProbe(editorIsReady, 20_000);
+    }
+  }
+  if (!editorIsReady(probe)) {
+    throw new Error(`剪映在 35 秒内未进入编辑器：${draftName}`);
+  }
+  await dismissJianyingMissingMediaDialog();
   return probe;
 }
 
 async function searchJianyingDraft(draftName: string) {
+  // Jianying truncates long search values. The final 16 characters preserve
+  // both the drama-name tail and the complete 第N集 suffix.
+  const searchQuery = draftName.length > 16 ? draftName.slice(-16) : draftName;
   await setJianyingElementValue({
     controlType: "Edit",
-    value: draftName,
+    value: searchQuery,
   });
   // Let the QML result grid discard cards from the previous search before
   // selecting the first result.
@@ -506,17 +526,6 @@ async function waitForJianyingProbe(
     probe = await probeJianyingUia();
   }
   return probe;
-}
-
-async function returnJianyingToHome() {
-  await returnJianyingHome();
-  const probe = await waitForJianyingProbe(
-    (nextProbe) => nextProbe.windows.some((window) => window.automationId === "HomeWindow"),
-    5_000,
-  );
-  if (!probe.windows.some((window) => window.automationId === "HomeWindow")) {
-    throw new Error("剪映未能返回草稿首页");
-  }
 }
 
 async function prepareDramaCollection(dramaDirectory: string) {
@@ -572,11 +581,15 @@ async function prepareDramaCollection(dramaDirectory: string) {
     const rangesForDuration = presetSubtitleFreeRanges
       .map(([start, end]) => [start, Math.min(end, trackResult.duration)] as [number, number])
       .filter(([start, end]) => end > start);
-    return markPreparedEpisodeTrackWritten(
+    const markedDraft = await markPreparedEpisodeTrackWritten(
       draft.draftPath,
       randomTimelineTime(rangesForDuration),
       trackResult.duration,
     );
+    if (!trackResult.mediaLibraryWritten) {
+      throw new Error(`${draft.draftName} 的素材索引写入失败`);
+    }
+    return markPreparedEpisodeMediaLibraryWritten(markedDraft.draftPath);
   };
 
   for (const episode of episodes) {
@@ -601,15 +614,20 @@ async function prepareDramaCollection(dramaDirectory: string) {
       ) {
         // Workflow v1/v2 used 新预设1 for every episode. These are known
         // app-generated temporary drafts, so migrate them automatically.
-        const currentProbe = await readJianyingUiaTree(500);
-        if (currentProbe.windows.some((window) => window.automationId === "MainWindow")) {
-          await returnJianyingToHome();
+        if (await isJianyingRunning()) {
+          await stopJianyingProcesses();
+          if (!(await waitForJianyingStop())) {
+            throw new Error("剪映未能完全退出，请关闭剪映后重试");
+          }
         }
         await rm(draftPath, { recursive: true, force: true });
       } else if (
         !existingDraft.trackWrittenAt
+        || !existingDraft.draftIdentitySynchronizedAt
+        || !existingDraft.missingMediaCleanedAt
         || existingDraft.previewTimelineTime === undefined
         || !existingDraft.timelineDuration
+        || !existingDraft.mediaLibraryWrittenAt
       ) {
         if (await isJianyingRunning()) {
           await stopJianyingProcesses();
@@ -621,6 +639,7 @@ async function prepareDramaCollection(dramaDirectory: string) {
           draftPath: existingDraft.draftPath,
           installDirectory,
           segmentFiles: existingDraft.segmentFiles,
+          registerAsNewDraft: true,
         });
         prepared.push(await finalizeTrack(existingDraft, trackResult, episodePresetPath));
         continue;
@@ -641,6 +660,7 @@ async function prepareDramaCollection(dramaDirectory: string) {
         draftPath: createdDraft.draftPath,
         installDirectory,
         segmentFiles: createdDraft.segmentFiles,
+        registerAsNewDraft: true,
       });
       prepared.push(await finalizeTrack(createdDraft, trackResult, episodePresetPath));
     } catch (error) {
@@ -652,13 +672,17 @@ async function prepareDramaCollection(dramaDirectory: string) {
   if (!prepared.length) throw new Error("没有可处理的剧集");
   const screenshots: string[] = [];
   let probe: JianyingUiaProbe | null = null;
+  // Jianying indexes every newly generated draft during startup. Do this once
+  // for the whole batch, then switch episodes by closing only the editor.
+  await launchJianying(true);
   for (const draft of prepared) {
     probe = await openJianyingDraft(draft.draftName);
+    await importJianyingMedia(draft.segmentFiles);
     if (draft.previewTimelineTime === undefined || !draft.timelineDuration) {
       throw new Error(`${draft.draftName} 缺少无字幕画面定位信息`);
     }
     await seekJianyingTimeline(draft.previewTimelineTime, draft.timelineDuration);
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     const finalScreenshot = ownershipScreenshotPath(
       normalizedDirectory,
@@ -669,7 +693,12 @@ async function prepareDramaCollection(dramaDirectory: string) {
     screenshots.push(finalScreenshot);
   }
 
-  await returnJianyingToHome();
+  if (await isJianyingRunning()) {
+    await stopJianyingProcesses();
+    if (!(await waitForJianyingStop())) {
+      throw new Error("剪映未能完全退出，无法清理临时草稿");
+    }
+  }
   for (const draft of prepared) {
     const normalizedDraftPath = path.resolve(draft.draftPath);
     if (
@@ -680,7 +709,6 @@ async function prepareDramaCollection(dramaDirectory: string) {
     }
     await rm(normalizedDraftPath, { recursive: true, force: true });
   }
-
   return {
     dramaDirectory: normalizedDirectory,
     episodes,

@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 export {
   cropJianyingPreviewScreenshot,
   findDramaEpisodes,
+  markPreparedEpisodeMediaLibraryWritten,
   markPreparedEpisodeTrackWritten,
   prepareEpisodeDraft,
   readPreparedEpisodeDraft,
@@ -80,8 +81,15 @@ async function pathExists(targetPath: string) {
 export async function resolveJianyingUiaHelperPath() {
   const resourcesPath = processResourcesPath();
   const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const developmentCandidates = (process as NodeJS.Process & { defaultApp?: boolean }).defaultApp
+    ? [
+        path.resolve(process.cwd(), "packages", "jianying-automation", "native", "bin", "JianyingUia.exe"),
+        path.resolve(sourceDirectory, "..", "native", "bin", "JianyingUia.exe"),
+      ]
+    : [];
   const candidates = [
     process.env.JIANYING_UIA_HELPER_PATH,
+    ...developmentCandidates,
     resourcesPath && path.join(resourcesPath, "jianying-automation", "JianyingUia.exe"),
     path.resolve(process.cwd(), "packages", "jianying-automation", "native", "bin", "JianyingUia.exe"),
     path.resolve(sourceDirectory, "..", "native", "bin", "JianyingUia.exe"),
@@ -97,6 +105,30 @@ export async function resolveJianyingUiaHelperPath() {
 async function runHelper<T>(args: string[], timeout = 30_000) {
   if (process.platform !== "win32") throw new Error("剪映 UI Automation 仅支持 Windows");
   const helperPath = await resolveJianyingUiaHelperPath();
+  const parseOutput = (rawOutput: string) => {
+    const output = rawOutput.replace(/^\uFEFF/, "").trim();
+    const candidates = [output];
+    const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    candidates.push(...lines.reverse());
+    for (const marker of ["{\"success\"", "{\"available\""]) {
+      const start = output.lastIndexOf(marker);
+      const end = output.lastIndexOf("}");
+      if (start >= 0 && end >= start) candidates.push(output.slice(start, end + 1));
+    }
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate) as T;
+        if (parsed && typeof parsed === "object") return parsed;
+      } catch {
+        // Native dependencies can write diagnostics to stdout before the
+        // helper's final JSON object. Try the remaining candidates.
+      }
+    }
+    const summary = output.slice(0, 240).replace(/\s+/g, " ");
+    throw new Error(
+      `剪映辅助程序返回了无效数据（${args[0]}）${summary ? `：${summary}` : ""}`,
+    );
+  };
   try {
     const { stdout } = await execFileAsync(helperPath, args, {
       encoding: "utf8",
@@ -104,16 +136,19 @@ async function runHelper<T>(args: string[], timeout = 30_000) {
       windowsHide: true,
       maxBuffer: 4 * 1024 * 1024,
     });
-    return JSON.parse(stdout.trim()) as T;
+    return parseOutput(stdout);
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout?.trim();
     if (stdout) {
-      let message = "";
       try {
-        const result = JSON.parse(stdout) as { message?: string };
-        message = result.message ?? "";
-      } catch {}
-      if (message) throw new Error(message);
+        const result = parseOutput(stdout) as { message?: string };
+        if (result.message) throw new Error(result.message);
+      } catch (parseError) {
+        if (parseError instanceof Error && parseError.message.startsWith("剪映辅助程序返回了无效数据")) {
+          throw parseError;
+        }
+        throw parseError;
+      }
     }
     throw error;
   }
@@ -215,21 +250,126 @@ export function clickJianyingPoint(x: number, y: number) {
   ]);
 }
 
-export function seekJianyingTimeline(timeMicroseconds: number, durationMicroseconds: number) {
-  return runHelper<{
-    success: boolean;
-    message: string;
-    timeUs: number;
-    durationUs: number;
-    x: number;
-    y: number;
-  }>([
+export async function seekJianyingTimeline(timeMicroseconds: number, durationMicroseconds: number) {
+  const args = [
     "seek-timeline",
     "--time-us",
     String(Math.round(timeMicroseconds)),
     "--duration-us",
     String(Math.round(durationMicroseconds)),
-  ]);
+  ];
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await runHelper<{
+        success: boolean;
+        message: string;
+        timeUs: number;
+        durationUs: number;
+        x: number;
+        y: number;
+      }>(args);
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof Error) || !error.message.includes("时间轴") || attempt === 1) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    }
+  }
+  throw lastError;
+}
+
+export async function openFirstJianyingDraftResult(draftName: string) {
+  try {
+    return await runHelper<{
+      success: boolean;
+      message: string;
+      draftName: string;
+      x: number;
+      y: number;
+    }>(["open-first-draft", "--draft-name", draftName]);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("Unsupported command")) throw error;
+    // Compatibility with a running app that still resolves the previous
+    // one-shot helper binary. Search leaves exactly one visible draft card.
+    return doubleClickJianyingElement({ className: "QQuickMouseArea" });
+  }
+}
+
+function jianyingElementText(element: JianyingUiaElement) {
+  return [element.name, element.value, element.helpText, element.legacyName]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function hasMissingMediaDialog(tree: JianyingUiaProbe) {
+  const text = tree.samples.map(jianyingElementText).join("\n");
+  return text.includes("链接媒体")
+    && (text.includes("媒体丢失") || text.includes("重新链接后再剪辑"));
+}
+
+export async function dismissJianyingMissingMediaDialog(detectionTimeoutMs = 2_500) {
+  const detectionDeadline = Date.now() + detectionTimeoutMs;
+  let tree: JianyingUiaProbe;
+  do {
+    // Do not wait for the limited UI tree sample to notice the auxiliary
+    // window. The native helper scans every Jianying top-level window.
+    const nativeResult = await runHelper<{ success: boolean; closedCount: number }>([
+      "close-missing-media-window",
+    ]).catch((error: unknown) => {
+      if (error instanceof Error && error.message.includes("Unsupported command")) {
+        return { success: false, closedCount: 0 };
+      }
+      throw error;
+    });
+    if (nativeResult.closedCount > 0) return { dismissed: true };
+    tree = await readJianyingUiaTree(5_000);
+    if (hasMissingMediaDialog(tree)) break;
+    if (Date.now() >= detectionDeadline) return { dismissed: false };
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  } while (true);
+
+  const cancel = tree.samples.find((element) => (
+    [element.name, element.value, element.helpText, element.legacyName]
+      .some((value) => value.trim() === "取消")
+  ));
+  let closedByWindow = false;
+  try {
+    const result = await runHelper<{ success: boolean; closedCount: number }>([
+      "close-missing-media-window",
+    ]);
+    closedByWindow = result.closedCount > 0;
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("Unsupported command")) throw error;
+  }
+  if (!closedByWindow) {
+    if (!cancel) throw new Error("检测到链接媒体窗口，但未找到可关闭的窗口或取消按钮");
+    await clickJianyingElement({ name: "取消" });
+  }
+
+  const closeDeadline = Date.now() + 5_000;
+  do {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    tree = await readJianyingUiaTree(5_000);
+    if (!hasMissingMediaDialog(tree)) return { dismissed: true };
+  } while (Date.now() < closeDeadline);
+  throw new Error("链接媒体弹窗未能关闭");
+}
+
+export async function waitForJianyingMediaVisible(timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const tree = await readJianyingUiaTree(5_000);
+    if (tree.samples.some((element) => (
+      element.className.startsWith("MediaInfoView")
+      || element.automationId.startsWith("material.library.item.")
+    ))) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  } while (Date.now() < deadline);
+  return false;
 }
 
 export function pressJianyingSpace() {
@@ -244,18 +384,20 @@ export function returnJianyingHome() {
   return runHelper<{ success: boolean; message: string }>(["return-home"]);
 }
 
+export function closeJianyingEditorWindow() {
+  return runHelper<{ success: boolean; message: string; closed: boolean }>([
+    "close-editor-window",
+  ]);
+}
+
 export async function importJianyingMedia(files: string[]) {
   if (!files.length) throw new Error("没有可导入的分段视频");
-  const batchSize = 4;
-  for (let index = 0; index < files.length; index += batchSize) {
-    const batch = files.slice(index, index + batchSize);
-    await runHelper<{ success: boolean; message: string; fileCount: number }>([
-      "import-media",
-      ...batch.flatMap((file) => ["--file", path.resolve(file)]),
-    ], 60_000);
-    if (index + batchSize < files.length) {
-      await new Promise((resolve) => setTimeout(resolve, 1_500));
-    }
+  await runHelper<{ success: boolean; message: string; fileCount: number }>([
+    "import-media",
+    ...files.flatMap((file) => ["--file", path.resolve(file)]),
+  ], 60_000);
+  if (!(await waitForJianyingMediaVisible())) {
+    throw new Error("视频片段已提交导入，但剪映素材区域未显示素材");
   }
   return {
     success: true,

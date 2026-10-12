@@ -12,7 +12,7 @@ const ffmpegPath = ffmpegPathImport as unknown as string | null;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".m4v"]);
 const EPISODE_PATTERN = /第\s*(\d+)\s*集/i;
 const WORKFLOW_MANIFEST = "autodrama.json";
-const WORKFLOW_VERSION = 3;
+const WORKFLOW_VERSION = 8;
 
 export type DramaEpisode = {
   episode: number;
@@ -34,6 +34,9 @@ export type PreparedEpisodeDraft = {
   previewTimelineTime?: number;
   timelineDuration?: number;
   trackWrittenAt?: string;
+  mediaLibraryWrittenAt?: string;
+  draftIdentitySynchronizedAt?: string;
+  missingMediaCleanedAt?: string;
 };
 
 function resolveFfmpegPath() {
@@ -225,10 +228,18 @@ export async function prepareEpisodeDraft(input: {
 
   const presetPath = path.resolve(input.presetPath);
   const presetSegmentsDirectory = path.join(presetPath, "video_segments");
-  const slotFiles = (await readdir(presetSegmentsDirectory))
-    .filter((name) => /^1-\d+\.mp4$/i.test(name))
-    .sort((left, right) => Number(left.match(/\d+/g)?.[1]) - Number(right.match(/\d+/g)?.[1]));
-  if (!slotFiles.length) throw new Error("预设中没有视频片段槽位");
+  const presetNumber = Number(/^新预设(\d+)$/.exec(path.basename(presetPath))?.[1]);
+  const slotFiles = (await readdir(presetSegmentsDirectory).catch(() => []))
+    .map((name) => ({ name, match: /^(\d+)-(\d+)\.mp4$/i.exec(name) }))
+    .filter((entry): entry is { name: string; match: RegExpExecArray } => (
+      entry.match !== null
+      && (!Number.isInteger(presetNumber) || Number(entry.match[1]) === presetNumber)
+    ))
+    .sort((left, right) => Number(left.match[2]) - Number(right.match[2]))
+    .map((entry) => entry.name);
+  if (!slotFiles.length) {
+    throw new Error(`${path.basename(presetPath)} 中没有视频片段槽位`);
+  }
 
   const [sourceDuration, ...slotDurations] = await Promise.all([
     mediaDuration(input.episode.file),
@@ -292,7 +303,8 @@ export async function readPreparedEpisodeDraft(draftPath: string) {
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as PreparedEpisodeDraft & {
     version?: number;
   };
-  const supportedVersion = [WORKFLOW_VERSION, 2, 1].includes(manifest.version ?? 0);
+  const manifestVersion = manifest.version ?? 0;
+  const supportedVersion = [WORKFLOW_VERSION, 7, 6, 5, 4, 3, 2, 1].includes(manifestVersion);
   if (!supportedVersion || !Array.isArray(manifest.segmentFiles)) {
     throw new Error("草稿自动化数据版本不匹配，请重新生成");
   }
@@ -302,6 +314,18 @@ export async function readPreparedEpisodeDraft(draftPath: string) {
   return {
     ...manifest,
     segmentDurations: Array.isArray(manifest.segmentDurations) ? manifest.segmentDurations : [],
+    // Workflow v4 marked the media library as written even though no material
+    // index had been generated. v5 used the real UI import and v6 writes the
+    // same index directly, so only v4 and older must be migrated.
+    mediaLibraryWrittenAt: manifestVersion >= 5
+      ? manifest.mediaLibraryWrittenAt
+      : undefined,
+    draftIdentitySynchronizedAt: manifestVersion >= 7
+      ? manifest.draftIdentitySynchronizedAt
+      : undefined,
+    missingMediaCleanedAt: manifestVersion >= 8
+      ? manifest.missingMediaCleanedAt
+      : undefined,
   };
 }
 
@@ -315,8 +339,25 @@ export async function markPreparedEpisodeTrackWritten(
     ...manifest,
     version: WORKFLOW_VERSION,
     trackWrittenAt: new Date().toISOString(),
+    draftIdentitySynchronizedAt: new Date().toISOString(),
+    missingMediaCleanedAt: new Date().toISOString(),
     previewTimelineTime: previewTimelineTime ?? manifest.previewTimelineTime,
     timelineDuration: timelineDuration ?? manifest.timelineDuration,
+  };
+  await writeFile(
+    path.join(path.resolve(draftPath), WORKFLOW_MANIFEST),
+    JSON.stringify(updated, null, 2),
+    "utf8",
+  );
+  return updated;
+}
+
+export async function markPreparedEpisodeMediaLibraryWritten(draftPath: string) {
+  const manifest = await readPreparedEpisodeDraft(draftPath);
+  const updated = {
+    ...manifest,
+    version: WORKFLOW_VERSION,
+    mediaLibraryWrittenAt: new Date().toISOString(),
   };
   await writeFile(
     path.join(path.resolve(draftPath), WORKFLOW_MANIFEST),
