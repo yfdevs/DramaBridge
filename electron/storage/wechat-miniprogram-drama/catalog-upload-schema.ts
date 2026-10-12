@@ -5,6 +5,7 @@ export const selectWechatMiniProgramCatalogUploadColumns = `
   drama_id AS dramaId,
   wx_drama_id AS wxDramaId,
   drama_name AS dramaName,
+  drama_description AS dramaDescription,
   episode_count AS episodeCount,
   baidu_netdisk_url AS baiduNetdiskUrl,
   has_first_four_episodes AS hasFirstFourEpisodes,
@@ -39,6 +40,7 @@ export function migrateWechatMiniProgramCatalogUploadTasks(database: Database.Da
       drama_id INTEGER NOT NULL UNIQUE,
       wx_drama_id INTEGER,
       drama_name TEXT NOT NULL,
+      drama_description TEXT,
       episode_count INTEGER NOT NULL,
       baidu_netdisk_url TEXT,
       has_first_four_episodes INTEGER NOT NULL DEFAULT 0,
@@ -75,6 +77,7 @@ export function migrateWechatMiniProgramCatalogUploadTasks(database: Database.Da
       .map((column) => column.name),
   )
   const additions: Record<string, string> = {
+    drama_description: "drama_description TEXT",
     has_first_four_episodes: "has_first_four_episodes INTEGER NOT NULL DEFAULT 0",
     has_cover: "has_cover INTEGER NOT NULL DEFAULT 0",
     lifecycle_status: "lifecycle_status TEXT",

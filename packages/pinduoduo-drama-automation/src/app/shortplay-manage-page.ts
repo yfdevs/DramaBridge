@@ -284,6 +284,7 @@ export type ShortplayApplyRecord = {
   id?: number;
   demoUrl?: string;
   episodeCount?: number;
+  gmtCreate?: number;
   rejectReason?: string;
   status?: number;
   topicCreateStatus?: number;
@@ -327,6 +328,7 @@ export function readShortplayApplyRecords(payload: unknown): ShortplayApplyRecor
         id: "id" in item && typeof item.id === "number" ? item.id : undefined,
         demoUrl: "demo_url" in item && typeof item.demo_url === "string" ? item.demo_url : undefined,
         episodeCount: "episode_count" in item && typeof item.episode_count === "number" ? item.episode_count : undefined,
+        gmtCreate: "gmt_create" in item && typeof item.gmt_create === "number" ? item.gmt_create : undefined,
         rejectReason:
           "reject_reason" in item && typeof item.reject_reason === "string"
             ? item.reject_reason

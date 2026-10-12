@@ -46,6 +46,7 @@ const emptyConfig: WechatMiniProgramConfig = {
   workerSlowEmptyClaimThreshold: "30",
   workerSlowEmptyClaimDelaySeconds: "30",
   videoAccountSyncIntervalSeconds: "600",
+  catalogAutoSyncIntervalSeconds: "15",
   idlePageRefreshIntervalSeconds: "10800",
   idlePageRefreshTimeoutSeconds: "60",
   idlePageRefreshJitterSeconds: "300",
@@ -172,6 +173,19 @@ const sections: Array<{
         type: "number",
         description: "定时同步小程序账号状态。",
         suffix: "秒",
+      },
+      {
+        kind: "select",
+        key: "catalogAutoSyncIntervalSeconds",
+        label: "入库剧目获取频率",
+        description: "前四集与封面入库页面自动获取全部剧目的频率；处理队列运行时会自动暂停。",
+        options: [
+          { value: "15", label: "每 15 秒" },
+          { value: "30", label: "每 30 秒" },
+          { value: "60", label: "每 1 分钟" },
+          { value: "300", label: "每 5 分钟" },
+          { value: "0", label: "关闭定时获取" },
+        ],
       },
       {
         key: "materialPreparationConcurrency",

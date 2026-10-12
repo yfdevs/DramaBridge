@@ -27,15 +27,17 @@ test("only queues approved shortplays whose topic has not been created", () => {
         { id: 2, title: "已经创建短剧", status: 2, topic_create_status: 1 },
         { id: 3, title: "未通过审核", status: 3, topic_create_status: 0 },
         { id: 4, title: "旧数据无创建字段", status: 2 },
+        { id: 5, title: "带创建时间", status: 2, gmt_create: 1791002365363 },
       ],
     },
   });
 
   assert.equal(records[0]?.topicCreateStatus, 0);
   assert.equal(records[1]?.topicCreateStatus, 1);
+  assert.equal(records[4]?.gmtCreate, 1791002365363);
   assert.deepEqual(
     records.filter(shouldUploadApprovedShortplay).map((record) => record.id),
-    [1, 4],
+    [1, 4, 5],
   );
 });
 

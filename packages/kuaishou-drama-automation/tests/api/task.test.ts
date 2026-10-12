@@ -6,7 +6,7 @@ import type { KuaishouDramaHttpClient } from "../../src/api/http-client.js";
 import { claimNextKuaishouDramaTaskApi } from "../../src/api/task.js";
 import { createKuaishouDramaPublishVariants } from "../../src/shared/publish-variants.js";
 
-test("keeps the six-ad-version fields when claiming a backend task", async () => {
+test("keeps the eight-ad-version fields when claiming a backend task", async () => {
   const calls: Array<{ path: string; payload: unknown }> = [];
   const client: KuaishouDramaHttpClient = {
     async post(path, payload) {
@@ -50,12 +50,14 @@ test("keeps the six-ad-version fields when claiming a backend task", async () =>
                 genderChannel: "不限",
                 categories: ["脑洞"],
                 plotTags: ["其他"],
-                publishType: "六个广告版本",
+                publishType: "八个广告版本",
                 adVersion2Title: "雨夜归人",
                 adVersion3Title: "旧城来信",
                 adVersion4Title: "长街灯火",
                 adVersion5Title: "故园春深",
                 adVersion6Title: "星河入梦",
+                adVersion7Title: "山海重逢",
+                adVersion8Title: "明日序章",
               },
             },
           },
@@ -71,12 +73,14 @@ test("keeps the six-ad-version fields when claiming a backend task", async () =>
   });
 
   assert.ok(claimed);
-  assert.equal(claimed.task.publishType, "六个广告版本");
+  assert.equal(claimed.task.publishType, "八个广告版本");
   assert.equal(claimed.task.adVersion2Title, "雨夜归人");
   assert.equal(claimed.task.adVersion3Title, "旧城来信");
   assert.equal(claimed.task.adVersion4Title, "长街灯火");
   assert.equal(claimed.task.adVersion5Title, "故园春深");
   assert.equal(claimed.task.adVersion6Title, "星河入梦");
+  assert.equal(claimed.task.adVersion7Title, "山海重逢");
+  assert.equal(claimed.task.adVersion8Title, "明日序章");
   assert.deepEqual(
     createKuaishouDramaPublishVariants(claimed.task).map(({ kind, title }) => ({ kind, title })),
     [
@@ -86,6 +90,8 @@ test("keeps the six-ad-version fields when claiming a backend task", async () =>
       { kind: "ad-unlock-4", title: "长街灯火" },
       { kind: "ad-unlock-5", title: "故园春深" },
       { kind: "ad-unlock-6", title: "星河入梦" },
+      { kind: "ad-unlock-7", title: "山海重逢" },
+      { kind: "ad-unlock-8", title: "明日序章" },
     ],
   );
   assert.deepEqual(calls.map(({ path }) => path), [

@@ -93,14 +93,17 @@ const adVersionTitleFields = [
   "adVersion4Title",
   "adVersion5Title",
   "adVersion6Title",
+  "adVersion7Title",
+  "adVersion8Title",
 ] as const;
-const adVersionSuffixes = ["二", "三", "四", "五", "六"] as const;
+const adVersionSuffixes = ["二", "三", "四", "五", "六", "七", "八"] as const;
 
 function requiredAdVersionTitleCount(publishType: string | undefined) {
   if (publishType === "付费" || publishType === "广告") return 0;
   if (publishType === "三个广告版本") return 2;
   if (publishType === "五个广告版本") return 4;
-  return 5;
+  if (publishType === "六个广告版本") return 5;
+  return 7;
 }
 
 function generatedAdVersionTitle(title: string, index: number) {

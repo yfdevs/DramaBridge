@@ -28,8 +28,8 @@ export const KUAISHOU_EPISODE_COVER_SIZE = {
 } as const;
 
 type KuaishouCoverKind = "drama" | "episode";
-type KuaishouTextlessVariant = 2 | 3 | 4 | 5 | 6;
-type KuaishouTextlessVariantKind = "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6";
+type KuaishouTextlessVariant = 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type KuaishouTextlessVariantKind = "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6" | "ad-unlock-7" | "ad-unlock-8";
 
 const textlessVariants = [
   { variant: 2, kind: "ad-unlock-2", titleKey: "adVersion2Title" },
@@ -37,10 +37,12 @@ const textlessVariants = [
   { variant: 4, kind: "ad-unlock-4", titleKey: "adVersion4Title" },
   { variant: 5, kind: "ad-unlock-5", titleKey: "adVersion5Title" },
   { variant: 6, kind: "ad-unlock-6", titleKey: "adVersion6Title" },
+  { variant: 7, kind: "ad-unlock-7", titleKey: "adVersion7Title" },
+  { variant: 8, kind: "ad-unlock-8", titleKey: "adVersion8Title" },
 ] as const satisfies ReadonlyArray<{
   variant: KuaishouTextlessVariant;
   kind: KuaishouTextlessVariantKind;
-  titleKey: "adVersion2Title" | "adVersion3Title" | "adVersion4Title" | "adVersion5Title" | "adVersion6Title";
+  titleKey: "adVersion2Title" | "adVersion3Title" | "adVersion4Title" | "adVersion5Title" | "adVersion6Title" | "adVersion7Title" | "adVersion8Title";
 }>;
 
 const textlessVariantKinds = new Set<string>(textlessVariants.map(({ kind }) => kind));
@@ -51,7 +53,9 @@ export function listKuaishouTextlessVariantKinds(
   if (publishType === "付费" || publishType === "广告") return [];
   const versionCount = publishType === "三个广告版本"
     ? 3
-    : publishType === "五个广告版本" ? 5 : 6;
+    : publishType === "五个广告版本"
+      ? 5
+      : publishType === "六个广告版本" ? 6 : 8;
   return textlessVariants
     .slice(0, versionCount - 1)
     .map(({ kind }) => kind);
@@ -163,6 +167,8 @@ export function buildKuaishouTextlessVariantCoverPrompt(options: {
     4: "突出主角的行动力和关键转折，采用富有动势的构图与清晰的前后景层次。",
     5: "突出人物命运对比与剧情高潮，采用完整群像或具有悬念感的环境构图。",
     6: "突出核心冲突后的命运抉择与情感余韵，采用富有故事感的远近景结合构图。",
+    7: "突出隐藏关系揭晓后的情感冲击，采用人物对峙与环境细节相呼应的构图。",
+    8: "突出最终高潮与人物命运走向，采用具有收束感和视觉张力的全新构图。",
   };
   return [
     `参考原剧封面及剧情简介，创作第 ${options.variant} 个广告版本的${coverDetails[options.kind].label}。`,

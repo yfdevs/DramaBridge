@@ -239,7 +239,7 @@ export async function startKuaishouDramaRuntime(
       taskState.claimed = undefined;
       let taskPage: Page | null = null;
       let publishedVariants: Array<
-        "full-paid" | "ad-unlock" | "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6"
+        "full-paid" | "ad-unlock" | "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6" | "ad-unlock-7" | "ad-unlock-8"
       > = [];
       try {
         const resolvedTask = await resolveTask();

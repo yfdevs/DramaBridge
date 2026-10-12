@@ -101,6 +101,7 @@ export const kuaishouDramaPublishTypeValues = [
   "三个广告版本",
   "五个广告版本",
   "六个广告版本",
+  "八个广告版本",
   "全部",
 ] as const;
 export const kuaishouDramaSaleModeValues = [
@@ -143,12 +144,14 @@ const kuaishouDramaTaskBaseSchema = z.object({
   baiduPanResourceLink: z.string().trim().optional()
     .describe("百度网盘分享文本，包含分享链接和提取码；存在时上剧前必须下载并校验全部剧集视频"),
   publishType: optionalPublishTypeSchema
-    .describe("发布版本；留空或全部发布一付费六广告；六个广告版本仅发布六广告"),
+    .describe("发布版本；留空或全部发布一付费八广告；八个广告版本仅发布八广告"),
   adVersion2Title: z.string().trim().max(28).optional(),
   adVersion3Title: z.string().trim().max(28).optional(),
   adVersion4Title: z.string().trim().max(28).optional(),
   adVersion5Title: z.string().trim().max(28).optional(),
   adVersion6Title: z.string().trim().max(28).optional(),
+  adVersion7Title: z.string().trim().max(28).optional(),
+  adVersion8Title: z.string().trim().max(28).optional(),
   fullDramaPriceYuan: z.coerce.number().positive().max(9999).default(4.9)
     .describe("全剧付费版本的全剧价格，单位元"),
   localCoverFile: requiredText.optional()
@@ -216,10 +219,14 @@ const kuaishouDramaTaskBaseSchema = z.object({
       ["adVersion4Title", taskConfig.adVersion4Title],
       ["adVersion5Title", taskConfig.adVersion5Title],
       ["adVersion6Title", taskConfig.adVersion6Title],
+      ["adVersion7Title", taskConfig.adVersion7Title],
+      ["adVersion8Title", taskConfig.adVersion8Title],
     ] as const;
     const adVersionCount = taskConfig.publishType === "三个广告版本"
       ? 3
-      : taskConfig.publishType === "五个广告版本" ? 5 : 6;
+      : taskConfig.publishType === "五个广告版本"
+        ? 5
+        : taskConfig.publishType === "六个广告版本" ? 6 : 8;
     const titleFields = allTitleFields.slice(0, adVersionCount - 1);
     for (const [field, title] of titleFields) {
       if (!title) context.addIssue({
@@ -295,13 +302,13 @@ export type KuaishouDramaTaskConfig = z.infer<typeof kuaishouDramaTaskSchema> & 
   /** Prepared locally at Kuaishou's 224:300 episode-cover ratio. */
   localEpisodeCoverFile?: string;
   localVariantCoverFiles?: Partial<Record<
-    "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6",
+    "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6" | "ad-unlock-7" | "ad-unlock-8",
     { drama: string; episode: string }
   >>;
 };
 
 export type KuaishouDramaPublishVariant = {
-  kind: "full-paid" | "ad-unlock" | "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6";
+  kind: "full-paid" | "ad-unlock" | "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6" | "ad-unlock-7" | "ad-unlock-8";
   title: string;
   saleMode: Extract<KuaishouDramaSaleMode, "全剧付费" | "观看广告解锁">;
   fullDramaPriceYuan?: number;

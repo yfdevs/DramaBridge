@@ -25,6 +25,7 @@ export type PinduoduoUploadRecord = {
   createdAt: string;
   demoUrl?: string;
   episodeCount?: number;
+  gmtCreate?: number;
   errorMessage?: string;
   lastAttemptAt?: string;
   platformApplyId: number;
@@ -45,6 +46,7 @@ export type PinduoduoUploadRecordRow = Omit<
   | "accountProfileName"
   | "demoUrl"
   | "episodeCount"
+  | "gmtCreate"
   | "errorMessage"
   | "lastAttemptAt"
   | "rawJson"
@@ -58,6 +60,7 @@ export type PinduoduoUploadRecordRow = Omit<
   accountProfileName: string | null;
   demoUrl: string | null;
   episodeCount: number | null;
+  gmtCreate: number | null;
   errorMessage: string | null;
   lastAttemptAt: string | null;
   rawJson: string | null;

@@ -50,6 +50,8 @@ export function createKuaishouDramaPublishVariants(
     ["ad-unlock-4", task.adVersion4Title],
     ["ad-unlock-5", task.adVersion5Title],
     ["ad-unlock-6", task.adVersion6Title],
+    ["ad-unlock-7", task.adVersion7Title],
+    ["ad-unlock-8", task.adVersion8Title],
   ] as const;
   const extraAds: KuaishouDramaPublishVariant[] = extraAdDefinitions.flatMap(
     ([kind, title]) =>
@@ -70,7 +72,10 @@ export function createKuaishouDramaPublishVariants(
   if (task.publishType === "五个广告版本") {
     return [variants[1]!, ...extraAds.slice(0, 4)];
   }
-  return task.publishType === "六个广告版本"
+  if (task.publishType === "六个广告版本") {
+    return [variants[1]!, ...extraAds.slice(0, 5)];
+  }
+  return task.publishType === "八个广告版本"
     ? [variants[1]!, ...extraAds]
     : [...variants, ...extraAds];
 }

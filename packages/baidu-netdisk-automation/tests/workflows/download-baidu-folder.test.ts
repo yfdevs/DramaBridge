@@ -20,6 +20,7 @@ import {
   planBaiduNetdiskSyncItem,
   resolveBaiduAssetDownloadRoot,
   selectLeadingEpisodeFiles,
+  shouldDownloadMixedPosterAsFile,
   shouldDownloadBaiduOwnershipDirectories,
   validateRemoteEpisodePathSelection,
   type RemoteVideoDirectoryCandidateScore,
@@ -44,6 +45,27 @@ test("isolates generic asset directories under each drama download root", () => 
   assert.equal(first, "D:\\短剧素材\\剧目甲");
   assert.equal(second, "D:\\短剧素材\\剧目乙");
   assert.notEqual(first, second);
+});
+
+test("downloads a poster as an individual file when it shares the video root in asset-only mode", () => {
+  assert.equal(shouldDownloadMixedPosterAsFile({
+    videoRootFullyDownloaded: false,
+    posterRoot: "/剧目甲/正片",
+    videoRoot: "/剧目甲/正片/",
+    remoteVideoCount: 24,
+  }), true);
+  assert.equal(shouldDownloadMixedPosterAsFile({
+    videoRootFullyDownloaded: true,
+    posterRoot: "/剧目甲/正片",
+    videoRoot: "/剧目甲/正片",
+    remoteVideoCount: 24,
+  }), false);
+  assert.equal(shouldDownloadMixedPosterAsFile({
+    videoRootFullyDownloaded: false,
+    posterRoot: "/剧目甲/海报",
+    videoRoot: "/剧目甲/正片",
+    remoteVideoCount: 24,
+  }), false);
 });
 
 test("treats nested asset roots as covered without matching sibling names", () => {

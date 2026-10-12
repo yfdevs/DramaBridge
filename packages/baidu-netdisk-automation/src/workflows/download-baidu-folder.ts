@@ -109,6 +109,17 @@ export function planBaiduNetdiskSyncItem(
   return target ? "recurse-existing-directory" : "transfer-directory-with-recursive-fallback";
 }
 
+export function shouldDownloadMixedPosterAsFile(options: {
+  videoRootFullyDownloaded: boolean;
+  posterRoot: string;
+  videoRoot: string;
+  remoteVideoCount: number;
+}) {
+  return !options.videoRootFullyDownloaded
+    && options.remoteVideoCount > 0
+    && normalizeBaiduAssetPath(options.posterRoot) === normalizeBaiduAssetPath(options.videoRoot);
+}
+
 export function areBaiduNetdiskFilesStrictlyIdentical(
   source: Record<string, unknown>,
   target: Record<string, unknown>,
@@ -3610,7 +3621,44 @@ async function submitSavedDownload(
   }
 
   for (const posterRoot of downloadAssetMaterials ? remotePosters.roots : []) {
-    if (!posterRoot.path || !posterRoot.fsId || assetRootIsCovered(posterRoot.path)) continue;
+    if (!posterRoot.path || assetRootIsCovered(posterRoot.path)) continue;
+    const mixedWithVideoRoot = shouldDownloadMixedPosterAsFile({
+      videoRootFullyDownloaded: downloadEpisodeVideos && !limitedEpisodeDownload,
+      posterRoot: posterRoot.path,
+      videoRoot: remoteVideos.rootPath,
+      remoteVideoCount: remoteVideos.allVideoFiles.length,
+    });
+    if (mixedWithVideoRoot) {
+      if (!assetDownloadRoot) throw new Error("下载混放海报封面时缺少本地素材目录。");
+      const localPosterRoot = path.join(assetDownloadRoot, "海报封面");
+      await mkdir(localPosterRoot, { recursive: true });
+      const localPosterCount = await countLocalPosterImages(localPosterRoot);
+      if (remotePosters.files.length > 0 && localPosterCount >= remotePosters.files.length) {
+        log("本地已有海报封面素材，跳过混放封面的重复下载。");
+        continue;
+      }
+      for (const posterFile of remotePosters.files) {
+        if (!posterFile.fsId) {
+          throw new Error(`海报封面缺少百度网盘文件 ID，无法自动下载：${posterFile.name}`);
+        }
+        const posterSubmission = await submitNativeDownloadTask(port, {
+          targetName: posterFile.name,
+          savedPath: posterFile.path,
+          fsId: posterFile.fsId,
+          isDirectory: false,
+          size: posterFile.size,
+          downloadRoot: localPosterRoot,
+        });
+        if (!posterSubmission.submitted) {
+          throw new Error(
+            `百度网盘混放海报封面下载任务提交失败：${posterFile.name}；原因=${posterSubmission.error || "unknown"}`,
+          );
+        }
+      }
+      log(`检测到海报封面与正片混放，已自动将封面单独下载到本地目录：${localPosterRoot}`);
+      continue;
+    }
+    if (!posterRoot.fsId) continue;
     assertDedicatedAssetRoot(posterRoot.path, "海报封面");
     const posterTaskName = posterRoot.path.split("/").filter(Boolean).pop() || "海报封面";
     const localPosterCandidates = downloadDir

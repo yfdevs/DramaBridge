@@ -15,6 +15,7 @@ export function migratePinduoduoUploadRecords(database: Database.Database): void
       platform_apply_id INTEGER PRIMARY KEY,
       title TEXT NOT NULL,
       episode_count INTEGER,
+      gmt_create INTEGER,
       demo_url TEXT,
       status TEXT NOT NULL,
       stage TEXT,
@@ -36,6 +37,7 @@ export function migratePinduoduoUploadRecords(database: Database.Database): void
       ON pinduoduo_approved_upload_records(status, updated_at);
   `);
   ensureColumn(database, "resource_source", "resource_source TEXT");
+  ensureColumn(database, "gmt_create", "gmt_create INTEGER");
   ensureColumn(database, "resource_source_rows", "resource_source_rows TEXT");
   ensureColumn(database, "uploaded_batch_count", "uploaded_batch_count INTEGER NOT NULL DEFAULT 0");
   ensureColumn(database, "total_batch_count", "total_batch_count INTEGER");

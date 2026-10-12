@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   normalizePinduoduoResourceTitle,
+  PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE,
   resolvePinduoduoResource,
   type PinduoduoLegacyResourceLink,
 } from "../../src/storage/pinduoduo-legacy-resource-links.js";
@@ -33,6 +34,7 @@ test("uses the historical spreadsheet original link when the title matches", () 
   const resolved = resolvePinduoduoResource(
     "果园的天平",
     "https://pan.baidu.com/s/sample",
+    PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE - 1,
     legacyLink(),
   );
 
@@ -46,23 +48,49 @@ test("fails closed when a matched historical row has no original link", () => {
     () => resolvePinduoduoResource(
       "缺少原链接的旧剧",
       "https://pan.baidu.com/s/sample",
+      PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE - 1,
       legacyLink({ originalShareText: null, baiduUrl: null, available: false }),
     ),
     /PINDUODUO_LEGACY_RESOURCE_LINK_MISSING/,
   );
 });
 
-test("falls back to the Pinduoduo list link only when no historical title matches", () => {
+test("uses the Pinduoduo list link from the cutoff onward even when a legacy title matches", () => {
   const resolved = resolvePinduoduoResource(
-    "九月二十四日后的新剧",
+    "果园的天平",
     "https://pan.baidu.com/s/full-version",
-    undefined,
+    PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE,
+    legacyLink(),
   );
 
   assert.deepEqual(resolved, {
     shareText: "https://pan.baidu.com/s/full-version",
     source: "PINDUODUO_LIST",
   });
+});
+
+test("requires an old record to match the historical resource table", () => {
+  assert.throws(
+    () => resolvePinduoduoResource(
+      "历史表未收录的旧剧",
+      "https://pan.baidu.com/s/platform-link",
+      PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE - 1,
+      undefined,
+    ),
+    /PINDUODUO_LEGACY_RESOURCE_NOT_FOUND/,
+  );
+});
+
+test("requires gmt_create before choosing a resource source", () => {
+  assert.throws(
+    () => resolvePinduoduoResource(
+      "缺少创建时间的剧",
+      "https://pan.baidu.com/s/platform-link",
+      undefined,
+      undefined,
+    ),
+    /PINDUODUO_GMT_CREATE_MISSING/,
+  );
 });
 
 test("generated seed contains the known historical full link and preserves missing-link rows", () => {

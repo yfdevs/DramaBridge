@@ -111,12 +111,23 @@ void test("selects only the extra cover variants required by the publish type", 
     "ad-unlock-5",
     "ad-unlock-6",
   ]);
+  assert.deepEqual(listKuaishouTextlessVariantKinds("八个广告版本"), [
+    "ad-unlock-2",
+    "ad-unlock-3",
+    "ad-unlock-4",
+    "ad-unlock-5",
+    "ad-unlock-6",
+    "ad-unlock-7",
+    "ad-unlock-8",
+  ]);
   assert.deepEqual(listKuaishouTextlessVariantKinds("全部"), [
     "ad-unlock-2",
     "ad-unlock-3",
     "ad-unlock-4",
     "ad-unlock-5",
     "ad-unlock-6",
+    "ad-unlock-7",
+    "ad-unlock-8",
   ]);
 });
 
@@ -220,7 +231,7 @@ void test("does not call AI when both source orientations already exist", async 
   }
 });
 
-void test("generates separate textless landscape and portrait covers for ad versions two through six", async () => {
+void test("generates separate textless landscape and portrait covers for ad versions two through eight", async () => {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "kuaishou-ad-cover-test-"));
   try {
     const landscapeFile = path.join(temporaryRoot, "landscape.svg");
@@ -265,15 +276,17 @@ void test("generates separate textless landscape and portrait covers for ad vers
       adVersion4Title: "第四版剧名",
       adVersion5Title: "第五版剧名",
       adVersion6Title: "第六版剧名",
+      adVersion7Title: "第七版剧名",
+      adVersion8Title: "第八版剧名",
     } as unknown as KuaishouDramaTaskConfig;
     const originals = await prepareKuaishouDramaCoverFiles(task, [
       poster(landscapeFile, 1_600, 1_000),
       poster(portraitFile, 900, 1_200),
     ], { aiClient, aiImageModel: "test-image-model", assetDownloadDir: temporaryRoot });
-    assert.equal(requests.length, 10);
+    assert.equal(requests.length, 14);
     assert.equal(resolveKuaishouDramaCoverFile(task, "ad-unlock"), originals.dramaCover);
     assert.equal(resolveKuaishouEpisodeCoverFile(task, "full-paid"), originals.episodeCover);
-    for (const kind of ["ad-unlock-2", "ad-unlock-3", "ad-unlock-4", "ad-unlock-5", "ad-unlock-6"]) {
+    for (const kind of ["ad-unlock-2", "ad-unlock-3", "ad-unlock-4", "ad-unlock-5", "ad-unlock-6", "ad-unlock-7", "ad-unlock-8"]) {
       assert.deepEqual(await readImageDimensions(resolveKuaishouDramaCoverFile(task, kind)), KUAISHOU_DRAMA_COVER_SIZE);
       assert.deepEqual(await readImageDimensions(resolveKuaishouEpisodeCoverFile(task, kind)), KUAISHOU_EPISODE_COVER_SIZE);
       assert.notEqual(resolveKuaishouDramaCoverFile(task, kind), originals.dramaCover);
@@ -285,10 +298,12 @@ void test("generates separate textless landscape and portrait covers for ad vers
       "ad-unlock-4",
       "ad-unlock-5",
       "ad-unlock-6",
-    ].map((kind) => resolveKuaishouDramaCoverFile(task, kind))).size, 5);
+      "ad-unlock-7",
+      "ad-unlock-8",
+    ].map((kind) => resolveKuaishouDramaCoverFile(task, kind))).size, 7);
     assert.deepEqual(requests.map((request) => request.size).sort(), [
-      "1792x2400", "1792x2400", "1792x2400", "1792x2400", "1792x2400",
-      "2208x1376", "2208x1376", "2208x1376", "2208x1376", "2208x1376",
+      "1792x2400", "1792x2400", "1792x2400", "1792x2400", "1792x2400", "1792x2400", "1792x2400",
+      "2208x1376", "2208x1376", "2208x1376", "2208x1376", "2208x1376", "2208x1376", "2208x1376",
     ]);
     assert.ok(requests.every((request) => String(request.prompt).includes("不要绘制任何新文字")));
   } finally {

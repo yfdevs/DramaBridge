@@ -67,6 +67,15 @@ export type EnsureVideoMinimumDimensionsRequest = {
   onLog?: (message: string) => void;
 };
 
+export type ExtractRandomVideoFramesRequest = {
+  inputFile: string;
+  outputDir: string;
+  count?: number;
+  signal?: AbortSignal;
+  onLog?: (message: string) => void;
+  random?: () => number;
+};
+
 const defaultAudioBitrateKbps = 128;
 const minimumVideoBitrateKbps = 100;
 const durationPattern = /Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/;
@@ -151,6 +160,61 @@ function runFfmpeg(
       ));
     });
   });
+}
+
+export function selectRandomVideoFrameTimestamps(
+  durationSeconds: number,
+  count = 2,
+  random: () => number = Math.random,
+) {
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    throw new Error("[video-frame-extract-failed] 视频时长无效。");
+  }
+  if (!Number.isSafeInteger(count) || count < 1) {
+    throw new Error("[video-frame-extract-failed] 截图数量必须是正整数。");
+  }
+
+  const safeStart = durationSeconds * 0.1;
+  const safeDuration = durationSeconds * 0.8;
+  const segmentDuration = safeDuration / count;
+  return Array.from({ length: count }, (_unused, index) => {
+    const randomValue = Math.min(0.999_999, Math.max(0, random()));
+    return safeStart + segmentDuration * (index + randomValue);
+  });
+}
+
+export async function extractRandomVideoFrames(options: ExtractRandomVideoFramesRequest) {
+  const count = options.count ?? 2;
+  const durationSeconds = await readVideoDurationSeconds(options.inputFile, options.signal);
+  const timestamps = selectRandomVideoFrameTimestamps(durationSeconds, count, options.random);
+  await mkdir(options.outputDir, { recursive: true });
+
+  const files: string[] = [];
+  for (const [index, timestamp] of timestamps.entries()) {
+    options.signal?.throwIfAborted();
+    const outputFile = path.join(
+      options.outputDir,
+      `frame-${index + 1}-${timestamp.toFixed(3).replace(".", "_")}.jpg`,
+    );
+    options.onLog?.(`正在从第一集抽取第 ${index + 1}/${count} 张 AI 参考帧（${timestamp.toFixed(1)} 秒）`);
+    await runFfmpeg([
+      "-hide_banner",
+      "-loglevel", "error",
+      "-ss", timestamp.toFixed(3),
+      "-i", options.inputFile,
+      "-map", "0:v:0",
+      "-frames:v", "1",
+      "-q:v", "2",
+      "-y",
+      outputFile,
+    ], { signal: options.signal });
+    const outputStat = await stat(outputFile).catch(() => undefined);
+    if (!outputStat?.isFile() || outputStat.size <= 0) {
+      throw new Error(`[video-frame-extract-failed] 第一集参考帧生成失败：${outputFile}`);
+    }
+    files.push(outputFile);
+  }
+  return { durationSeconds, files, timestamps };
 }
 
 export async function readVideoDurationSeconds(inputFile: string, signal?: AbortSignal) {

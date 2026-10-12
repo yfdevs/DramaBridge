@@ -28,6 +28,7 @@ export type WechatMiniProgramCatalogUploadTask = {
   dramaId: number
   wxDramaId?: number
   dramaName: string
+  dramaDescription?: string
   episodeCount: number
   baiduNetdiskUrl?: string
   hasFirstFourEpisodes: boolean

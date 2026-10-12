@@ -8,6 +8,10 @@ test("catalog upload migration clears legacy jobs and keeps only version 3 audit
   const database = new Database(":memory:")
   try {
     migrateWechatMiniProgramCatalogUploadTasks(database)
+    const columns = database.prepare(
+      "PRAGMA table_info(wechat_miniprogram_catalog_upload_tasks)",
+    ).all() as Array<{ name: string }>
+    assert.ok(columns.some((column) => column.name === "drama_description"))
     const insert = database.prepare(`
       INSERT INTO wechat_miniprogram_catalog_upload_tasks (
         id, drama_id, drama_name, episode_count, audit_status, state,

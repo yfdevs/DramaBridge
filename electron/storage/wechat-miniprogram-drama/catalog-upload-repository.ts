@@ -27,6 +27,7 @@ function readTask(row: WechatMiniProgramCatalogUploadTaskRow): WechatMiniProgram
     dramaId: row.dramaId,
     wxDramaId: row.wxDramaId ?? undefined,
     dramaName: row.dramaName,
+    dramaDescription: row.dramaDescription ?? undefined,
     episodeCount: row.episodeCount,
     baiduNetdiskUrl: row.baiduNetdiskUrl ?? undefined,
     hasFirstFourEpisodes: Boolean(row.hasFirstFourEpisodes),
@@ -59,6 +60,7 @@ function writeParams(task: WechatMiniProgramCatalogUploadTask) {
   return {
     ...task,
     wxDramaId: task.wxDramaId ?? null,
+    dramaDescription: task.dramaDescription ?? null,
     baiduNetdiskUrl: task.baiduNetdiskUrl ?? null,
     hasFirstFourEpisodes: task.hasFirstFourEpisodes ? 1 : 0,
     hasCover: task.hasCover ? 1 : 0,
@@ -118,6 +120,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
     dramaId: number
     wxDramaId?: number
     dramaName: string
+    dramaDescription?: string
     episodeCount: number
     baiduNetdiskUrl?: string
     hasFirstFourEpisodes: boolean
@@ -148,6 +151,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
       return this.update(current.id, {
         wxDramaId: input.wxDramaId,
         dramaName: input.dramaName,
+        dramaDescription: input.dramaDescription,
         episodeCount: input.episodeCount,
         baiduNetdiskUrl: input.baiduNetdiskUrl,
         hasFirstFourEpisodes: input.hasFirstFourEpisodes,
@@ -253,14 +257,14 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
   private insertOrReplace(task: WechatMiniProgramCatalogUploadTask): void {
     this.database.prepare(`
       INSERT INTO wechat_miniprogram_catalog_upload_tasks (
-        id, drama_id, wx_drama_id, drama_name, episode_count, baidu_netdisk_url,
+        id, drama_id, wx_drama_id, drama_name, drama_description, episode_count, baidu_netdisk_url,
         has_first_four_episodes, has_cover, lifecycle_status, audit_status,
         expected_publish_status, actual_publish_status, operation_status,
         state, target_episode_count, uploaded_episode_count, episode_statuses_json,
         cover_status, cover_material_id, cover_file_name, cover_error, workflow_version,
         local_path, error, retry_count, created_at, updated_at, started_at, finished_at
       ) VALUES (
-        @id, @dramaId, @wxDramaId, @dramaName, @episodeCount, @baiduNetdiskUrl,
+        @id, @dramaId, @wxDramaId, @dramaName, @dramaDescription, @episodeCount, @baiduNetdiskUrl,
         @hasFirstFourEpisodes, @hasCover, @lifecycleStatus, @auditStatus,
         @expectedPublishStatus, @actualPublishStatus, @operationStatus,
         @state, @targetEpisodeCount, @uploadedEpisodeCount, @episodeStatusesJson,
@@ -269,6 +273,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
       )
       ON CONFLICT(id) DO UPDATE SET
         wx_drama_id=excluded.wx_drama_id, drama_name=excluded.drama_name,
+        drama_description=excluded.drama_description,
         episode_count=excluded.episode_count, baidu_netdisk_url=excluded.baidu_netdisk_url,
         has_first_four_episodes=excluded.has_first_four_episodes,
         has_cover=excluded.has_cover,

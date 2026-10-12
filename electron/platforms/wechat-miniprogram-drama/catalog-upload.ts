@@ -1,10 +1,18 @@
 import { BrowserWindow, ipcMain } from "electron"
+import { createHash } from "node:crypto"
 import { openAsBlob } from "node:fs"
+import { readdir, stat } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk"
 import { createElectronPlatformLogger } from "../../platform-logger"
+import {
+  createConfiguredAiClient,
+  getConfiguredAiCoverGenerationRetryAttempts,
+  getConfiguredAiImageModel,
+  isAiPosterFallbackEnabled,
+} from "../../global-app-config"
 import {
   configureNativeChildWindow,
   platformWindowIconPath,
@@ -36,6 +44,12 @@ type CatalogDrama = {
   id: number
   wxDramaId?: number | null
   name: string
+  dramaDescription?: string | null
+  description?: string | null
+  summary?: string | null
+  synopsis?: string | null
+  introduction?: string | null
+  intro?: string | null
   episodeCount: number
   baiduNetdiskUrl?: string | null
   hasFirstFourEpisodes?: boolean
@@ -121,6 +135,66 @@ function imageContentType(file: string): string {
 
 function materialIdentifier(material: MaterialView): string | undefined {
   return material.materialId ?? (material.id === undefined ? undefined : String(material.id))
+}
+
+function catalogDramaDescription(drama: CatalogDrama): string | undefined {
+  return [
+    drama.dramaDescription,
+    drama.description,
+    drama.summary,
+    drama.synopsis,
+    drama.introduction,
+    drama.intro,
+  ]
+    .find((value): value is string => typeof value === "string" && Boolean(value.trim()))
+    ?.trim()
+}
+
+async function cachedEpisodeReferenceFrames(options: {
+  episodeFile: string
+  localMaterialRoot: string
+  resourceName: string
+  signal: AbortSignal
+  onLog: (message: string) => void
+}) {
+  const episodeStat = await stat(options.episodeFile)
+  const episodeKey = createHash("sha256")
+    .update(path.resolve(options.episodeFile).toLowerCase())
+    .update(String(episodeStat.size))
+    .update(String(episodeStat.mtimeMs))
+    .digest("hex")
+    .slice(0, 16)
+  const outputDir = path.join(
+    options.localMaterialRoot,
+    options.resourceName,
+    "海报封面",
+    "AI参考帧",
+    episodeKey,
+  )
+  const cachedCandidates = (await readdir(outputDir, { withFileTypes: true }).catch(() => []))
+    .filter((entry) => entry.isFile() && /^frame-\d+-.+\.jpg$/i.test(entry.name))
+    .map((entry) => path.join(outputDir, entry.name))
+    .sort()
+  const cached: string[] = []
+  for (const file of cachedCandidates) {
+    const fileStat = await stat(file).catch(() => undefined)
+    if (fileStat?.isFile() && fileStat.size > 0) cached.push(file)
+    if (cached.length === 2) break
+  }
+  if (cached.length === 2) {
+    options.onLog("复用第一集已抽取的两张 AI 参考帧")
+    return cached
+  }
+
+  const { extractRandomVideoFrames } = await import("@drama/drama-media-assets")
+  const extracted = await extractRandomVideoFrames({
+    inputFile: options.episodeFile,
+    outputDir,
+    count: 2,
+    signal: options.signal,
+    onLog: options.onLog,
+  })
+  return extracted.files
 }
 
 export class WechatMiniProgramCatalogUploadCoordinator {
@@ -332,6 +406,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
           dramaId: drama.id,
           wxDramaId: drama.wxDramaId ?? undefined,
           dramaName: drama.name,
+          dramaDescription: catalogDramaDescription(drama),
           episodeCount: drama.episodeCount,
           baiduNetdiskUrl: drama.baiduNetdiskUrl?.trim() || undefined,
           hasFirstFourEpisodes: Boolean(drama.hasFirstFourEpisodes),
@@ -436,10 +511,13 @@ export class WechatMiniProgramCatalogUploadCoordinator {
       const downloadEpisodeVideos = missingEpisodeIndexes.length > 0
       const downloadCover = !coverAlreadyExists
       const needsDownload = downloadEpisodeVideos || downloadCover
+      const episodeDownloadCount = downloadEpisodeVideos
+        ? targetEpisodeCount
+        : downloadCover ? 1 : 0
       let localPath = task.localPath
       if (needsDownload) {
         if (!downloadEpisodeVideos && downloadCover) {
-          logger.info("First episodes already exist; downloading cover material only", {
+          logger.info("First episodes already exist; downloading cover material and episode 1 for AI fallback", {
             dramaId: task.dramaId,
             existingEpisodeCount: statuses.length,
           })
@@ -449,13 +527,13 @@ export class WechatMiniProgramCatalogUploadCoordinator {
           shareText: task.baiduNetdiskUrl ?? "",
           resourceName: task.dramaName,
           localEpisodeVideoRoot: settings.localEpisodeVideoRoot,
-          episodeCount: downloadEpisodeVideos ? targetEpisodeCount : 0,
-          episodeDownloadLimit: downloadEpisodeVideos ? targetEpisodeCount : undefined,
-          downloadEpisodeVideos,
+          episodeCount: episodeDownloadCount,
+          episodeDownloadLimit: episodeDownloadCount || undefined,
+          downloadEpisodeVideos: episodeDownloadCount > 0,
           downloadAssetMaterials: downloadCover,
           requiredOwnership: { minimumImages: 0 },
           requiredOwnershipFiles: 0,
-          requiredPosterImages: downloadCover ? 1 : 0,
+          requiredPosterImages: 0,
           requiredAiProductionProofFiles: 0,
           signal: controller.signal,
         })
@@ -463,13 +541,14 @@ export class WechatMiniProgramCatalogUploadCoordinator {
       }
       controller.signal.throwIfAborted()
 
-      const { findLocalEpisodeVideos, listLocalPosterImages } = await import("@drama/drama-media-assets")
-      const episodeVideos = missingEpisodeIndexes.length > 0
+      const { ensureAiPoster, findLocalEpisodeVideos, listLocalPosterImages } = await import("@drama/drama-media-assets")
+      const localEpisodeVideos = episodeDownloadCount > 0
         ? (await findLocalEpisodeVideos({
             localEpisodeVideoRoot: settings.localEpisodeVideoRoot,
             resourceName: task.dramaName,
           })).filter((episode) => episode.index <= targetEpisodeCount)
         : []
+      const episodeVideos = missingEpisodeIndexes.length > 0 ? localEpisodeVideos : []
       if (missingEpisodeIndexes.length > 0) {
         const actualIndexes = episodeVideos.map((episode) => episode.index)
         if (
@@ -482,14 +561,61 @@ export class WechatMiniProgramCatalogUploadCoordinator {
         }
       }
 
-      const coverFile = coverAlreadyExists
+      let coverFile = coverAlreadyExists
         ? undefined
         : (await listLocalPosterImages({
             root: settings.localEpisodeVideoRoot,
             resourceName: task.dramaName,
           }))[0]?.file
       if (!coverAlreadyExists && !coverFile) {
-        throw new Error("封面下载校验失败：未找到文件名或目录名包含“封面”或“海报”的图片。")
+        if (!isAiPosterFallbackEnabled()) {
+          throw new Error("封面下载校验失败：百度网盘未提供海报，且全局 AI 封面兜底已关闭。")
+        }
+        let summary = task.dramaDescription?.trim()
+        if (!summary) {
+          try {
+            const detail = await this.fetchDramaDetail(task.dramaId, controller.signal)
+            summary = catalogDramaDescription(detail)
+            if (summary) this.repository.update(task.id, { dramaDescription: summary })
+          } catch (error) {
+            logger.warn("Unable to load drama description for AI poster; continuing with episode frames", {
+              errorMessage: readableError(error),
+            })
+          }
+        }
+        const firstEpisode = localEpisodeVideos.find((episode) => episode.index === 1)
+        if (!firstEpisode) {
+          throw new Error("百度网盘未提供海报，AI 兜底生成未找到已下载的第一集视频。")
+        }
+        summary ||= "接口未提供剧情简介，请结合剧名和第一集参考画面理解主要人物、时代背景、场景氛围与核心剧情冲突。"
+        logger.warn("Baidu Netdisk did not provide a poster; generating one from episode frames", {
+          firstEpisode: firstEpisode.file,
+          summaryLength: summary.length,
+        })
+        const referenceImages = await cachedEpisodeReferenceFrames({
+          episodeFile: firstEpisode.file,
+          localMaterialRoot: settings.localEpisodeVideoRoot,
+          resourceName: task.dramaName,
+          signal: controller.signal,
+          onLog: logger.callback("ai-poster"),
+        })
+        const generatedPoster = await ensureAiPoster({
+          client: createConfiguredAiClient(),
+          model: getConfiguredAiImageModel(),
+          retryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
+          localMaterialRoot: settings.localEpisodeVideoRoot,
+          resourceName: task.dramaName,
+          title: task.dramaName,
+          summary,
+          referenceImages,
+          onLog: logger.callback("ai-poster"),
+        })
+        coverFile = generatedPoster.file
+        logger.info("AI fallback poster generated from episode frames", {
+          coverFile,
+          referenceImages,
+          reused: generatedPoster.reused,
+        })
       }
 
       this.repository.update(task.id, {
@@ -620,6 +746,18 @@ export class WechatMiniProgramCatalogUploadCoordinator {
       },
     })
     return this.readApiResponse<DramaPage>(response, "读取剧列表失败")
+  }
+
+  private async fetchDramaDetail(dramaId: number, signal: AbortSignal): Promise<CatalogDrama> {
+    const settings = this.options.getSettings()
+    const response = await fetch(apiUrl(settings.catalogApiBaseUrl, `/admin/v1/dramas/${dramaId}`), {
+      signal,
+      headers: {
+        accept: "application/json, text/plain, */*",
+        "x-operator": "",
+      },
+    })
+    return this.readApiResponse<CatalogDrama>(response, "读取剧目详情失败")
   }
 
   private async uploadEpisode(

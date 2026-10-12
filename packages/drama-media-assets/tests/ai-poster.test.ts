@@ -1,6 +1,6 @@
 import type { DramaAiClient, ImageGenerationOptions } from "@drama/ai";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -205,6 +205,43 @@ test("uses the configured AI cover retry count after the first failure", async (
 
     assert.equal(calls, 3);
     assert.ok((await stat(result.file)).size > 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("passes episode frames to image generation and includes them in the cache identity", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-ai-poster-frames-"));
+  try {
+    const generatedSource = await sharp({
+      create: { background: "#111827", channels: 3, height: 900, width: 1600 },
+    }).png().toBuffer();
+    const referenceDir = path.join(root, "references");
+    await mkdir(referenceDir, { recursive: true });
+    const firstFrame = path.join(referenceDir, "frame-1.jpg");
+    const secondFrame = path.join(referenceDir, "frame-2.jpg");
+    await writeFile(firstFrame, generatedSource);
+    await writeFile(secondFrame, generatedSource);
+    const fake = fakeClient(generatedSource);
+    const base = {
+      client: fake.client,
+      localMaterialRoot: root,
+      model: "test-image-model",
+      resourceName: "参考帧测试剧",
+      summary: "男女主在第一集相遇并卷入一场身份危机。",
+      title: "参考帧测试剧",
+    };
+
+    await ensureAiPoster({ ...base, referenceImages: [firstFrame, secondFrame] });
+    await ensureAiPoster({ ...base, referenceImages: [firstFrame] });
+
+    assert.equal(fake.getCalls(), 2);
+    assert.deepEqual(fake.requests[0]?.referenceImages, [
+      { type: "file", path: firstFrame },
+      { type: "file", path: secondFrame },
+    ]);
+    assert.match(fake.requests[0]?.prompt ?? "", /2 张第一集随机画面/);
+    assert.match(fake.requests[0]?.prompt ?? "", /不要直接拼贴截图/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

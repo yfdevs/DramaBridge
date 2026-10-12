@@ -60,6 +60,7 @@ export type WechatMiniProgramConfig = {
   workerSlowEmptyClaimThreshold: string
   workerSlowEmptyClaimDelaySeconds: string
   videoAccountSyncIntervalSeconds: string
+  catalogAutoSyncIntervalSeconds: string
   idlePageRefreshIntervalSeconds: string
   idlePageRefreshTimeoutSeconds: string
   idlePageRefreshJitterSeconds: string
@@ -101,6 +102,7 @@ const defaultWechatMiniProgramConfig: WechatMiniProgramConfig = {
   workerSlowEmptyClaimThreshold: '30',
   workerSlowEmptyClaimDelaySeconds: '30',
   videoAccountSyncIntervalSeconds: '600',
+  catalogAutoSyncIntervalSeconds: '15',
   idlePageRefreshIntervalSeconds: '10800',
   idlePageRefreshTimeoutSeconds: '60',
   idlePageRefreshJitterSeconds: '300',
@@ -260,6 +262,7 @@ function normalizeConfig(
     workerSlowEmptyClaimThreshold: config.workerSlowEmptyClaimThreshold ?? defaultWechatMiniProgramConfig.workerSlowEmptyClaimThreshold,
     workerSlowEmptyClaimDelaySeconds: config.workerSlowEmptyClaimDelaySeconds ?? defaultWechatMiniProgramConfig.workerSlowEmptyClaimDelaySeconds,
     videoAccountSyncIntervalSeconds: config.videoAccountSyncIntervalSeconds ?? defaultWechatMiniProgramConfig.videoAccountSyncIntervalSeconds,
+    catalogAutoSyncIntervalSeconds: config.catalogAutoSyncIntervalSeconds ?? defaultWechatMiniProgramConfig.catalogAutoSyncIntervalSeconds,
     idlePageRefreshIntervalSeconds: config.idlePageRefreshIntervalSeconds ?? defaultWechatMiniProgramConfig.idlePageRefreshIntervalSeconds,
     idlePageRefreshTimeoutSeconds: config.idlePageRefreshTimeoutSeconds ?? defaultWechatMiniProgramConfig.idlePageRefreshTimeoutSeconds,
     idlePageRefreshJitterSeconds: config.idlePageRefreshJitterSeconds ?? defaultWechatMiniProgramConfig.idlePageRefreshJitterSeconds,

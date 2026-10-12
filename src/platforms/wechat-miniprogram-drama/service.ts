@@ -28,6 +28,7 @@ export type WechatMiniProgramConfig = {
   workerSlowEmptyClaimThreshold: string
   workerSlowEmptyClaimDelaySeconds: string
   videoAccountSyncIntervalSeconds: string
+  catalogAutoSyncIntervalSeconds: string
   idlePageRefreshIntervalSeconds: string
   idlePageRefreshTimeoutSeconds: string
   idlePageRefreshJitterSeconds: string

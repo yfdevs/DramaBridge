@@ -8,6 +8,7 @@ import {
 import { fetchApprovedShortplays } from "./shortplay-manage-page.js";
 import { PinduoduoUploadRecordsRepository } from "../storage/pinduoduo-upload-records-repository.js";
 import {
+  PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE,
   PinduoduoLegacyResourceLinksRepository,
   resolvePinduoduoResource,
 } from "../storage/pinduoduo-legacy-resource-links.js";
@@ -536,8 +537,18 @@ async function processUploadRecord(
   try {
     throwIfRuntimeStopped(options);
     repository.markDownloading(record.platformApplyId);
-    const legacyResource = legacyResourceRepository.findByTitle(record.title);
-    const resource = resolvePinduoduoResource(record.title, record.demoUrl, legacyResource);
+    const shouldUseLegacyResource =
+      record.gmtCreate !== undefined &&
+      record.gmtCreate < PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE;
+    const legacyResource = shouldUseLegacyResource
+      ? legacyResourceRepository.findByTitle(record.title)
+      : undefined;
+    const resource = resolvePinduoduoResource(
+      record.title,
+      record.demoUrl,
+      record.gmtCreate,
+      legacyResource,
+    );
     repository.markResourceSource(
       record.platformApplyId,
       resource.source,

@@ -28,6 +28,7 @@ import {
   type WechatMiniProgramCatalogUploadState,
   type WechatMiniProgramCatalogUploadWorkspace,
 } from "@/platforms/wechat-miniprogram-drama/catalog-upload-service";
+import { wechatMiniProgramService } from "@/platforms/wechat-miniprogram-drama/service";
 
 const stateLabels: Record<WechatMiniProgramCatalogUploadState, string> = {
   discovered: "等待处理",
@@ -94,13 +95,11 @@ type MaterialFilter = "all" | "complete" | "pending" | "failed";
 type SourceFilter = "all" | "available" | "missing";
 type SelectOption<T extends string | number> = { value: T; label: string };
 
-const autoSyncOptions = [15, 30, 60, 300, 0] as const;
 const pageSizeOptions = [20, 50, 100] as const;
 
-function autoSyncLabel(seconds: number) {
-  if (seconds === 0) return "关闭定时获取";
-  if (seconds >= 60) return `每 ${seconds / 60} 分钟获取`;
-  return `每 ${seconds} 秒获取`;
+function parseAutoSyncSeconds(value: string) {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : 15;
 }
 
 const stateFilterOptions: SelectOption<StateFilter>[] = [
@@ -235,6 +234,25 @@ export function WechatMiniProgramCatalogUploadWindow() {
       unsubscribe();
     };
   }, [refresh]);
+
+  useEffect(() => {
+    let active = true;
+    void wechatMiniProgramService
+      .getConfig()
+      .then(({ config }) => {
+        if (active) setAutoSyncSeconds(parseAutoSyncSeconds(config.catalogAutoSyncIntervalSeconds));
+      })
+      .catch(() => {
+        // Keep the default interval when configuration is unavailable, such as in browser previews.
+      });
+    const unsubscribe = wechatMiniProgramService.onConfigChanged(({ config }) => {
+      setAutoSyncSeconds(parseAutoSyncSeconds(config.catalogAutoSyncIntervalSeconds));
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (autoSyncSeconds === 0 || workspace?.queue.running || workspace?.sync.running) return;
@@ -479,25 +497,6 @@ export function WechatMiniProgramCatalogUploadWindow() {
               {workspace.sync.error}
             </span>
           ) : null}
-          <div className="ml-auto flex items-center gap-2 text-muted-foreground">
-            <span>
-              {autoSyncSeconds === 0
-                ? "定时获取已关闭"
-                : workspace?.queue.running
-                  ? "定时获取已暂停"
-                  : "定时获取剧目"}
-            </span>
-            <CompactSelect
-              ariaLabel="定时获取全部剧目频率"
-              className="w-32"
-              options={autoSyncOptions.map((seconds) => ({
-                value: seconds,
-                label: autoSyncLabel(seconds),
-              }))}
-              value={autoSyncSeconds}
-              onValueChange={setAutoSyncSeconds}
-            />
-          </div>
         </div>
       </header>
 
