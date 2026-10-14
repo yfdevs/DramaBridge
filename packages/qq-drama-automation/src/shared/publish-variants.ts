@@ -11,12 +11,13 @@ export function shouldOpenNewQqDramaVariantPage(variantIndex: number) {
 
 export function createQqDramaPublishVariants(
   task: ClaimedQqDramaTask,
+  acceptSecondVersion = true,
 ): QqDramaPublishVariant[] {
   const variants: QqDramaPublishVariant[] = [{
     kind: "primary",
     title: task.playlet.title,
   }];
-  if (task.playlet.secondVersionEnabled) {
+  if (acceptSecondVersion && task.playlet.secondVersionEnabled) {
     variants.push({
       kind: "secondary",
       title: task.playlet.secondVersionTitle!,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { formatAutomationErrorReport, isBrowserClosedError } from "@drama/automation-logging";
 import {
   kuaishouDramaTaskSchema,
+  resolveKuaishouAdVersionCount,
   type ClaimedKuaishouDramaTask,
   type KuaishouDramaApiConfig,
   type KuaishouDramaRuntimeOptions,
@@ -18,6 +19,7 @@ type ApiOptions = {
 const endpoints = {
   accountTaskPage: "/dramaAiRpa/kuaishou/accountTask/page",
   claimTask: "/dramaAiRpa/kuaishou/rpa/claim",
+  dramaDetail: (dramaId: number) => `/dramaAiRpa/detail/${dramaId}`,
   reportTask: "/dramaAiRpa/kuaishou/rpa/report",
 };
 const requiredText = z.string().trim().min(1);
@@ -51,6 +53,9 @@ const claimDataSchema = z.object({
   payloadJson: z.unknown(),
 });
 const claimResponseSchema = responseBaseSchema.extend({ data: claimDataSchema.nullish() });
+const dramaDetailResponseSchema = responseBaseSchema.extend({
+  data: z.object({ dataJson: z.unknown() }).passthrough().nullish(),
+});
 const reportResponseSchema = responseBaseSchema.extend({ data: z.boolean().nullish() });
 
 type ReadyTask = z.infer<typeof readyTaskSchema>;
@@ -78,6 +83,23 @@ function parsePayload(value: unknown) {
   return asRecord(typeof value === "string" ? JSON.parse(value) : value);
 }
 
+function mergeLatestDramaPayload(snapshotValue: unknown, latestValue: unknown) {
+  const snapshot = parsePayload(snapshotValue);
+  const latest = parsePayload(latestValue);
+  const snapshotKuaishou = asRecord(snapshot.kuaishou);
+  const latestKuaishou = asRecord(latest.kuaishou);
+  const snapshotPlaylet = asRecord(snapshot.kuaishouPlaylet ?? snapshotKuaishou.playlet);
+  const latestPlaylet = asRecord(latest.kuaishouPlaylet ?? latestKuaishou.playlet);
+  return {
+    ...snapshot,
+    ...latest,
+    kuaishouPlaylet: {
+      ...snapshotPlaylet,
+      ...latestPlaylet,
+    },
+  };
+}
+
 function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -85,6 +107,18 @@ function text(value: unknown) {
 function number(value: unknown) {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function stringList(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => text(item));
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map((item) => text(item));
+  } catch {
+    // Some backend serializers return a delimited string instead of a JSON array.
+  }
+  return value.split(/[,，、\n]/u).map((item) => text(item));
 }
 
 const adVersionTitleFields = [
@@ -98,16 +132,8 @@ const adVersionTitleFields = [
 ] as const;
 const adVersionSuffixes = ["二", "三", "四", "五", "六", "七", "八"] as const;
 
-function requiredAdVersionTitleCount(publishType: string | undefined) {
-  if (publishType === "付费" || publishType === "广告") return 0;
-  if (publishType === "三个广告版本") return 2;
-  if (publishType === "五个广告版本") return 4;
-  if (publishType === "六个广告版本") return 5;
-  return 7;
-}
-
 function generatedAdVersionTitle(title: string, index: number) {
-  const suffix = `·${adVersionSuffixes[index]}`;
+  const suffix = `·${adVersionSuffixes[index] ?? index + 2}`;
   const base = title.replace(/^《+|》+$/g, "").trim();
   return `${base.slice(0, Math.max(1, 28 - suffix.length))}${suffix}`;
 }
@@ -118,13 +144,32 @@ function normalizeAdVersionTitles(
   title: string,
 ) {
   const normalized = { ...playlet };
-  const count = requiredAdVersionTitleCount(text(playlet.publishType) ?? text(payload.publishType));
-  for (let index = 0; index < count; index += 1) {
-    const field = adVersionTitleFields[index]!;
-    normalized[field] = text(playlet[field])
-      ?? text(payload[field])
-      ?? generatedAdVersionTitle(title, index);
+  const publishType = text(playlet.publishType) ?? text(payload.publishType);
+  const explicitAdVersionCount = number(playlet.adVersionCount)
+    ?? number(payload.adVersionCount);
+  const adVersionCount = resolveKuaishouAdVersionCount({
+    publishType,
+    adVersionCount: explicitAdVersionCount,
+  });
+  const configuredTitles = [playlet.adVersionTitles, payload.adVersionTitles]
+    .map(stringList)
+    .find((titles) => titles !== undefined);
+  const adVersionTitles: string[] = [];
+  for (let index = 0; index < Math.max(0, adVersionCount - 1); index += 1) {
+    const field = adVersionTitleFields[index];
+    const configuredTitle = configuredTitles?.[index]
+      ?? (field ? text(playlet[field]) : undefined)
+      ?? (field ? text(payload[field]) : undefined);
+    if (!configuredTitle && explicitAdVersionCount !== undefined) {
+      throw new Error(
+        `KUAISHOU_DRAMA_AD_VERSION_TITLE_MISSING: version=${index + 2}; `
+          + `adVersionCount=${adVersionCount}`,
+      );
+    }
+    adVersionTitles.push(configuredTitle ?? generatedAdVersionTitle(title, index));
   }
+  normalized.adVersionCount = adVersionCount > 0 ? adVersionCount : undefined;
+  normalized.adVersionTitles = adVersionTitles;
   return normalized;
 }
 
@@ -203,8 +248,9 @@ async function report(
 }
 
 async function claimById(options: ApiOptions, accountTaskId: number, listedTask?: ReadyTask) {
+  const httpClient = client(options);
   const payload = claimResponseSchema.parse(
-    await client(options).post(endpoints.claimTask, { accountTaskId }),
+    await httpClient.post(endpoints.claimTask, { accountTaskId }),
   );
   assertSuccess(payload, "KUAISHOU_DRAMA_ACCOUNT_TASK_CLAIM_FAILED");
   if (!payload.data) return null;
@@ -215,7 +261,20 @@ async function claimById(options: ApiOptions, accountTaskId: number, listedTask?
     );
   }
   try {
-    return normalizeClaimedTask(payload.data, listedTask, options.runtimeOptions);
+    let claimedData = payload.data;
+    if (listedTask?.dramaId && httpClient.get) {
+      const latestPayload = await httpClient.get(endpoints.dramaDetail(listedTask.dramaId))
+        .then((response) => dramaDetailResponseSchema.parse(response))
+        .then((response) => response.data?.dataJson)
+        .catch(() => undefined);
+      if (latestPayload !== undefined) {
+        claimedData = {
+          ...claimedData,
+          payloadJson: mergeLatestDramaPayload(claimedData.payloadJson, latestPayload),
+        };
+      }
+    }
+    return normalizeClaimedTask(claimedData, listedTask, options.runtimeOptions);
   } catch (error) {
     await report({
       ...options,

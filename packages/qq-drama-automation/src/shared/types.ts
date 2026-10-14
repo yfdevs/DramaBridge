@@ -275,6 +275,7 @@ export type QqDramaRuntimeOptions = {
   baiduNetdiskDownloadRetryAttempts?: number;
   episodeUploadWaitTimeoutMinutes?: number;
   episodeUploadFailedRetryAttempts?: number;
+  acceptSecondVersion?: boolean;
   taskPollIntervalMs?: number;
   aiClientFactory?: () => DramaAiClient;
   aiImageModel?: string;

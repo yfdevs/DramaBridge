@@ -19,6 +19,8 @@ test("slows only Douyin episode videos at or below 30 seconds", async () => {
         speed: request.speed,
         sourceDurationSeconds: request.sourceDurationSeconds!,
         outputDurationSeconds: request.sourceDurationSeconds! / request.speed,
+        outputVideoDurationSeconds: request.sourceDurationSeconds! / request.speed,
+        outputAudioDurationSeconds: request.sourceDurationSeconds! / request.speed,
       };
     },
   });

@@ -87,6 +87,7 @@ export type QqDramaConfig = {
   baiduNetdiskDownloadRetryAttempts: string;
   episodeUploadWaitTimeoutMinutes: string;
   episodeUploadFailedRetryAttempts: string;
+  acceptSecondVersion: string;
   headless: string;
   operationDelaySeconds: string;
   taskPollIntervalSeconds: string;
@@ -126,6 +127,7 @@ const defaultQqDramaConfig: QqDramaConfig = {
   baiduNetdiskDownloadRetryAttempts: "3",
   episodeUploadWaitTimeoutMinutes: "120",
   episodeUploadFailedRetryAttempts: "3",
+  acceptSecondVersion: "true",
   headless: "false",
   operationDelaySeconds: "0",
   taskPollIntervalSeconds: "10",
@@ -225,6 +227,8 @@ function normalizeConfig(
       defaultQqDramaConfig.episodeUploadFailedRetryAttempts,
       0,
     ),
+    acceptSecondVersion:
+      config.acceptSecondVersion ?? defaultQqDramaConfig.acceptSecondVersion,
     headless: config.headless ?? defaultQqDramaConfig.headless,
     operationDelaySeconds: normalizeNumberText(
       config.operationDelaySeconds,
@@ -556,6 +560,7 @@ async function startRuntime() {
         baiduNetdiskDownloadRetryAttempts,
         episodeUploadWaitTimeoutMinutes,
         episodeUploadFailedRetryAttempts,
+        acceptSecondVersion: config.acceptSecondVersion === "true",
         taskPollIntervalMs,
         aiClientFactory: createConfiguredAiClient,
         aiImageModel: getConfiguredAiImageModel(),

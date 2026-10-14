@@ -41,6 +41,12 @@ test("uses FFmpeg to slow video and audio to 0.9x", async () => {
 
     assert.ok(adjusted.outputDurationSeconds > sourceDurationSeconds);
     assert.ok(Math.abs(adjusted.outputDurationSeconds - sourceDurationSeconds / 0.9) <= 1);
+    assert.ok(adjusted.outputAudioDurationSeconds);
+    assert.ok(
+      Math.abs(
+        adjusted.outputVideoDurationSeconds - adjusted.outputAudioDurationSeconds,
+      ) <= 0.25,
+    );
     assert.equal(
       (await readVideoDurationSeconds(inputFile)).toFixed(2),
       adjusted.outputDurationSeconds.toFixed(2),

@@ -11,6 +11,8 @@ const taskKeys: Array<keyof KuaishouDramaTaskInput> = [
   "episodeCount",
   "baiduPanResourceLink",
   "publishType",
+  "adVersionCount",
+  "adVersionTitles",
   "adVersion2Title",
   "adVersion3Title",
   "adVersion4Title",

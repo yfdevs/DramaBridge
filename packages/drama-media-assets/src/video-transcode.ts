@@ -51,6 +51,8 @@ export type AdjustedVideoPlaybackSpeed = {
   speed: number;
   sourceDurationSeconds: number;
   outputDurationSeconds: number;
+  outputVideoDurationSeconds: number;
+  outputAudioDurationSeconds?: number;
 };
 
 export type VideoDimensions = {
@@ -79,6 +81,7 @@ export type ExtractRandomVideoFramesRequest = {
 const defaultAudioBitrateKbps = 128;
 const minimumVideoBitrateKbps = 100;
 const durationPattern = /Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/;
+const progressTimePattern = /time=\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/g;
 const videoDimensionsPattern = /Video:[^\r\n]*?\b(\d{2,5})x(\d{2,5})\b/u;
 
 function assertPolicy(policy: VideoSizePolicy) {
@@ -320,7 +323,36 @@ async function videoHasAudioStream(inputFile: string, signal?: AbortSignal) {
     ["-hide_banner", "-i", inputFile],
     { signal, acceptExitCode: (code) => code === 1 },
   );
-  return /Stream #\d+:\d+(?:\([^)]*\))?: Audio:/u.test(result.stderr);
+  return /^\s*Stream #\d+:\d+.*?: Audio:/mu.test(result.stderr);
+}
+
+async function readDecodedStreamDurationSeconds(
+  inputFile: string,
+  stream: "video" | "audio",
+  signal?: AbortSignal,
+) {
+  const result = await runFfmpeg([
+    "-hide_banner",
+    "-xerror",
+    "-i", inputFile,
+    "-map", stream === "video" ? "0:v:0" : "0:a:0",
+    "-f", "null",
+    process.platform === "win32" ? "NUL" : "/dev/null",
+  ], { signal });
+  const matches = [...result.stderr.matchAll(progressTimePattern)];
+  const lastMatch = matches[matches.length - 1];
+  if (!lastMatch) {
+    throw new Error(
+      `[video-speed-failed] 无法读取${stream === "video" ? "画面" : "音频"}轨解码时长: ${inputFile}`,
+    );
+  }
+  const durationSeconds = secondsFromDurationMatch(lastMatch);
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    throw new Error(
+      `[video-speed-failed] ${stream === "video" ? "画面" : "音频"}轨解码时长无效: ${inputFile}`,
+    );
+  }
+  return durationSeconds;
 }
 
 export async function adjustVideoPlaybackSpeed(
@@ -332,6 +364,7 @@ export async function adjustVideoPlaybackSpeed(
   const sourceDurationSeconds = request.sourceDurationSeconds
     ?? await readVideoDurationSeconds(request.inputFile, request.signal);
   const hasAudio = await videoHasAudioStream(request.inputFile, request.signal);
+  const expectedDurationSeconds = sourceDurationSeconds / request.speed;
   const temporaryOutput = path.join(
     path.dirname(request.inputFile),
     `.${path.basename(request.inputFile)}.${process.pid}-${Date.now()}.speed.tmp.mp4`,
@@ -345,25 +378,38 @@ export async function adjustVideoPlaybackSpeed(
     const args = [
       "-y",
       "-hide_banner",
+      "-fflags", "+genpts",
       "-i", request.inputFile,
       "-map", "0:v:0",
-      "-filter:v", `setpts=PTS/${request.speed}`,
+      "-filter:v", `settb=AVTB,setpts=(PTS-STARTPTS)/${request.speed}`,
       "-c:v", "libx264",
       "-preset", "veryfast",
       "-crf", "18",
+      "-pix_fmt", "yuv420p",
       "-threads", "2",
     ];
     if (hasAudio) {
       args.push(
         "-map", "0:a:0?",
-        "-filter:a", `atempo=${request.speed}`,
+        "-filter:a",
+        `aresample=48000:async=1:first_pts=0,atempo=${request.speed},`
+          + `asetpts=N/SR/TB,apad=whole_dur=${expectedDurationSeconds.toFixed(6)}`,
         "-c:a", "aac",
-        "-b:a", "128k",
+        "-b:a", "192k",
+        "-ar", "48000",
+        "-ac", "2",
       );
     } else {
       args.push("-an");
     }
-    args.push("-movflags", "+faststart", temporaryOutput);
+    args.push(
+      "-t", expectedDurationSeconds.toFixed(6),
+      "-fps_mode", "cfr",
+      "-avoid_negative_ts", "make_zero",
+      "-max_muxing_queue_size", "2048",
+      "-movflags", "+faststart",
+      temporaryOutput,
+    );
     await runFfmpeg(args, { signal: request.signal });
 
     const outputStat = await stat(temporaryOutput);
@@ -371,13 +417,40 @@ export async function adjustVideoPlaybackSpeed(
       throw new Error(`[video-speed-failed] FFmpeg 未生成有效视频: ${request.inputFile}`);
     }
     const outputDurationSeconds = await readVideoDurationSeconds(temporaryOutput, request.signal);
-    const expectedDurationSeconds = sourceDurationSeconds / request.speed;
-    const toleranceSeconds = Math.max(1, expectedDurationSeconds * 0.03);
+    const outputVideoDurationSeconds = await readDecodedStreamDurationSeconds(
+      temporaryOutput,
+      "video",
+      request.signal,
+    );
+    const outputAudioDurationSeconds = hasAudio
+      ? await readDecodedStreamDurationSeconds(temporaryOutput, "audio", request.signal)
+      : undefined;
+    const toleranceSeconds = Math.max(0.25, expectedDurationSeconds * 0.01);
     if (Math.abs(outputDurationSeconds - expectedDurationSeconds) > toleranceSeconds) {
       throw new Error(
         `[video-speed-failed] 调速后时长不符合预期: source=${sourceDurationSeconds.toFixed(2)} `
           + `expected=${expectedDurationSeconds.toFixed(2)} actual=${outputDurationSeconds.toFixed(2)} `
           + `file=${request.inputFile}`,
+      );
+    }
+    if (Math.abs(outputVideoDurationSeconds - expectedDurationSeconds) > toleranceSeconds) {
+      throw new Error(
+        `[video-speed-failed] 调速后画面轨时长不符合预期: `
+          + `expected=${expectedDurationSeconds.toFixed(2)} actual=${outputVideoDurationSeconds.toFixed(2)} `
+          + `file=${request.inputFile}`,
+      );
+    }
+    if (
+      outputAudioDurationSeconds !== undefined
+      && (
+        Math.abs(outputAudioDurationSeconds - expectedDurationSeconds) > toleranceSeconds
+        || Math.abs(outputAudioDurationSeconds - outputVideoDurationSeconds) > toleranceSeconds
+      )
+    ) {
+      throw new Error(
+        `[video-speed-failed] 调速后音画轨时长不一致: `
+          + `video=${outputVideoDurationSeconds.toFixed(2)} audio=${outputAudioDurationSeconds.toFixed(2)} `
+          + `expected=${expectedDurationSeconds.toFixed(2)} file=${request.inputFile}`,
       );
     }
     await replaceSourceFile({
@@ -394,6 +467,8 @@ export async function adjustVideoPlaybackSpeed(
       speed: request.speed,
       sourceDurationSeconds,
       outputDurationSeconds,
+      outputVideoDurationSeconds,
+      outputAudioDurationSeconds,
     };
   } finally {
     await rm(temporaryOutput, { force: true }).catch(() => undefined);

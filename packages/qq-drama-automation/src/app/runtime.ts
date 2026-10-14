@@ -244,7 +244,7 @@ async function runTask(
         qqAccountName: task.qqAccountName,
       },
       async () => {
-        const variants = createQqDramaPublishVariants(task);
+        const variants = createQqDramaPublishVariants(task, options.acceptSecondVersion !== false);
         const missingVariants: typeof variants = [];
         for (const variant of variants) {
           const existingDrama = await findUploadedQqDramaByExactTitle(context, variant.title);
@@ -314,7 +314,10 @@ async function runTask(
       },
     );
     publishSucceeded = true;
-    const publishedVariants = createQqDramaPublishVariants(task).map((variant) => {
+    const publishedVariants = createQqDramaPublishVariants(
+      task,
+      options.acceptSecondVersion !== false,
+    ).map((variant) => {
       const result = variantResults.get(variant.kind);
       if (!result) throw new Error(`QQ_DRAMA_VARIANT_RESULT_MISSING: ${variant.kind}`);
       return result;

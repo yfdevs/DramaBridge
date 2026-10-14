@@ -129,6 +129,10 @@ void test("selects only the extra cover variants required by the publish type", 
     "ad-unlock-7",
     "ad-unlock-8",
   ]);
+  assert.equal(listKuaishouTextlessVariantKinds({
+    publishType: "广告多版本",
+    adVersionCount: 10,
+  }).at(-1), "ad-unlock-10");
 });
 
 void test("generates only the missing landscape cover and shares prepared files across variants", async () => {

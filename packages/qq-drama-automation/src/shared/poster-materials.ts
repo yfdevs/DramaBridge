@@ -275,7 +275,7 @@ export async function prepareQqDramaPosterMaterials(
 ) {
   const source = await selectPosterSource(task, options);
   const primary = await preparePrimaryPoster(source, task, options);
-  const secondary = task.playlet.secondVersionEnabled
+  const secondary = options.acceptSecondVersion !== false && task.playlet.secondVersionEnabled
     ? await generateSecondVersionPoster(
         source.file,
         task.playlet.secondVersionTitle!,

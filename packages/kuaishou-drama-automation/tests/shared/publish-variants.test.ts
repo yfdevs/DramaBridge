@@ -95,9 +95,22 @@ void test("explicit 全部 uses the nine-variant sequence", () => {
 
 void test("requires distinct extra ad titles for six-ad, eight-ad, and all modes", () => {
   const base = task("广告");
-  assert.equal(kuaishouDramaTaskSchema.safeParse({ ...base, publishType: "全部", adVersion4Title: "" }).success, false);
+  assert.equal(kuaishouDramaTaskSchema.safeParse({ ...base, publishType: "全部", adVersionCount: 3, adVersionTitles: ["雨夜归人"] }).success, false);
   assert.equal(kuaishouDramaTaskSchema.safeParse({ ...base, publishType: "六个广告版本", adVersion6Title: "测试短剧" }).success, false);
   assert.equal(kuaishouDramaTaskSchema.safeParse({ ...base, publishType: "八个广告版本", adVersion8Title: "测试短剧" }).success, false);
+});
+
+void test("publishes a dynamically configured number of ad variants", () => {
+  const dynamicTask = kuaishouDramaTaskSchema.parse({
+    ...task("广告"),
+    publishType: "广告多版本",
+    adVersionCount: 10,
+    adVersionTitles: Array.from({ length: 9 }, (_, index) => `动态剧名${index + 2}`),
+  });
+  const variants = createKuaishouDramaPublishVariants(dynamicTask);
+  assert.equal(variants.length, 10);
+  assert.equal(variants.at(-1)?.kind, "ad-unlock-10");
+  assert.equal(variants.at(-1)?.title, "动态剧名10");
 });
 
 void test("publishes only the paid variant when publishType is 付费", () => {

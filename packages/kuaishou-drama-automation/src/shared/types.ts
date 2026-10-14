@@ -98,6 +98,7 @@ export const kuaishouDramaAuthorDeclarationValues = [
 export const kuaishouDramaPublishTypeValues = [
   "付费",
   "广告",
+  "广告多版本",
   "三个广告版本",
   "五个广告版本",
   "六个广告版本",
@@ -122,6 +123,53 @@ const optionalPublishTypeSchema = z.preprocess(
   z.enum(kuaishouDramaPublishTypeValues).optional(),
 );
 
+type KuaishouAdVersionConfig = {
+  publishType?: KuaishouDramaPublishType | string;
+  adVersionCount?: number;
+  adVersionTitles?: string[];
+  adVersion2Title?: string;
+  adVersion3Title?: string;
+  adVersion4Title?: string;
+  adVersion5Title?: string;
+  adVersion6Title?: string;
+  adVersion7Title?: string;
+  adVersion8Title?: string;
+};
+
+export function resolveKuaishouAdVersionCount(config: KuaishouAdVersionConfig): number {
+  if (config.publishType === "付费") return 0;
+  if (config.publishType === "三个广告版本") return 3;
+  if (config.publishType === "五个广告版本") return 5;
+  if (config.publishType === "六个广告版本") return 6;
+  if (config.publishType === "八个广告版本") return 8;
+  if (config.adVersionCount !== undefined && Number.isInteger(config.adVersionCount)) {
+    return Math.max(1, config.adVersionCount);
+  }
+  if (config.publishType === "广告") return 1;
+  return 8;
+}
+
+export function resolveKuaishouAdVersionTitles(config: KuaishouAdVersionConfig): string[] {
+  const extraTitleCount = Math.max(0, resolveKuaishouAdVersionCount(config) - 1);
+  const legacyTitles = [
+    config.adVersion2Title,
+    config.adVersion3Title,
+    config.adVersion4Title,
+    config.adVersion5Title,
+    config.adVersion6Title,
+    config.adVersion7Title,
+    config.adVersion8Title,
+  ].slice(0, extraTitleCount).flatMap((title) => title ? [title] : []);
+  const isLegacyMode = [
+    "三个广告版本",
+    "五个广告版本",
+    "六个广告版本",
+    "八个广告版本",
+  ].includes(config.publishType ?? "");
+  if (isLegacyMode && legacyTitles.length === extraTitleCount) return legacyTitles;
+  return config.adVersionTitles?.slice(0, extraTitleCount) ?? legacyTitles;
+}
+
 function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
@@ -144,7 +192,11 @@ const kuaishouDramaTaskBaseSchema = z.object({
   baiduPanResourceLink: z.string().trim().optional()
     .describe("百度网盘分享文本，包含分享链接和提取码；存在时上剧前必须下载并校验全部剧集视频"),
   publishType: optionalPublishTypeSchema
-    .describe("发布版本；留空或全部发布一付费八广告；八个广告版本仅发布八广告"),
+    .describe("发布模式；广告版本数量由 adVersionCount 动态控制"),
+  adVersionCount: z.coerce.number().int().min(1).optional()
+    .describe("需要发布的广告版本总数；第一个广告版使用主标题"),
+  adVersionTitles: z.array(z.string().trim().min(1).max(28)).optional()
+    .describe("第二个广告版开始的剧名，数量应为 adVersionCount - 1"),
   adVersion2Title: z.string().trim().max(28).optional(),
   adVersion3Title: z.string().trim().max(28).optional(),
   adVersion4Title: z.string().trim().max(28).optional(),
@@ -212,37 +264,24 @@ const kuaishouDramaTaskBaseSchema = z.object({
       message: "AIGC剧的作者声明必须选择含AI生成内容",
     });
   }
-  if (taskConfig.publishType !== "付费" && taskConfig.publishType !== "广告") {
-    const allTitleFields = [
-      ["adVersion2Title", taskConfig.adVersion2Title],
-      ["adVersion3Title", taskConfig.adVersion3Title],
-      ["adVersion4Title", taskConfig.adVersion4Title],
-      ["adVersion5Title", taskConfig.adVersion5Title],
-      ["adVersion6Title", taskConfig.adVersion6Title],
-      ["adVersion7Title", taskConfig.adVersion7Title],
-      ["adVersion8Title", taskConfig.adVersion8Title],
-    ] as const;
-    const adVersionCount = taskConfig.publishType === "三个广告版本"
-      ? 3
-      : taskConfig.publishType === "五个广告版本"
-        ? 5
-        : taskConfig.publishType === "六个广告版本" ? 6 : 8;
-    const titleFields = allTitleFields.slice(0, adVersionCount - 1);
-    for (const [field, title] of titleFields) {
-      if (!title) context.addIssue({
+  const adVersionCount = resolveKuaishouAdVersionCount(taskConfig);
+  if (adVersionCount > 1) {
+    const titles = resolveKuaishouAdVersionTitles(taskConfig);
+    if (titles.length !== adVersionCount - 1 || titles.some((title) => !title?.trim())) {
+      context.addIssue({
         code: z.ZodIssueCode.custom,
-        path: [field],
+        path: ["adVersionTitles"],
         message: `${adVersionCount}个广告版本需要填写第二至第${adVersionCount}广告版剧名`,
       });
+    } else {
+      const normalized = [taskConfig.title, ...titles]
+        .map((title) => title!.replace(/^《+|》+$/g, "").trim());
+      if (new Set(normalized).size !== adVersionCount) context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["adVersionTitles"],
+        message: `${adVersionCount}个广告版本的剧名不能重复`,
+      });
     }
-    const titles = titleFields.map(([, title]) => title);
-    const normalized = [taskConfig.title, ...titles]
-      .map((title) => title?.replace(/^《+|》+$/g, "").trim());
-    if (titles.every(Boolean) && new Set(normalized).size !== adVersionCount) context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: [titleFields[titleFields.length - 1]?.[0] ?? "title"],
-      message: `${adVersionCount}个广告版本的剧名不能重复`,
-    });
   }
 });
 
@@ -262,6 +301,8 @@ export const kuaishouDramaTaskSchema = kuaishouDramaTaskBaseSchema.transform((ta
   ];
   return {
     ...taskConfig,
+    adVersionCount: resolveKuaishouAdVersionCount(taskConfig),
+    adVersionTitles: resolveKuaishouAdVersionTitles(taskConfig),
     mainActors,
     directorName: fixedPersonnelName,
     directorGender: "男" as const,
@@ -301,14 +342,11 @@ export type KuaishouDramaTaskInput = z.input<typeof kuaishouDramaTaskSchema>;
 export type KuaishouDramaTaskConfig = z.infer<typeof kuaishouDramaTaskSchema> & {
   /** Prepared locally at Kuaishou's 224:300 episode-cover ratio. */
   localEpisodeCoverFile?: string;
-  localVariantCoverFiles?: Partial<Record<
-    "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6" | "ad-unlock-7" | "ad-unlock-8",
-    { drama: string; episode: string }
-  >>;
+  localVariantCoverFiles?: Partial<Record<`ad-unlock-${number}`, { drama: string; episode: string }>>;
 };
 
 export type KuaishouDramaPublishVariant = {
-  kind: "full-paid" | "ad-unlock" | "ad-unlock-2" | "ad-unlock-3" | "ad-unlock-4" | "ad-unlock-5" | "ad-unlock-6" | "ad-unlock-7" | "ad-unlock-8";
+  kind: "full-paid" | "ad-unlock" | `ad-unlock-${number}`;
   title: string;
   saleMode: Extract<KuaishouDramaSaleMode, "全剧付费" | "观看广告解锁">;
   fullDramaPriceYuan?: number;

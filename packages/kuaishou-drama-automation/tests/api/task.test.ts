@@ -6,9 +6,32 @@ import type { KuaishouDramaHttpClient } from "../../src/api/http-client.js";
 import { claimNextKuaishouDramaTaskApi } from "../../src/api/task.js";
 import { createKuaishouDramaPublishVariants } from "../../src/shared/publish-variants.js";
 
-test("keeps the eight-ad-version fields when claiming a backend task", async () => {
+test("keeps exact dynamic ad-version titles when claiming a backend task", async () => {
   const calls: Array<{ path: string; payload: unknown }> = [];
+  const getCalls: string[] = [];
   const client: KuaishouDramaHttpClient = {
+    async get(path) {
+      getCalls.push(path);
+      return {
+        code: 0,
+        msg: "操作成功",
+        data: {
+          dataJson: {
+            kuaishouPlaylet: {
+              publishType: "全部",
+              adVersionCount: 6,
+              adVersionTitles: [
+                "雨夜归人",
+                "旧城来信",
+                "长街灯火",
+                "故园春深",
+                "星河入梦",
+              ],
+            },
+          },
+        },
+      } as never;
+    },
     async post(path, payload) {
       calls.push({ path, payload });
       if (path.endsWith("/accountTask/page")) {
@@ -50,14 +73,15 @@ test("keeps the eight-ad-version fields when claiming a backend task", async () 
                 genderChannel: "不限",
                 categories: ["脑洞"],
                 plotTags: ["其他"],
-                publishType: "八个广告版本",
-                adVersion2Title: "雨夜归人",
-                adVersion3Title: "旧城来信",
-                adVersion4Title: "长街灯火",
-                adVersion5Title: "故园春深",
-                adVersion6Title: "星河入梦",
-                adVersion7Title: "山海重逢",
-                adVersion8Title: "明日序章",
+                publishType: "全部",
+                adVersionCount: 6,
+                adVersionTitles: [
+                  "逆风归途·二",
+                  "逆风归途·三",
+                  "逆风归途·四",
+                  "逆风归途·五",
+                  "逆风归途·六",
+                ],
               },
             },
           },
@@ -73,31 +97,32 @@ test("keeps the eight-ad-version fields when claiming a backend task", async () 
   });
 
   assert.ok(claimed);
-  assert.equal(claimed.task.publishType, "八个广告版本");
-  assert.equal(claimed.task.adVersion2Title, "雨夜归人");
-  assert.equal(claimed.task.adVersion3Title, "旧城来信");
-  assert.equal(claimed.task.adVersion4Title, "长街灯火");
-  assert.equal(claimed.task.adVersion5Title, "故园春深");
-  assert.equal(claimed.task.adVersion6Title, "星河入梦");
-  assert.equal(claimed.task.adVersion7Title, "山海重逢");
-  assert.equal(claimed.task.adVersion8Title, "明日序章");
+  assert.equal(claimed.task.publishType, "全部");
+  assert.equal(claimed.task.adVersionCount, 6);
+  assert.deepEqual(claimed.task.adVersionTitles, [
+    "雨夜归人",
+    "旧城来信",
+    "长街灯火",
+    "故园春深",
+    "星河入梦",
+  ]);
   assert.deepEqual(
     createKuaishouDramaPublishVariants(claimed.task).map(({ kind, title }) => ({ kind, title })),
     [
+      { kind: "full-paid", title: "《逆风归途》" },
       { kind: "ad-unlock", title: "逆风归途" },
       { kind: "ad-unlock-2", title: "雨夜归人" },
       { kind: "ad-unlock-3", title: "旧城来信" },
       { kind: "ad-unlock-4", title: "长街灯火" },
       { kind: "ad-unlock-5", title: "故园春深" },
       { kind: "ad-unlock-6", title: "星河入梦" },
-      { kind: "ad-unlock-7", title: "山海重逢" },
-      { kind: "ad-unlock-8", title: "明日序章" },
     ],
   );
   assert.deepEqual(calls.map(({ path }) => path), [
     "/dramaAiRpa/kuaishou/accountTask/page",
     "/dramaAiRpa/kuaishou/rpa/claim",
   ]);
+  assert.deepEqual(getCalls, ["/dramaAiRpa/detail/901"]);
 });
 
 test("fills missing backend ad-version titles with distinct safe titles", async () => {

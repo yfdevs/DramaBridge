@@ -7,6 +7,7 @@ export type QqDramaConfig = {
   baiduNetdiskDownloadRetryAttempts: string
   episodeUploadWaitTimeoutMinutes: string
   episodeUploadFailedRetryAttempts: string
+  acceptSecondVersion: string
   headless: string
   operationDelaySeconds: string
   taskPollIntervalSeconds: string

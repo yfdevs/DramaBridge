@@ -48,7 +48,15 @@ export function isBaiduInformationConfirmNotClosedError(error: unknown) {
   return errorMessage(error).includes("BAIDU_DRAMA_INFORMATION_CONFIRM_NOT_CLOSED");
 }
 
-async function runPublishTaskWithInformationConfirmRetry(
+export function isBaiduCoverSlotNotReadyError(error: unknown) {
+  return /BAIDU_DRAMA_COVER_SLOT_(?:NOT_READY|LOST)/.test(errorMessage(error));
+}
+
+export function isBaiduDropdownOptionNotFoundError(error: unknown) {
+  return errorMessage(error).includes("BAIDU_DRAMA_DROPDOWN_OPTION_NOT_FOUND");
+}
+
+async function runPublishTaskWithPageRefreshRetry(
   page: Page,
   task: ClaimedBaiduDramaTask,
   options: BaiduDramaRuntimeOptions,
@@ -56,12 +64,32 @@ async function runPublishTaskWithInformationConfirmRetry(
   try {
     await runBaiduDramaPublishTask(page, task, options);
   } catch (error) {
-    if (!isBaiduInformationConfirmNotClosedError(error) || page.isClosed()) throw error;
+    const informationConfirmNotClosed = isBaiduInformationConfirmNotClosedError(error);
+    const coverSlotNotReady = isBaiduCoverSlotNotReadyError(error);
+    const dropdownOptionNotFound = isBaiduDropdownOptionNotFoundError(error);
+    if (
+      (!informationConfirmNotClosed && !coverSlotNotReady && !dropdownOptionNotFound)
+      || page.isClosed()
+    ) throw error;
+
+    const retryReason = coverSlotNotReady
+      ? "cover-slot-not-ready"
+      : dropdownOptionNotFound
+        ? "dropdown-option-not-found"
+        : "information-confirm-not-closed";
 
     warn(
       options,
-      "[baidu-drama] 短剧信息确认弹窗未关闭，刷新任务页面并从头重试一次。",
-      { accountTaskId: task.accountTaskId, error },
+      coverSlotNotReady
+        ? "[baidu-drama] 封面上传后未回填，刷新任务页面并从头重填一次。"
+        : dropdownOptionNotFound
+          ? "[baidu-drama] 页面下拉选项未加载，刷新任务页面并从头重填一次。"
+        : "[baidu-drama] 短剧信息确认弹窗未关闭，刷新任务页面并从头重试一次。",
+      {
+        accountTaskId: task.accountTaskId,
+        error,
+        retryReason,
+      },
       "task",
     );
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -154,7 +182,7 @@ async function runTask(
       },
       "task",
     );
-    await runPublishTaskWithInformationConfirmRetry(taskPage, task, options);
+    await runPublishTaskWithPageRefreshRetry(taskPage, task, options);
     await reportBaiduDramaTaskSuccessApi({
       runtimeOptions: options,
       apiConfig: options.apiConfig,

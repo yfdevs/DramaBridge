@@ -47,6 +47,12 @@ test("keeps legacy and explicitly disabled QQ tasks single-version", () => {
   ]);
 });
 
+test("forces a QQ task to single-version when second versions are not accepted", () => {
+  assert.deepEqual(createQqDramaPublishVariants(task(true, "第二版剧名"), false), [
+    { kind: "primary", title: "第一版剧名" },
+  ]);
+});
+
 test("rejects an enabled QQ second version without a distinct title", () => {
   assert.equal(
     claimedQqDramaTaskSchema.safeParse({
