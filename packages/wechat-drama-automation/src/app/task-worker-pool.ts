@@ -26,7 +26,7 @@ import { TaskService } from "./task-service.js";
 import { classifyError, ErrorType, inferRpaFailStage } from "../shared/errors.js";
 import { getWechatVideoRuntimeSettings } from "../shared/runtime-settings.js";
 import { integerSetting } from "../shared/settings-value.js";
-import type { EnsureBaiduNetdiskResource } from "./runtime.js";
+import type { CleanupBaiduNetdiskResource, EnsureBaiduNetdiskResource } from "./runtime.js";
 import {
   getWechatOwnershipRequirements,
   loadWechatOwnershipMaterials,
@@ -71,6 +71,7 @@ type ClaimedTask = NonNullable<Awaited<ReturnType<typeof claimNextTaskForVideoAc
 
 type PreparedClaimedTask = {
   playletConfig: ReturnType<typeof normalizeClaimedTaskConfig>;
+  baiduNetdiskResource?: unknown;
   episodeVideos: Array<{
     index: number;
     title: string;
@@ -97,6 +98,7 @@ export class TaskWorkerPool {
     private readonly notifier = new FeishuNotifier(),
     private readonly ensureBaiduNetdiskResource?: EnsureBaiduNetdiskResource,
     private readonly ownershipAiClient?: NonNullable<Parameters<typeof findOwnershipProjectProofFiles>[0]["aiClient"]>,
+    private readonly cleanupBaiduNetdiskResourceAfterTaskSuccess?: CleanupBaiduNetdiskResource,
   ) {
     const settings = getWechatVideoRuntimeSettings();
     this.materialPreparationQueue = new PQueue({
@@ -322,10 +324,11 @@ export class TaskWorkerPool {
   private enqueueClaimedTask(worker: AccountWorkerControl, claimedAccountTask: ClaimedTask) {
     const videoAccount = worker.videoAccount;
     const videoAccountId = videoAccount.id;
+    let baiduNetdiskResource: unknown;
     const preparation = this.materialPreparationQueue.add(
       async () => {
         const playletConfig = normalizeClaimedTaskConfig(claimedAccountTask);
-        await this.ensureBaiduNetdiskResourceReady(
+        baiduNetdiskResource = await this.ensureBaiduNetdiskResourceReady(
           videoAccount,
           claimedAccountTask,
           playletConfig,
@@ -383,7 +386,7 @@ export class TaskWorkerPool {
         episodeCount: episodeVideos.length,
         transcodedCount: episodeVideos.filter((episode) => episode.transcoded).length,
       });
-      return { playletConfig, episodeVideos };
+      return { playletConfig, episodeVideos, baiduNetdiskResource };
     });
 
     const lifecycle = this.getPublishQueue(videoAccountId).add(
@@ -438,6 +441,11 @@ export class TaskWorkerPool {
       await reportClaimedTaskSuccessApi({
         accountTaskId: claimedAccountTask.accountTaskId,
       });
+      await this.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(prepared.baiduNetdiskResource)
+        .catch((error) => logger.warn("task succeeded but baidu netdisk cleanup failed", {
+          accountTaskId: claimedAccountTask.accountTaskId,
+          error,
+        }));
       await this.notifier.notifyTaskSucceeded({
         accountTaskId: claimedAccountTask.accountTaskId,
         dramaId: claimedAccountTask.dramaId,
@@ -498,11 +506,10 @@ export class TaskWorkerPool {
 
   private async ensureBaiduNetdiskResourceReady(
     videoAccount: VideoAccount,
-    claimedAccountTask: Awaited<ReturnType<typeof claimNextTaskForVideoAccountApi>>,
+    claimedAccountTask: NonNullable<Awaited<ReturnType<typeof claimNextTaskForVideoAccountApi>>>,
     playletConfig: ReturnType<typeof normalizeClaimedTaskConfig>,
     signal: AbortSignal,
-  ): Promise<void> {
-    if (!claimedAccountTask) return;
+  ): Promise<unknown> {
 
     const baiduPanResourceLink = stringValue(claimedAccountTask.playlet.baiduPanResourceLink);
     if (!baiduPanResourceLink) return;
@@ -533,7 +540,7 @@ export class TaskWorkerPool {
           maxAttempts,
         });
 
-        await this.ensureBaiduNetdiskResource({
+        const resource = await this.ensureBaiduNetdiskResource({
           shareText: baiduPanResourceLink,
           resourceName: claimedAccountTask.originalTitle,
           localEpisodeVideoRoot: settings.localEpisodeVideoRoot,
@@ -583,7 +590,7 @@ export class TaskWorkerPool {
           originalTitle: claimedAccountTask.originalTitle,
           attempt,
         });
-        return;
+        return resource;
       } catch (error) {
         lastError = error;
         const errorMessage = error instanceof Error ? error.message : String(error);

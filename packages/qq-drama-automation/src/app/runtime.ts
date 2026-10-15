@@ -184,7 +184,7 @@ async function ensureBaiduNetdiskResourceReady(
         attempt,
         maxAttempts,
       });
-      await options.ensureBaiduNetdiskResource({
+      return await options.ensureBaiduNetdiskResource({
         shareText: baiduPanResourceLink,
         resourceName,
         localEpisodeVideoRoot,
@@ -195,7 +195,6 @@ async function ensureBaiduNetdiskResourceReady(
           summary: task.playlet.summary,
         },
       });
-      return;
     } catch (error) {
       lastError = error;
       const message = errorMessage(error);
@@ -229,6 +228,7 @@ async function runTask(
     "primary" | "secondary",
     { kind: "primary" | "secondary"; title: string; existing: boolean; dramaId?: string }
   >();
+  let baiduNetdiskResource: unknown;
   setLastTask({
     accountTaskId: task.accountTaskId,
     originalTitle: task.originalTitle,
@@ -275,7 +275,7 @@ async function runTask(
           return;
         }
 
-        await ensureBaiduNetdiskResourceReady(task, options);
+        baiduNetdiskResource = await ensureBaiduNetdiskResourceReady(task, options);
         await validateQqDramaLocalEpisodeVideos(task, options);
         const posters = await prepareQqDramaPosterMaterials(task, options);
         log(options, `[qq-drama] publish covers ready`, posters);
@@ -335,6 +335,16 @@ async function runTask(
         },
       }),
     );
+    if (baiduNetdiskResource && options.cleanupBaiduNetdiskResourceAfterTaskSuccess) {
+      try {
+        await options.cleanupBaiduNetdiskResourceAfterTaskSuccess(baiduNetdiskResource);
+      } catch (error) {
+        log(options, `[qq-drama] task succeeded but baidu netdisk cleanup failed`, {
+          accountTaskId: task.accountTaskId,
+          errorMessage: errorMessage(error),
+        });
+      }
+    }
     setLastTask({
       accountTaskId: task.accountTaskId,
       originalTitle: task.originalTitle,

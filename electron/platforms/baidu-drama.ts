@@ -14,7 +14,7 @@ import {
   RuntimeController,
   selectDirectory,
 } from "./shared";
-import { ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
 import { createElectronPlatformLogger } from "../platform-logger";
 import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
 import {
@@ -41,6 +41,7 @@ type BaiduDramaAccountRuntimeStatus = {
   createUrl: string;
   loginUrl: string;
   userDataDir: string;
+  taskClaimResumeAt?: number;
   lastTask?: {
     accountTaskId: number;
     originalTitle: string;
@@ -96,7 +97,10 @@ type BaiduDramaStoragePaths = {
 };
 
 export type BaiduDramaServiceStatus = BaiduDramaRuntimeStatus & { pid: number | null };
-type BaiduDramaStore = { config: Partial<BaiduDramaConfig> };
+type BaiduDramaStore = {
+  config: Partial<BaiduDramaConfig>;
+  taskClaimResumeAtByAccount?: Record<string, number>;
+};
 
 const defaultConfig: BaiduDramaConfig = {
   apiBaseUrl: "http://180.184.76.232:19090",
@@ -162,6 +166,20 @@ function readConfig() {
     runDataDir: directories.runDataDir,
     localEpisodeVideoRoot: directories.localMaterialRoot,
   };
+}
+
+function taskClaimResumeAt(accountId: string) {
+  const resumeAt = getStore().get("taskClaimResumeAtByAccount", {})[accountId];
+  if (!resumeAt || resumeAt <= Date.now()) return undefined;
+  return resumeAt;
+}
+
+function saveTaskClaimResumeAt(accountId: string, resumeAt: number) {
+  const resumeAtByAccount = getStore().get("taskClaimResumeAtByAccount", {});
+  getStore().set("taskClaimResumeAtByAccount", {
+    ...resumeAtByAccount,
+    [accountId]: resumeAt,
+  });
 }
 
 function storagePaths(
@@ -433,6 +451,9 @@ async function startRuntime() {
         baiduNetdiskDownloadRetryAttempts: Number.parseInt(config.baiduNetdiskDownloadRetryAttempts, 10),
         episodeUploadWaitTimeoutMinutes: Number.parseFloat(config.episodeUploadWaitTimeoutMinutes),
         taskPollIntervalMs: Number.parseFloat(config.taskPollIntervalSeconds) * 1000,
+        taskClaimResumeAt: taskClaimResumeAt(account.accountId),
+        onTaskClaimPaused: (resumeAt: number) =>
+          saveTaskClaimResumeAt(account.accountId, resumeAt),
         createAiClient: createConfiguredAiClient,
         aiImageModel: getConfiguredAiImageModel(),
         aiCoverGenerationRetryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
@@ -441,6 +462,7 @@ async function startRuntime() {
           ...request,
           requesterPlatform: "baidu-drama",
         }),
+        cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
         config: {
           browser: {
             headless: config.headless === "true",

@@ -91,7 +91,11 @@ export class BaiduNetdiskDownloadRecordsRepository {
           remote_transfer_fs_id,
           remote_transfer_owned,
           remote_cleanup_pending,
-          remote_cleanup_error
+          remote_cleanup_error,
+          remote_resource_path,
+          remote_resource_fs_id,
+          remote_resource_cleanup_completed_at,
+          remote_resource_cleanup_error
         ) VALUES (
           @id,
           @shareKey,
@@ -117,7 +121,11 @@ export class BaiduNetdiskDownloadRecordsRepository {
           @remoteTransferFsId,
           @remoteTransferOwned,
           @remoteCleanupPending,
-          @remoteCleanupError
+          @remoteCleanupError,
+          @remoteResourcePath,
+          @remoteResourceFsId,
+          @remoteResourceCleanupCompletedAt,
+          @remoteResourceCleanupError
         )
         ON CONFLICT(id) DO UPDATE SET
           share_key=excluded.share_key,
@@ -143,7 +151,11 @@ export class BaiduNetdiskDownloadRecordsRepository {
           remote_transfer_fs_id=excluded.remote_transfer_fs_id,
           remote_transfer_owned=excluded.remote_transfer_owned,
           remote_cleanup_pending=excluded.remote_cleanup_pending,
-          remote_cleanup_error=excluded.remote_cleanup_error
+          remote_cleanup_error=excluded.remote_cleanup_error,
+          remote_resource_path=excluded.remote_resource_path,
+          remote_resource_fs_id=excluded.remote_resource_fs_id,
+          remote_resource_cleanup_completed_at=excluded.remote_resource_cleanup_completed_at,
+          remote_resource_cleanup_error=excluded.remote_resource_cleanup_error
       `,
       )
       .run(writeBaiduNetdiskDownloadRecordParams(nextRecord));

@@ -3746,6 +3746,10 @@ async function submitSavedDownload(
   return {
     downloadRoot,
     targetName: downloadTargetName,
+    remoteResourceRoot: {
+      path: saved.resourceRootPath,
+      fsId: saved.resourceRootFsId,
+    },
     remoteVideos,
     remoteOwnership,
     remotePosters,
@@ -3808,6 +3812,7 @@ async function downloadBaiduNetdiskSharePromise(
     remoteAiProductionProofs,
     remoteMetadata,
     inferredEpisodeCount,
+    remoteResourceRoot,
     temporaryTransfer,
   } = await submitSavedDownload(
     port,
@@ -3853,24 +3858,30 @@ async function downloadBaiduNetdiskSharePromise(
     expectedMetadataTextFiles: remoteMetadata.textFiles.length,
     expectedMetadataFiles: remoteMetadata.files.length,
     inferredEpisodeCount,
+    remoteResourceRoot,
     temporaryTransfer,
     completed: false,
     skippedExisting: false,
   };
 }
 
-export async function deleteBaiduNetdiskTemporaryTransfer(options: {
+async function deleteBaiduNetdiskRootDirectory(options: {
   port?: number;
   shareText: string;
   path: string;
   fsId: number | string;
+  requireTemporaryTransfer: boolean;
 }) {
+  const targetLabel = options.requireTemporaryTransfer ? "中转目录" : "剧目目录";
   const transferPath = `/${String(options.path || "").split("/").filter(Boolean).join("/")}`;
-  if (!isAutomationTemporaryTransferPath(transferPath)) {
+  if (options.requireTemporaryTransfer && !isAutomationTemporaryTransferPath(transferPath)) {
     throw new Error(`拒绝删除非软件唯一中转目录：${transferPath}`);
   }
+  if (transferPath === "/" || transferPath.split("/").filter(Boolean).length !== 1) {
+    throw new Error(`拒绝删除非网盘根目录下的剧目目录：${transferPath}`);
+  }
   const expectedFsId = String(options.fsId || "");
-  if (!expectedFsId) throw new Error(`拒绝删除缺少 fsId 的中转目录：${transferPath}`);
+  if (!expectedFsId) throw new Error(`拒绝删除缺少 fsId 的${targetLabel}：${transferPath}`);
 
   const port = options.port ?? 9337;
   const share = parseBaiduNetdiskShareText(options.shareText);
@@ -3926,10 +3937,10 @@ export async function deleteBaiduNetdiskTemporaryTransfer(options: {
   if (!item) return { deleted: false, alreadyMissing: true };
   const actualFsId = String(item?.fs_id || item?.fsid || item?.id || "");
   if (actualFsId !== expectedFsId) {
-    throw new Error("中转目录 fsId 已变化，拒绝删除：expected=" + expectedFsId + " actual=" + actualFsId);
+    throw new Error(${JSON.stringify(targetLabel)} + " fsId 已变化，拒绝删除：expected=" + expectedFsId + " actual=" + actualFsId);
   }
   if (!(Number(item?.isdir ?? item?.is_dir ?? 0) === 1)) {
-    throw new Error("中转路径不再是目录，拒绝删除：" + transferPath);
+    throw new Error(${JSON.stringify(targetLabel)} + "路径不再是目录，拒绝删除：" + transferPath);
   }
 
   const params = requestParams();
@@ -3945,24 +3956,42 @@ export async function deleteBaiduNetdiskTemporaryTransfer(options: {
   });
   const data = await response.json();
   if (data.errno !== 0) {
-    throw new Error("删除网盘中转目录失败：errno=" + String(data.errno) + " message=" + String(data.errmsg || data.show_msg || ""));
+    throw new Error("删除网盘" + ${JSON.stringify(targetLabel)} + "失败：errno=" + String(data.errno) + " message=" + String(data.errmsg || data.show_msg || ""));
   }
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await sleep(500);
     if (!await readRootItem()) return { deleted: true, alreadyMissing: false, errno: 0 };
   }
-  throw new Error("删除请求已提交，但中转目录仍然存在：" + transferPath);
+  throw new Error("删除请求已提交，但" + ${JSON.stringify(targetLabel)} + "仍然存在：" + transferPath);
 })()
 `,
       30_000,
     );
     log(
       result.alreadyMissing
-        ? `网盘中转目录已不存在：${transferPath}`
-        : `网盘中转目录已自动清理：${transferPath}`,
+        ? `网盘${targetLabel}已不存在：${transferPath}`
+        : `网盘${targetLabel}已自动清理：${transferPath}`,
     );
   });
+}
+
+export async function deleteBaiduNetdiskTemporaryTransfer(options: {
+  port?: number;
+  shareText: string;
+  path: string;
+  fsId: number | string;
+}) {
+  return deleteBaiduNetdiskRootDirectory({ ...options, requireTemporaryTransfer: true });
+}
+
+export async function deleteBaiduNetdiskPlayletDirectory(options: {
+  port?: number;
+  shareText: string;
+  path: string;
+  fsId: number | string;
+}) {
+  return deleteBaiduNetdiskRootDirectory({ ...options, requireTemporaryTransfer: false });
 }
 
 export function downloadBaiduNetdiskShareEffect(

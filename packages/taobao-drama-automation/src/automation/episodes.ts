@@ -998,7 +998,7 @@ async function fillEpisodeMetadata(
   task: TaobaoBatchUploadTask,
   options: TaobaoDramaRuntimeOptions,
 ) {
-  const contentTags = taobaoContentTags(task.originalTitle, metadata.dramaTag);
+  const contentTags = taobaoContentTags(task.title ?? task.originalTitle, metadata.dramaTag);
   for (const [position, episode] of episodes.entries()) {
     const fileName = path.basename(episode.file);
     // The embedded upload frame can reload after the final upload signal. Always
@@ -1049,7 +1049,7 @@ async function fillEpisodeMetadata(
       log(options, `[taobao-drama] 第 ${episode.index} 集检查点：AI 创作者声明已完成`);
 
       await runWithTaobaoVerificationRetry(page, options, () =>
-        selectMatchingCollectionTitle(scope, task.originalTitle));
+        selectMatchingCollectionTitle(scope, task.title ?? task.originalTitle));
       await runWithTaobaoVerificationRetry(page, options, () =>
         selectMatchingCollectionEpisode(scope, episode.index));
       log(options, `[taobao-drama] 第 ${episode.index} 集检查点：合集和集数已完成`);

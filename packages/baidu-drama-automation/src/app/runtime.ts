@@ -44,6 +44,21 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+export function isBaiduDailyPublishLimitError(error: unknown) {
+  const message = errorMessage(error);
+  return (
+    message.includes("BAIDU_DRAMA_FORM_ERROR") &&
+    /今日还可发布\s*0\s*篇内容/.test(message)
+  );
+}
+
+export function nextBaiduTaskClaimResumeAt(now = new Date()) {
+  const resumeAt = new Date(now);
+  resumeAt.setDate(resumeAt.getDate() + 1);
+  resumeAt.setHours(1, 0, 0, 0);
+  return resumeAt.getTime();
+}
+
 export function isBaiduInformationConfirmNotClosedError(error: unknown) {
   return errorMessage(error).includes("BAIDU_DRAMA_INFORMATION_CONFIRM_NOT_CLOSED");
 }
@@ -122,7 +137,7 @@ async function ensureNetdiskResource(
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await options.ensureBaiduNetdiskResource({
+      return await options.ensureBaiduNetdiskResource({
         shareText,
         resourceName: baiduDramaResourceName(task),
         localEpisodeVideoRoot: baiduDramaLocalRoot(options),
@@ -133,7 +148,6 @@ async function ensureNetdiskResource(
           summary: task.playlet.summary,
         },
       });
-      return;
     } catch (error) {
       lastError = error;
       if (isNonRetryableBaiduNetdiskResourceError(error) || attempt === maxAttempts) break;
@@ -162,6 +176,7 @@ async function runTask(
     updatedAt: new Date().toISOString(),
   });
   const taskPage = await basePage.context().newPage();
+  let baiduNetdiskResource: unknown;
   try {
     log(
       options,
@@ -169,7 +184,7 @@ async function runTask(
       { accountTaskId: task.accountTaskId },
       "task",
     );
-    await ensureNetdiskResource(task, options);
+    baiduNetdiskResource = await ensureNetdiskResource(task, options);
     await prepareBaiduDramaResources(task, options);
     log(
       options,
@@ -189,6 +204,9 @@ async function runTask(
       accountTaskId: task.accountTaskId,
       resultJson: { message: "提交成功" },
     });
+    await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
+      (error) => log(options, "[baidu-drama] 任务成功，但百度网盘剧目目录清理失败。", { error }, "task"),
+    );
     setLastTask({
       accountTaskId: task.accountTaskId,
       originalTitle: task.originalTitle,
@@ -201,7 +219,9 @@ async function runTask(
       { accountTaskId: task.accountTaskId, title: task.originalTitle },
       "task",
     );
+    return false;
   } catch (error) {
+    const dailyPublishLimitReached = isBaiduDailyPublishLimitError(error);
     const message = formatAutomationErrorReport(error, {
       fallbackMessage: "百度任务提交失败，未获取到具体错误原因",
     });
@@ -221,6 +241,13 @@ async function runTask(
       failStage: stage,
       errorMessage: message,
       resultJson: {},
+    }).catch((reportError) => {
+      warn(
+        options,
+        `[baidu-drama] 任务失败上报失败：${errorMessage(reportError)}`,
+        { accountTaskId: task.accountTaskId, reportError },
+        "task",
+      );
     });
     setLastTask({
       accountTaskId: task.accountTaskId,
@@ -242,6 +269,7 @@ async function runTask(
       },
       "task",
     );
+    return dailyPublishLimitReached;
   } finally {
     if (!taskPage.isClosed()) await taskPage.close().catch(() => undefined);
   }
@@ -264,6 +292,12 @@ export async function startBaiduDramaRuntime(
   const page = context.pages()[0] ?? (await context.newPage());
   let running = true;
   let lastTask: BaiduDramaRuntimeStatus["lastTask"];
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let wakePoll: (() => void) | null = null;
+  let taskClaimResumeAt =
+    options.taskClaimResumeAt && options.taskClaimResumeAt > Date.now()
+      ? options.taskClaimResumeAt
+      : null;
 
   try {
     await openBaiduDramaCreatePage(page);
@@ -276,26 +310,51 @@ export async function startBaiduDramaRuntime(
     throw error;
   }
 
+  const waitForNextPoll = async (delayMs = options.taskPollIntervalMs ?? 10_000) => {
+    await new Promise<void>((resolve) => {
+      wakePoll = resolve;
+      pollTimer = setTimeout(resolve, Math.max(1_000, delayMs));
+    });
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = null;
+    wakePoll = null;
+  };
+
   const pollLoop = async () => {
     while (running) {
+      if (taskClaimResumeAt && taskClaimResumeAt > Date.now()) {
+        await waitForNextPoll(taskClaimResumeAt - Date.now());
+        if (!running) break;
+        taskClaimResumeAt = null;
+        log(options, "[baidu-drama] 每日发布额度暂停已结束，恢复领取任务。", undefined, "polling");
+      }
       try {
         const task = await claimNextBaiduDramaTaskApi({
           runtimeOptions: options,
           apiConfig: options.apiConfig,
         });
         if (task) {
-          await runTask(page, task, options, (value) => {
+          const dailyPublishLimitReached = await runTask(page, task, options, (value) => {
             lastTask = value;
           });
+          if (dailyPublishLimitReached) {
+            taskClaimResumeAt = nextBaiduTaskClaimResumeAt();
+            options.onTaskClaimPaused?.(taskClaimResumeAt);
+            warn(
+              options,
+              `[baidu-drama] 今日发布额度已用完，当前账号暂停领取任务至 ` +
+                `${new Date(taskClaimResumeAt).toLocaleString()}。`,
+              { taskClaimResumeAt },
+              "polling",
+            );
+          }
           continue;
         }
       } catch (error) {
         warn(options, `[baidu-drama] 任务轮询失败：${errorMessage(error)}`, { error }, "polling");
       }
       if (!running) break;
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.max(1_000, options.taskPollIntervalMs ?? 10_000)),
-      );
+      await waitForNextPoll();
     }
   };
   void pollLoop();
@@ -310,11 +369,16 @@ export async function startBaiduDramaRuntime(
         createUrl: BAIDU_DRAMA_CREATE_URL,
         loginUrl: BAIDU_DRAMA_LOGIN_URL,
         userDataDir,
+        taskClaimResumeAt: taskClaimResumeAt ?? undefined,
         lastTask,
       };
     },
     async stop() {
       running = false;
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      wakePoll?.();
+      wakePoll = null;
       log(options, "[baidu-drama] 运行时停止。", undefined, "runtime");
       await context.close().catch(() => undefined);
       await flushBaiduDramaLogs(options);

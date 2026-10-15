@@ -5,6 +5,7 @@ import {
   cleanupEpisodeUploadFiles,
   ensureVideoMinimumDimensions,
   findLocalEpisodeVideos,
+  listLocalPosterImages,
   validateLocalEpisodeVideos,
 } from "@drama/drama-media-assets";
 import { TAOBAO_DRAMA_MIN_VIDEO_DIMENSION } from "./constants.js";
@@ -36,6 +37,17 @@ export function findTaobaoEpisodeVideos(
     localEpisodeVideoRoot: taobaoMaterialRoot(options),
     resourceName: task.originalTitle,
   });
+}
+
+export async function findTaobaoSourcePoster(
+  task: TaobaoBatchUploadTask,
+  options: TaobaoDramaRuntimeOptions,
+) {
+  const posters = await listLocalPosterImages({
+    root: taobaoMaterialRoot(options),
+    resourceName: task.originalTitle,
+  });
+  return posters[0]?.file;
 }
 
 export async function prepareTaobaoEpisodeVideos(

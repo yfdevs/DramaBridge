@@ -35,6 +35,7 @@ export type EnsureBaiduNetdiskResourceRequest = {
 export type EnsureBaiduNetdiskResource = (
   request: EnsureBaiduNetdiskResourceRequest,
 ) => Promise<unknown>;
+export type CleanupBaiduNetdiskResource = (resource: unknown) => Promise<void>;
 
 export type WechatMiniProgramRuntime = {
   getStatus: () => WechatMiniProgramRuntimeStatus;
@@ -50,6 +51,7 @@ export type WechatMiniProgramRuntimeOptions = {
   onLog?: (message: string) => void;
   settings?: Partial<WechatMiniProgramRuntimeSettings>;
   ensureBaiduNetdiskResource?: EnsureBaiduNetdiskResource;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: CleanupBaiduNetdiskResource;
 }
 
 const logger = createLogger("runtime");
@@ -78,6 +80,7 @@ export async function startWechatMiniProgramRuntime(options: WechatMiniProgramRu
     taskService,
     notifier,
     options.ensureBaiduNetdiskResource,
+    options.cleanupBaiduNetdiskResourceAfterTaskSuccess,
   );
   const idlePageRefreshService = new IdlePageRefreshService(serviceConfig, browserContexts, taskService);
   const videoAccountSyncService = new VideoAccountSyncService(

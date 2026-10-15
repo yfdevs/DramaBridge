@@ -25,7 +25,11 @@ export const selectBaiduNetdiskDownloadRecordColumns = `
   remote_transfer_fs_id AS remoteTransferFsId,
   remote_transfer_owned AS remoteTransferOwned,
   remote_cleanup_pending AS remoteCleanupPending,
-  remote_cleanup_error AS remoteCleanupError
+  remote_cleanup_error AS remoteCleanupError,
+  remote_resource_path AS remoteResourcePath,
+  remote_resource_fs_id AS remoteResourceFsId,
+  remote_resource_cleanup_completed_at AS remoteResourceCleanupCompletedAt,
+  remote_resource_cleanup_error AS remoteResourceCleanupError
 `;
 
 export function migrateBaiduNetdiskDownloadRecords(database: Database.Database): void {
@@ -55,7 +59,11 @@ export function migrateBaiduNetdiskDownloadRecords(database: Database.Database):
       remote_transfer_fs_id TEXT,
       remote_transfer_owned INTEGER NOT NULL DEFAULT 0,
       remote_cleanup_pending INTEGER NOT NULL DEFAULT 0,
-      remote_cleanup_error TEXT
+      remote_cleanup_error TEXT,
+      remote_resource_path TEXT,
+      remote_resource_fs_id TEXT,
+      remote_resource_cleanup_completed_at TEXT,
+      remote_resource_cleanup_error TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_baidu_download_records_updated_at
@@ -75,6 +83,10 @@ export function migrateBaiduNetdiskDownloadRecords(database: Database.Database):
     ["remote_transfer_owned", "INTEGER NOT NULL DEFAULT 0"],
     ["remote_cleanup_pending", "INTEGER NOT NULL DEFAULT 0"],
     ["remote_cleanup_error", "TEXT"],
+    ["remote_resource_path", "TEXT"],
+    ["remote_resource_fs_id", "TEXT"],
+    ["remote_resource_cleanup_completed_at", "TEXT"],
+    ["remote_resource_cleanup_error", "TEXT"],
   ] as const;
   for (const [name, definition] of additions) {
     if (!columns.has(name)) {

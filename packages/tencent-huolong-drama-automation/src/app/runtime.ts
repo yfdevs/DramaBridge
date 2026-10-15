@@ -71,7 +71,7 @@ async function ensureResource(
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      await options.ensureBaiduNetdiskResource({
+      return await options.ensureBaiduNetdiskResource({
         shareText: link,
         resourceName: task.originalTitle,
         localEpisodeVideoRoot: materialRoot(options),
@@ -79,7 +79,6 @@ async function ensureResource(
         requiredPosterImages: 1,
         posterFallback: { title: task.playlet.title, summary: task.playlet.summary },
       });
-      return;
     } catch (error) {
       lastError = error;
       if (isNonRetryableBaiduNetdiskResourceError(error) || attempt >= retries) break;
@@ -95,7 +94,7 @@ export async function ensureTencentHuolongTaskResource(
 ) {
   validateTencentHuolongTaskMaterialReferences(task);
   log(options, "[tencent-huolong-drama] 任务必需合同材料校验通过");
-  await ensureResource(task, options);
+  return ensureResource(task, options);
 }
 
 async function runTask(
@@ -105,6 +104,7 @@ async function runTask(
   options: TencentHuolongRuntimeOptions,
   setLastTask: (value: LastTask) => void,
 ) {
+  let baiduNetdiskResource: unknown;
   setLastTask({
     accountTaskId: task.accountTaskId,
     originalTitle: task.originalTitle,
@@ -119,7 +119,7 @@ async function runTask(
         accountTaskId: task.accountTaskId,
       },
       async () => {
-        await ensureTencentHuolongTaskResource(task, options);
+        baiduNetdiskResource = await ensureTencentHuolongTaskResource(task, options);
         await runTencentHuolongPublishTask(page, context, task, options);
       },
     );
@@ -129,6 +129,9 @@ async function runTask(
       accountTaskId: task.accountTaskId,
       resultJson: { activeUrl: page.url(), accountId: task.accountId },
     });
+    await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
+      (error) => log(options, "[tencent-huolong-drama] 任务成功，但百度网盘剧目目录清理失败。", { error }),
+    );
     setLastTask({
       accountTaskId: task.accountTaskId,
       originalTitle: task.originalTitle,

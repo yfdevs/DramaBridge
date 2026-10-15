@@ -103,6 +103,7 @@ export type BaiduDramaRuntimeStatus = {
   createUrl: string;
   loginUrl: string;
   userDataDir: string;
+  taskClaimResumeAt?: number;
   lastTask?: {
     accountTaskId: number;
     originalTitle: string;
@@ -126,6 +127,8 @@ export type BaiduDramaRuntimeOptions = {
   baiduNetdiskDownloadRetryAttempts?: number;
   episodeUploadWaitTimeoutMinutes?: number;
   taskPollIntervalMs?: number;
+  taskClaimResumeAt?: number;
+  onTaskClaimPaused?: (resumeAt: number) => void;
   createAiClient?: () => DramaAiClient;
   aiImageModel?: string;
   aiCoverGenerationRetryAttempts?: number;
@@ -139,6 +142,7 @@ export type BaiduDramaRuntimeOptions = {
     requiredPosterImages?: number;
     posterFallback?: { title?: string; summary: string };
   }) => Promise<unknown>;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: (resource: unknown) => Promise<void>;
 };
 
 export type BaiduDramaRuntime = {

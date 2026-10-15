@@ -268,6 +268,7 @@ export type DouyinDramaRuntimeOptions = {
     downloadAssetMaterials?: boolean;
     forceAssetDownload?: boolean;
   }) => Promise<{ skippedExisting?: boolean } | unknown>;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: (resource: unknown) => Promise<void>;
 };
 
 export type DouyinDramaRuntime = {

@@ -95,6 +95,7 @@ export type TencentHuolongRuntimeOptions = {
     requiredPosterImages?: number;
     posterFallback?: { title?: string; summary: string };
   }) => Promise<unknown>;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: (resource: unknown) => Promise<void>;
 };
 
 export type TencentHuolongRuntime = {

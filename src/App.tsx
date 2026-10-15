@@ -11,7 +11,6 @@ import { AppRoutes } from "@/routes/app-routes";
 import { WechatMiniProgramBaiduUploadWindow } from "@/pages/wechat-miniprogram-drama/baidu-upload-window";
 import { WechatMiniProgramCatalogUploadWindow } from "@/pages/wechat-miniprogram-drama/catalog-upload-window";
 import { PinduoduoDramaUploadRecordsPage } from "@/pages/pinduoduo-drama/upload-records";
-import { TaobaoDramaTaskDataWindow } from "@/pages/taobao-drama/task-data-window";
 
 import "./App.css";
 
@@ -41,15 +40,6 @@ export default function App() {
       </TooltipProvider>
     );
   }
-  if (windowMode === "taobao-drama-task-data") {
-    return (
-      <TooltipProvider delay={120} closeDelay={0} timeout={250}>
-        <TaobaoDramaTaskDataWindow />
-        <Toaster position="bottom-right" closeButton={true} theme="dark" richColors />
-      </TooltipProvider>
-    );
-  }
-
   return (
     <HashRouter>
       <AppContent />

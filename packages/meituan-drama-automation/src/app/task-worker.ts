@@ -175,8 +175,9 @@ export async function runMeituanAccountTaskWorker(options: {
           runtimeOptions,
           `[meituan-drama] opened dedicated task page: accountTaskId=${claimed.accountTaskId}`,
         );
-        await runPublishTask(context, taskPage, runtimeOptions, task);
+        const baiduNetdiskResource = await runPublishTask(context, taskPage, runtimeOptions, task);
 
+        let successReported = false;
         await reportWithRetry(
           runtimeOptions,
           {
@@ -191,6 +192,7 @@ export async function runMeituanAccountTaskWorker(options: {
           isRunning,
         )
           .then(() => {
+            successReported = true;
             log(
               runtimeOptions,
               `[meituan-drama] task succeeded and reported: accountTaskId=${claimed.accountTaskId}`,
@@ -203,6 +205,13 @@ export async function runMeituanAccountTaskWorker(options: {
                 `accountTaskId=${claimed.accountTaskId} error=${errorMessage(reportError)}`,
             );
           });
+        if (successReported) {
+          await runtimeOptions.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource)
+            .catch((error) => log(
+              runtimeOptions,
+              `[meituan-drama] task succeeded but baidu netdisk cleanup failed: ${errorMessage(error)}`,
+            ));
+        }
       } catch (error) {
         const message = formatAutomationErrorReport(error, {
           fallbackMessage: "美团任务提交失败，未获取到具体错误原因",

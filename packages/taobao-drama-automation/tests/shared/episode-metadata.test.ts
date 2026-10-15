@@ -7,18 +7,40 @@ import type { DramaAiClient } from "@drama/ai";
 
 import {
   collectTaobaoSynopsis,
+  createTaobaoCollectionMetadata,
   formatTaobaoHashtags,
   formatTaobaoVideoDescription,
   prepareTaobaoEpisodeMetadata,
   taobaoContentTags,
 } from "../../src/shared/episode-metadata.js";
 
+test("derives collection fields for the newly created Taobao collection", () => {
+  const collection = createTaobaoCollectionMetadata({
+    id: "task-collection",
+    originalTitle: "闪婚千金逆袭",
+    baiduPanResourceLink: "https://pan.baidu.com/s/example?pwd=1234",
+    episodeCount: 2,
+  }, {
+    dramaTag: "逆袭",
+    episodeSummaries: ["意外闪婚", "身份揭晓"],
+    synopsisText: "女主遭遇背叛后闪婚，最终完成逆袭。",
+  });
+
+  assert.deepEqual(collection, {
+    title: "闪婚千金逆袭",
+    summary: "女主遭遇背叛后闪婚，最终完成逆袭。\n第1集：意外闪婚；第2集：身份揭晓",
+    episodeCount: 2,
+    shortDramaType: "AI动漫短剧",
+    shortDramaTags: ["AI动漫解说漫", "逆袭"],
+    audience: "女",
+  });
+});
+
 test("reads synopsis text and generates all episode summaries", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "taobao-metadata-"));
   const resourceDir = path.join(root, "逆风翻盘", "海报封面", "剧情资料");
   await mkdir(resourceDir, { recursive: true });
   await writeFile(path.join(resourceDir, "简介.txt"), "男主遭到背叛后寻找证据并完成反击。", "utf8");
-  let saved: { dramaTag: string; episodeSummaries: string[] } | undefined;
   const client = {
     async generateText() {
       return {
@@ -45,11 +67,9 @@ test("reads synopsis text and generates all episode summaries", async () => {
     }, {
       localMaterialRoot: root,
       aiClientFactory: () => client,
-      saveGeneratedMetadata: (_taskId, value) => { saved = value; },
     });
     assert.equal(metadata.dramaTag, "都市");
     assert.deepEqual(metadata.episodeSummaries, ["男主意外发现骗局", "搜集证据成功反击"]);
-    assert.equal(saved?.dramaTag, "都市");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

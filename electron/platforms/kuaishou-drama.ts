@@ -3,7 +3,7 @@ import Store from "electron-store";
 import { registerTaskAnalyticsHandler } from "./task-analytics";
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
 import { createElectronPlatformLogger } from "../platform-logger";
 import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
 import {
@@ -514,6 +514,7 @@ async function startRuntime() {
           ...request,
           requesterPlatform: "kuaishou-drama",
         }),
+        cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
         config: {
           browser: { headless: config.headless === "true", slowMo: operationDelayMs },
         },

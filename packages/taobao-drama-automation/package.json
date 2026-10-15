@@ -22,7 +22,6 @@
     "@drama/drama-media-assets": "workspace:*",
     "mammoth": "1.11.0",
     "playwright": "1.61.1",
-    "xlsx": "0.18.5",
     "zod": "3.22.4"
   },
   "devDependencies": {

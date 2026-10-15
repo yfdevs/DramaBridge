@@ -239,6 +239,7 @@ export type PinduoduoDramaRuntimeOptions = {
     };
     signal?: AbortSignal;
   }) => Promise<{ localPath?: string }>;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: (resource: unknown) => Promise<void>;
   onLog?: (message: string) => void;
 };
 

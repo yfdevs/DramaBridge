@@ -36,6 +36,7 @@ export type GlobalAppConfig = {
   aiCoverGenerationRetryAttempts: string;
   aiPosterFallbackEnabled: boolean;
   baiduNetdiskDownloadTimeoutMinutes: string;
+  baiduNetdiskCleanupPlayletAfterTaskSuccess: boolean;
   jianyingEpisodeCount: string;
   runDataRoot: string;
   localMaterialRoot: string;
@@ -49,6 +50,7 @@ type StoredGlobalAppConfig = {
   aiCoverGenerationRetryAttempts?: string;
   aiPosterFallbackEnabled?: boolean;
   baiduNetdiskDownloadTimeoutMinutes?: string;
+  baiduNetdiskCleanupPlayletAfterTaskSuccess?: boolean;
   jianyingEpisodeCount?: string;
   runDataRoot?: string;
   localMaterialRoot?: string;
@@ -66,6 +68,7 @@ const defaultStoredConfig: StoredGlobalAppConfig = {
   aiCoverGenerationRetryAttempts: DEFAULT_AI_COVER_GENERATION_RETRY_ATTEMPTS,
   aiPosterFallbackEnabled: true,
   baiduNetdiskDownloadTimeoutMinutes: DEFAULT_BAIDU_NETDISK_DOWNLOAD_TIMEOUT_MINUTES,
+  baiduNetdiskCleanupPlayletAfterTaskSuccess: false,
   jianyingEpisodeCount: DEFAULT_JIANYING_EPISODE_COUNT,
   runDataRoot: "",
   localMaterialRoot: "",
@@ -168,6 +171,10 @@ function normalizeGlobalAppConfig(config: Partial<GlobalAppConfig>): GlobalAppCo
       config.baiduNetdiskDownloadTimeoutMinutes,
       DEFAULT_BAIDU_NETDISK_DOWNLOAD_TIMEOUT_MINUTES,
     ),
+    baiduNetdiskCleanupPlayletAfterTaskSuccess: normalizeBoolean(
+      config.baiduNetdiskCleanupPlayletAfterTaskSuccess,
+      false,
+    ),
     jianyingEpisodeCount: normalizeJianyingEpisodeCount(config.jianyingEpisodeCount),
     runDataRoot: config.runDataRoot?.trim() ?? "",
     localMaterialRoot: config.localMaterialRoot?.trim() ?? "",
@@ -198,6 +205,10 @@ export function readGlobalAppConfig(): GlobalAppConfig {
       config.baiduNetdiskDownloadTimeoutMinutes,
       DEFAULT_BAIDU_NETDISK_DOWNLOAD_TIMEOUT_MINUTES,
     ),
+    baiduNetdiskCleanupPlayletAfterTaskSuccess: normalizeBoolean(
+      config.baiduNetdiskCleanupPlayletAfterTaskSuccess,
+      false,
+    ),
     jianyingEpisodeCount: normalizeJianyingEpisodeCount(config.jianyingEpisodeCount),
     runDataRoot: config.runDataRoot?.trim() ?? "",
     localMaterialRoot: config.localMaterialRoot?.trim() ?? "",
@@ -214,6 +225,13 @@ export function getConfiguredBaiduNetdiskDownloadTimeoutMs() {
 
 export function isAiPosterFallbackEnabled() {
   return normalizeBoolean(getStore().get("config").aiPosterFallbackEnabled, true);
+}
+
+export function isBaiduNetdiskPlayletCleanupEnabled() {
+  return normalizeBoolean(
+    getStore().get("config").baiduNetdiskCleanupPlayletAfterTaskSuccess,
+    false,
+  );
 }
 
 export function getConfiguredJianyingEpisodeCount() {
@@ -234,6 +252,8 @@ function saveGlobalAppConfig(config: Partial<GlobalAppConfig>) {
     aiCoverGenerationRetryAttempts: normalized.aiCoverGenerationRetryAttempts,
     aiPosterFallbackEnabled: normalized.aiPosterFallbackEnabled,
     baiduNetdiskDownloadTimeoutMinutes: normalized.baiduNetdiskDownloadTimeoutMinutes,
+    baiduNetdiskCleanupPlayletAfterTaskSuccess:
+      normalized.baiduNetdiskCleanupPlayletAfterTaskSuccess,
     jianyingEpisodeCount: normalized.jianyingEpisodeCount,
     runDataRoot: normalized.runDataRoot,
     localMaterialRoot: normalized.localMaterialRoot,

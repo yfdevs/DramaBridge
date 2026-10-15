@@ -455,6 +455,7 @@ export type KuaishouDramaRuntimeOptions = {
     requiredPosterImages?: number;
     posterFallback?: { title?: string; summary: string };
   }) => Promise<unknown>;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: (resource: unknown) => Promise<void>;
 };
 
 export type KuaishouDramaRuntime = {

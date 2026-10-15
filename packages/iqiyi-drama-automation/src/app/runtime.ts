@@ -132,7 +132,7 @@ async function ensureRemoteMaterials(
         episodeCount: task.playlet.episodeCount,
         resourceName: task.originalTitle,
       });
-      await options.ensureBaiduNetdiskResource({
+      return await options.ensureBaiduNetdiskResource({
         shareText,
         resourceName: task.originalTitle,
         localEpisodeVideoRoot: localMaterialRoot,
@@ -144,7 +144,6 @@ async function ensureRemoteMaterials(
           summary: task.playlet.summary,
         },
       });
-      return;
     } catch (error) {
       lastError = error;
       if (isNonRetryableBaiduNetdiskResourceError(error) || attempt >= maximumAttempts) break;
@@ -169,6 +168,7 @@ async function executeTask(
     updatedAt: new Date().toISOString(),
   });
   let published = false;
+  let baiduNetdiskResource: unknown;
   try {
     await runWithLogContext(
       {
@@ -177,7 +177,7 @@ async function executeTask(
         iqiyiAccountName: task.iqiyiAccountName,
       },
       async () => {
-        await ensureRemoteMaterials(task, options);
+        baiduNetdiskResource = await ensureRemoteMaterials(task, options);
         const materials = await withTimeout(
           prepareIqiyiMaterials(task, options),
           iqiyiMaterialPreparationTimeoutMs,
@@ -202,6 +202,9 @@ async function executeTask(
           generatedLandscapeCover: task.playlet.horizontalCoverFile,
         },
       }),
+    );
+    await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
+      (error) => log(options, "[iqiyi-drama] task succeeded but baidu netdisk cleanup failed", { error }),
     );
     setLastTask({
       accountTaskId: task.accountTaskId,

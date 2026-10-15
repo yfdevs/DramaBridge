@@ -13,9 +13,11 @@ import { toast } from "sonner"
 
 const emptyConfig: TaobaoDramaConfig = {
   accountProfileName: "default",
+  apiBaseUrl: "http://180.184.76.232:19090",
   browserExecutablePath: "",
   headless: "false",
   operationDelaySeconds: "0",
+  taskPollIntervalSeconds: "10",
   baiduNetdiskDownloadRetryAttempts: "3",
   episodeUploadWaitTimeoutMinutes: "120",
   closeFailedTaskPages: "false",
@@ -26,16 +28,17 @@ const emptyConfig: TaobaoDramaConfig = {
 const sections: ConfigSectionDefinition<TaobaoDramaConfig>[] = [
   {
     title: "账号与素材",
-    description: "淘宝使用独立浏览器登录态；Excel 只负责导入，上传任务统一从本地数据库读取。",
+    description: "服务读取后台已启用的淘宝账号，并为每个账号启动独立浏览器领取任务。",
     fields: [
-      { key: "accountProfileName", label: "浏览器账号标识", type: "text", description: "用于隔离淘宝登录态，本地单账号运行，不再读取后台账号。" },
+      { key: "apiBaseUrl", label: "接口地址", type: "url", description: "淘宝账号、任务领取及结果回写接口根地址。" },
+      { key: "taskPollIntervalSeconds", label: "任务轮询间隔", type: "number", suffix: "秒", min: 1, description: "没有可领取任务或单次执行结束后的等待时间。" },
       { key: "browserExecutablePath", label: "浏览器可执行文件路径", type: "text", description: "本机 Chrome 或 Chromium 的 exe 路径；留空使用系统 Chrome。" },
       { key: "baiduNetdiskDownloadRetryAttempts", label: "网盘下载重试", type: "number", suffix: "次", min: 0, description: "百度网盘素材准备失败后的重试次数。" },
     ],
   },
   {
     title: "浏览器与上传",
-    description: "直接进入淘宝批量发布页面，不创建合集，也不填写剧目资料。素材根目录使用全局配置。",
+    description: "每条任务会先自动创建并填写合集，再进入批量发布页面上传视频。素材根目录使用全局配置。",
     fields: [
       { key: "episodeUploadWaitTimeoutMinutes", label: "视频上传等待", type: "number", suffix: "分钟", min: 1, description: "等待全部剧集上传完成的最长时间。" },
       { key: "operationDelaySeconds", label: "操作延迟", type: "number", suffix: "秒", step: "0.01", description: "每一步 Playwright 操作之间的延迟。" },

@@ -228,6 +228,7 @@ export type IqiyiDramaRuntimeOptions = {
     requireAllDiscoveredAssets?: boolean;
     posterFallback?: { title?: string; summary: string };
   }) => Promise<unknown>;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: (resource: unknown) => Promise<void>;
 };
 
 export type IqiyiDramaRuntime = {

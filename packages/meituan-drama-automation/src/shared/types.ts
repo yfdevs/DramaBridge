@@ -313,6 +313,7 @@ export type MeituanCreationRuntimeOptions = {
     requiredPosterImages?: number;
     posterFallback?: { title?: string; summary: string };
   }) => Promise<unknown>;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: (resource: unknown) => Promise<void>;
   onLog?: (message: string) => void;
 };
 

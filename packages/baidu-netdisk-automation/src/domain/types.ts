@@ -181,6 +181,10 @@ export type BaiduNetdiskShareDownloadResult = {
   expectedMetadataFiles?: number;
   inferredEpisodeCount?: number;
   temporaryTransfer?: BaiduNetdiskTemporaryTransfer;
+  remoteResourceRoot?: {
+    path: string;
+    fsId: number | string;
+  };
   completed: boolean;
   skippedExisting: boolean;
 };

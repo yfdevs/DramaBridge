@@ -53,6 +53,10 @@ export type BaiduNetdiskShareDownloadResult = {
     textFiles: Array<{ name: string; path: string; size?: number }>;
     roots: Array<{ path: string; fsId?: number | string }>;
   };
+  remoteResourceRoot?: {
+    path: string;
+    fsId: number | string;
+  };
   completed: boolean;
   skippedExisting: boolean;
 };

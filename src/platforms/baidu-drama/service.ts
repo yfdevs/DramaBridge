@@ -31,6 +31,7 @@ export type BaiduDramaServiceStatus = {
     loginState: BaiduDramaLoginState
     activeUrl?: string
     userDataDir: string
+    taskClaimResumeAt?: number
     lastTask?: {
       accountTaskId: number
       originalTitle: string

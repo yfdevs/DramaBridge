@@ -43,7 +43,7 @@ async function ensureBaiduNetdiskResourceReady(
         `[meituan-drama] ensuring baidu netdisk resource: accountTaskId=${task.accountTaskId} ` +
           `resourceName=${resourceName} episodeCount=${episodeCount} attempt=${attempt}/${maxAttempts}`,
       );
-      await options.ensureBaiduNetdiskResource({
+      return await options.ensureBaiduNetdiskResource({
         shareText: baiduPanResourceLink,
         resourceName,
         localEpisodeVideoRoot,
@@ -57,7 +57,6 @@ async function ensureBaiduNetdiskResourceReady(
           summary: task.playlet.plotSynopsisText,
         },
       });
-      return;
     } catch (error) {
       lastError = error;
       const message = errorMessage(error);
@@ -103,7 +102,7 @@ export async function runPublishTask(
     options,
     `[meituan-drama] starting claimed task: accountTaskId=${task.accountTaskId} originalTitle=${task.originalTitle}`,
   );
-  await ensureBaiduNetdiskResourceReady(task, options);
+  const baiduNetdiskResource = await ensureBaiduNetdiskResourceReady(task, options);
   log(options, "[meituan-drama] validating local episode videos before publishing");
   await validateLocalEpisodeVideos(task, options);
   log(options, "[meituan-drama] matching local collection cover before publishing");
@@ -119,4 +118,5 @@ export async function runPublishTask(
   await uploadEpisodeVideosStep(page, task, options);
   await submitPublishStep(page, options);
   log(options, "[meituan-drama] publish task completed");
+  return baiduNetdiskResource;
 }

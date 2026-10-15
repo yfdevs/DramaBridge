@@ -176,7 +176,7 @@ export async function startMeituanCreationRuntime(
 
       const workerPromise = (
         options.taskPollingEnabled === false
-          ? runPublishTask(context, page, browserOptions, null)
+          ? runPublishTask(context, page, browserOptions, null).then(() => undefined)
           : runMeituanAccountTaskWorker({
             account,
             context,

@@ -79,7 +79,7 @@ async function ensureBaiduNetdiskResourceReady(
           `accountTaskId=${accountTaskId ?? "configured"} resourceName=${resourceName} ` +
           `episodeCount=${task.episodeCount} attempt=${attempt}/${maxAttempts}`,
       );
-      await options.ensureBaiduNetdiskResource({
+      const resource = await options.ensureBaiduNetdiskResource({
         shareText,
         resourceName,
         localEpisodeVideoRoot,
@@ -96,7 +96,7 @@ async function ensureBaiduNetdiskResourceReady(
         `[kuaishou-drama] baidu netdisk resource ready: ` +
           `resourceName=${resourceName} episodes=${task.episodeCount}`,
       );
-      return;
+      return resource;
     } catch (error) {
       lastError = error;
       const message = errorMessage(error);
@@ -192,7 +192,7 @@ export async function startKuaishouDramaRuntime(
     resolvedTask: NonNullable<Awaited<ReturnType<typeof resolveTask>>>,
     needsFormMaterials: boolean,
   ) => {
-    await ensureBaiduNetdiskResourceReady(
+    const baiduNetdiskResource = await ensureBaiduNetdiskResourceReady(
       resolvedTask.taskConfig,
       resolvedTask.resourceName,
       resolvedTask.claimedTask?.accountTaskId,
@@ -203,7 +203,7 @@ export async function startKuaishouDramaRuntime(
         options,
         "[kuaishou-drama] all drama records already exist; form material preparation skipped",
       );
-      return;
+      return baiduNetdiskResource;
     }
     const covers = await prepareKuaishouDramaTaskMaterials(
       resolvedTask.taskConfig,
@@ -215,6 +215,7 @@ export async function startKuaishouDramaRuntime(
       `[kuaishou-drama] local drama and episode covers ready: ` +
         `drama=${covers.dramaCover} episode=${covers.episodeCover}`,
     );
+    return baiduNetdiskResource;
   };
 
   const waitForNextPoll = async (delayMs = options.taskPollIntervalMs ?? 10_000) => {
@@ -240,6 +241,7 @@ export async function startKuaishouDramaRuntime(
       taskState.claimed = undefined;
       let taskPage: Page | null = null;
       let publishedVariants: KuaishouDramaPublishVariant["kind"][] = [];
+      let baiduNetdiskResource: unknown;
       try {
         const resolvedTask = await resolveTask();
         if (!resolvedTask) {
@@ -256,7 +258,9 @@ export async function startKuaishouDramaRuntime(
             taskPage,
             options,
             resolvedTask,
-            (needsFormMaterials) => prepareTask(resolvedTask, needsFormMaterials),
+            async (needsFormMaterials) => {
+              baiduNetdiskResource = await prepareTask(resolvedTask, needsFormMaterials);
+            },
           );
         }
         if (resolvedTask?.claimedTask) {
@@ -269,6 +273,9 @@ export async function startKuaishouDramaRuntime(
               variants: publishedVariants,
             },
           });
+          await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
+            (error) => log(options, `[kuaishou-drama] task succeeded but baidu netdisk cleanup failed: ${errorMessage(error)}`),
+          );
           lastTask = {
             accountTaskId: completedTask.accountTaskId,
             originalTitle: completedTask.originalTitle,

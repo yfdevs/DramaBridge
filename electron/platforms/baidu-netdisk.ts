@@ -21,6 +21,7 @@ import {
   getConfiguredAiImageModel,
   getConfiguredBaiduNetdiskDownloadTimeoutMs,
   isAiPosterFallbackEnabled,
+  isBaiduNetdiskPlayletCleanupEnabled,
   resolveGlobalPlatformDirectories,
 } from "../global-app-config";
 import { resolveFromAppRoot, selectDirectory } from "./shared";
@@ -119,6 +120,10 @@ type BaiduNetdiskShareDownloadResult = {
     path: string;
     fsId: number | string;
     createdByAutomation: true;
+  };
+  remoteResourceRoot?: {
+    path: string;
+    fsId: number | string;
   };
   completed: boolean;
   skippedExisting: boolean;
@@ -901,6 +906,12 @@ async function importBaiduNetdiskDownloadRuntimePackage() {
       path: string;
       fsId: number | string;
     }) => Promise<void>;
+    deleteBaiduNetdiskPlayletDirectory: (options: {
+      port?: number;
+      shareText: string;
+      path: string;
+      fsId: number | string;
+    }) => Promise<void>;
   };
   runtime.configureBaiduNetdiskAutomationLogging({
     logFilePath: baiduNetdiskLogFilePath(),
@@ -1149,6 +1160,10 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
     remoteTransferOwned: existingRecord?.remoteTransferOwned,
     remoteCleanupPending: existingRecord?.remoteCleanupPending,
     remoteCleanupError: existingRecord?.remoteCleanupError,
+    remoteResourcePath: existingRecord?.remoteResourcePath,
+    remoteResourceFsId: existingRecord?.remoteResourceFsId,
+    remoteResourceCleanupCompletedAt: existingRecord?.remoteResourceCleanupCompletedAt,
+    remoteResourceCleanupError: existingRecord?.remoteResourceCleanupError,
   });
 
   record = upsertDownloadRecord({
@@ -1188,8 +1203,8 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
       downloadDir: uniqueDownloadDir,
       sourceLocalPath: existingRecord?.localPath,
       downloadTaskName: existingRecord?.resourceName,
-      downloadShare: (downloadRequest) =>
-        runBaiduCdpOperationExclusive(downloadRequest.resourceName, () =>
+      downloadShare: async (downloadRequest) => {
+        const downloadResult = await runBaiduCdpOperationExclusive(downloadRequest.resourceName, () =>
           downloadBaiduNetdiskShare({
             shareText: downloadRequest.shareText,
             resourceName: downloadRequest.resourceName,
@@ -1228,7 +1243,18 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
               });
             },
           }),
-        ),
+        );
+        if (downloadResult.remoteResourceRoot) {
+          record = upsertDownloadRecord({
+            ...record,
+            remoteResourcePath: downloadResult.remoteResourceRoot.path,
+            remoteResourceFsId: String(downloadResult.remoteResourceRoot.fsId),
+            remoteResourceCleanupCompletedAt: undefined,
+            remoteResourceCleanupError: undefined,
+          });
+        }
+        return downloadResult;
+      },
       getDownloadTaskStatus: (statusRequest) =>
         getBaiduNetdiskDownloadTaskStatus({
           port,
@@ -1381,6 +1407,64 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
         }).warn("Failed to cleanup downloaded temporary resources", { error });
       });
     }
+  }
+}
+
+export async function cleanupBaiduNetdiskPlayletAfterTaskSuccess(
+  resource: unknown,
+): Promise<void> {
+  if (!isBaiduNetdiskPlayletCleanupEnabled()) return;
+  if (!resource || typeof resource !== "object") return;
+  const candidate = resource as { id?: unknown; shareText?: unknown; resourceName?: unknown };
+  const id = candidate.id
+    ? String(candidate.id)
+    : typeof candidate.shareText === "string" && typeof candidate.resourceName === "string"
+      ? createRecordId(shareKeyFromText(candidate.shareText), candidate.resourceName)
+      : "";
+  if (!id) return;
+  const record = getDownloadRecordsRepository().findById(id);
+  if (
+    !record
+    || record.state !== "completed"
+    || !record.remoteResourcePath
+    || !record.remoteResourceFsId
+    || record.remoteResourceCleanupCompletedAt
+  ) {
+    return;
+  }
+
+  const cleanupLogger = baiduNetdiskLogger("storage", {
+    resourceName: record.resourceName,
+    remoteResourcePath: record.remoteResourcePath,
+  });
+  try {
+    const config = readConfig();
+    await startCdp(false);
+    const runtime = await importBaiduNetdiskDownloadRuntimePackage();
+    await runBaiduCdpOperationExclusive(`清理网盘剧目目录：${record.resourceName}`, () =>
+      runtime.deleteBaiduNetdiskPlayletDirectory({
+        port: cdpPort(config),
+        shareText: record.shareText,
+        path: record.remoteResourcePath!,
+        fsId: record.remoteResourceFsId!,
+      }),
+    );
+    upsertDownloadRecord({
+      ...record,
+      remoteResourceCleanupCompletedAt: new Date().toISOString(),
+      remoteResourceCleanupError: undefined,
+    });
+    cleanupLogger.info("Remote playlet directory cleanup completed after task success");
+  } catch (error) {
+    const cleanupError = readableError(error);
+    upsertDownloadRecord({
+      ...record,
+      remoteResourceCleanupError: cleanupError,
+    });
+    cleanupLogger.warn("Remote playlet directory cleanup failed after task success", {
+      error: cleanupError,
+    });
+    throw new Error(`任务已成功，但自动清理百度网盘剧目目录失败：${cleanupError}`);
   }
 }
 

@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  cleanupBaiduNetdiskPlayletAfterTaskSuccess,
   ensureBaiduNetdiskShareDownloaded,
   type BaiduNetdiskEnsureDownloadedRequest,
 } from "./baidu-netdisk";
@@ -419,6 +420,7 @@ async function startRuntime() {
         ...request,
         requesterPlatform: "pinduoduo-drama",
       }),
+    cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
     config: {
       creatorUid: config.creatorUid,
       browser: {

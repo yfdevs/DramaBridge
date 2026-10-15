@@ -5,7 +5,31 @@ import {
   isBaiduCoverSlotNotReadyError,
   isBaiduDropdownOptionNotFoundError,
   isBaiduInformationConfirmNotClosedError,
+  isBaiduDailyPublishLimitError,
+  nextBaiduTaskClaimResumeAt,
 } from "../../src/app/runtime.js";
+
+test("pauses Baidu task claims when the daily publish allowance is zero", () => {
+  assert.equal(
+    isBaiduDailyPublishLimitError(
+      new Error(
+        "BAIDU_DRAMA_FORM_ERROR: 提交短剧审核: 今日还可发布0篇内容，您当前提交的内容篇数过多",
+      ),
+    ),
+    true,
+  );
+  assert.equal(
+    isBaiduDailyPublishLimitError(
+      new Error("BAIDU_DRAMA_FORM_ERROR: 提交短剧审核: 剧情分类不能为空"),
+    ),
+    false,
+  );
+});
+
+test("resumes Baidu task claims at 1 AM on the next local day", () => {
+  const now = new Date(2026, 9, 14, 0, 30, 0);
+  assert.equal(nextBaiduTaskClaimResumeAt(now), new Date(2026, 9, 15, 1, 0, 0).getTime());
+});
 
 test("retries only when the Baidu information confirmation dialog stays open", () => {
   assert.equal(

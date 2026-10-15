@@ -12,7 +12,7 @@ import {
   resolveGlobalPlatformDirectories,
 } from "../global-app-config";
 import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
-import { ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
 import {
   directoryDefaultPath,
   normalizePlatformRunDataDir,
@@ -383,6 +383,7 @@ async function startRuntime() {
           ...request,
           requesterPlatform: "iqiyi-drama",
         }),
+        cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
         apiConfig: { baseUrl: config.apiBaseUrl },
         config: {
           browser: {

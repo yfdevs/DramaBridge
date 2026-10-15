@@ -93,8 +93,7 @@ export async function openQqDramaAddPage(
   }
 
   await gotoAddPage();
-  if (qqDramaLoginStateFromUrl(page.url()) === "login-required") {
-    await waitForLoginIfNeeded(page, context, options);
+  if (await waitForLoginIfNeeded(page, context, options)) {
     await gotoAddPage();
   }
   await waitForBasicInfoPageReady();

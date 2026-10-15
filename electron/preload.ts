@@ -8,7 +8,6 @@ const nativeTitlebarWindowModes = new Set([
   'wechat-miniprogram-baidu-upload',
   'wechat-miniprogram-catalog-upload',
   'pinduoduo-drama-upload-records',
-  'taobao-drama-task-data',
 ])
 
 function getListenerMap(channel: string) {

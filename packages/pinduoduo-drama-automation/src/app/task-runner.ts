@@ -432,6 +432,13 @@ async function runApprovedShortplayFlowTask(
       },
       rpaStatus: "VIDEO_UPLOADING",
     });
+    await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.({
+      shareText: task.playlet.demoUrl,
+      resourceName: task.originalTitle,
+    }).catch((error) => log(options, "warn", "runtime", "task succeeded but baidu netdisk cleanup failed", {
+      accountTaskId: task.accountTaskId,
+      error,
+    }));
     applyRecordsRepository.markVideoUploading(trackedRecord);
     return true;
   } catch (error) {

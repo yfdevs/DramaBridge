@@ -95,7 +95,7 @@ async function ensureNetdiskResource(
     throw lastError;
   };
 
-  await ensureWithRetry({
+  let resource = await ensureWithRetry({
     shareText,
     resourceName: douyinDramaResourceName(task),
     localEpisodeVideoRoot: douyinDramaLocalRoot(options),
@@ -111,17 +111,17 @@ async function ensureNetdiskResource(
     mergeOwnershipMaterials: false,
   });
 
-  if (!douyinTaskNeedsNetdiskMetadata(task)) return;
+  if (!douyinTaskNeedsNetdiskMetadata(task)) return resource;
   const resourceDir = path.join(douyinDramaLocalRoot(options), douyinDramaResourceName(task));
   const inputs = await collectDouyinNetdiskMetadataInputs(resourceDir);
   const missingRequiredText = task.playlet.summary.trim().length <= 100 && inputs.texts.length === 0;
-  if (!missingRequiredText) return;
+  if (!missingRequiredText) return resource;
 
   log(options, "[douyin-drama] 后端简介不足且本地没有剧情资料，补拉网盘简介目录。", {
     accountTaskId: task.accountTaskId,
     missingRequiredText,
   }, "download");
-  await ensureWithRetry({
+  resource = await ensureWithRetry({
     shareText,
     resourceName: douyinDramaResourceName(task),
     localEpisodeVideoRoot: douyinDramaLocalRoot(options),
@@ -139,6 +139,7 @@ async function ensureNetdiskResource(
     requiredMetadataTextFiles: missingRequiredText ? 1 : 0,
     mergeOwnershipMaterials: false,
   });
+  return resource;
 }
 
 async function runTask(
@@ -160,7 +161,7 @@ async function runTask(
     updatedAt: new Date().toISOString(),
   });
   try {
-    await ensureNetdiskResource(task, options);
+    const baiduNetdiskResource = await ensureNetdiskResource(task, options);
     const enrichedTask = await enrichDouyinTaskFromNetdisk(task, options);
     const resources = await prepareDouyinDramaResources(enrichedTask, options);
     log(
@@ -175,6 +176,9 @@ async function runTask(
       runtimeOptions: options,
       accountTaskId: task.accountTaskId,
     });
+    await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
+      (error) => warn(options, "[douyin-drama] 任务成功，但百度网盘剧目目录清理失败。", { error }, "task"),
+    );
     setLastTask({
       accountTaskId: task.accountTaskId,
       originalTitle: task.originalTitle,
@@ -257,7 +261,6 @@ export async function startDouyinDramaRuntime(
   const page = context.pages()[0] ?? (await context.newPage());
   let running = true;
   let lastTask: DouyinDramaRuntimeStatus["lastTask"];
-  const attemptedTaskIds = new Set<number>();
   try {
     await openDouyinDramaCreatePage(page);
     await waitForDouyinDramaLogin(page, context, options);
@@ -277,31 +280,23 @@ export async function startDouyinDramaRuntime(
           runtimeOptions: options,
         });
         if (task) {
-          if (attemptedTaskIds.has(task.accountTaskId)) {
-            warn(options, `[douyin-drama] 当前运行中已处理过任务，跳过重复执行：taskId=${task.accountTaskId}`, {
+          const taskPage = await page.context().newPage();
+          const succeeded = await runTask(taskPage, task, options, (value) => {
+            lastTask = value;
+          });
+          const failedBeforeOpeningPlatformPage = taskPage.url() === "about:blank";
+          if (
+            !taskPage.isClosed()
+            && (succeeded || options.closeFailedTaskPages === true || failedBeforeOpeningPlatformPage)
+          ) {
+            await taskPage.close().catch(() => undefined);
+          } else if (!taskPage.isClosed()) {
+            log(options, "[douyin-drama] 已保留失败任务页面供排查。", {
               accountTaskId: task.accountTaskId,
-              title: task.originalTitle,
-            }, "polling");
-          } else {
-            attemptedTaskIds.add(task.accountTaskId);
-            const taskPage = await page.context().newPage();
-            const succeeded = await runTask(taskPage, task, options, (value) => {
-              lastTask = value;
-            });
-            const failedBeforeOpeningPlatformPage = taskPage.url() === "about:blank";
-            if (
-              !taskPage.isClosed()
-              && (succeeded || options.closeFailedTaskPages === true || failedBeforeOpeningPlatformPage)
-            ) {
-              await taskPage.close().catch(() => undefined);
-            } else if (!taskPage.isClosed()) {
-              log(options, "[douyin-drama] 已保留失败任务页面供排查。", {
-                accountTaskId: task.accountTaskId,
-                activeUrl: taskPage.url(),
-              }, "task");
-            }
-            continue;
+              activeUrl: taskPage.url(),
+            }, "task");
           }
+          continue;
         }
       } catch (error) {
         warn(options, `[douyin-drama] 任务轮询失败：${errorMessage(error)}`, { error }, "polling");

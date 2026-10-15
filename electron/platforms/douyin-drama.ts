@@ -12,7 +12,7 @@ import {
   RuntimeController,
   selectDirectory,
 } from "./shared";
-import { ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
 import {
   assertGlobalDirectoriesConfigured,
   createConfiguredAiClient,
@@ -334,6 +334,7 @@ async function startRuntime() {
           ...request,
           requesterPlatform: "douyin-drama",
         }),
+        cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
         config: {
           browser: {
             headless: config.headless === "true",

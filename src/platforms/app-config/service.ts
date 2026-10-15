@@ -6,6 +6,7 @@ export type GlobalAppConfig = {
   aiCoverGenerationRetryAttempts: string
   aiPosterFallbackEnabled: boolean
   baiduNetdiskDownloadTimeoutMinutes: string
+  baiduNetdiskCleanupPlayletAfterTaskSuccess: boolean
   jianyingEpisodeCount: string
   runDataRoot: string
   localMaterialRoot: string

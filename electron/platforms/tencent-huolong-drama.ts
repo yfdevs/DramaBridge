@@ -12,7 +12,7 @@ import {
 } from "../global-app-config";
 import { createElectronPlatformLogger } from "../platform-logger";
 import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
-import { ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
 import {
   directoryDefaultPath,
   normalizePlatformRunDataDir,
@@ -262,6 +262,7 @@ async function startRuntime(): Promise<PlatformRuntime> {
         aiCoverGenerationRetryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
         ensureBaiduNetdiskResource: (request: Parameters<typeof ensureBaiduNetdiskShareDownloaded>[0]) =>
           ensureBaiduNetdiskShareDownloaded({ ...request, requesterPlatform: "tencent-huolong-drama" }),
+        cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
         apiConfig: { baseUrl: config.apiBaseUrl },
         config: {
           browser: {

@@ -35,6 +35,7 @@ export type EnsureBaiduNetdiskResourceRequest = {
 export type EnsureBaiduNetdiskResource = (
   request: EnsureBaiduNetdiskResourceRequest,
 ) => Promise<unknown>;
+export type CleanupBaiduNetdiskResource = (resource: unknown) => Promise<void>;
 
 export type WechatVideoRuntime = {
   getStatus: () => WechatVideoRuntimeStatus;
@@ -50,6 +51,7 @@ export type WechatVideoRuntimeOptions = {
   onLog?: (message: string) => void;
   settings?: Partial<WechatVideoRuntimeSettings>;
   ensureBaiduNetdiskResource?: EnsureBaiduNetdiskResource;
+  cleanupBaiduNetdiskResourceAfterTaskSuccess?: CleanupBaiduNetdiskResource;
   ownershipAiClient?: NonNullable<Parameters<typeof findOwnershipProjectProofFiles>[0]["aiClient"]>;
 }
 
@@ -79,6 +81,7 @@ export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions
     notifier,
     options.ensureBaiduNetdiskResource,
     options.ownershipAiClient,
+    options.cleanupBaiduNetdiskResourceAfterTaskSuccess,
   );
   const idlePageRefreshService = new IdlePageRefreshService(serviceConfig, browserContexts, taskService);
   const videoAccountSyncService = new VideoAccountSyncService(

@@ -14,7 +14,7 @@ import {
   RuntimeController,
   selectDirectory,
 } from "./shared";
-import { ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
 import { createElectronPlatformLogger } from "../platform-logger";
 import {
   assertGlobalDirectoriesConfigured,
@@ -362,6 +362,7 @@ async function startRuntime() {
       ...request,
       requesterPlatform: "meituan-drama",
     }),
+    cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
     config: {
       localEpisodeVideoRoot: config.localEpisodeVideoRoot,
       browser: {

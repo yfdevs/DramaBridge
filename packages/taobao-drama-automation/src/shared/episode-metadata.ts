@@ -3,10 +3,17 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import * as mammoth from "mammoth";
 import { z } from "zod";
-import { taobaoEpisodeBatchRanges } from "./constants.js";
+import {
+  TAOBAO_DRAMA_COLLECTION_PROPERTY_TAGS,
+  taobaoEpisodeBatchRanges,
+} from "./constants.js";
 import { taobaoMaterialRoot } from "./local-materials.js";
 import { log } from "./logger.js";
-import type { TaobaoBatchUploadTask, TaobaoDramaRuntimeOptions } from "./types.js";
+import type {
+  TaobaoBatchUploadTask,
+  TaobaoCollectionMetadata,
+  TaobaoDramaRuntimeOptions,
+} from "./types.js";
 
 const synopsisExtensions = new Set([".txt", ".md", ".docx", ".doc"]);
 const MAX_SYNOPSIS_FILES = 8;
@@ -219,13 +226,40 @@ export async function prepareTaobaoEpisodeMetadata(
     synopsisText: synopsis.text,
     synopsisSource: synopsis.source,
   };
-  await options.saveGeneratedMetadata?.(task.id, metadata);
   log(options, `[taobao-drama] AI 文案生成完成：标签=${metadata.dramaTag}，集数=${metadata.episodeSummaries.length}，模型=${generated.model}`);
   return metadata;
 }
 
 export function formatTaobaoVideoDescription(episodeIndex: number, summary: string) {
   return `第${episodeIndex}集|${cleanSummary(summary)}`.slice(0, 30);
+}
+
+const femaleAudiencePattern = /女主|千金|王妃|嫡女|女帝|娇妻|萌宝|甜宠|闪婚|先婚后爱|追妻|替嫁|带球跑|女性成长|古代言情|现代言情/;
+
+export function createTaobaoCollectionMetadata(
+  task: TaobaoBatchUploadTask,
+  metadata: TaobaoEpisodeMetadata,
+): TaobaoCollectionMetadata {
+  const source = `${task.title ?? task.originalTitle}\n${metadata.dramaTag}\n${metadata.synopsisText ?? ""}`;
+  const propertyTag = TAOBAO_DRAMA_COLLECTION_PROPERTY_TAGS.find((tag) =>
+    source.includes(tag)
+  );
+  return {
+    title: task.title ?? task.originalTitle,
+    summary: [
+      task.summary,
+      metadata.synopsisText,
+      metadata.episodeSummaries.map((summary, index) => `第${index + 1}集：${summary}`).join("；"),
+    ].filter((value, index, values): value is string => Boolean(value?.trim()) && values.indexOf(value) === index)
+      .join("\n")
+      .slice(0, 3_000),
+    episodeCount: task.episodeCount,
+    shortDramaType: task.shortDramaType ?? "AI动漫短剧",
+    shortDramaTags: task.shortDramaTags?.length
+      ? task.shortDramaTags
+      : ["AI动漫解说漫", ...(propertyTag ? [propertyTag] : [])],
+    audience: task.audience ?? (femaleAudiencePattern.test(source) ? "女" : "男"),
+  };
 }
 
 export function taobaoContentTags(title: string, dramaTag: string) {

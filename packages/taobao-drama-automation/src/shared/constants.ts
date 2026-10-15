@@ -18,9 +18,12 @@ export const TAOBAO_DRAMA_FIXED_FIELDS = {
   paymentMode: "免费",
   completionStatus: "已完结",
   filingType: "备案号申请",
+  productionCost: "30万以下",
   producerName: "杨爱平",
   productionCompany: "明星说",
   directorName: "明星说",
+  scriptwriterName: "明星说",
+  mainActors: "无",
   averageEpisodeDurationMinutes: 1,
 } as const;
 
@@ -32,6 +35,18 @@ export const TAOBAO_DRAMA_MIN_VIDEO_DIMENSION = 1_088;
 export const TAOBAO_DRAMA_MAX_EPISODES_PER_TASK = 1_000;
 export const TAOBAO_DRAMA_COVER_WIDTH = 1_080;
 export const TAOBAO_DRAMA_COVER_HEIGHT = 1_800;
+
+export const TAOBAO_DRAMA_COLLECTION_PROPERTY_TAGS = [
+  "校园", "民国", "职场", "都市", "年代", "古代", "宫廷", "乡村", "架空", "荒岛", "末日",
+  "科幻", "恐怖", "玄幻修仙", "抗战", "现代言情", "武侠", "商战", "奇幻", "古代言情", "刑侦",
+  "都市修仙", "权谋", "悬疑推理", "魔幻惊悚", "正能量", "玄学", "虐渣打脸", "豪门", "传承觉醒",
+  "团宠", "娱乐圈", "逆袭", "异能", "宅斗", "鉴宝", "女性成长", "扮猪吃虎", "重生", "闪婚",
+  "穿越", "先婚后爱", "破镜重圆", "青梅竹马", "真假千金", "虐恋", "宫斗", "穿书", "甜宠",
+  "家庭伦理", "系统", "求生", "复仇", "马甲", "追妻火葬场", "暗恋", "替身", "古穿今",
+  "带球跑", "创业", "契约婚姻", "身份反转", "年下", "替嫁", "相爱相杀", "失忆", "医术",
+  "兵王", "小人物", "中老年", "大女主", "赘婿", "王妃", "嫡女", "反派", "萌宝", "女帝",
+  "神豪", "弃少", "高手下山", "强者归来", "战神", "霸总", "黑道", "神医", "娇妻",
+] as const;
 
 export function taobaoEpisodeBatchRanges(
   episodeCount: number,

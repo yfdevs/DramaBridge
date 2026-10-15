@@ -14,7 +14,10 @@ import {
   RuntimeController,
   selectDirectory,
 } from "./shared";
-import { ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+import {
+  cleanupBaiduNetdiskPlayletAfterTaskSuccess,
+  ensureBaiduNetdiskShareDownloaded,
+} from "./baidu-netdisk";
 import { createElectronPlatformLogger } from "../platform-logger";
 import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
 import {
@@ -569,6 +572,8 @@ async function startRuntime() {
           ...request,
           requesterPlatform: "qq-drama",
         }),
+        cleanupBaiduNetdiskResourceAfterTaskSuccess:
+          cleanupBaiduNetdiskPlayletAfterTaskSuccess,
         apiConfig: {
           baseUrl: config.apiBaseUrl,
         },
