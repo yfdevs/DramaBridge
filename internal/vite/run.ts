@@ -88,8 +88,7 @@ export const runConfig = {
       command: "vp pack",
       cwd: "packages/taobao-drama-automation",
       dependsOn: ["pkg:ai:build", "pkg:logging:build"],
-      input: packageBuildInputs(),
-      output: ["packages/taobao-drama-automation/dist/**"],
+      cache: false,
     },
     "pkg:tencent-huolong:build": {
       command: "vp pack",

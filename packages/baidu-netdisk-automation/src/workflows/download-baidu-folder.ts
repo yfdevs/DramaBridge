@@ -397,6 +397,35 @@ function uniqueTargets(targets: CdpTarget[]) {
   });
 }
 
+export function isSameBaiduCdpTarget(left: CdpTarget, right: CdpTarget) {
+  return Boolean(
+    (left.id && right.id && left.id === right.id)
+      || (
+        left.webSocketDebuggerUrl
+        && right.webSocketDebuggerUrl
+        && left.webSocketDebuggerUrl === right.webSocketDebuggerUrl
+      ),
+  );
+}
+
+export function selectTrackedBaiduShareTarget(
+  targets: CdpTarget[],
+  preferredTargets: CdpTarget[],
+) {
+  const exact = targets.find(
+    (target) => target.webSocketDebuggerUrl
+      && preferredTargets.some((preferred) => isSameBaiduCdpTarget(target, preferred)),
+  );
+  if (exact) return exact;
+
+  // Baidu may replace the share webview after extraction and remove the share id
+  // from the new route. Only fall back when the replacement is unambiguous.
+  const panTargets = uniqueTargets(
+    targets.filter((target) => target.webSocketDebuggerUrl && isPanTarget(target)),
+  );
+  return panTargets.length === 1 ? panTargets[0] : undefined;
+}
+
 function openShareCandidates(targets: CdpTarget[]) {
   const coreTargets = targets.filter((target) => isCoreTarget(target) && target.type === "page");
   const primaryCoreTargets = coreTargets.filter(
@@ -879,14 +908,28 @@ async function waitForShareReadyTarget(
   const started = Date.now();
   let lastState: ShareReadyState | undefined;
   let sawTarget = false;
+  let recoveredTrackedTarget = false;
+  const trackedTargets = [...preferredTargets];
   const blankSinceByTarget = new Map<string, number>();
   const reloadedTargets = new Set<string>();
 
   while (Date.now() - started < timeoutMs) {
-    const target = await findShareTarget(port, id, preferredTargets);
+    let target = await findShareTarget(port, id, trackedTargets);
+    if (!target && trackedTargets.length) {
+      const targets = await getTargets(port).catch(() => []);
+      target = selectTrackedBaiduShareTarget(targets, trackedTargets);
+      if (target && !recoveredTrackedTarget) {
+        recoveredTrackedTarget = true;
+        log(`分享页提取后路由已变化，继续跟踪原 CDP target：${target.title || target.url}`);
+      }
+    }
     if (!target) {
       await sleep(500);
       continue;
+    }
+
+    if (!trackedTargets.some((tracked) => isSameBaiduCdpTarget(tracked, target))) {
+      trackedTargets.unshift(target);
     }
 
     sawTarget = true;
@@ -925,11 +968,14 @@ async function waitForShareReadyTarget(
     await sleep(500);
   }
 
+  const targetSummary = (await getTargets(port).catch(() => []))
+    .map((target) => `${target.type}:${compactText(target.title || target.url, 80)}`)
+    .join(" | ");
   const stateSummary = lastState
     ? `url=${lastState.url}；readyState=${lastState.readyState}；htmlLength=${lastState.htmlLength}；readyForList=${lastState.readyForList}；needsCode=${lastState.needsCode}；页面文本=${compactText(lastState.text)}`
     : sawTarget
       ? "已找到分享页，但页面状态无法读取。"
-      : "没有找到分享页 target。";
+      : `没有找到分享页 target。当前页面：${targetSummary || "无"}`;
   throw new Error(`没有进入分享文件列表。${stateSummary}`);
 }
 

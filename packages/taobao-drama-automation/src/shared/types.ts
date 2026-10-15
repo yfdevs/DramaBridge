@@ -27,6 +27,7 @@ export const taobaoBatchUploadTaskSchema = z.object({
   audience: z.enum(["男", "女"]).optional(),
   sourceCoverFile: requiredText.optional(),
   sourceCoverUrl: z.string().trim().url().optional(),
+  productionCostProofFiles: z.array(requiredText).default([]),
 });
 
 export const taobaoDramaTaskFailStageValues = [

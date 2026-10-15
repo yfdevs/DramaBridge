@@ -689,12 +689,21 @@ importers:
       '@drama/drama-media-assets':
         specifier: workspace:*
         version: link:../drama-media-assets
+      '@napi-rs/canvas':
+        specifier: 0.1.100
+        version: 0.1.100
       mammoth:
         specifier: 1.11.0
         version: 1.11.0
+      pdf-to-img:
+        specifier: 5.0.0
+        version: 5.0.0
       playwright:
         specifier: 1.61.1
         version: 1.61.1
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.4(@types/node@26.6.5)
       zod:
         specifier: 3.22.4
         version: 3.22.4
@@ -6967,12 +6976,12 @@ snapshots:
 
   '@types/fs-extra@9.0.13':
     dependencies:
-      '@types/node': 26.6.4
+      '@types/node': 26.6.5
 
   '@types/glob@7.2.0':
     dependencies:
       '@types/minimatch': 6.0.0
-      '@types/node': 26.6.4
+      '@types/node': 26.6.5
     optional: true
 
   '@types/http-cache-semantics@4.2.0': {}
@@ -7026,7 +7035,7 @@ snapshots:
 
   '@types/plist@3.0.5':
     dependencies:
-      '@types/node': 26.6.4
+      '@types/node': 26.6.5
       xmlbuilder: 15.1.1
     optional: true
 

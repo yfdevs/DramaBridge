@@ -18,7 +18,6 @@ export const TAOBAO_DRAMA_FIXED_FIELDS = {
   paymentMode: "免费",
   completionStatus: "已完结",
   filingType: "备案号申请",
-  productionCost: "30万以下",
   producerName: "杨爱平",
   productionCompany: "明星说",
   directorName: "明星说",

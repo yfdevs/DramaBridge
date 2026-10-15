@@ -19,12 +19,40 @@ import {
   matchBaiduLeadingEpisodeIndex,
   planBaiduNetdiskSyncItem,
   resolveBaiduAssetDownloadRoot,
+  isSameBaiduCdpTarget,
+  selectTrackedBaiduShareTarget,
   selectLeadingEpisodeFiles,
   shouldDownloadMixedPosterAsFile,
   shouldDownloadBaiduOwnershipDirectories,
   validateRemoteEpisodePathSelection,
   type RemoteVideoDirectoryCandidateScore,
 } from "../../src/workflows/download-baidu-folder.js";
+import type { CdpTarget } from "../../src/domain/types.js";
+
+const cdpTarget = (id: string, url: string): CdpTarget => ({
+  id,
+  type: "webview",
+  title: "百度网盘",
+  url,
+  webSocketDebuggerUrl: `ws://127.0.0.1:9337/devtools/page/${id}`,
+});
+
+test("keeps tracking the same Baidu target after extraction removes the share id", () => {
+  const before = cdpTarget("share-1", "https://pan.baidu.com/s/1abc");
+  const after = cdpTarget("share-1", "https://pan.baidu.com/disk/main#/index?category=all");
+
+  assert.equal(isSameBaiduCdpTarget(before, after), true);
+  assert.equal(selectTrackedBaiduShareTarget([after], [before]), after);
+});
+
+test("adopts a unique replacement Baidu target but rejects an ambiguous replacement", () => {
+  const before = cdpTarget("share-1", "https://pan.baidu.com/s/1abc");
+  const replacement = cdpTarget("share-2", "https://pan.baidu.com/disk/main#/index?category=all");
+  const another = cdpTarget("share-3", "https://pan.baidu.com/disk/main#/index?category=video");
+
+  assert.equal(selectTrackedBaiduShareTarget([replacement], [before]), replacement);
+  assert.equal(selectTrackedBaiduShareTarget([replacement, another], [before]), undefined);
+});
 
 test("limits episode downloads without changing the default full selection", () => {
   const files = Array.from({ length: 8 }, (_, index) => ({

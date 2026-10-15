@@ -2,6 +2,7 @@ import type { BrowserContext, Page } from "playwright";
 import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
 import { taobaoMaterialRoot, validateTaobaoEpisodeVideos } from "../shared/local-materials.js";
 import { prepareTaobaoCollectionCover } from "../shared/cover.js";
+import { prepareTaobaoCostConfigImage } from "../shared/cost-material.js";
 import { log } from "../shared/logger.js";
 import type { TaobaoBatchUploadTask, TaobaoDramaRuntimeOptions } from "../shared/types.js";
 import { saveTaobaoCredentialState, waitForTaobaoPage } from "./browser-session.js";
@@ -67,10 +68,11 @@ export async function runTaobaoPublishTask(
   const metadata = await prepareTaobaoEpisodeMetadata(task, options);
   const collectionMetadata = createTaobaoCollectionMetadata(task, metadata);
   const coverFile = await prepareTaobaoCollectionCover(task, collectionMetadata, options);
+  const costConfigImage = await prepareTaobaoCostConfigImage(task, options);
 
   await waitForTaobaoPage(page, "collection", options);
   await saveTaobaoCredentialState(context, options);
-  await fillAndCreateTaobaoCollection(page, collectionMetadata, coverFile, options);
+  await fillAndCreateTaobaoCollection(page, collectionMetadata, coverFile, costConfigImage, options);
 
   await waitForTaobaoPage(page, "batch", options);
   await saveTaobaoCredentialState(context, options);

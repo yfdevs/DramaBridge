@@ -15,6 +15,9 @@ test("normalizes a claimed backend task for collection creation and video upload
     accountConfigJson: null,
     payloadJson: {
       name: "原始剧名",
+      productionCost: {
+        proofFiles: ["https://assets.example.test/cost-report.pdf"],
+      },
       taobaoPlaylet: {
         title: "淘宝剧名",
         summary: "测试剧情简介",
@@ -40,6 +43,7 @@ test("normalizes a claimed backend task for collection creation and video upload
   assert.equal(task.title, "淘宝剧名");
   assert.equal(task.episodeCount, 12);
   assert.deepEqual(task.shortDramaTags, ["AI动漫解说漫", "逆袭"]);
+  assert.deepEqual(task.productionCostProofFiles, ["https://assets.example.test/cost-report.pdf"]);
 });
 
 test("lists and claims the next READY Taobao task through Taobao-prefixed endpoints", async () => {

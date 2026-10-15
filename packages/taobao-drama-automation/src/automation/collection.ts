@@ -18,6 +18,10 @@ function exactText(value: string) {
   return new RegExp(`^\\s*${escaped(value)}\\s*$`);
 }
 
+function fieldLabelText(value: string) {
+  return new RegExp(`^\\s*\\*?\\s*${escaped(value)}(?:\\s|最低|查看|创建后|请及时|$)`);
+}
+
 async function firstVisible(candidates: Locator[]) {
   for (const candidate of candidates) {
     const locator = candidate.filter({ visible: true }).first();
@@ -30,9 +34,7 @@ async function fieldContainer(page: Page, labels: string[]) {
   for (const label of labels) {
     const labelPattern = new RegExp(`^\\s*\\*?\\s*${escaped(label)}\\s*\\*?\\s*$`);
     const text = await firstVisible([
-      page.locator("label").filter({
-        hasText: new RegExp(`^\\s*\\*?\\s*${escaped(label)}(?:\\s|查看|创建后|请及时|$)`),
-      }),
+      page.locator("label").filter({ hasText: fieldLabelText(label) }),
       page.getByText(labelPattern).last(),
     ]);
     if (!text) continue;
@@ -54,7 +56,7 @@ async function fieldContainer(page: Page, labels: string[]) {
 
 async function fillTextField(page: Page, labels: string[], value: string) {
   const labeledInput = await firstVisible(labels.map((label) =>
-    page.getByLabel(new RegExp(`^\\s*${escaped(label)}\\s*$`))
+    page.getByLabel(fieldLabelText(label))
   ));
   if (labeledInput) {
     await labeledInput.scrollIntoViewIfNeeded({ timeout: 10_000 });
@@ -79,6 +81,19 @@ async function visiblePopupOption(page: Page, value: string) {
     page.locator("[role='menuitem'], [role='checkbox']").filter({ hasText: exactText(value) }),
     page.locator(".next-menu-item, .ant-select-item-option, .semi-select-option")
       .filter({ hasText: exactText(value) }),
+    page.locator("[class*='dialog-tag--']")
+      .filter({ has: page.locator("[class*='dialog-tag-label']").filter({ hasText: exactText(value) }) }),
+  ]);
+}
+
+async function fieldTrigger(container: Locator) {
+  return firstVisible([
+    container.locator("[role='combobox']"),
+    container.locator(".next-select, .ant-select, .semi-select"),
+    container.locator("[class*='select-trigger']"),
+    container.getByText(/^\s*选择\s*$/),
+    container.locator("input:not([type='hidden']):not([type='file'])"),
+    container.locator("button"),
   ]);
 }
 
@@ -92,14 +107,7 @@ async function selectFieldValue(page: Page, labels: string[], value: string, mul
     if (!await nativeControl.isChecked().catch(() => false)) await nativeControl.click({ timeout: 15_000 });
     return;
   }
-  const trigger = await firstVisible([
-    container.locator("[role='combobox']"),
-    container.locator(".next-select, .ant-select, .semi-select"),
-    container.locator("[class*='select-trigger']"),
-    container.getByText(/^\s*选择\s*$/),
-    container.locator("input:not([type='hidden']):not([type='file'])"),
-    container.locator("button"),
-  ]);
+  const trigger = await fieldTrigger(container);
   if (!trigger) {
     const inlineControl = await firstVisible([
       container.locator("[role='radio'], [role='checkbox'], label, button").filter({ hasText: exactText(value) }),
@@ -130,11 +138,69 @@ async function selectFieldValue(page: Page, labels: string[], value: string, mul
   if (!multi) await page.keyboard.press("Escape").catch(() => undefined);
 }
 
-async function uploadCover(page: Page, coverFile: string) {
+export async function selectTaobaoDramaCollectionTags(page: Page, values: string[]) {
+  const labels = ["短剧标签", "标签"];
+  const container = await fieldContainer(page, labels);
+  const pending: string[] = [];
+  for (const value of [...new Set(values)]) {
+    const selected = await firstVisible([
+      container.locator("[aria-selected='true'], [data-selected='true'], [class*='selected'], [class*='selection-item'], [class*='tag']")
+        .filter({ hasText: exactText(value) }),
+    ]);
+    if (!selected) pending.push(value);
+  }
+  if (!pending.length) return;
+
+  const trigger = await fieldTrigger(container);
+  if (!trigger) throw new Error(`TAOBAO_DRAMA_SELECT_NOT_FOUND: labels=${labels.join("|")}`);
+  await trigger.scrollIntoViewIfNeeded({ timeout: 10_000 });
+  await trigger.click({ timeout: 15_000 });
+
+  // The current Taobao picker is mounted asynchronously after the trigger click.
+  // Waiting for the requested label also keeps the legacy dropdown fallback fast.
+  await page.getByText(exactText(pending[0]!)).filter({ visible: true }).first()
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .catch(() => undefined);
+
+  const dialog = await firstVisible([
+    page.locator(".next-dialog:visible, .ant-modal:visible, .semi-modal:visible, [role='dialog']:visible")
+      .filter({ has: page.locator("[class*='dialog-group-title']") }),
+    page.locator("[class*='dialog-content']:visible").locator("xpath=.."),
+  ]);
+  if (!dialog) {
+    for (const value of pending) {
+      const option = await visiblePopupOption(page, value);
+      if (!option) throw new Error(`TAOBAO_DRAMA_SELECT_OPTION_NOT_FOUND: labels=${labels.join("|")} value=${value}`);
+      await option.click({ timeout: 15_000 });
+    }
+    await page.keyboard.press("Escape").catch(() => undefined);
+    return;
+  }
+
+  for (const value of pending) {
+    const label = dialog.locator("[class*='dialog-tag-label']").filter({ hasText: exactText(value) }).first();
+    if (!await label.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      throw new Error(`TAOBAO_DRAMA_SELECT_OPTION_NOT_FOUND: labels=${labels.join("|")} value=${value}`);
+    }
+    const tag = label.locator("xpath=ancestor::*[contains(@class, 'dialog-tag--')][1]");
+    await (await tag.count() ? tag : label).click({ timeout: 15_000 });
+  }
+
+  const confirm = await firstVisible([
+    dialog.getByRole("button", { name: /^\s*(?:确定|确认|完成|保存)\s*$/ }),
+    dialog.locator("button[class*='dialog-confirm-btn']"),
+  ]);
+  if (!confirm) throw new Error("TAOBAO_DRAMA_TAG_DIALOG_CONFIRM_NOT_FOUND");
+  await confirm.click({ timeout: 15_000 });
+  await dialog.waitFor({ state: "hidden", timeout: 15_000 });
+}
+
+export async function uploadTaobaoCollectionCover(page: Page, coverFile: string) {
   const container = await fieldContainer(page, ["封面", "合集封面", "短剧封面"]);
-  const input = container.locator("input[type='file']:not([disabled])").first();
-  if (await input.count()) {
-    await input.setInputFiles(coverFile, { timeout: 60_000 });
+  const directInput = container.locator("input[type='file']:not([disabled])").first();
+  let mediaDialog: Locator | null = null;
+  if (await directInput.count()) {
+    await directInput.setInputFiles(coverFile, { timeout: 60_000 });
   } else {
     const trigger = await firstVisible([
       container.getByText(/^\s*添加封面\s*$/),
@@ -142,26 +208,85 @@ async function uploadCover(page: Page, coverFile: string) {
       container.locator("button"),
     ]);
     if (!trigger) throw new Error("TAOBAO_DRAMA_COVER_UPLOAD_TRIGGER_NOT_FOUND");
-    const chooserPromise = page.waitForEvent("filechooser", { timeout: 30_000 });
     await trigger.click({ timeout: 15_000 });
-    const chooser = await chooserPromise;
-    await chooser.setFiles(coverFile, { timeout: 60_000 });
+
+    mediaDialog = page
+      .locator(".next-dialog, .ant-modal, .semi-modal, [role='dialog']")
+      .filter({ has: page.getByRole("button", { name: /^\s*上传新图片\s*$/ }) })
+      .last();
+    await mediaDialog.waitFor({ state: "visible", timeout: 30_000 });
+
+    const uploadInput = mediaDialog.locator("input[type='file']:not([disabled])").first();
+    await uploadInput.waitFor({ state: "attached", timeout: 15_000 }).catch(() => undefined);
+    if (await uploadInput.count()) {
+      // Taobao's image-space button delegates to this hidden input. Setting it
+      // directly is reliable and does not emit a Playwright filechooser event.
+      await uploadInput.setInputFiles(coverFile, { timeout: 60_000 });
+    } else {
+      const uploadButton = mediaDialog.getByRole("button", { name: /^\s*上传新图片\s*$/ }).last();
+      const chooserPromise = page.waitForEvent("filechooser", { timeout: 30_000 });
+      await uploadButton.click({ timeout: 15_000 });
+      const chooser = await chooserPromise;
+      await chooser.setFiles(coverFile, { timeout: 60_000 });
+    }
   }
+
   const cropDialog = page
-    .locator(".next-dialog:visible, .ant-modal:visible, .semi-modal:visible, [role='dialog']:visible")
-    .filter({ has: page.locator("img, canvas") })
+    .locator(".next-dialog, .ant-modal, .semi-modal, [role='dialog']")
+    .filter({ has: page.getByText(/^\s*裁剪图片\s*$/) })
     .last();
-  if (await cropDialog.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await cropDialog.getByRole("button", { name: /^\s*(?:确定|确认|完成|保存)\s*$/ })
-      .filter({ visible: true }).last().click({ timeout: 30_000 });
-    await cropDialog.waitFor({ state: "hidden", timeout: 30_000 });
+  const cropAppeared = await cropDialog.waitFor({ state: "visible", timeout: 60_000 })
+    .then(() => true, () => false);
+  if (cropAppeared) {
+    await cropDialog.locator("canvas, img").first().waitFor({ state: "visible", timeout: 30_000 });
+    await cropDialog.getByRole("button", { name: /^\s*(?:确定|完成|保存)\s*$/ })
+      .filter({ visible: true }).last().click({ timeout: 60_000 });
+    await cropDialog.waitFor({ state: "hidden", timeout: 60_000 });
+  } else if (mediaDialog) {
+    throw new Error("TAOBAO_DRAMA_COVER_CROP_DIALOG_NOT_FOUND");
   }
+
+  // Cropping uploads the file into image space. Some Taobao revisions then
+  // require a second confirmation to apply the selected image to the form.
+  if (mediaDialog && await mediaDialog.isVisible().catch(() => false)) {
+    const applyButton = mediaDialog.getByRole("button", { name: /^\s*(?:确认|确定)\s*$/ })
+      .filter({ visible: true }).last();
+    await applyButton.waitFor({ state: "visible", timeout: 60_000 });
+    await applyButton.click({ timeout: 60_000 });
+    await mediaDialog.waitFor({ state: "hidden", timeout: 60_000 });
+  }
+
   const preview = container.locator("img:visible, [class*='upload-list']:visible").first();
   await preview.waitFor({ state: "visible", timeout: 60_000 }).catch(async (error) => {
-    if (!await input.count() || await input.evaluate((element: HTMLInputElement) => element.files?.length ?? 0) < 1) {
+    if (!await directInput.count() || await directInput.evaluate((element: HTMLInputElement) => element.files?.length ?? 0) < 1) {
       throw error;
     }
   });
+}
+
+export async function uploadTaobaoCostConfigMaterial(page: Page, file: string) {
+  if (!file.trim()) {
+    throw new Error("TAOBAO_DRAMA_COST_MATERIAL_REQUIRED: productionCost.proofFiles 不能为空");
+  }
+  await page.getByText(/^\s*成本配置材料\s*$/).first()
+    .waitFor({ state: "visible", timeout: 30_000 });
+  const container = await fieldContainer(page, ["成本配置材料", "成本合同"]);
+  const input = container.locator("input[type='file']:not([disabled])").first();
+  await input.waitFor({ state: "attached", timeout: 30_000 });
+  await input.setInputFiles(file, { timeout: 60_000 });
+  const uploadedFileCount = await input.evaluate(
+    (element: HTMLInputElement) => element.files?.length ?? 0,
+  );
+  if (uploadedFileCount < 1) {
+    throw new Error("TAOBAO_DRAMA_COST_MATERIAL_UPLOAD_NOT_ACCEPTED: 淘宝未接收成本配置材料图片");
+  }
+  const uploadedPreview = container
+    .locator("img:visible, [class*='upload-list']:visible, [class*='file-item']:visible")
+    .first();
+  await uploadedPreview.waitFor({ state: "visible", timeout: 60_000 });
+  await container.locator(".next-loading:visible, [class*='uploading']:visible")
+    .first().waitFor({ state: "hidden", timeout: 60_000 }).catch(() => undefined);
+  await page.waitForTimeout(500);
 }
 
 async function validationMessages(page: Page) {
@@ -183,6 +308,7 @@ export async function fillAndCreateTaobaoCollection(
   page: Page,
   task: TaobaoCollectionMetadata,
   coverFile: string,
+  costConfigImage: string,
   options: TaobaoDramaRuntimeOptions,
 ) {
   log(options, "[taobao-drama] 开始填写合集必填信息", {
@@ -195,15 +321,13 @@ export async function fillAndCreateTaobaoCollection(
   await selectFieldValue(page, ["合集类型"], TAOBAO_DRAMA_FIXED_FIELDS.collectionType);
   await selectFieldValue(page, ["短剧类型"], task.shortDramaType);
   await selectFieldValue(page, ["付费方式"], TAOBAO_DRAMA_FIXED_FIELDS.paymentMode);
-  for (const tag of task.shortDramaTags) await selectFieldValue(page, ["短剧标签", "标签"], tag, true);
-  await page.keyboard.press("Escape").catch(() => undefined);
+  await selectTaobaoDramaCollectionTags(page, task.shortDramaTags);
   await selectFieldValue(page, ["是否完结", "完结状态"], TAOBAO_DRAMA_FIXED_FIELDS.completionStatus);
   await selectFieldValue(page, ["观看受众", "受众"], task.audience);
-  await uploadCover(page, coverFile);
+  await uploadTaobaoCollectionCover(page, coverFile);
   await selectFieldValue(page, ["备案类型"], TAOBAO_DRAMA_FIXED_FIELDS.filingType);
-  await selectFieldValue(page, ["制作成本"], TAOBAO_DRAMA_FIXED_FIELDS.productionCost);
-  await fillTextField(page, ["制片人"], TAOBAO_DRAMA_FIXED_FIELDS.producerName);
   await fillTextField(page, ["制作机构"], TAOBAO_DRAMA_FIXED_FIELDS.productionCompany);
+  await fillTextField(page, ["制片人"], TAOBAO_DRAMA_FIXED_FIELDS.producerName);
   await fillTextField(page, ["导演"], TAOBAO_DRAMA_FIXED_FIELDS.directorName);
   await fillTextField(page, ["编剧"], TAOBAO_DRAMA_FIXED_FIELDS.scriptwriterName);
   await fillTextField(page, ["主要演员"], TAOBAO_DRAMA_FIXED_FIELDS.mainActors);
@@ -213,6 +337,7 @@ export async function fillAndCreateTaobaoCollection(
     throw new Error(`TAOBAO_DRAMA_COLLECTION_SUMMARY_TOO_SHORT: length=${task.summary.trim().length} min=100`);
   }
   await fillTextField(page, ["内容概要"], task.summary.trim().slice(0, 3_000));
+  await uploadTaobaoCostConfigMaterial(page, costConfigImage);
 
   const createButton = page.getByRole("button", { name: /^\s*(?:确认创建|创建合集|创建)\s*$/ })
     .filter({ visible: true }).last();

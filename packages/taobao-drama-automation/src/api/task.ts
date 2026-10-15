@@ -68,6 +68,11 @@ export function normalizeClaimedTaobaoDramaTask(claimed: ClaimData, listed: Read
   const config = record(claimed.accountConfigJson);
   const playlet = { ...record(config.taobaoPlaylet), ...record(payload.taobaoPlaylet ?? payload.taobaoDrama ?? payload.playlet) };
   const posters = record(payload.posters);
+  const productionCost = {
+    ...record(config.productionCost),
+    ...record(playlet.productionCost),
+    ...record(payload.productionCost),
+  };
   const originalTitle = text(claimed.originalTitle) ?? text(listed.originalTitle) ?? text(payload.name) ?? text(playlet.title);
   const parsed = taobaoBatchUploadTaskSchema.safeParse({
     id: String(claimed.accountTaskId), accountTaskId: claimed.accountTaskId, originalTitle,
@@ -81,6 +86,7 @@ export function normalizeClaimedTaobaoDramaTask(claimed: ClaimData, listed: Read
     audience: text(playlet.audience) ?? text(playlet.audienceType),
     sourceCoverFile: text(playlet.sourceCoverFile),
     sourceCoverUrl: text(playlet.sourceCoverUrl) ?? text(playlet.coverImageUrl) ?? text(posters.main) ?? imageUrl(payload, "collectionCover"),
+    productionCostProofFiles: texts(productionCost.proofFiles),
   });
   if (parsed.success && parsed.data.accountTaskId) return parsed.data as ClaimedTaobaoDramaTask;
   const details = parsed.success ? "accountTaskId missing" : parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
