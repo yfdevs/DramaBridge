@@ -21,6 +21,8 @@ export interface WechatVideoRuntimeSettings {
   taskPrefetchPerAccount: string;
   videoTranscodeConcurrency: string;
   videoTranscodeThreadsPerJob: string;
+  imageCompressionThresholdMegabytes: string;
+  imageCompressionTargetMegabytes: string;
   episodeVideoMaxFileMegabytes: string;
   episodeVideoTargetFileMegabytes: string;
   episodeUploadWaitTimeoutSeconds: string;
@@ -51,6 +53,8 @@ export const defaultWechatVideoRuntimeSettings: WechatVideoRuntimeSettings = {
   taskPrefetchPerAccount: "2",
   videoTranscodeConcurrency: "2",
   videoTranscodeThreadsPerJob: "2",
+  imageCompressionThresholdMegabytes: "10",
+  imageCompressionTargetMegabytes: "9",
   episodeVideoMaxFileMegabytes: "490",
   episodeVideoTargetFileMegabytes: "480",
   episodeUploadWaitTimeoutSeconds: "7200",

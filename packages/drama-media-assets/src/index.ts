@@ -81,6 +81,7 @@ export {
   prepareEpisodeVideos,
   readVideoDurationSeconds,
   readVideoDimensions,
+  readVideoStreamMetadata,
   resolveFfmpegExecutablePath,
   selectRandomVideoFrameTimestamps,
   VideoTranscodeQueue,
@@ -91,10 +92,12 @@ export {
   type VideoDimensions,
   type VideoPlaybackSpeedRequest,
   type VideoSizePolicy,
+  type VideoStreamMetadata,
   type VideoTranscodeQueueOptions,
   type VideoTranscodeRequest,
 } from "./video-transcode.js";
 export {
+  compressImageForUpload,
   prepareImageForUpload,
   prepareContainedImageVariant,
   prepareCroppedImageVariant,
@@ -102,6 +105,7 @@ export {
   prepareStretchedImageVariant,
   readImageDimensions,
   type ImageCropRegion,
+  type ImageCompressionPolicy,
   type ImageDimensions,
   type ImageUploadPolicy,
   type PreparedImageUploadFile,
@@ -583,8 +587,10 @@ export async function classifyOwnershipProjectProof(
   nameHint = path.basename(file),
   aiClient?: DramaAiClient,
 ): Promise<OwnershipProjectProofKind> {
-  const parentDirectoryHint = path.basename(path.dirname(file));
-  const namedKind = classifyOwnershipProjectProofName(`${parentDirectoryHint}/${nameHint}`);
+  // Keep all source directory labels in the hint. Baidu resources often split
+  // proof images into nested folders such as 权属文件/剪映工程图/截图/1.png,
+  // where the immediate parent and filename contain no platform label.
+  const namedKind = classifyOwnershipProjectProofName(`${file}/${nameHint}`);
   if (namedKind) return namedKind;
 
   if (!aiClient) throw new Error("OWNERSHIP_PROJECT_PROOF_AI_CLIENT_REQUIRED");
@@ -996,9 +1002,9 @@ export async function standardizeOwnershipMaterialsToRoot(options: {
 
   for (const [position, material] of selected.entries()) {
     const extension = path.extname(material.file).toLowerCase() || ".jpg";
-    const proofKind = classifyOwnershipProjectProofName(
-      `${path.basename(path.dirname(material.file))}/${material.name}`,
-    );
+    // Classify before flattening into 权属文件 so labels on any ancestor
+    // directory (for example 剪映工程图/截图) survive standardization.
+    const proofKind = classifyOwnershipProjectProofName(`${material.file}/${material.name}`);
     const proofLabel = proofKind === "jianying"
       ? "剪映"
       : proofKind === "juchuang"

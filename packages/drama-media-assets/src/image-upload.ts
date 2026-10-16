@@ -28,6 +28,12 @@ export type PreparedImageUploadFile = {
   quality?: number;
 };
 
+export type ImageCompressionPolicy = {
+  compressAboveBytes: number;
+  targetFileBytes: number;
+  minimumJpegQuality?: number;
+};
+
 export type PreparedStretchedImageVariant = {
   sourceFile: string;
   file: string;
@@ -518,4 +524,67 @@ export async function prepareImageForUpload(options: {
       `${options.policy.minimumWidth}x${options.policy.minimumHeight} 分辨率的前提下，` +
       `无法将图片压缩到 ${options.policy.targetFileBytes} 字节以内：${options.inputFile}`,
   );
+}
+
+/**
+ * Generic size-only image compression for platform upload materials. Images at
+ * or below the threshold are returned unchanged; larger images are converted
+ * to JPEG and reduced until they fit the target size while preserving aspect
+ * ratio. Platform-specific dimension/crop rules should run separately.
+ */
+export async function compressImageForUpload(options: {
+  inputFile: string;
+  outputDir: string;
+  outputFileName: string;
+  policy: ImageCompressionPolicy;
+  onLog?: (message: string) => void;
+}): Promise<PreparedImageUploadFile> {
+  if (
+    !Number.isFinite(options.policy.compressAboveBytes)
+    || !Number.isFinite(options.policy.targetFileBytes)
+    || options.policy.compressAboveBytes <= 0
+    || options.policy.targetFileBytes <= 0
+    || options.policy.targetFileBytes >= options.policy.compressAboveBytes
+  ) {
+    throw new Error("[image-compress-failed] 图片压缩目标体积必须大于 0 且小于触发体积。");
+  }
+
+  const sourceStat = await stat(options.inputFile).catch(() => undefined);
+  if (!sourceStat?.isFile() || sourceStat.size <= 0) {
+    throw new Error(`[image-compress-failed] 图片文件不存在或为空：${options.inputFile}`);
+  }
+  const metadata = await sharp(options.inputFile, { failOn: "error" }).metadata();
+  const dimensions = orientedDimensions(metadata);
+  if (!dimensions.width || !dimensions.height) {
+    throw new Error(`[image-compress-failed] 无法读取图片尺寸：${options.inputFile}`);
+  }
+  if (sourceStat.size <= options.policy.compressAboveBytes) {
+    options.onLog?.(
+      `[image-compress] 图片未超过压缩阈值，保持原图：size=${sourceStat.size} `
+        + `threshold=${options.policy.compressAboveBytes} file=${options.inputFile}`,
+    );
+    return {
+      sourceFile: options.inputFile,
+      file: options.inputFile,
+      originalSize: sourceStat.size,
+      outputSize: sourceStat.size,
+      width: dimensions.width,
+      height: dimensions.height,
+      compressed: false,
+    };
+  }
+
+  return prepareImageForUpload({
+    inputFile: options.inputFile,
+    outputDir: options.outputDir,
+    outputFileName: options.outputFileName.replace(/\.[^.]+$/u, "") + ".jpg",
+    policy: {
+      maxFileBytes: options.policy.compressAboveBytes,
+      targetFileBytes: options.policy.targetFileBytes,
+      minimumWidth: 1,
+      minimumHeight: 1,
+      minimumJpegQuality: options.policy.minimumJpegQuality ?? 80,
+    },
+    onLog: options.onLog,
+  });
 }

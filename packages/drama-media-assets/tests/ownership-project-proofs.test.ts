@@ -156,6 +156,40 @@ test("preserves Baidu filename labels while standardizing and skips cloud AI", a
   }
 });
 
+test("preserves a Jianying label from a nested source directory while standardizing", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ownership-nested-directory-label-"));
+  const sourceDir = path.join(root, "download", "权属文件", "剪映工程图", "截图");
+  const targetRoot = path.join(root, "materials");
+  const resourceName = "亡妻归来，替身入局";
+  await mkdir(sourceDir, { recursive: true });
+
+  try {
+    const sourceFiles = await Promise.all(Array.from({ length: 4 }, async (_, index) => {
+      const name = `工程文件${index + 1}.png`;
+      const file = path.join(sourceDir, name);
+      await sharp({
+        create: { width: 1_920, height: 1_080, channels: 3, background: `rgb(${index},0,0)` },
+      }).png().toFile(file);
+      return { name, file, size: (await stat(file)).size };
+    }));
+    const standardized = await standardizeOwnershipMaterialsToRoot({
+      materials: sourceFiles,
+      requirements: { minimumImages: 4 },
+      targetRoot,
+      resourceName,
+    });
+
+    assert.deepEqual(standardized.map((file) => file.name), [
+      `${resourceName} - 剪映1.png`,
+      `${resourceName} - 剪映2.png`,
+      `${resourceName} - 剪映3.png`,
+      `${resourceName} - 剪映4.png`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("uses cloud AI for valid screenshots and rejects non-screenshots", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ownership-project-proof-"));
   try {

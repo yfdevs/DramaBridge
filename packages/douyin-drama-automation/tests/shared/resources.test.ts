@@ -105,6 +105,17 @@ test("recognizes Jianying screenshots from the netdisk directory name", async ()
   ]);
 });
 
+test("recognizes Jianying screenshots when the label is on an ancestor directory", async () => {
+  const materials = Array.from({ length: 4 }, (_, index) => ({
+    file: `D:\\素材\\权属文件\\剪映工程图\\截图\\工程文件${index + 1}.png`,
+    index: index + 1,
+    name: `工程文件${index + 1}.png`,
+    size: 100 + index,
+  }));
+
+  assert.deepEqual(await selectDouyinJianyingProjectScreenshots(materials), materials.map(({ file }) => file));
+});
+
 test("uses content classification after netdisk standardization removes source labels", async () => {
   const materials = Array.from({ length: 8 }, (_, index) => ({
     file: `D:\\素材\\权属文件\\测试剧 - 权属工程文件${index + 1}.png`,

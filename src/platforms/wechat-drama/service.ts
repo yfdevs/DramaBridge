@@ -42,6 +42,8 @@ export type WechatVideoConfig = {
   taskPrefetchPerAccount: string
   videoTranscodeConcurrency: string
   videoTranscodeThreadsPerJob: string
+  imageCompressionThresholdMegabytes: string
+  imageCompressionTargetMegabytes: string
   episodeVideoMaxFileMegabytes: string
   episodeVideoTargetFileMegabytes: string
   episodeUploadWaitTimeoutSeconds: string

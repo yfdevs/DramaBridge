@@ -36,6 +36,7 @@ import { prepareWechatPosterMaterials } from "../shared/poster-materials.js";
 import {
   prepareWechatAiProductionProofMaterials,
 } from "../shared/ai-production-proof-materials.js";
+import { prepareWechatImageUploadMaterials } from "../shared/image-materials.js";
 
 const logger = createLogger("worker");
 const claimErrorDelayMs = 10000;
@@ -55,6 +56,8 @@ function episodeVideoSizePolicy(
     targetFileBytes:
       Math.max(1, integerSetting(settings.episodeVideoTargetFileMegabytes, 480)) * 1_000_000,
     audioBitrateKbps: 128,
+    minimumVideoBitrateKbps: 4_000,
+    targetVideoBitrateKbps: 4_500,
     threadsPerJob: Math.max(1, integerSetting(settings.videoTranscodeThreadsPerJob, 2)),
   };
 }
@@ -348,6 +351,18 @@ export class TaskWorkerPool {
           playletConfig,
           this.ownershipAiClient,
         );
+        await prepareWechatImageUploadMaterials({
+          config: playletConfig,
+          outputDir: resolveRunDataPath(
+            "media-cache",
+            "image-compressions",
+            String(claimedAccountTask.accountTaskId),
+          ),
+          onLog: (message) => logger.info(message, {
+            accountTaskId: claimedAccountTask.accountTaskId,
+            videoAccountId,
+          }),
+        });
         logger.info("all task materials ready", {
           accountTaskId: claimedAccountTask.accountTaskId,
           videoAccountId,

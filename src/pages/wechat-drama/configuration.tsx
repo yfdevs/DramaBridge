@@ -58,6 +58,8 @@ const emptyConfig: WechatVideoConfig = {
   taskPrefetchPerAccount: "2",
   videoTranscodeConcurrency: "2",
   videoTranscodeThreadsPerJob: "2",
+  imageCompressionThresholdMegabytes: "10",
+  imageCompressionTargetMegabytes: "9",
   episodeVideoMaxFileMegabytes: "490",
   episodeVideoTargetFileMegabytes: "480",
   episodeUploadWaitTimeoutSeconds: "7200",
@@ -280,6 +282,20 @@ const sections: Array<{
     title: "上传与通知",
     description: "视频压缩、上传等待、失败重试和飞书通知。",
     fields: [
+      {
+        key: "imageCompressionThresholdMegabytes",
+        label: "图片压缩触发体积",
+        type: "number",
+        description: "上传图片超过该体积时自动压缩；PDF 等非图片材料保持原样。",
+        suffix: "MB",
+      },
+      {
+        key: "imageCompressionTargetMegabytes",
+        label: "图片压缩目标体积",
+        type: "number",
+        description: "压缩后的图片不超过该体积，必须小于触发体积。",
+        suffix: "MB",
+      },
       {
         key: "episodeVideoMaxFileMegabytes",
         label: "单集视频上限",

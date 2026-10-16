@@ -219,9 +219,9 @@ export async function selectDouyinJianyingProjectScreenshots(
     material: Awaited<ReturnType<typeof listLocalOwnershipMaterials>>[number];
   }> = [];
   for (const material of ownershipMaterials) {
-    const namedKind = classifyOwnershipProjectProofName(
-      `${path.basename(path.dirname(material.file))}/${material.name}`,
-    );
+    // The platform label can be on an ancestor folder rather than the direct
+    // parent, e.g. 权属文件/剪映工程图/截图/1.png.
+    const namedKind = classifyOwnershipProjectProofName(`${material.file}/${material.name}`);
     classified.push({
       kind: namedKind ?? (classifyUnknown ? await classifyUnknown(material) : "unknown"),
       material,

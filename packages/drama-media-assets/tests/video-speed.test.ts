@@ -8,9 +8,12 @@ import test from "node:test";
 import {
   adjustVideoPlaybackSpeed,
   ensureVideoMinimumDimensions,
+  prepareEpisodeVideos,
   readVideoDurationSeconds,
   readVideoDimensions,
+  readVideoStreamMetadata,
   resolveFfmpegExecutablePath,
+  VideoTranscodeQueue,
 } from "../src/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -82,6 +85,48 @@ test("uses FFmpeg to raise both video dimensions above Taobao's minimum", async 
     const output = await readVideoDimensions(outputFile);
     assert.ok(output.width >= 1_088);
     assert.ok(output.height >= 1_088);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("quickly probes low video bitrate and raises it above the platform minimum", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "drama-video-bitrate-"));
+  const inputFile = path.join(directory, "episode.mp4");
+  const executable = resolveFfmpegExecutablePath();
+  try {
+    await execFileAsync(executable, [
+      "-y",
+      "-f", "lavfi",
+      "-i", "testsrc2=s=640x360:r=25:d=2",
+      "-f", "lavfi",
+      "-i", "sine=frequency=1000:sample_rate=44100:duration=2",
+      "-c:v", "libx264",
+      "-b:v", "500k",
+      "-c:a", "aac",
+      "-shortest",
+      inputFile,
+    ], { windowsHide: true });
+
+    const source = await readVideoStreamMetadata(inputFile);
+    assert.ok(source.videoBitrateKbps < 4_000, `source=${source.videoBitrateKbps}k`);
+    const [prepared] = await prepareEpisodeVideos({
+      episodes: [{ index: 1, title: "第1集", file: inputFile }],
+      queue: new VideoTranscodeQueue({ concurrency: 1 }),
+      cacheRootDir: path.join(directory, "cache"),
+      policy: {
+        maxFileBytes: 20_000_000,
+        targetFileBytes: 15_000_000,
+        audioBitrateKbps: 128,
+        minimumVideoBitrateKbps: 4_000,
+        targetVideoBitrateKbps: 4_500,
+        threadsPerJob: 2,
+      },
+    });
+
+    assert.equal(prepared.transcoded, true);
+    const output = await readVideoStreamMetadata(prepared.file);
+    assert.ok(output.videoBitrateKbps >= 4_000, `output=${output.videoBitrateKbps}k`);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

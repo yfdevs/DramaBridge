@@ -10,6 +10,8 @@ export type VideoSizePolicy = {
   maxFileBytes: number;
   targetFileBytes: number;
   audioBitrateKbps?: number;
+  minimumVideoBitrateKbps?: number;
+  targetVideoBitrateKbps?: number;
   preset?: "ultrafast" | "superfast" | "veryfast" | "faster" | "fast" | "medium" | "slow";
   threadsPerJob?: number;
 };
@@ -60,6 +62,12 @@ export type VideoDimensions = {
   height: number;
 };
 
+export type VideoStreamMetadata = VideoDimensions & {
+  durationSeconds: number;
+  videoBitrateKbps: number;
+  bitrateSource: "stream" | "estimated";
+};
+
 export type EnsureVideoMinimumDimensionsRequest = {
   inputFile: string;
   outputFile: string;
@@ -83,6 +91,8 @@ const minimumVideoBitrateKbps = 100;
 const durationPattern = /Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/;
 const progressTimePattern = /time=\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/g;
 const videoDimensionsPattern = /Video:[^\r\n]*?\b(\d{2,5})x(\d{2,5})\b/u;
+const videoStreamPattern = /^\s*Stream[^\r\n]*Video:[^\r\n]*$/gimu;
+const streamBitratePattern = /\b(\d+(?:\.\d+)?)\s*kb\/s\b/iu;
 
 function assertPolicy(policy: VideoSizePolicy) {
   if (!Number.isFinite(policy.maxFileBytes) || policy.maxFileBytes <= 0) {
@@ -237,6 +247,49 @@ export async function readVideoDurationSeconds(inputFile: string, signal?: Abort
     throw new Error(`[video-transcode-failed] 视频时长无效: ${inputFile}`);
   }
   return durationSeconds;
+}
+
+export async function readVideoStreamMetadata(
+  inputFile: string,
+  signal?: AbortSignal,
+): Promise<VideoStreamMetadata> {
+  const [result, fileStat] = await Promise.all([
+    runFfmpeg(
+      ["-hide_banner", "-i", inputFile],
+      { signal, acceptExitCode: (code) => code === 1 },
+    ),
+    stat(inputFile),
+  ]);
+  const durationMatch = durationPattern.exec(result.stderr);
+  const dimensionsMatch = videoDimensionsPattern.exec(result.stderr);
+  const durationSeconds = durationMatch ? secondsFromDurationMatch(durationMatch) : 0;
+  const width = Number(dimensionsMatch?.[1]);
+  const height = Number(dimensionsMatch?.[2]);
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    throw new Error(`[video-transcode-failed] 无法读取视频时长: ${inputFile}`);
+  }
+  if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
+    throw new Error(`[video-transcode-failed] 无法读取视频分辨率: ${inputFile}`);
+  }
+  const videoStreamLine = [...result.stderr.matchAll(videoStreamPattern)][0]?.[0] ?? "";
+  const streamBitrate = Number(streamBitratePattern.exec(videoStreamLine)?.[1]);
+  if (Number.isFinite(streamBitrate) && streamBitrate > 0) {
+    return { durationSeconds, width, height, videoBitrateKbps: streamBitrate, bitrateSource: "stream" };
+  }
+  // Some MP4 encoders omit the per-stream bitrate. File size divided by
+  // duration is still a fast, conservative approximation; reserve 160 kbps
+  // for audio and container overhead so borderline files are re-encoded.
+  const estimatedVideoBitrateKbps = Math.max(
+    minimumVideoBitrateKbps,
+    Math.floor(fileStat.size * 8 / durationSeconds / 1000) - defaultAudioBitrateKbps - 32,
+  );
+  return {
+    durationSeconds,
+    width,
+    height,
+    videoBitrateKbps: estimatedVideoBitrateKbps,
+    bitrateSource: "estimated",
+  };
 }
 
 export async function readVideoDimensions(
@@ -510,9 +563,11 @@ async function cacheKeyFor(inputFile: string, policy: VideoSizePolicy) {
     maxFileBytes: policy.maxFileBytes,
     targetFileBytes: policy.targetFileBytes,
     audioBitrateKbps: policy.audioBitrateKbps ?? defaultAudioBitrateKbps,
+    minimumVideoBitrateKbps: policy.minimumVideoBitrateKbps ?? 0,
+    targetVideoBitrateKbps: policy.targetVideoBitrateKbps ?? 0,
     preset: policy.preset ?? "medium",
     threadsPerJob: policy.threadsPerJob ?? 2,
-    version: 2,
+    version: 3,
   });
   return {
     cacheKey: createHash("sha256").update(fingerprint).digest("hex"),
@@ -583,6 +638,7 @@ async function transcodeAttempt(options: {
   passLogFile: string;
   durationSeconds: number;
   targetFileBytes: number;
+  videoBitrateOverrideKbps?: number;
   policy: VideoSizePolicy;
   signal?: AbortSignal;
   onLog?: (message: string) => void;
@@ -590,7 +646,7 @@ async function transcodeAttempt(options: {
   const audioBitrateKbps = options.policy.audioBitrateKbps ?? defaultAudioBitrateKbps;
   const containerReserveKbps = 32;
   const targetTotalKbps = Math.floor(options.targetFileBytes * 8 / options.durationSeconds / 1000);
-  const videoBitrateKbps = Math.max(
+  const videoBitrateKbps = options.videoBitrateOverrideKbps ?? Math.max(
     minimumVideoBitrateKbps,
     targetTotalKbps - audioBitrateKbps - containerReserveKbps,
   );
@@ -602,11 +658,34 @@ async function transcodeAttempt(options: {
     "-threads", String(Math.max(1, options.policy.threadsPerJob ?? 2)),
     "-passlogfile", options.passLogFile,
   ];
+  if (options.videoBitrateOverrideKbps) {
+    commonVideoArgs.push(
+      "-minrate", `${videoBitrateKbps}k`,
+      "-maxrate", `${videoBitrateKbps}k`,
+      "-bufsize", `${videoBitrateKbps * 2}k`,
+      "-x264-params", "nal-hrd=cbr:force-cfr=1",
+    );
+  }
 
   options.onLog?.(
     `[video-transcode] target=${options.targetFileBytes} bytes duration=${options.durationSeconds.toFixed(2)}s ` +
       `videoBitrate=${videoBitrateKbps}k audioBitrate=${audioBitrateKbps}k`,
   );
+
+  if (options.videoBitrateOverrideKbps) {
+    await runFfmpeg([
+      "-y",
+      "-hide_banner",
+      "-i", options.inputFile,
+      ...commonVideoArgs,
+      "-map", "0:a:0?",
+      "-c:a", "aac",
+      "-b:a", `${audioBitrateKbps}k`,
+      "-movflags", "+faststart",
+      options.outputFile,
+    ], { signal: options.signal });
+    return;
+  }
 
   await runFfmpeg([
     "-y",
@@ -639,7 +718,21 @@ async function prepareVideoFile(request: VideoTranscodeRequest): Promise<Prepare
   if (!fileStat.isFile() || fileStat.size <= 0) {
     throw new Error(`[video-transcode-failed] 视频文件不存在或为空: ${request.inputFile}`);
   }
-  if (fileStat.size <= request.policy.maxFileBytes) {
+  const minimumRequiredBitrate = request.policy.minimumVideoBitrateKbps ?? 0;
+  const sourceMetadata = minimumRequiredBitrate > 0
+    ? await readVideoStreamMetadata(request.inputFile, request.signal)
+    : undefined;
+  const bitrateTooLow = Boolean(
+    sourceMetadata && sourceMetadata.videoBitrateKbps < minimumRequiredBitrate,
+  );
+  if (sourceMetadata) {
+    request.onLog?.(
+      `[video-bitrate-check] file=${request.inputFile} `
+        + `videoBitrate=${sourceMetadata.videoBitrateKbps}k `
+        + `minimum=${minimumRequiredBitrate}k source=${sourceMetadata.bitrateSource}`,
+    );
+  }
+  if (fileStat.size <= request.policy.maxFileBytes && !bitrateTooLow) {
     return {
       sourceFile: request.inputFile,
       file: request.inputFile,
@@ -689,11 +782,20 @@ async function prepareVideoFile(request: VideoTranscodeRequest): Promise<Prepare
   }
 
   await mkdir(cacheDir, { recursive: true });
-  const durationSeconds = await readVideoDurationSeconds(request.inputFile, request.signal);
-  const attemptTargets = [
-    request.policy.targetFileBytes,
-    Math.floor(request.policy.targetFileBytes * 0.94),
-  ];
+  const durationSeconds = sourceMetadata?.durationSeconds
+    ?? await readVideoDurationSeconds(request.inputFile, request.signal);
+  const targetBitrate = Math.max(
+    minimumRequiredBitrate,
+    request.policy.targetVideoBitrateKbps ?? minimumRequiredBitrate,
+  );
+  const bitrateAttempts = bitrateTooLow ? [targetBitrate, targetBitrate + 300] : [];
+  const attemptTargets = bitrateTooLow
+    ? bitrateAttempts.map((videoBitrate) => Math.ceil(
+        durationSeconds
+          * (videoBitrate + (request.policy.audioBitrateKbps ?? defaultAudioBitrateKbps) + 32)
+          * 1000 / 8,
+      ))
+    : [request.policy.targetFileBytes, Math.floor(request.policy.targetFileBytes * 0.94)];
 
   for (let attempt = 0; attempt < attemptTargets.length; attempt += 1) {
     const temporaryOutput = path.join(cacheDir, `video-attempt-${attempt + 1}.tmp.mp4`);
@@ -706,16 +808,18 @@ async function prepareVideoFile(request: VideoTranscodeRequest): Promise<Prepare
         passLogFile,
         durationSeconds,
         targetFileBytes: attemptTargets[attempt],
+        videoBitrateOverrideKbps: bitrateTooLow ? bitrateAttempts[attempt] : undefined,
         policy: request.policy,
         signal: request.signal,
         onLog: request.onLog,
       });
       const outputStat = await stat(temporaryOutput);
       if (outputStat.size > 0 && outputStat.size < request.policy.maxFileBytes) {
-        const outputDurationSeconds = await readVideoDurationSeconds(
-          temporaryOutput,
-          request.signal,
-        );
+        const outputMetadata = bitrateTooLow
+          ? await readVideoStreamMetadata(temporaryOutput, request.signal)
+          : undefined;
+        const outputDurationSeconds = outputMetadata?.durationSeconds
+          ?? await readVideoDurationSeconds(temporaryOutput, request.signal);
         const durationToleranceSeconds = Math.max(1, durationSeconds * 0.02);
         if (Math.abs(outputDurationSeconds - durationSeconds) > durationToleranceSeconds) {
           request.onLog?.(
@@ -723,6 +827,15 @@ async function prepareVideoFile(request: VideoTranscodeRequest): Promise<Prepare
               `differs from source ${durationSeconds.toFixed(2)}s`,
           );
           continue;
+        }
+        if (outputMetadata) {
+          if (outputMetadata.videoBitrateKbps < minimumRequiredBitrate) {
+            request.onLog?.(
+              `[video-transcode-retry] output bitrate ${outputMetadata.videoBitrateKbps}k `
+                + `is below ${minimumRequiredBitrate}k`,
+            );
+            continue;
+          }
         }
         await rm(outputFile, { force: true }).catch(() => undefined);
         await rename(temporaryOutput, outputFile);

@@ -73,6 +73,8 @@ export type WechatVideoConfig = {
   taskPrefetchPerAccount: string
   videoTranscodeConcurrency: string
   videoTranscodeThreadsPerJob: string
+  imageCompressionThresholdMegabytes: string
+  imageCompressionTargetMegabytes: string
   episodeVideoMaxFileMegabytes: string
   episodeVideoTargetFileMegabytes: string
   episodeUploadWaitTimeoutSeconds: string
@@ -113,6 +115,8 @@ const defaultWechatVideoConfig: WechatVideoConfig = {
   taskPrefetchPerAccount: '2',
   videoTranscodeConcurrency: '2',
   videoTranscodeThreadsPerJob: '2',
+  imageCompressionThresholdMegabytes: '10',
+  imageCompressionTargetMegabytes: '9',
   episodeVideoMaxFileMegabytes: '490',
   episodeVideoTargetFileMegabytes: '480',
   episodeUploadWaitTimeoutSeconds: '7200',
@@ -309,6 +313,8 @@ function normalizeConfig(
     taskPrefetchPerAccount: config.taskPrefetchPerAccount ?? defaultWechatVideoConfig.taskPrefetchPerAccount,
     videoTranscodeConcurrency: config.videoTranscodeConcurrency ?? defaultWechatVideoConfig.videoTranscodeConcurrency,
     videoTranscodeThreadsPerJob: config.videoTranscodeThreadsPerJob ?? defaultWechatVideoConfig.videoTranscodeThreadsPerJob,
+    imageCompressionThresholdMegabytes: config.imageCompressionThresholdMegabytes ?? defaultWechatVideoConfig.imageCompressionThresholdMegabytes,
+    imageCompressionTargetMegabytes: config.imageCompressionTargetMegabytes ?? defaultWechatVideoConfig.imageCompressionTargetMegabytes,
     episodeVideoMaxFileMegabytes:
       !config.episodeVideoMaxFileMegabytes || config.episodeVideoMaxFileMegabytes === '500'
         ? defaultWechatVideoConfig.episodeVideoMaxFileMegabytes
@@ -487,6 +493,17 @@ function assertWechatVideoConfigReady(config = readConfig()) {
     || targetVideoMegabytes >= maxVideoMegabytes
   ) {
     throw new Error('视频压缩目标体积必须大于 0 且小于单集视频上限。')
+  }
+  const imageThresholdMegabytes = Number(config.imageCompressionThresholdMegabytes)
+  const imageTargetMegabytes = Number(config.imageCompressionTargetMegabytes)
+  if (
+    !Number.isFinite(imageThresholdMegabytes)
+    || !Number.isFinite(imageTargetMegabytes)
+    || imageThresholdMegabytes <= 0
+    || imageTargetMegabytes <= 0
+    || imageTargetMegabytes >= imageThresholdMegabytes
+  ) {
+    throw new Error('图片压缩目标体积必须大于 0 且小于压缩触发体积。')
   }
 }
 
