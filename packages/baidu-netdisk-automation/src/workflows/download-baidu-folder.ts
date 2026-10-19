@@ -67,6 +67,7 @@ export type {
 export type RemoteVideoDirectoryCandidateScore = {
   validEpisodeSequence: boolean;
   materialDirectory: boolean;
+  subtitlePreference: number;
   preferredEpisodeDirectory: boolean;
   uniqueEpisodeCount: number;
   recognizedVideoCount: number;
@@ -283,6 +284,19 @@ export function isSupportedEpisodeVideoFileName(fileName: string) {
   return /\.(?:mp4|mov)$/i.test(fileName);
 }
 
+export function baiduVideoSubtitleDirectoryPreference(value: string) {
+  const pathSegments = String(value || "").split(/[\\/]+/).filter(Boolean);
+  // The first segment is the drama's wrapper directory, so do not let a title such as
+  // “无字天书” accidentally downgrade every video directory below it.
+  const segments = (pathSegments.length > 1 ? pathSegments.slice(1) : pathSegments).reverse();
+  for (const segment of segments) {
+    const compactName = segment.replace(/\s+/g, "");
+    if (/无字幕|无字(?:版)?|纯净版|clean(?:版|version)?/iu.test(compactName)) return -1;
+    if (/有字幕|带字幕|含字幕|字幕版|中字(?:版)?|有字(?:版)?|硬字幕|烧录字幕/iu.test(compactName)) return 1;
+  }
+  return 0;
+}
+
 export function isBaiduNetdiskIncompleteProgressDirectoryName(name: string) {
   return /(?:^|[^\d])\d{1,2}(?:\.\d+)?\s*[%％]/.test(String(name || "").trim());
 }
@@ -313,8 +327,12 @@ export function isBaiduNetdiskOwnershipProofDirectoryName(name: string) {
 export function isBaiduNetdiskScreenshotCandidateDirectory(
   entries: Array<{ name: string; isDirectory: boolean }>,
   depth: number,
+  relativeDirectoryPath = "",
 ) {
   if (depth < 1 || entries.some((entry) => entry.isDirectory)) return false;
+  if (String(relativeDirectoryPath || "")
+    .split(/[\\/]+/)
+    .some((segment) => /海报|封面|角色头像|人物形象|主形象|演员头像|poster|cover|avatar/iu.test(segment))) return false;
   const files = entries.map((entry) => entry.name);
   return files.filter((name) => /\.(?:png|jpe?g|bmp|webp)$/i.test(name)).length >= 2
     && !files.some((name) => /\.(?:mp4|mov)$/i.test(name));
@@ -338,6 +356,9 @@ export function compareRemoteVideoDirectoryCandidates(
 ) {
   if (left.materialDirectory !== right.materialDirectory) {
     return Number(left.materialDirectory) - Number(right.materialDirectory);
+  }
+  if (left.subtitlePreference !== right.subtitlePreference) {
+    return right.subtitlePreference - left.subtitlePreference;
   }
   if (left.uniqueEpisodeCount !== right.uniqueEpisodeCount) {
     return right.uniqueEpisodeCount - left.uniqueEpisodeCount;
@@ -1923,6 +1944,7 @@ async function saveShareToOwnNetdisk(
   const alreadySaved = !createdTarget && transferredCount === 0;
   const escapeRegExp = (value) => String(value).replace(/[\\\\^$.*+?()[\\]{}|]/g, "\\\\$&");
   const isSupportedEpisodeVideoFileName = ${isSupportedEpisodeVideoFileName.toString()};
+  const videoSubtitleDirectoryPreference = ${baiduVideoSubtitleDirectoryPreference.toString()};
   const matchLeadingEpisodeIndex = ${matchBaiduLeadingEpisodeIndex.toString()};
   const classifyOwnershipProofName = ${classifyBaiduNetdiskOwnershipProofName.toString()};
   const isOwnershipProofDirectoryName = ${isBaiduNetdiskOwnershipProofDirectoryName.toString()};
@@ -2014,6 +2036,7 @@ async function saveShareToOwnNetdisk(
   const rootIsAiProductionProof = /ai制作证明/i.test(String(finalFileName).replace(/s+/g, ""));
   const queue = [{
     path: normalizeDir(savedPath),
+    relativePath: "",
     name: finalFileName,
     fsId: itemFsId(ownRoot),
     depth: 0,
@@ -2050,6 +2073,7 @@ async function saveShareToOwnNetdisk(
         isDirectory: entry?.isdir === 1 || entry?.isdir === true,
       })),
       current.depth,
+      current.relativePath,
     );
     const currentOwnershipScope = current.ownershipScope || structuralOwnershipScope;
     if (structuralOwnershipScope && !current.ownershipScope) {
@@ -2101,6 +2125,7 @@ async function saveShareToOwnNetdisk(
           if (entersAiProductionProofScope) aiProductionProofRoots.set(normalizeDir(entryPath), itemFsId(entry));
           queue.push({
             path: normalizeDir(entryPath),
+            relativePath: joinPath(current.relativePath, name),
             name,
             fsId: itemFsId(entry),
             depth: current.depth + 1,
@@ -2212,6 +2237,7 @@ async function saveShareToOwnNetdisk(
       ignoredIdenticalAliases: aliasResolution.ignored,
       validEpisodeSequence,
       materialDirectory,
+      subtitlePreference: videoSubtitleDirectoryPreference(candidate.path),
       preferredEpisodeDirectory,
       uniqueEpisodeCount: uniqueIndexes.length,
       recognizedVideoCount: recognizedIndexes.length,
@@ -3471,7 +3497,15 @@ async function submitSavedDownload(
       });
     }
   }
-  const requiredOwnershipImages = Math.max(0, expectedOwnershipCounts?.minimumImages ?? 0);
+  const requiredJianyingImages = Math.max(
+    0,
+    expectedOwnershipCounts?.minimumJianyingImages ?? 0,
+  );
+  const requiredOwnershipImages = Math.max(
+    0,
+    expectedOwnershipCounts?.minimumImages ?? 0,
+    requiredJianyingImages,
+  );
   log(`网盘权属材料清单：图片=${remoteOwnership.files.length}/${requiredOwnershipImages}`);
   const namedJianyingProofs = remoteOwnership.files.filter((file) => file.proofKind === "jianying").length;
   const namedJuchuangProofs = remoteOwnership.files.filter((file) => file.proofKind === "juchuang").length;
@@ -3646,7 +3680,11 @@ async function submitSavedDownload(
     const localOwnershipImageCounts = await Promise.all(
       localOwnershipCandidates.map(countLocalOwnershipImages),
     );
-    if (remoteOwnership.files.length > 0 && Math.max(0, ...localOwnershipImageCounts) >= remoteOwnership.files.length) {
+    if (
+      requiredJianyingImages === 0
+      && remoteOwnership.files.length > 0
+      && Math.max(0, ...localOwnershipImageCounts) >= remoteOwnership.files.length
+    ) {
       log(`本地已有完整权属目录，跳过重复下载：${ownershipTaskName}`);
       markAssetRootSubmitted(ownershipRoot.path);
       continue;

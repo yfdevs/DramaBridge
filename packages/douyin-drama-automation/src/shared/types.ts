@@ -258,7 +258,10 @@ export type DouyinDramaRuntimeOptions = {
     resourceName: string;
     localEpisodeVideoRoot: string;
     episodeCount: number;
-    requiredOwnership?: { minimumImages?: number };
+    requiredOwnership?: {
+      minimumImages?: number;
+      minimumJianyingImages?: number;
+    };
     requiredPosterImages?: number;
     posterFallback?: { title?: string; summary: string };
     requiredAiProductionProofFiles?: number;

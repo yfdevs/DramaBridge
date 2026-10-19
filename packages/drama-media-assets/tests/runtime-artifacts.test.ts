@@ -7,11 +7,18 @@ import test from "node:test";
 import {
   cleanupStaleRuntimeArtifacts,
   createRuntimeArtifactLease,
+  materialUploadDirectoryPattern,
   runtimeArtifactLeaseFileName,
 } from "../src/runtime-artifacts.js";
 import { cleanupEpisodeUploadFiles, prepareEpisodeUploadFiles } from "../src/index.js";
 
 const hourMs = 60 * 60 * 1000;
+
+test("recognizes legacy and task-scoped material upload directories", () => {
+  assert.equal(materialUploadDirectoryPattern.test("material-upload"), true);
+  assert.equal(materialUploadDirectoryPattern.test("material-upload-task-67-1234-test"), true);
+  assert.equal(materialUploadDirectoryPattern.test("poster-upload"), false);
+});
 
 async function temporaryRoot() {
   return mkdtemp(path.join(tmpdir(), "drama-runtime-assets-"));
@@ -41,6 +48,46 @@ test("removes a stale legacy upload directory nested below an account", async ()
     assert.equal(result.deletedDirectoryCount, 1);
     assert.equal(result.reclaimedLogicalBytes, 128);
     await assert.rejects(stat(uploadDir), { code: "ENOENT" });
+  } finally {
+    await rm(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("removes a stale task-scoped material upload directory", async () => {
+  const rootPath = await temporaryRoot();
+  try {
+    const uploadDir = path.join(rootPath, "account-a", "material-upload-task-67-1234-test");
+    await mkdir(uploadDir, { recursive: true });
+    const imagePath = path.join(uploadDir, "commitment.jpg");
+    await writeFile(imagePath, Buffer.alloc(64));
+    await makeOld(imagePath);
+    await makeOld(uploadDir);
+
+    const result = await cleanupStaleRuntimeArtifacts({
+      rootPath,
+      maxDepth: 2,
+      minimumAgeMs: 3 * hourMs,
+    });
+
+    assert.equal(result.deletedDirectoryCount, 1);
+    await assert.rejects(stat(uploadDir), { code: "ENOENT" });
+  } finally {
+    await rm(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("keeps a task-scoped material directory leased by the current process", async () => {
+  const rootPath = await temporaryRoot();
+  try {
+    const uploadDir = path.join(rootPath, "material-upload-task-68-1234-test");
+    await mkdir(uploadDir);
+    await createRuntimeArtifactLease(uploadDir, "material-upload");
+
+    const result = await cleanupStaleRuntimeArtifacts({ rootPath, minimumAgeMs: 0 });
+
+    assert.equal(result.activeCount, 1);
+    assert.equal(result.deletedDirectoryCount, 0);
+    assert.equal((await stat(uploadDir)).isDirectory(), true);
   } finally {
     await rm(rootPath, { recursive: true, force: true });
   }

@@ -12,6 +12,7 @@ import {
   classifyOwnershipProjectProof,
   classifyOwnershipProjectProofName,
   findOwnershipProjectProofFiles,
+  hasRequiredOwnershipMaterials,
   selectOwnershipProjectProofFiles,
   standardizeOwnershipMaterialsToRoot,
   type ClassifiedOwnershipProjectProof,
@@ -116,6 +117,43 @@ test("classifies explicitly named parent directories without opening the image",
   assert.equal(
     await classifyOwnershipProjectProof("D:\\素材\\权属文件\\剧创\\工程1.png", "工程1.png"),
     "juchuang",
+  );
+});
+
+test("does not treat unrelated cached images as sufficient Jianying proofs", () => {
+  const materials = [
+    ...Array.from({ length: 8 }, (_, index) => ({
+      file: `D:\\素材\\角色头像\\头像${index + 1}.png`,
+      name: `头像${index + 1}.png`,
+      size: 100,
+    })),
+    ...Array.from({ length: 4 }, (_, index) => ({
+      file: `D:\\素材\\剧创工程图\\工程${index + 1}.png`,
+      name: `工程${index + 1}.png`,
+      size: 100,
+    })),
+  ];
+
+  assert.equal(
+    hasRequiredOwnershipMaterials(materials, {
+      minimumImages: 4,
+      minimumJianyingImages: 4,
+    }),
+    false,
+  );
+  assert.equal(
+    hasRequiredOwnershipMaterials([
+      ...materials,
+      ...Array.from({ length: 4 }, (_, index) => ({
+        file: `D:\\素材\\剪映工程图\\截图\\工程${index + 1}.jpg`,
+        name: `工程${index + 1}.jpg`,
+        size: 100,
+      })),
+    ], {
+      minimumImages: 4,
+      minimumJianyingImages: 4,
+    }),
+    true,
   );
 });
 

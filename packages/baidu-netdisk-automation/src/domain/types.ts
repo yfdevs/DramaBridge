@@ -51,6 +51,7 @@ export type BaiduNetdiskShareDownloadOptions = {
   inferEpisodeCount?: boolean;
   expectedOwnershipCounts?: {
     minimumImages?: number;
+    minimumJianyingImages?: number;
   };
   expectedOwnershipFiles?: number;
   expectedPosterImages?: number;

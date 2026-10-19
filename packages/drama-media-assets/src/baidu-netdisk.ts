@@ -2,11 +2,13 @@ import path from "node:path";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import {
   collectEpisodeDirectorySummaries,
+  classifyOwnershipProjectProofName,
   composeOwnershipMaterialsIntoTwo,
   episodeFileSummary,
   fileSetSignature,
   hasRequiredOwnershipMaterials,
   isOwnershipDirectoryName,
+  isExplicitNonOwnershipImageDirectoryPath,
   isOwnershipScreenshotCandidateDirectory,
   isCompleteEpisodeFileSet,
   listDirectLocalEpisodeFiles,
@@ -423,7 +425,8 @@ async function listCurrentRawOwnershipFiles(
     if (depth > 8) return;
     const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
     const currentOwnershipScope = inOwnershipDirectory
-      || isOwnershipScreenshotCandidateDirectory(entries);
+      || (!isExplicitNonOwnershipImageDirectoryPath(path.relative(playletDir(targetRoot, resourceName), directory))
+        && isOwnershipScreenshotCandidateDirectory(entries));
     for (const entry of entries) {
       const file = path.join(directory, entry.name);
       if (entry.isDirectory()) {
@@ -1143,6 +1146,9 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     root: options.localEpisodeVideoRoot,
     resourceName: options.resourceName,
   });
+  const existingJianyingOwnershipCount = existingOwnership.filter((material) => (
+    classifyOwnershipProjectProofName(`${material.file}/${material.name}`) === "jianying"
+  )).length;
   const existingRawOwnershipFiles = await listCurrentRawOwnershipFiles(
     [targetLocalPath],
     options.localEpisodeVideoRoot,
@@ -1217,6 +1223,10 @@ export async function ensureBaiduNetdiskEpisodeVideos(
       minimumImages: Math.max(
         0,
         (ownershipRequirements.minimumImages ?? 0) - existingOwnership.length,
+      ),
+      minimumJianyingImages: Math.max(
+        0,
+        (ownershipRequirements.minimumJianyingImages ?? 0) - existingJianyingOwnershipCount,
       ),
     },
     expectedOwnershipFiles: Math.max(

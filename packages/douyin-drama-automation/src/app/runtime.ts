@@ -100,7 +100,7 @@ async function ensureNetdiskResource(
     resourceName: douyinDramaResourceName(task),
     localEpisodeVideoRoot: douyinDramaLocalRoot(options),
     episodeCount: task.playlet.episodeCount,
-    requiredOwnership: { minimumImages: 4 },
+    requiredOwnership: { minimumImages: 4, minimumJianyingImages: 4 },
     requiredPosterImages: 1,
     posterFallback: {
       title: task.playlet.title,

@@ -8,6 +8,7 @@ import {
   classifyBaiduNetdiskOwnershipProofName,
   collapseIdenticalRemoteEpisodeAliases,
   compareRemoteVideoDirectoryCandidates,
+  baiduVideoSubtitleDirectoryPreference,
   inspectContiguousEpisodeIndexes,
   isBaiduAssetRootCovered,
   isAutomationTemporaryTransferPath,
@@ -214,6 +215,9 @@ test("discovers screenshot directories by structure even when names are arbitrar
     { name: "b.JPG", isDirectory: false },
   ];
   assert.equal(isBaiduNetdiskScreenshotCandidateDirectory(images, 1), true);
+  assert.equal(isBaiduNetdiskScreenshotCandidateDirectory(images, 2, "/海报封面/原始图片"), false);
+  assert.equal(isBaiduNetdiskScreenshotCandidateDirectory(images, 2, "/海报封面/AI角色头像"), false);
+  assert.equal(isBaiduNetdiskScreenshotCandidateDirectory(images, 1, "/剪映工程图"), true);
   assert.equal(isBaiduNetdiskScreenshotCandidateDirectory(images, 0), false);
   assert.equal(isBaiduNetdiskScreenshotCandidateDirectory([
     ...images, { name: "第1集.mp4", isDirectory: false },
@@ -246,6 +250,7 @@ test("browser-injected Baidu helpers run after serialization without module scop
   );
   assert.equal(isolate(classifyBaiduNetdiskOwnershipProofName)("剪映.png"), "jianying");
   assert.equal(isolate(isBaiduNetdiskOwnershipProofDirectoryName)("工程文件"), true);
+  assert.equal(isolate(baiduVideoSubtitleDirectoryPreference)("/剧名/有字幕"), 1);
   const isolatedDetector = isolate(isBaiduNetdiskScreenshotCandidateDirectory);
   assert.equal(isolatedDetector(images, 1), true);
   assert.equal(isolatedDetector([...images, { name: "第1集.mp4", isDirectory: false }], 1), false);
@@ -407,6 +412,7 @@ function videoDirectoryCandidate(
   return {
     validEpisodeSequence: true,
     materialDirectory: false,
+    subtitlePreference: 0,
     preferredEpisodeDirectory: false,
     uniqueEpisodeCount: 8,
     recognizedVideoCount: 8,
@@ -486,6 +492,33 @@ test("prefers a clean neutral episode directory over a numbered material directo
 
   candidates.sort(compareRemoteVideoDirectoryCandidates);
   assert.equal(candidates[0]?.path, "/九千罚单");
+});
+
+test("prefers an explicitly subtitled video directory over unsubtitled and neutral versions", () => {
+  assert.equal(baiduVideoSubtitleDirectoryPreference("/四达这一炉羊，我不敢卖便宜/有字幕"), 1);
+  assert.equal(baiduVideoSubtitleDirectoryPreference("/四达这一炉羊，我不敢卖便宜/无字幕"), -1);
+  assert.equal(baiduVideoSubtitleDirectoryPreference("/四达这一炉羊，我不敢卖便宜/字幕"), 0);
+
+  const candidates = [
+    videoDirectoryCandidate({
+      subtitlePreference: -1,
+      uniqueEpisodeCount: 60,
+      recognizedVideoCount: 60,
+      mp4Count: 60,
+      path: "/四达这一炉羊，我不敢卖便宜/无字幕",
+    }),
+    videoDirectoryCandidate({
+      subtitlePreference: 1,
+      uniqueEpisodeCount: 58,
+      recognizedVideoCount: 58,
+      mp4Count: 58,
+      path: "/四达这一炉羊，我不敢卖便宜/有字幕",
+    }),
+    videoDirectoryCandidate({ path: "/四达这一炉羊，我不敢卖便宜/其他版本" }),
+  ];
+
+  candidates.sort(compareRemoteVideoDirectoryCandidates);
+  assert.equal(candidates[0]?.path, "/四达这一炉羊，我不敢卖便宜/有字幕");
 });
 
 test("prefers the directory with the most episodes over a one-episode valid sequence", () => {

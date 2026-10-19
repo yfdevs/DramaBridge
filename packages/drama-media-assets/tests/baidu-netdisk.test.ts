@@ -128,6 +128,34 @@ test("unnamed leaf folders with multiple screenshots enter AI proof candidates",
   }
 });
 
+test("poster and role-image folders do not enter ownership candidates", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-non-ownership-scan-"));
+  const resourceName = "测试短剧";
+  const ownership = path.join(root, resourceName, "权属文件", "剪映工程图");
+  const poster = path.join(root, resourceName, "海报封面", "原始图片");
+  const avatars = path.join(root, resourceName, "海报封面", "AI角色头像");
+  try {
+    await Promise.all([
+      mkdir(ownership, { recursive: true }),
+      mkdir(poster, { recursive: true }),
+      mkdir(avatars, { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(path.join(ownership, "剪映1.png"), Buffer.from([1])),
+      writeFile(path.join(ownership, "剪映2.png"), Buffer.from([2])),
+      writeFile(path.join(poster, "封面-1.png"), Buffer.from([3])),
+      writeFile(path.join(poster, "封面-2.png"), Buffer.from([4])),
+      writeFile(path.join(avatars, "角色-1.png"), Buffer.from([5])),
+      writeFile(path.join(avatars, "角色-2.png"), Buffer.from([6])),
+    ]);
+
+    const materials = await listLocalOwnershipMaterials({ root, resourceName });
+    assert.deepEqual(materials.map((item) => item.name), ["剪映1.png", "剪映2.png"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("resource readiness returns when only unrequested remote ownership is incomplete", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-ready-"));
   const resourceName = "鑫沐痴心";
@@ -155,6 +183,46 @@ test("resource readiness returns when only unrequested remote ownership is incom
 
     assert.equal(result.completed, true);
     assert.equal(result.localPath, path.join(root, resourceName));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("requests missing Jianying proofs even when unrelated cached ownership images are plentiful", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-jianying-refresh-"));
+  const resourceName = "亡妻归来，替身入局";
+  const cachedOwnership = path.join(root, resourceName, "权属文件", "剧创工程图");
+  let requestedJianyingImages = 0;
+  try {
+    await mkdir(cachedOwnership, { recursive: true });
+    await Promise.all(Array.from({ length: 12 }, (_, index) => (
+      writeFile(path.join(cachedOwnership, `剧创${index + 1}.png`), Buffer.from([index + 1]))
+    )));
+
+    await assert.rejects(
+      ensureBaiduNetdiskEpisodeVideos({
+        shareText: "https://pan.baidu.com/s/test?pwd=test",
+        resourceName,
+        localEpisodeVideoRoot: root,
+        episodeCount: 0,
+        downloadEpisodeVideos: false,
+        requiredOwnership: { minimumImages: 4, minimumJianyingImages: 4 },
+        timeoutMs: 10,
+        pollIntervalMs: 1,
+        stableCompletePolls: 1,
+        downloadShare: async (request) => {
+          requestedJianyingImages = request.expectedOwnershipCounts?.minimumJianyingImages ?? 0;
+          return {
+            share: { link: "https://pan.baidu.com/s/test", pwd: "test", name: resourceName },
+            localPath: path.join(root, "empty-download", resourceName),
+            completed: false,
+            skippedExisting: false,
+          };
+        },
+      }),
+      /等待百度网盘资源下载完成超时/u,
+    );
+    assert.equal(requestedJianyingImages, 4);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

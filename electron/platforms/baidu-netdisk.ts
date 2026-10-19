@@ -855,6 +855,7 @@ async function importBaiduNetdiskDownloadRuntimePackage() {
       inferEpisodeCount?: boolean;
       expectedOwnershipCounts?: {
         minimumImages?: number;
+        minimumJianyingImages?: number;
       };
       expectedOwnershipFiles?: number;
       expectedPosterImages?: number;

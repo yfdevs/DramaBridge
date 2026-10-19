@@ -6,17 +6,18 @@ import {
   readFile,
   readdir,
   rename,
-  rm,
   stat,
   writeFile,
 } from "node:fs/promises";
+import { removePathWithRetry } from "./filesystem-retry.js";
 
 export const episodeUploadDirectoryPattern = /^episode-upload-\d+$/;
+export const materialUploadDirectoryPattern = /^material-upload(?:-task-.*)?$/;
 export const runtimeArtifactLeaseFileName = ".drama-artifact-lease.json";
 
 type RuntimeArtifactLease = {
   version: 1;
-  kind: "episode-upload";
+  kind: "episode-upload" | "material-upload";
   pid: number;
   hostname: string;
   createdAt: string;
@@ -92,7 +93,7 @@ async function readLease(directoryPath: string) {
     const lease = JSON.parse(raw) as Partial<RuntimeArtifactLease>;
     if (
       lease.version !== 1 ||
-      lease.kind !== "episode-upload" ||
+      (lease.kind !== "episode-upload" && lease.kind !== "material-upload") ||
       typeof lease.pid !== "number" ||
       typeof lease.hostname !== "string" ||
       typeof lease.createdAt !== "string"
@@ -148,7 +149,10 @@ async function findEpisodeUploadDirectories(rootPath: string, maxDepth: number) 
       if (entry.name === ".artifact-trash") continue;
 
       const entryPath = path.join(current.directoryPath, entry.name);
-      if (episodeUploadDirectoryPattern.test(entry.name)) {
+      if (
+        episodeUploadDirectoryPattern.test(entry.name)
+        || materialUploadDirectoryPattern.test(entry.name)
+      ) {
         candidates.push(entryPath);
         continue;
       }
@@ -162,7 +166,11 @@ async function findEpisodeUploadDirectories(rootPath: string, maxDepth: number) 
 }
 
 async function removeQuarantinedDirectory(directoryPath: string) {
-  await rm(directoryPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+  await removePathWithRetry(
+    directoryPath,
+    { recursive: true, force: true, maxRetries: 3, retryDelay: 200 },
+    { maximumAttempts: 7, initialDelayMs: 200 },
+  );
 }
 
 async function cleanupQuarantine(rootPath: string, result: RuntimeArtifactCleanupResult) {
@@ -182,10 +190,13 @@ async function cleanupQuarantine(rootPath: string, result: RuntimeArtifactCleanu
   }
 }
 
-export async function createRuntimeArtifactLease(directoryPath: string) {
+export async function createRuntimeArtifactLease(
+  directoryPath: string,
+  kind: RuntimeArtifactLease["kind"] = "episode-upload",
+) {
   const lease: RuntimeArtifactLease = {
     version: 1,
-    kind: "episode-upload",
+    kind,
     pid: process.pid,
     hostname: hostname(),
     createdAt: new Date().toISOString(),

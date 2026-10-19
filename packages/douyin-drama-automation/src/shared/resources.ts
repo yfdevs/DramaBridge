@@ -1,9 +1,11 @@
-import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import sharp from "sharp";
 import {
   classifyOwnershipProjectProof,
   classifyOwnershipProjectProofName,
+  createRuntimeArtifactLease,
   listLocalOwnershipMaterials,
   listLocalPosterImages,
   prepareStretchedImageVariant,
@@ -153,14 +155,10 @@ async function prepareMaterialReferences(
   category: string,
   task: ClaimedDouyinDramaTask,
   options: DouyinDramaRuntimeOptions,
+  materialUploadRoot: string,
   allowedExtensions?: ReadonlySet<string>,
 ) {
-  const outputDir = path.join(
-    options.assetDownloadDir ?? path.resolve(process.cwd(), ".drama-runs/douyin-drama/assets"),
-    "material-upload",
-    category,
-  );
-  await rm(outputDir, { recursive: true, force: true });
+  const outputDir = path.join(materialUploadRoot, category);
   await mkdir(outputDir, { recursive: true });
 
   return Promise.all(references.map(async (reference, index) => {
@@ -178,7 +176,9 @@ async function prepareMaterialReferences(
           `DOUYIN_DRAMA_MATERIAL_FORMAT_INVALID: ${category}仅支持${[...allowedExtensions].join("/")}，实际=${extension || "无扩展名"}`,
         );
       }
-      return candidate;
+      const target = path.join(outputDir, `${category}-${index + 1}${extension}`);
+      await copyFile(candidate, target);
+      return target;
     }
 
     const url = new URL(reference);
@@ -300,6 +300,12 @@ export async function prepareDouyinDramaResources(
 ) {
   const resourceName = douyinDramaResourceName(task);
   const localEpisodeVideoRoot = douyinDramaLocalRoot(options);
+  const materialUploadRoot = path.join(
+    options.assetDownloadDir ?? path.resolve(process.cwd(), ".drama-runs/douyin-drama/assets"),
+    `material-upload-task-${task.accountTaskId}-${process.pid}-${randomUUID()}`,
+  );
+  await mkdir(materialUploadRoot, { recursive: true });
+  await createRuntimeArtifactLease(materialUploadRoot, "material-upload");
   await validateLocalEpisodeVideos({
     localEpisodeVideoRoot,
     resourceName,
@@ -350,15 +356,17 @@ export async function prepareDouyinDramaResources(
       "cost-configuration",
       task,
       options,
+      materialUploadRoot,
       douyinDocumentMaterialExtensions,
     ),
-    prepareMaterialReferences(task.playlet.payCommitmentFiles, "pay-commitment", task, options),
-    prepareMaterialReferences(task.playlet.ownershipProofFiles, "ownership-proof", task, options),
+    prepareMaterialReferences(task.playlet.payCommitmentFiles, "pay-commitment", task, options, materialUploadRoot),
+    prepareMaterialReferences(task.playlet.ownershipProofFiles, "ownership-proof", task, options, materialUploadRoot),
     prepareMaterialReferences(
       task.playlet.nonInfringementCommitmentFiles,
       "non-infringement-commitment",
       task,
       options,
+      materialUploadRoot,
       douyinDocumentMaterialExtensions,
     ),
     prepareMaterialReferences(
@@ -366,6 +374,7 @@ export async function prepareDouyinDramaResources(
       "project-screenshots",
       task,
       options,
+      materialUploadRoot,
       douyinImageMaterialExtensions,
     ),
   ]);
@@ -385,11 +394,7 @@ export async function prepareDouyinDramaResources(
     includeAllMatches: true,
   });
   const coverSources = selectDouyinCoverSources(posters);
-  const outputDir = path.join(
-    options.assetDownloadDir ?? path.resolve(process.cwd(), ".drama-runs/douyin-drama/assets"),
-    "poster-upload",
-  );
-  await rm(outputDir, { recursive: true, force: true });
+  const outputDir = path.join(materialUploadRoot, "poster-upload");
   const onResizeLog = (message: string) => log(options, `[douyin-drama] ${message}`, undefined, "resources");
   const [hongguoCover, douyinCover] = await Promise.all([
     prepareStretchedImageVariant({
@@ -413,11 +418,7 @@ export async function prepareDouyinDramaResources(
   ]);
   task.playlet.localHongguoCoverFile = hongguoCover.file;
   task.playlet.localDouyinCoverFile = douyinCover.file;
-  const rolePhotoOutputDir = path.join(
-    options.assetDownloadDir ?? path.resolve(process.cwd(), ".drama-runs/douyin-drama/assets"),
-    "role-photo-upload",
-  );
-  await rm(rolePhotoOutputDir, { recursive: true, force: true });
+  const rolePhotoOutputDir = path.join(materialUploadRoot, "role-photo-upload");
   for (const [index, role] of task.playlet.roles.entries()) {
     if (!role.photoFile) {
       throw new Error(`DOUYIN_DRAMA_ROLE_PHOTO_REQUIRED: 网盘中找不到角色图片：${role.name}`);
@@ -427,6 +428,7 @@ export async function prepareDouyinDramaResources(
       `role-photo-${index + 1}`,
       task,
       options,
+      materialUploadRoot,
     );
     const preparedRolePhoto = await prepareDouyinRolePhoto(
       sourceRolePhoto,

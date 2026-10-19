@@ -5,6 +5,7 @@ import type { DramaAiClient } from "@drama/ai";
 import sharp from "sharp";
 
 import { classifyOwnershipProjectProofScreenshotWithAi } from "./ownership-project-proof-ai.js";
+import { removePathWithRetry, retryFileSystemOperation } from "./filesystem-retry.js";
 import { readVideoDurationSeconds } from "./video-transcode.js";
 
 export type LocalEpisodeVideo = {
@@ -33,7 +34,11 @@ export type LocalOwnershipMaterialFile = {
   size: number;
 };
 
-export type OwnershipMaterialRequirements = { minimumImages?: number };
+export type OwnershipMaterialRequirements = {
+  minimumImages?: number;
+  /** Images whose file path or source directory explicitly identifies Jianying/CapCut. */
+  minimumJianyingImages?: number;
+};
 
 export type LocalOwnershipMaterialSet = LocalOwnershipMaterialFile[];
 
@@ -74,6 +79,12 @@ export type PreparedEpisodeUploadFiles = {
   files: string[];
 };
 
+export {
+  isTransientFileSystemError,
+  removePathWithRetry,
+  retryFileSystemOperation,
+  type FileSystemRetryOptions,
+} from "./filesystem-retry.js";
 export {
   adjustVideoPlaybackSpeed,
   ensureVideoMinimumDimensions,
@@ -136,6 +147,7 @@ export {
   cleanupStaleRuntimeArtifacts,
   createRuntimeArtifactLease,
   episodeUploadDirectoryPattern,
+  materialUploadDirectoryPattern,
   runtimeArtifactLeaseFileName,
   type RuntimeArtifactCleanupFailure,
   type RuntimeArtifactCleanupOptions,
@@ -211,6 +223,12 @@ export function isOwnershipScreenshotCandidateDirectory(
   const files = entries.filter((entry) => entry.isFile());
   return files.filter((entry) => ownershipImageExtensions.has(path.extname(entry.name).toLowerCase())).length >= 2
     && !files.some((entry) => episodeVideoExtensions.has(path.extname(entry.name).toLowerCase()));
+}
+
+export function isExplicitNonOwnershipImageDirectoryPath(value: string) {
+  return String(value || "")
+    .split(/[\\/]+/)
+    .some((segment) => /海报|封面|角色头像|人物形象|主形象|演员头像|poster|cover|avatar/iu.test(segment));
 }
 
 export function playletDir(root: string, resourceName: string) {
@@ -508,11 +526,15 @@ export async function listLocalOwnershipMaterials(options: {
   const seenFiles = new Set<string>();
 
   for (const dir of await recursiveDirs(resourceDir)) {
-    const directoryNames = [path.basename(resourceDir), ...path.relative(resourceDir, dir).split(path.sep)]
+    const relativeDirectoryPath = path.relative(resourceDir, dir);
+    const directoryNames = [path.basename(resourceDir), ...relativeDirectoryPath.split(path.sep)]
       .map((name) => name.replace(/\s+/g, ""));
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-    if (!directoryNames.some(isOwnershipDirectoryName)
-      && !isOwnershipScreenshotCandidateDirectory(entries)) continue;
+    const explicitOwnershipScope = directoryNames.some(isOwnershipDirectoryName);
+    if (!explicitOwnershipScope && (
+      isExplicitNonOwnershipImageDirectoryPath(relativeDirectoryPath)
+      || !isOwnershipScreenshotCandidateDirectory(entries)
+    )) continue;
     for (const entry of entries) {
       if (!entry.isFile() || !ownershipImageExtensions.has(path.extname(entry.name).toLowerCase())) continue;
       if (/-权属工程文件合成[12]\.jpg$/i.test(entry.name)) continue;
@@ -977,7 +999,12 @@ export function hasRequiredOwnershipMaterials(
   materials: LocalOwnershipMaterialSet,
   requirements: OwnershipMaterialRequirements = {},
 ) {
-  return materials.length >= Math.max(0, requirements.minimumImages ?? 0);
+  if (materials.length < Math.max(0, requirements.minimumImages ?? 0)) return false;
+  const requiredJianyingImages = Math.max(0, requirements.minimumJianyingImages ?? 0);
+  if (requiredJianyingImages === 0) return true;
+  return materials.filter((material) => (
+    classifyOwnershipProjectProofName(`${material.file}/${material.name}`) === "jianying"
+  )).length >= requiredJianyingImages;
 }
 
 export function selectRequiredOwnershipMaterials(
@@ -1272,12 +1299,12 @@ function localEpisodeSourceDir(files: LocalEpisodeFile[]) {
 }
 
 async function moveOrCopyFile(sourceFile: string, targetFile: string) {
-  await rm(targetFile, { force: true });
+  await removePathWithRetry(targetFile, { force: true });
   try {
-    await rename(sourceFile, targetFile);
+    await retryFileSystemOperation(() => rename(sourceFile, targetFile));
     return "move" as const;
   } catch {
-    await copyFile(sourceFile, targetFile);
+    await retryFileSystemOperation(() => copyFile(sourceFile, targetFile));
     return "copy" as const;
   }
 }
