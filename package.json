@@ -12,7 +12,6 @@
     "lint": "vp lint",
     "preview": "vp preview",
     "playwright:install-browsers": "node scripts/install-playwright-browsers.mjs",
-    "release": "node scripts/create-release.mjs",
     "release:win": "node scripts/release-win.mjs",
     "postinstall": "node scripts/rebuild-electron-native.mjs",
     "prepare": "vp config",

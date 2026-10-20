@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="腾讯视频">
-  <defs>
-    <linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#20d46b"/><stop offset="1" stop-color="#12b9d6"/></linearGradient>
-    <linearGradient id="b" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#19baf2"/><stop offset="1" stop-color="#4677ff"/></linearGradient>
-  </defs>
-  <path fill="url(#a)" d="M11 8c-5 3-7 9-7 16v16c0 7 2 13 7 16 5 3 11 2 17-2l25-15c5-3 7-8 7-12s-2-9-7-12L28 2C22-2 16-1 11 8Z"/>
-  <path fill="url(#b)" d="M18 12c-4 2-6 6-6 12v16c0 6 2 10 6 12 4 2 8 1 13-2l20-12c4-2 5-5 5-8s-1-6-5-8L31 10c-5-3-9-4-13 2Z"/>
-  <path fill="#fff" d="m27 20 19 12-19 12V20Z"/>
-</svg>
