@@ -163,7 +163,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "meituan-drama",
-    title: "美团短剧",
+    title: "美团",
     routePrefix: "meituan-drama",
     serviceRoute: "meituan-drama/service",
     configRoute: "meituan-drama/config",
@@ -171,7 +171,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "taobao-drama",
-    title: "淘宝短剧",
+    title: "淘宝",
     routePrefix: "taobao-drama",
     serviceRoute: "taobao-drama/service",
     configRoute: "taobao-drama/config",
@@ -179,7 +179,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "kuaishou-drama",
-    title: "快手短剧",
+    title: "快手",
     routePrefix: "kuaishou-drama",
     serviceRoute: "kuaishou-drama/service",
     configRoute: "kuaishou-drama/config",
@@ -187,7 +187,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "qq-drama",
-    title: "QQ短剧",
+    title: "QQ",
     routePrefix: "qq-drama",
     serviceRoute: "qq-drama/service",
     configRoute: "qq-drama/config",
@@ -203,7 +203,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "iqiyi-drama",
-    title: "爱奇艺短剧",
+    title: "爱奇艺",
     routePrefix: "iqiyi-drama",
     serviceRoute: "iqiyi-drama/service",
     configRoute: "iqiyi-drama/config",
@@ -211,7 +211,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "baidu-drama",
-    title: "百度短剧",
+    title: "百度",
     routePrefix: "baidu-drama",
     serviceRoute: "baidu-drama/service",
     configRoute: "baidu-drama/config",
@@ -219,7 +219,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "douyin-drama",
-    title: "抖音短剧",
+    title: "抖音",
     routePrefix: "douyin-drama",
     serviceRoute: "douyin-drama/service",
     configRoute: "douyin-drama/config",
@@ -227,7 +227,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "tiktok-drama",
-    title: "TikTok短剧",
+    title: "TikTok",
     routePrefix: "tiktok-drama",
     serviceRoute: "tiktok-drama/service",
     configRoute: "tiktok-drama/config",
@@ -235,7 +235,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "pinduoduo-drama",
-    title: "拼多多短剧",
+    title: "拼多多",
     routePrefix: "pinduoduo-drama",
     serviceRoute: "pinduoduo-drama/service",
     configRoute: "pinduoduo-drama/config",
@@ -285,7 +285,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "美团短剧",
+    title: "美团",
     items: [
       {
         title: "实例",
@@ -305,7 +305,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "淘宝短剧",
+    title: "淘宝",
     items: [
       {
         title: "实例",
@@ -325,7 +325,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "快手短剧",
+    title: "快手",
     items: [
       {
         title: "实例",
@@ -345,7 +345,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "QQ短剧",
+    title: "QQ",
     items: [
       {
         title: "实例",
@@ -385,7 +385,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "爱奇艺短剧",
+    title: "爱奇艺",
     items: [
       {
         title: "实例",
@@ -405,7 +405,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "百度短剧",
+    title: "百度",
     items: [
       {
         title: "实例",
@@ -425,7 +425,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "抖音短剧",
+    title: "抖音",
     items: [
       {
         title: "实例",
@@ -445,7 +445,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "TikTok短剧",
+    title: "TikTok",
     items: [
       {
         title: "实例",
@@ -465,7 +465,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "拼多多短剧",
+    title: "拼多多",
     items: [
       {
         title: "实例",
