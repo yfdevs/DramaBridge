@@ -4,7 +4,7 @@ import {
   formatDateKey,
   type AutomationLogEntry,
   type AutomationLogger,
-} from '@drama/automation-logging';
+} from '@dramabridge/automation-logging';
 import { z } from 'zod';
 
 const configSchema = z.object({

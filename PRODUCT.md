@@ -10,7 +10,7 @@ Operators who publish and manage short-drama content across desktop automation w
 
 ## Product Purpose
 
-AutoDrama is a multi-platform desktop automation app for drama publishing workflows. The product should make platform automation feel controlled, observable, and modular, with each platform isolated in its own runtime, IPC, service, and page structure.
+DramaBridge is a multi-platform desktop automation app for drama publishing workflows. The product should make platform automation feel controlled, observable, and modular, with each platform isolated in its own runtime, IPC, service, and page structure.
 
 ## Brand Personality
 

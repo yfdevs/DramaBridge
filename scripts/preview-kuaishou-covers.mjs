@@ -17,7 +17,7 @@ function errorMessage(error) {
 
 function configuredUserDataDir() {
   const appDataDir = app.getPath("appData");
-  const candidates = ["drama-post-auto", "AutoDrama"]
+  const candidates = ["dramabridge", "DramaBridge"]
     .map((name) => path.join(appDataDir, name));
   return candidates.find((candidate) =>
     existsSync(path.join(candidate, "global-app-config.json"))) ?? candidates[0];
@@ -25,7 +25,7 @@ function configuredUserDataDir() {
 
 function preparePreviewUserDataDir() {
   const configuredDir = configuredUserDataDir();
-  const previewDir = path.join(app.getPath("appData"), "drama-post-auto-ai-preview");
+  const previewDir = path.join(app.getPath("appData"), "dramabridge-ai-preview");
   const sourceConfig = path.join(configuredDir, "global-app-config.json");
   if (!existsSync(sourceConfig)) {
     throw new Error(`GLOBAL_AI_CONFIG_FILE_NOT_FOUND: ${sourceConfig}`);
@@ -68,9 +68,9 @@ export async function previewKuaishouCovers(inputFile, requestedOutputDir) {
 
   try {
     const [{ createOpenAiCompatibleClient }, automationModule, mediaAssetsModule] = await Promise.all([
-      import("@drama/ai"),
-      import("@drama/kuaishou-drama-automation"),
-      import("@drama/drama-media-assets"),
+      import("@dramabridge/ai"),
+      import("@dramabridge/kuaishou-drama-automation"),
+      import("@dramabridge/media-assets"),
     ]);
     log(`读取项目全局 AI 配置：userData=${app.getPath("userData")}`);
     const globalConfigModule = await tsImport(
@@ -136,7 +136,7 @@ export async function previewKuaishouCovers(inputFile, requestedOutputDir) {
   }
 }
 
-app.setName("drama-post-auto-ai-preview");
+app.setName("dramabridge-ai-preview");
 app.setPath("userData", preparePreviewUserDataDir());
 
 async function runPreviewFromArguments() {

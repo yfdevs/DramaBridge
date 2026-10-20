@@ -470,7 +470,7 @@ function openPathOrParent(targetPath: string) {
 }
 
 async function importQqDramaRuntimePackage() {
-  return import("@drama/qq-drama-automation") as Promise<{
+  return import("@dramabridge/qq-drama-automation") as Promise<{
     fetchQqDramaAccounts: (
       apiBaseUrl: string,
       fetcher?: typeof fetch,

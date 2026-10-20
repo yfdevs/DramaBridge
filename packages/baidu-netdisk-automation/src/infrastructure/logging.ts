@@ -3,7 +3,7 @@ import {
   type AutomationLogFields,
   type AutomationLogger,
   type CreateAutomationLoggerOptions,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 
 import type { BaiduNetdiskRemoteVideoListing } from "../domain/types.js";
 import { formatByteSize } from "./utils.js";

@@ -2,7 +2,7 @@ import type { Locator, Page } from "playwright";
 import {
   cleanupEpisodeUploadFiles,
   prepareEpisodeUploadFiles,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { resolveRunDataPath } from "../../shared/config.js";
 import { createLogger } from "../../shared/logger.js";
 import { getWechatMiniProgramRuntimeSettings } from "../../shared/runtime-settings.js";

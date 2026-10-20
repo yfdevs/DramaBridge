@@ -1,4 +1,4 @@
-# @drama/iqiyi-drama-automation
+# @dramabridge/iqiyi-drama-automation
 
 爱奇艺创作者平台自动化运行时，按任务类型分别进入：
 

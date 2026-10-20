@@ -40,55 +40,55 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@18.2.0)
-      '@drama/ai':
+      '@dramabridge/ai':
         specifier: workspace:*
-        version: link:packages/drama-ai
-      '@drama/automation-logging':
+        version: link:packages/ai
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:packages/automation-logging
-      '@drama/baidu-drama-automation':
+      '@dramabridge/baidu-drama-automation':
         specifier: workspace:*
         version: link:packages/baidu-drama-automation
-      '@drama/baidu-netdisk-automation':
+      '@dramabridge/baidu-netdisk-automation':
         specifier: workspace:*
         version: link:packages/baidu-netdisk-automation
-      '@drama/douyin-drama-automation':
+      '@dramabridge/douyin-drama-automation':
         specifier: workspace:*
         version: link:packages/douyin-drama-automation
-      '@drama/drama-media-assets':
-        specifier: workspace:*
-        version: link:packages/drama-media-assets
-      '@drama/iqiyi-drama-automation':
+      '@dramabridge/iqiyi-drama-automation':
         specifier: workspace:*
         version: link:packages/iqiyi-drama-automation
-      '@drama/jianying-automation':
+      '@dramabridge/jianying-automation':
         specifier: workspace:*
         version: link:packages/jianying-automation
-      '@drama/kuaishou-drama-automation':
+      '@dramabridge/kuaishou-drama-automation':
         specifier: workspace:*
         version: link:packages/kuaishou-drama-automation
-      '@drama/meituan-drama-automation':
+      '@dramabridge/media-assets':
+        specifier: workspace:*
+        version: link:packages/media-assets
+      '@dramabridge/meituan-drama-automation':
         specifier: workspace:*
         version: link:packages/meituan-drama-automation
-      '@drama/pinduoduo-drama-automation':
+      '@dramabridge/pinduoduo-drama-automation':
         specifier: workspace:*
         version: link:packages/pinduoduo-drama-automation
-      '@drama/qq-drama-automation':
+      '@dramabridge/qq-drama-automation':
         specifier: workspace:*
         version: link:packages/qq-drama-automation
-      '@drama/taobao-drama-automation':
+      '@dramabridge/taobao-drama-automation':
         specifier: workspace:*
         version: link:packages/taobao-drama-automation
-      '@drama/tencent-huolong-drama-automation':
+      '@dramabridge/tencent-huolong-drama-automation':
         specifier: workspace:*
         version: link:packages/tencent-huolong-drama-automation
-      '@drama/tiktok-drama-automation':
+      '@dramabridge/tiktok-drama-automation':
         specifier: workspace:*
         version: link:packages/tiktok-drama-automation
-      '@drama/wechat-drama-automation':
+      '@dramabridge/wechat-drama-automation':
         specifier: workspace:*
         version: link:packages/wechat-drama-automation
-      '@drama/wechat-miniprogram-drama-automation':
+      '@dramabridge/wechat-miniprogram-drama-automation':
         specifier: workspace:*
         version: link:packages/wechat-miniprogram-drama-automation
       '@fontsource-variable/geist':
@@ -309,6 +309,28 @@ importers:
         specifier: 'catalog:'
         version: 0.2.6(@types/node@26.4.1)(@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@6.0.3))(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@6.0.3)
 
+  packages/ai:
+    dependencies:
+      openai:
+        specifier: 6.49.0
+        version: 6.49.0(ws@8.21.3)(zod@3.25.76)
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: latest
+        version: 26.6.5
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.13
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@6.0.3)'
+
   packages/automation-logging:
     dependencies:
       winston:
@@ -346,15 +368,15 @@ importers:
 
   packages/baidu-drama-automation:
     dependencies:
-      '@drama/ai':
+      '@dramabridge/ai':
         specifier: workspace:*
-        version: link:../drama-ai
-      '@drama/automation-logging':
+        version: link:../ai
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       playwright:
         specifier: 1.61.1
         version: 1.61.1
@@ -377,7 +399,7 @@ importers:
 
   packages/baidu-netdisk-automation:
     dependencies:
-      '@drama/automation-logging':
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
       effect:
@@ -405,12 +427,12 @@ importers:
 
   packages/douyin-drama-automation:
     dependencies:
-      '@drama/automation-logging':
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       '@napi-rs/canvas':
         specifier: 0.1.100
         version: 0.1.100
@@ -446,62 +468,6 @@ importers:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
         version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@6.0.3)'
 
-  packages/drama-ai:
-    dependencies:
-      openai:
-        specifier: 6.49.0
-        version: 6.49.0(ws@8.21.3)(zod@3.25.76)
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: latest
-        version: 26.6.5
-      tsx:
-        specifier: ^4.23.12
-        version: 4.23.13
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vite:
-        specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@6.0.3)'
-
-  packages/drama-media-assets:
-    dependencies:
-      '@drama/ai':
-        specifier: workspace:*
-        version: link:../drama-ai
-      ffmpeg-static:
-        specifier: ^5.3.0
-        version: 5.3.0(patch_hash=7141cab2ccdd4258d888261d08b6b12f180ddc962a8ba8bf7fbc943f650ca1bc)
-      ffprobe-static:
-        specifier: 3.1.0
-        version: 3.1.0
-      p-queue:
-        specifier: ^9.3.3
-        version: 9.3.3
-      sharp:
-        specifier: ^0.35.3
-        version: 0.35.4(@types/node@26.6.5)
-    devDependencies:
-      '@types/ffprobe-static':
-        specifier: 2.0.3
-        version: 2.0.3
-      '@types/node':
-        specifier: latest
-        version: 26.6.5
-      tsx:
-        specifier: ^4.23.12
-        version: 4.23.13
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vite:
-        specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@6.0.3)'
-
   packages/feishu-notifier:
     devDependencies:
       '@types/node':
@@ -519,15 +485,15 @@ importers:
 
   packages/iqiyi-drama-automation:
     dependencies:
-      '@drama/ai':
+      '@dramabridge/ai':
         specifier: workspace:*
-        version: link:../drama-ai
-      '@drama/automation-logging':
+        version: link:../ai
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       playwright:
         specifier: 1.61.1
         version: 1.61.1
@@ -572,15 +538,15 @@ importers:
 
   packages/kuaishou-drama-automation:
     dependencies:
-      '@drama/ai':
+      '@dramabridge/ai':
         specifier: workspace:*
-        version: link:../drama-ai
-      '@drama/automation-logging':
+        version: link:../ai
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       playwright:
         specifier: 1.61.1
         version: 1.61.1
@@ -601,14 +567,48 @@ importers:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
         version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@6.0.3)'
 
+  packages/media-assets:
+    dependencies:
+      '@dramabridge/ai':
+        specifier: workspace:*
+        version: link:../ai
+      ffmpeg-static:
+        specifier: ^5.3.0
+        version: 5.3.0(patch_hash=7141cab2ccdd4258d888261d08b6b12f180ddc962a8ba8bf7fbc943f650ca1bc)
+      ffprobe-static:
+        specifier: 3.1.0
+        version: 3.1.0
+      p-queue:
+        specifier: ^9.3.3
+        version: 9.3.3
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.4(@types/node@26.6.5)
+    devDependencies:
+      '@types/ffprobe-static':
+        specifier: 2.0.3
+        version: 2.0.3
+      '@types/node':
+        specifier: latest
+        version: 26.6.5
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.13
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@6.0.3)'
+
   packages/meituan-drama-automation:
     dependencies:
-      '@drama/automation-logging':
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       dayjs:
         specifier: ^1.11.21
         version: 1.11.23
@@ -634,15 +634,15 @@ importers:
 
   packages/pinduoduo-drama-automation:
     dependencies:
-      '@drama/automation-logging':
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/axios':
+      '@dramabridge/axios':
         specifier: workspace:*
         version: link:../axios
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
@@ -665,15 +665,15 @@ importers:
 
   packages/qq-drama-automation:
     dependencies:
-      '@drama/ai':
+      '@dramabridge/ai':
         specifier: workspace:*
-        version: link:../drama-ai
-      '@drama/automation-logging':
+        version: link:../ai
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       playwright:
         specifier: 1.61.1
         version: 1.61.1
@@ -696,15 +696,15 @@ importers:
 
   packages/taobao-drama-automation:
     dependencies:
-      '@drama/ai':
+      '@dramabridge/ai':
         specifier: workspace:*
-        version: link:../drama-ai
-      '@drama/automation-logging':
+        version: link:../ai
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       '@napi-rs/canvas':
         specifier: 0.1.100
         version: 0.1.100
@@ -739,15 +739,15 @@ importers:
 
   packages/tencent-huolong-drama-automation:
     dependencies:
-      '@drama/ai':
+      '@dramabridge/ai':
         specifier: workspace:*
-        version: link:../drama-ai
-      '@drama/automation-logging':
+        version: link:../ai
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/drama-media-assets':
+      '@dramabridge/media-assets':
         specifier: workspace:*
-        version: link:../drama-media-assets
+        version: link:../media-assets
       playwright:
         specifier: 1.61.1
         version: 1.61.1
@@ -770,10 +770,10 @@ importers:
 
   packages/tiktok-drama-automation:
     dependencies:
-      '@drama/automation-logging':
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/feishu-notifier':
+      '@dramabridge/feishu-notifier':
         specifier: workspace:*
         version: link:../feishu-notifier
       playwright:
@@ -798,18 +798,18 @@ importers:
 
   packages/wechat-drama-automation:
     dependencies:
-      '@drama/automation-logging':
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/axios':
+      '@dramabridge/axios':
         specifier: workspace:*
         version: link:../axios
-      '@drama/drama-media-assets':
-        specifier: workspace:*
-        version: link:../drama-media-assets
-      '@drama/feishu-notifier':
+      '@dramabridge/feishu-notifier':
         specifier: workspace:*
         version: link:../feishu-notifier
+      '@dramabridge/media-assets':
+        specifier: workspace:*
+        version: link:../media-assets
       p-queue:
         specifier: ^9.3.3
         version: 9.3.3
@@ -838,18 +838,18 @@ importers:
 
   packages/wechat-miniprogram-drama-automation:
     dependencies:
-      '@drama/automation-logging':
+      '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
-      '@drama/axios':
+      '@dramabridge/axios':
         specifier: workspace:*
         version: link:../axios
-      '@drama/drama-media-assets':
-        specifier: workspace:*
-        version: link:../drama-media-assets
-      '@drama/feishu-notifier':
+      '@dramabridge/feishu-notifier':
         specifier: workspace:*
         version: link:../feishu-notifier
+      '@dramabridge/media-assets':
+        specifier: workspace:*
+        version: link:../media-assets
       p-queue:
         specifier: ^9.3.3
         version: 9.3.3

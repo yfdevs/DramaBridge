@@ -2,12 +2,12 @@ import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { analyzeImagesAsJson } from "@drama/ai";
+import { analyzeImagesAsJson } from "@dramabridge/ai";
 import {
   evaluateCommercialPosterTextValidation,
   listLocalPosterImages,
   prepareImageForUpload,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { z } from "zod";
 
 import {

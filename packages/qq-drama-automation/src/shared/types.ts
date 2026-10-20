@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DramaAiClient } from "@drama/ai";
+import type { DramaAiClient } from "@dramabridge/ai";
 
 export type QqDramaLoginState = "login-required" | "logged-in" | "unknown";
 export type QqDramaTaskStatus = "READY" | "RUNNING" | "SUCCESS" | "FAILED";

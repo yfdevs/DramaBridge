@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { DramaAiClient, TextGenerationOptions } from "@drama/ai";
+import type { DramaAiClient, TextGenerationOptions } from "@dramabridge/ai";
 
 import { selectBaiduEpisodePathsWithAi } from "../src/index.js";
 

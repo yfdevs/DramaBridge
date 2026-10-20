@@ -2,7 +2,7 @@ import {
   findLocalEpisodeVideos as findSharedLocalEpisodeVideos,
   validateLocalEpisodeVideos as validateSharedLocalEpisodeVideos,
   type LocalEpisodeVideo,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import type {
   ClaimedMeituanDramaTask,
   MeituanCreationRuntimeOptions,

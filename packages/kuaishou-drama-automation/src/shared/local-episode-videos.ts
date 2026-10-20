@@ -1,4 +1,4 @@
-import { validateLocalEpisodeVideos as validateSharedLocalEpisodeVideos } from "@drama/drama-media-assets";
+import { validateLocalEpisodeVideos as validateSharedLocalEpisodeVideos } from "@dramabridge/media-assets";
 import type { KuaishouDramaRuntimeOptions, KuaishouDramaTaskConfig } from "./types.js";
 
 export function getKuaishouDramaLocalEpisodeVideoRoot(options: KuaishouDramaRuntimeOptions) {

@@ -18,6 +18,8 @@ release
 .auth
 .playwright-mcp
 *.local
+__pycache__/
+*.pyc
 
 # Editor directories and files
 .vscode/*

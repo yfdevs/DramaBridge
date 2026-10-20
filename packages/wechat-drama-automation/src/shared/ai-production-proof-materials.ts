@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import type { LocalOwnershipMaterialFile } from "@drama/drama-media-assets";
+import type { LocalOwnershipMaterialFile } from "@dramabridge/media-assets";
 import type { Config } from "./types.js";
 
 export async function prepareWechatAiProductionProofMaterials(

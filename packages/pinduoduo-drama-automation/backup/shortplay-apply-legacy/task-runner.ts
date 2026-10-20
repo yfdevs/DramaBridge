@@ -2,8 +2,8 @@ import type { Page } from "playwright";
 import {
   captureAutomationFailureDiagnostics,
   formatAutomationErrorReport,
-} from "@drama/automation-logging";
-import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
+} from "@dramabridge/automation-logging";
+import { isNonRetryableBaiduNetdiskResourceError } from "@dramabridge/media-assets";
 import { PINDUODUO_SHORTPLAY_APPLY_EDIT_URL } from "../shared/constants.js";
 import {
   type ClaimNextPinduoduoDramaTaskOptions,

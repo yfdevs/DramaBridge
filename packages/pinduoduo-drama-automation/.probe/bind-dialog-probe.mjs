@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const USER_DATA_DIR = "D:/pinduoduo-drama/auth/accounts/default/chromium-profile";
 const VIDEO = "D:/BaiduNetdiskDownload/货车被当免费拉货站，我收车/货车被当免费拉货站，我收车 - 第1集.mp4";
 const DRAMA_TITLE = "货车被当免费拉货站，我收车";
-const SHOT_DIR = "D:/WebDesign/CodeWorkspace/drama-post-auto/.cache";
+const SHOT_DIR = "D:/WebDesign/CodeWorkspace/dramabridge/.cache";
 
 const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
   channel: "chrome",

@@ -305,7 +305,7 @@ function latestLog(paths = storagePaths()) {
 }
 
 async function importRuntimePackage() {
-  return import("@drama/iqiyi-drama-automation") as Promise<{
+  return import("@dramabridge/iqiyi-drama-automation") as Promise<{
     fetchIqiyiDramaAccounts: (
       apiBaseUrl: string,
       fetcher?: typeof fetch,

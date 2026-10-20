@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "playwright";
-import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
+import { isNonRetryableBaiduNetdiskResourceError } from "@dramabridge/media-assets";
 import type { ClaimedMeituanDramaTask, MeituanCreationRuntimeOptions } from "../shared/types.js";
 import { log, saveCredentialState, waitForPublishPageReady } from "./browser-session.js";
 import {

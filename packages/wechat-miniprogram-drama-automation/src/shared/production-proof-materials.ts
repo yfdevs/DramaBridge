@@ -5,7 +5,7 @@ import {
   composeOwnershipMaterialsIntoTwo,
   listLocalOwnershipMaterials,
   safeEpisodeFileBaseName,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { prepareUploadFiles } from "../automation/upload/upload-helpers.js";
 import {
   mingxingshuoContractSubject,

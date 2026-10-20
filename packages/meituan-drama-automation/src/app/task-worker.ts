@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "playwright";
-import { formatAutomationErrorReport } from "@drama/automation-logging";
+import { formatAutomationErrorReport } from "@dramabridge/automation-logging";
 import {
   claimMeituanAccountTaskApi,
   fetchReadyMeituanAccountTasksApi,

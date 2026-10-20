@@ -3,7 +3,7 @@ import {
   createAutomationLogger,
   formatReadableLogEntry,
   type AutomationLogFields,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 
 import type { PinduoduoDramaRuntimeOptions } from "./types.js";
 

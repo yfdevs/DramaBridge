@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DramaAiClient } from "@drama/ai";
+import type { DramaAiClient } from "@dramabridge/ai";
 import { TAOBAO_DRAMA_MAX_EPISODES_PER_TASK } from "./constants.js";
 
 const requiredText = z.string().trim().min(1);

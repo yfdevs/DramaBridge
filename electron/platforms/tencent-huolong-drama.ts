@@ -199,7 +199,7 @@ function platformLogger() {
 }
 
 async function importRuntimePackage() {
-  return import("@drama/tencent-huolong-drama-automation") as Promise<{
+  return import("@dramabridge/tencent-huolong-drama-automation") as Promise<{
     fetchTencentHuolongDramaAccounts: (baseUrl: string) => Promise<Account[]>;
     startTencentHuolongDramaRuntime: (options: Record<string, unknown>) => Promise<AccountRuntime>;
   }>;

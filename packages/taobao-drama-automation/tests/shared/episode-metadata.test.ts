@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import type { DramaAiClient } from "@drama/ai";
+import type { DramaAiClient } from "@dramabridge/ai";
 
 import {
   collectTaobaoSynopsis,

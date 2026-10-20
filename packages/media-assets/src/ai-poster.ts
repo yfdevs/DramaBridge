@@ -1,4 +1,4 @@
-import type { DramaAiClient } from "@drama/ai";
+import type { DramaAiClient } from "@dramabridge/ai";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";

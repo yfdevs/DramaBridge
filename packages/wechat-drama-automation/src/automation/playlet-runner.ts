@@ -12,7 +12,7 @@ import { createLogger, runWithLogContext } from "../shared/logger.js";
 import { attachFailStage } from "../shared/errors.js";
 import { getWechatVideoRuntimeSettings } from "../shared/runtime-settings.js";
 import { booleanSetting, secondsSettingToMs } from "../shared/settings-value.js";
-import { captureAutomationFailureDiagnostics } from "@drama/automation-logging";
+import { captureAutomationFailureDiagnostics } from "@dramabridge/automation-logging";
 
 const publishLogger = createLogger("publish");
 

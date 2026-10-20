@@ -10,7 +10,7 @@ import {
   listLocalPosterImages,
   prepareStretchedImageVariant,
   validateLocalEpisodeVideos,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import {
   DOUYIN_DRAMA_DOUYIN_COVER,
   DOUYIN_DRAMA_HONGGUO_COVER,

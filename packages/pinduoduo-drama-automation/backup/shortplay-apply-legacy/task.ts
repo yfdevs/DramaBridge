@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatAutomationErrorReport, isBrowserClosedError } from "@drama/automation-logging";
+import { formatAutomationErrorReport, isBrowserClosedError } from "@dramabridge/automation-logging";
 import { createLogger } from "../shared/logger.js";
 import { PINDUODUO_DEFAULT_COPYRIGHT_EXPIRE_TIME } from "../shared/constants.js";
 import {

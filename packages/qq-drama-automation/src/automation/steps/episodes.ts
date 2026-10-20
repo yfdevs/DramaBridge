@@ -3,7 +3,7 @@ import {
   cleanupEpisodeUploadFiles,
   prepareEpisodeUploadFiles,
   type PreparedEpisodeUploadFiles,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { log } from "../../shared/logger.js";
 import {
   getQqDramaLocalEpisodeVideoRoot,

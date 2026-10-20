@@ -1,4 +1,4 @@
-import { analyzeImagesAsJson, type DramaAiClient } from "@drama/ai";
+import { analyzeImagesAsJson, type DramaAiClient } from "@dramabridge/ai";
 import sharp from "sharp";
 
 export type OwnershipProjectProofAiKind = "jianying" | "juchuang" | "unknown";

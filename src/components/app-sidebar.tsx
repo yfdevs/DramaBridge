@@ -84,7 +84,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
           to={routePath(defaultRoute)}
           className="w-fit rounded-md text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          AutoDrama
+          DramaBridge
         </NavLink>
       </SidebarHeader>
       <SidebarContent className="app-sidebar-content gap-0 px-3 pb-4">

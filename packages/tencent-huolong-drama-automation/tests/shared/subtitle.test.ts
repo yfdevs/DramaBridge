@@ -1,7 +1,7 @@
 // oxlint-disable typescript/no-floating-promises
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { DramaAiClient, TextGenerationOptions } from "@drama/ai";
+import type { DramaAiClient, TextGenerationOptions } from "@dramabridge/ai";
 
 import { resolveTencentHuolongCreativeMetadata } from "../../src/shared/subtitle.js";
 import type { TencentHuolongTaskPayload } from "../../src/shared/types.js";

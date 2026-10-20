@@ -5,7 +5,7 @@ import {
   validateLocalEpisodeMinimumDuration,
   VideoTranscodeQueue,
   type VideoSizePolicy,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import PQueue from "p-queue";
 import {
   mingxingshuoContractSubject,
@@ -16,7 +16,7 @@ import {
 } from "../shared/config.js";
 import { createLogger, runWithLogContext } from "../shared/logger.js";
 import { validateLocalEpisodeVideos } from "../shared/local-episode-videos.js";
-import { FeishuNotifier } from "@drama/feishu-notifier";
+import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import {
   claimNextWechatMiniProgramTaskApi,
   reportClaimedTaskErrorApi,

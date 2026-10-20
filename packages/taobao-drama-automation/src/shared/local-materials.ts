@@ -7,7 +7,7 @@ import {
   findLocalEpisodeVideos,
   listLocalPosterImages,
   validateLocalEpisodeVideos,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { TAOBAO_DRAMA_MIN_VIDEO_DIMENSION } from "./constants.js";
 import { log } from "./logger.js";
 import type { TaobaoBatchUploadTask, TaobaoDramaRuntimeOptions } from "./types.js";

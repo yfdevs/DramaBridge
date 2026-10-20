@@ -4,8 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import type { DramaAiClient, ImageGenerationOptions } from "@drama/ai";
-import { readImageDimensions } from "@drama/drama-media-assets";
+import type { DramaAiClient, ImageGenerationOptions } from "@dramabridge/ai";
+import { readImageDimensions } from "@dramabridge/media-assets";
 
 import { prepareTaobaoCollectionCover } from "../../src/shared/cover.js";
 import type { ClaimedTaobaoDramaTask } from "../../src/shared/types.js";

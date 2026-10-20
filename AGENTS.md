@@ -18,7 +18,7 @@ This repository is a multi-platform desktop automation app. The current implemen
 - Use platform-prefixed IPC channels, for example `wechat-drama:service:start`.
 - Do not use generic names like `automation-service` for platform-specific behavior.
 - Root scripts for platform automation must be platform-prefixed, for example `wechat-drama:check`.
-- Package names must include the platform, for example `@drama/wechat-drama-automation`.
+- Package names must include the platform, for example `@dramabridge/wechat-drama-automation`.
 
 ## Configuration
 
@@ -52,7 +52,7 @@ Before handing off changes, run the relevant checks:
 
 ```bash
 pnpm exec tsc --noEmit
-pnpm --filter @drama/wechat-drama-automation check
-pnpm --filter @drama/wechat-drama-automation build
+pnpm --filter @dramabridge/wechat-drama-automation check
+pnpm --filter @dramabridge/wechat-drama-automation build
 pnpm exec vite build
 ```

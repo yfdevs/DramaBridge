@@ -1,5 +1,5 @@
 {
-  "name": "@drama/feishu-notifier",
+  "name": "@dramabridge/feishu-notifier",
   "version": "0.1.0",
   "private": true,
   "type": "module",

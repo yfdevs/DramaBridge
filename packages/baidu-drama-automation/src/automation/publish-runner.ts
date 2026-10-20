@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   cleanupEpisodeUploadFiles,
   prepareEpisodeUploadFiles,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import type { Page } from "playwright";
 import type { BaiduDramaRuntimeOptions, ClaimedBaiduDramaTask } from "../shared/types.js";
 import { baiduDramaLocalRoot, baiduDramaResourceName } from "../shared/resources.js";

@@ -2,9 +2,9 @@
 const http = require("node:http");
 const https = require("node:https");
 
-const httpProxy = process.env.AUTODRAMA_HTTP_PROXY;
-const httpsProxy = process.env.AUTODRAMA_HTTPS_PROXY;
-const noProxy = process.env.AUTODRAMA_NO_PROXY;
+const httpProxy = process.env.DRAMABRIDGE_HTTP_PROXY;
+const httpsProxy = process.env.DRAMABRIDGE_HTTPS_PROXY;
+const noProxy = process.env.DRAMABRIDGE_NO_PROXY;
 
 if (httpProxy || httpsProxy) {
   const proxyEnv = {};

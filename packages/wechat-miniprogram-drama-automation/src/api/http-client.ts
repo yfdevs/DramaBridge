@@ -1,4 +1,4 @@
-import { ApiClient, AxiosError } from "@drama/axios";
+import { ApiClient, AxiosError } from "@dramabridge/axios";
 import { getWechatMiniProgramRuntimeSettings } from "../shared/runtime-settings.js";
 
 export const httpClient = new ApiClient({

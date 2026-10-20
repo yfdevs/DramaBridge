@@ -2,14 +2,14 @@ import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { analyzeImagesAsJson } from "@drama/ai";
+import { analyzeImagesAsJson } from "@dramabridge/ai";
 import {
   evaluateCommercialPosterTextValidation,
   findOwnershipProjectProofFiles,
   listLocalOwnershipMaterials,
   listLocalPosterImages,
   validateLocalEpisodeVideos,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import sharp from "sharp";
 import { z } from "zod";
 

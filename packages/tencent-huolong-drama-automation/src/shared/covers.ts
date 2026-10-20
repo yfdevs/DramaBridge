@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { prepareContainedImageVariant } from "@drama/drama-media-assets";
+import { prepareContainedImageVariant } from "@dramabridge/media-assets";
 import { log } from "./logger.js";
 import type { ClaimedTencentHuolongDramaTask, TencentHuolongRuntimeOptions } from "./types.js";
 

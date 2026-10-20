@@ -2,8 +2,8 @@ import type { BrowserContext, Page } from "playwright";
 import {
   captureAutomationFailureDiagnostics,
   formatAutomationErrorReport,
-} from "@drama/automation-logging";
-import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
+} from "@dramabridge/automation-logging";
+import { isNonRetryableBaiduNetdiskResourceError } from "@dramabridge/media-assets";
 import { QQ_DRAMA_ADD_URL, QQ_DRAMA_LOGIN_URL, QQ_DRAMA_PLATFORM } from "../shared/constants.js";
 import {
   cleanupOldLogFiles,

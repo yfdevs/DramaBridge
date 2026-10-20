@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 import type {
   WechatMiniProgramDirectUploadRuntime,
   WechatMiniProgramRuntimeSettings,
-} from "@drama/wechat-miniprogram-drama-automation"
+} from "@dramabridge/wechat-miniprogram-drama-automation"
 import { ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk"
 import { createElectronPlatformLogger } from "../../platform-logger"
 import {
@@ -323,7 +323,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
         prepareEpisodeVideos,
         validateLocalEpisodeMinimumDuration,
         VideoTranscodeQueue,
-      } = await import("@drama/drama-media-assets")
+      } = await import("@dramabridge/media-assets")
       const downloadedEpisodeVideos = await findLocalEpisodeVideos({
         localEpisodeVideoRoot: settings.localEpisodeVideoRoot,
         resourceName: task.dramaName,
@@ -473,7 +473,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
     if (this.runtime) return this.runtime
     process.env.PLAYWRIGHT_BROWSERS_PATH = this.options.playwrightBrowsersPath()
     const { startWechatMiniProgramDirectUploadRuntime } = await import(
-      "@drama/wechat-miniprogram-drama-automation"
+      "@dramabridge/wechat-miniprogram-drama-automation"
     )
     const settings = this.options.getSettings()
     this.runtime = startWechatMiniProgramDirectUploadRuntime({

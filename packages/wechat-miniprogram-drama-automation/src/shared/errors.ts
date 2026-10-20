@@ -1,4 +1,4 @@
-import { formatAutomationErrorReport } from "@drama/automation-logging";
+import { formatAutomationErrorReport } from "@dramabridge/automation-logging";
 
 export enum ErrorType {
   Unknown = "UNKNOWN",

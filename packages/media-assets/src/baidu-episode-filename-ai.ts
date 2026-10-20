@@ -1,4 +1,4 @@
-import { parseAiJsonObject, type DramaAiClient } from "@drama/ai";
+import { parseAiJsonObject, type DramaAiClient } from "@dramabridge/ai";
 
 export type BaiduEpisodeFilenameCandidate = {
   id: number;

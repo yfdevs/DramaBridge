@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
-import { formatAutomationErrorReport } from "@drama/automation-logging";
-import { FeishuNotifier } from "@drama/feishu-notifier";
+import { formatAutomationErrorReport } from "@dramabridge/automation-logging";
+import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { claimNextTiktokDramaTaskApi } from "./api/index.js";
 import { config, configureTiktokDramaCenterRuntimeSettings, logger } from "./config.js";

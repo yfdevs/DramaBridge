@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { captureAutomationFailureDiagnostics, formatAutomationErrorReport } from "@drama/automation-logging";
+import { captureAutomationFailureDiagnostics, formatAutomationErrorReport } from "@dramabridge/automation-logging";
 import { claimNextTaobaoDramaTaskApi, reportTaobaoAccountTaskApi } from "../api/task.js";
 import {
   TAOBAO_DRAMA_BATCH_PUBLISH_URL,

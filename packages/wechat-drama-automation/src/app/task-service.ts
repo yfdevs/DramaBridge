@@ -8,7 +8,7 @@ import type {
   TaskRunOptions,
 } from "../shared/types.js";
 import { createLogger, type LogContext, runWithLogContext } from "../shared/logger.js";
-import { FeishuNotifier } from "@drama/feishu-notifier";
+import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import { classifyError, ErrorType } from "../shared/errors.js";
 
 const logger = createLogger("task");

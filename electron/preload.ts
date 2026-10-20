@@ -88,5 +88,5 @@ window.addEventListener('DOMContentLoaded', () => {
     },
   })
 
-  titlebar.updateTitle('AutoDrama')
+  titlebar.updateTitle('DramaBridge')
 })

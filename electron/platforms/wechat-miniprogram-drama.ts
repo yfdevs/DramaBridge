@@ -450,7 +450,7 @@ function assertWechatMiniProgramConfigReady(config = readConfig()) {
 async function startRuntime() {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath()
 
-  const { startWechatMiniProgramRuntime } = await import('@drama/wechat-miniprogram-drama-automation')
+  const { startWechatMiniProgramRuntime } = await import('@dramabridge/wechat-miniprogram-drama-automation')
   return startWechatMiniProgramRuntime({
     settings: {
       ...readConfig(),

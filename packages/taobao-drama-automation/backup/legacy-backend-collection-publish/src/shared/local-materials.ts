@@ -2,7 +2,7 @@ import {
   findLocalEpisodeVideos,
   listLocalPosterImages,
   validateLocalEpisodeVideos,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import type { ClaimedTaobaoDramaTask, TaobaoDramaRuntimeOptions } from "./types.js";
 
 export function taobaoMaterialRoot(options: TaobaoDramaRuntimeOptions) {

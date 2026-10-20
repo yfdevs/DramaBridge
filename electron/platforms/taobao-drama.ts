@@ -119,7 +119,7 @@ function latestLog(paths = storagePaths()) {
 }
 function openPathOrParent(value: string) { return openExistingPath(existsSync(value) ? value : path.dirname(value)); }
 async function runtimePackage() {
-  return import("@drama/taobao-drama-automation") as unknown as Promise<{
+  return import("@dramabridge/taobao-drama-automation") as unknown as Promise<{
     fetchTaobaoDramaAccounts: (baseUrl: string) => Promise<Account[]>;
     startTaobaoDramaRuntime: (options: Record<string, unknown>) => Promise<AccountRuntime>;
     testTaobaoBrowserExecutable: (path: string) => Promise<{ ok: boolean; message: string }>;

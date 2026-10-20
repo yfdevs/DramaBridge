@@ -4,7 +4,7 @@ import { basename, extname, join } from "node:path";
 import {
   listLocalPosterImages,
   prepareCroppedImageVariant,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { fetchApprovedShortplays } from "./shortplay-manage-page.js";
 import { PinduoduoUploadRecordsRepository } from "../storage/pinduoduo-upload-records-repository.js";
 import {

@@ -1,4 +1,4 @@
-# @drama/axios
+# @dramabridge/axios
 
 轻量 axios 封装，提供语义化客户端和常用拦截器。
 
@@ -10,7 +10,7 @@ import {
   attachAuthTokenHeader,
   unwrapApiResponseData,
   handleApiResponseError,
-} from "@drama/axios";
+} from "@dramabridge/axios";
 
 interface UserProfile {
   id: string;
@@ -39,6 +39,6 @@ const profile = await http.get<UserProfile>("/profile");
 
 ```bash
 vp install
-vp run test --filter @drama/axios
+vp run test --filter @dramabridge/axios
 vp check packages/axios
 ```

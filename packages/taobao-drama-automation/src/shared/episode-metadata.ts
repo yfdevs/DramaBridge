@@ -1,4 +1,4 @@
-import { parseAiJsonObject, type DramaAiClient } from "@drama/ai";
+import { parseAiJsonObject, type DramaAiClient } from "@dramabridge/ai";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import * as mammoth from "mammoth";

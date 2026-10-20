@@ -45,9 +45,9 @@ export const runConfig = {
     },
     "pkg:ai:build": {
       command: "vp pack",
-      cwd: "packages/drama-ai",
+      cwd: "packages/ai",
       input: packageBuildInputs(),
-      output: ["packages/drama-ai/dist/**"],
+      output: ["packages/ai/dist/**"],
     },
     "pkg:wechat:build": {
       command: "vp pack",
@@ -187,7 +187,7 @@ export const runConfig = {
     },
     "pkg:ai:check": {
       command: "tsc --noEmit",
-      cwd: "packages/drama-ai",
+      cwd: "packages/ai",
       output: [],
     },
     "pkg:meituan:check": {

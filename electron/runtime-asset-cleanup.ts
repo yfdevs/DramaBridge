@@ -1,4 +1,4 @@
-import { cleanupStaleRuntimeArtifacts } from "@drama/drama-media-assets";
+import { cleanupStaleRuntimeArtifacts } from "@dramabridge/media-assets";
 import path from "node:path";
 import { logMain } from "./main-logger";
 

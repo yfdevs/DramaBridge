@@ -43,96 +43,96 @@ export function createElectronPlugin(rootDir: string) {
         resolve: {
           alias: [
             {
-              find: /^@drama\/ai$/,
-              replacement: path.join(rootDir, "packages/drama-ai/src/index.ts"),
+              find: /^@dramabridge\/ai$/,
+              replacement: path.join(rootDir, "packages/ai/src/index.ts"),
             },
             {
-              find: /^@drama\/automation-logging$/,
+              find: /^@dramabridge\/automation-logging$/,
               replacement: path.join(rootDir, "packages/automation-logging/src/index.ts"),
             },
             {
-              find: /^@drama\/baidu-netdisk-automation\/download-baidu-folder$/,
+              find: /^@dramabridge\/baidu-netdisk-automation\/download-baidu-folder$/,
               replacement: path.join(
                 rootDir,
                 "packages/baidu-netdisk-automation/src/download-baidu-folder.ts",
               ),
             },
             {
-              find: /^@drama\/drama-media-assets\/baidu-netdisk$/,
-              replacement: path.join(rootDir, "packages/drama-media-assets/src/baidu-netdisk.ts"),
+              find: /^@dramabridge\/media-assets\/baidu-netdisk$/,
+              replacement: path.join(rootDir, "packages/media-assets/src/baidu-netdisk.ts"),
             },
             {
-              find: /^@drama\/axios$/,
+              find: /^@dramabridge\/axios$/,
               replacement: path.join(rootDir, "packages/axios/src/index.ts"),
             },
             {
-              find: /^@drama\/baidu-netdisk-automation$/,
+              find: /^@dramabridge\/baidu-netdisk-automation$/,
               replacement: path.join(rootDir, "packages/baidu-netdisk-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/baidu-drama-automation$/,
+              find: /^@dramabridge\/baidu-drama-automation$/,
               replacement: path.join(rootDir, "packages/baidu-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/douyin-drama-automation$/,
+              find: /^@dramabridge\/douyin-drama-automation$/,
               replacement: path.join(rootDir, "packages/douyin-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/wechat-miniprogram-drama-automation$/,
+              find: /^@dramabridge\/wechat-miniprogram-drama-automation$/,
               replacement: path.join(
                 rootDir,
                 "packages/wechat-miniprogram-drama-automation/src/index.ts",
               ),
             },
             {
-              find: /^@drama\/drama-media-assets$/,
-              replacement: path.join(rootDir, "packages/drama-media-assets/src/index.ts"),
+              find: /^@dramabridge\/media-assets$/,
+              replacement: path.join(rootDir, "packages/media-assets/src/index.ts"),
             },
             {
-              find: /^@drama\/iqiyi-drama-automation$/,
+              find: /^@dramabridge\/iqiyi-drama-automation$/,
               replacement: path.join(rootDir, "packages/iqiyi-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/jianying-automation$/,
+              find: /^@dramabridge\/jianying-automation$/,
               replacement: path.join(rootDir, "packages/jianying-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/feishu-notifier$/,
+              find: /^@dramabridge\/feishu-notifier$/,
               replacement: path.join(rootDir, "packages/feishu-notifier/src/index.ts"),
             },
             {
-              find: /^@drama\/kuaishou-drama-automation$/,
+              find: /^@dramabridge\/kuaishou-drama-automation$/,
               replacement: path.join(rootDir, "packages/kuaishou-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/meituan-drama-automation$/,
+              find: /^@dramabridge\/meituan-drama-automation$/,
               replacement: path.join(rootDir, "packages/meituan-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/pinduoduo-drama-automation$/,
+              find: /^@dramabridge\/pinduoduo-drama-automation$/,
               replacement: path.join(rootDir, "packages/pinduoduo-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/qq-drama-automation$/,
+              find: /^@dramabridge\/qq-drama-automation$/,
               replacement: path.join(rootDir, "packages/qq-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/taobao-drama-automation$/,
+              find: /^@dramabridge\/taobao-drama-automation$/,
               replacement: path.join(rootDir, "packages/taobao-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/tencent-huolong-drama-automation$/,
+              find: /^@dramabridge\/tencent-huolong-drama-automation$/,
               replacement: path.join(
                 rootDir,
                 "packages/tencent-huolong-drama-automation/src/index.ts",
               ),
             },
             {
-              find: /^@drama\/tiktok-drama-automation$/,
+              find: /^@dramabridge\/tiktok-drama-automation$/,
               replacement: path.join(rootDir, "packages/tiktok-drama-automation/src/index.ts"),
             },
             {
-              find: /^@drama\/wechat-drama-automation$/,
+              find: /^@dramabridge\/wechat-drama-automation$/,
               replacement: path.join(rootDir, "packages/wechat-drama-automation/src/index.ts"),
             },
           ],

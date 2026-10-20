@@ -406,7 +406,7 @@ async function startRuntime() {
   const paths = storagePaths(config);
   ensureStorageDirectories(paths);
   const logRetentionDays = Math.max(1, Number.parseInt(config.logRetentionDays, 10) || 3);
-  const { startPinduoduoDramaRuntime } = await import("@drama/pinduoduo-drama-automation");
+  const { startPinduoduoDramaRuntime } = await import("@dramabridge/pinduoduo-drama-automation");
 
   return startPinduoduoDramaRuntime({
     accountProfileName: config.accountProfileName,
@@ -469,7 +469,7 @@ export function registerPinduoduoDramaPlatformHandlers() {
   ipcMain.handle(
     "pinduoduo-drama:config:test-browser-path",
     async (_event, executablePath: string) => {
-      const { testPinduoduoBrowserExecutable } = await import("@drama/pinduoduo-drama-automation");
+      const { testPinduoduoBrowserExecutable } = await import("@dramabridge/pinduoduo-drama-automation");
       return testPinduoduoBrowserExecutable(executablePath);
     },
   );

@@ -2,7 +2,7 @@ import type { BrowserContext, Page } from "playwright";
 import {
   captureAutomationFailureDiagnostics,
   formatAutomationErrorReport,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 import {
   claimNextTaobaoDramaTaskApi,
   reportTaobaoAccountTaskApi,

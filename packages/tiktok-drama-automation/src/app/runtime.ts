@@ -1,14 +1,14 @@
 import { mkdir } from "node:fs/promises";
-import { FeishuNotifier } from "@drama/feishu-notifier";
+import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import path from "node:path";
 import {
   captureAutomationFailureDiagnostics,
   formatAutomationErrorReport,
   formatDateKey,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { config, configureTiktokDramaCenterRuntimeSettings, logger } from "../config.js";
-import { formatReadableLogEntry } from "@drama/automation-logging";
+import { formatReadableLogEntry } from "@dramabridge/automation-logging";
 import { claimNextTiktokDramaTaskApi } from "../api/index.js";
 import { fillDraft, waitForDraftPage } from "../draft-form.js";
 import { matchVideos, resolveCoverFile } from "../media.js";

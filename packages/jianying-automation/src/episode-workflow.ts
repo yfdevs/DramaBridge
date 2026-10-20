@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const ffmpegPath = ffmpegPathImport as unknown as string | null;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".m4v"]);
 const EPISODE_PATTERN = /第\s*(\d+)\s*集/i;
-const WORKFLOW_MANIFEST = "autodrama.json";
+const WORKFLOW_MANIFEST = "dramabridge.json";
 const WORKFLOW_VERSION = 8;
 
 export type DramaEpisode = {
@@ -257,7 +257,7 @@ export async function prepareEpisodeDraft(input: {
   try {
     // Keep every file referenced by the source preset untouched. Generated clips
     // live only in the copied episode draft and are linked into its video track.
-    const targetSegmentsDirectory = path.join(draftPath, "AutoDramaSegments");
+    const targetSegmentsDirectory = path.join(draftPath, "DramaBridgeSegments");
     await mkdir(targetSegmentsDirectory, { recursive: true });
     const segmentFiles = slotFiles.map((_, index) => path.join(
       targetSegmentsDirectory,

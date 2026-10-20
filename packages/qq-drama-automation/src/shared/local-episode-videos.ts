@@ -1,4 +1,4 @@
-import { validateLocalEpisodeVideos as validateSharedLocalEpisodeVideos } from "@drama/drama-media-assets";
+import { validateLocalEpisodeVideos as validateSharedLocalEpisodeVideos } from "@dramabridge/media-assets";
 import type { ClaimedQqDramaTask, QqDramaRuntimeOptions } from "./types.js";
 
 export function getQqDramaOriginalTitle(task: ClaimedQqDramaTask) {

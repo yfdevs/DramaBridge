@@ -3,7 +3,7 @@ import {
   createAutomationLogger,
   formatDateKey,
   type AutomationLogFields,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 
 export function createElectronPlatformLogger(options: {
   platform: string;

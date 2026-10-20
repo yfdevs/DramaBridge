@@ -1,5 +1,5 @@
 import { BrowserContextManager, type VideoAccountRuntimeStatus } from "../automation/browser-context-manager.js";
-import { FeishuNotifier } from "@drama/feishu-notifier";
+import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import { loadServiceConfig } from "../shared/config.js";
 import { createLogger } from "../shared/logger.js";
 import {

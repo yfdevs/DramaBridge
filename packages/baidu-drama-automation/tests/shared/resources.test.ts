@@ -1,4 +1,4 @@
-import type { DramaAiClient, ImageGenerationOptions } from "@drama/ai";
+import type { DramaAiClient, ImageGenerationOptions } from "@dramabridge/ai";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import sharp from "sharp";
 
-import { readImageDimensions } from "@drama/drama-media-assets";
+import { readImageDimensions } from "@dramabridge/media-assets";
 import {
   BAIDU_DRAMA_LANDSCAPE_COVER_SIZE,
   BAIDU_DRAMA_PORTRAIT_COVER_SIZE,

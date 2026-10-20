@@ -1,4 +1,4 @@
-import type { DramaAiClient } from "@drama/ai";
+import type { DramaAiClient } from "@dramabridge/ai";
 import { z } from "zod";
 import { tencentHuolongKeywordValues, tencentHuolongThemeValues } from "./constants.js";
 

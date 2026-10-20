@@ -186,7 +186,7 @@ async function cachedEpisodeReferenceFrames(options: {
     return cached
   }
 
-  const { extractRandomVideoFrames } = await import("@drama/drama-media-assets")
+  const { extractRandomVideoFrames } = await import("@dramabridge/media-assets")
   const extracted = await extractRandomVideoFrames({
     inputFile: options.episodeFile,
     outputDir,
@@ -541,7 +541,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
       }
       controller.signal.throwIfAborted()
 
-      const { ensureAiPoster, findLocalEpisodeVideos, listLocalPosterImages } = await import("@drama/drama-media-assets")
+      const { ensureAiPoster, findLocalEpisodeVideos, listLocalPosterImages } = await import("@dramabridge/media-assets")
       const localEpisodeVideos = episodeDownloadCount > 0
         ? (await findLocalEpisodeVideos({
             localEpisodeVideoRoot: settings.localEpisodeVideoRoot,

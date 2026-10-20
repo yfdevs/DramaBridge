@@ -1,7 +1,7 @@
 import { access, copyFile, link, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { DramaAiClient } from "@drama/ai";
+import type { DramaAiClient } from "@dramabridge/ai";
 import sharp from "sharp";
 
 import { classifyOwnershipProjectProofScreenshotWithAi } from "./ownership-project-proof-ai.js";

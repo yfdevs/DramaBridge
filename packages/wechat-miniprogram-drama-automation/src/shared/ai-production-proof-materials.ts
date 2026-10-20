@@ -1,4 +1,4 @@
-import { listLocalAiProductionProofFiles } from "@drama/drama-media-assets";
+import { listLocalAiProductionProofFiles } from "@dramabridge/media-assets";
 import { prepareUploadFiles } from "../automation/upload/upload-helpers.js";
 import { resolveFromRoot } from "./config.js";
 import { getWechatMiniProgramRuntimeSettings } from "./runtime-settings.js";

@@ -362,7 +362,7 @@ function ensureStorageDirectories(paths = storagePaths()) {
 }
 
 async function importKuaishouDramaRuntimePackage() {
-  return import("@drama/kuaishou-drama-automation") as Promise<{
+  return import("@dramabridge/kuaishou-drama-automation") as Promise<{
     fetchKuaishouDramaAccounts: (apiBaseUrl: string) => Promise<
       Array<{
         id: number;

@@ -5,7 +5,7 @@ import {
   cleanupAutomationLogFiles,
   createAutomationLogger,
   formatReadableLogEntry,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 import type { BrowserContext, Page } from "playwright";
 import type {
   MeituanCreationLoginState,

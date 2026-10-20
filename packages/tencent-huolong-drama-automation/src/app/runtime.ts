@@ -2,8 +2,8 @@ import type { BrowserContext, Page } from "playwright";
 import {
   captureAutomationFailureDiagnostics,
   formatAutomationErrorReport,
-} from "@drama/automation-logging";
-import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
+} from "@dramabridge/automation-logging";
+import { isNonRetryableBaiduNetdiskResourceError } from "@dramabridge/media-assets";
 import {
   TENCENT_HUOLONG_DRAMA_ADD_URL,
   TENCENT_HUOLONG_DRAMA_LOGIN_URL,

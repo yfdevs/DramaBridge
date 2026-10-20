@@ -2,7 +2,7 @@ import path from "node:path";
 import {
   listLocalPosterImages,
   prepareCroppedImageVariant,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { log } from "../automation/browser-session.js";
 import type {
   ClaimedMeituanDramaTask,

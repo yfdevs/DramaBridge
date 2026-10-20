@@ -2,7 +2,7 @@ import {
   createOpenAiCompatibleClient,
   type OpenAiCompatibleClient,
   type OpenAiCompatibleClientOptions,
-} from "@drama/ai";
+} from "@dramabridge/ai";
 import {
   app,
   BrowserWindow,

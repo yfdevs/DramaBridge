@@ -8,11 +8,11 @@ import type {
   DramaAiClient,
   ImageAnalysisOptions,
   ImageGenerationOptions,
-} from "@drama/ai";
+} from "@dramabridge/ai";
 import {
   readImageDimensions,
   type LocalPosterImageFile,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 
 import {
   buildKuaishouCounterpartCoverPrompt,

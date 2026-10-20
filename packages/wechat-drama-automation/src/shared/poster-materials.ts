@@ -1,4 +1,4 @@
-import { listLocalPosterImages } from "@drama/drama-media-assets";
+import { listLocalPosterImages } from "@dramabridge/media-assets";
 import { getWechatVideoRuntimeSettings } from "./runtime-settings.js";
 import type { Config } from "./types.js";
 

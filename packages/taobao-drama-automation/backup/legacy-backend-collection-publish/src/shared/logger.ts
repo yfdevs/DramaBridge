@@ -5,7 +5,7 @@ import {
   formatReadableLogEntry,
   type AutomationLogFields,
   type AutomationLogLevel,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 import type { TaobaoDramaRuntimeOptions } from "./types.js";
 
 type LogContext = { accountId?: string; accountName?: string; accountTaskId?: number };

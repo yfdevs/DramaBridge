@@ -1,5 +1,5 @@
 {
-  "name": "@drama/taobao-drama-automation",
+  "name": "@dramabridge/taobao-drama-automation",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,9 +17,9 @@
     "test": "tsx --conditions=development --test tests/**/*.test.ts"
   },
   "dependencies": {
-    "@drama/ai": "workspace:*",
-    "@drama/automation-logging": "workspace:*",
-    "@drama/drama-media-assets": "workspace:*",
+    "@dramabridge/ai": "workspace:*",
+    "@dramabridge/automation-logging": "workspace:*",
+    "@dramabridge/media-assets": "workspace:*",
     "@napi-rs/canvas": "0.1.100",
     "mammoth": "1.11.0",
     "pdf-to-img": "5.0.0",

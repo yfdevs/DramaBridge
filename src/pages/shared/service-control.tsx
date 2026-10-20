@@ -219,7 +219,7 @@ export function ServiceControlButtonPage({
             </h1>
             <p className="mt-2 max-w-[60ch] text-[13px] leading-6 text-muted-foreground">
               {!connected
-                ? "在 AutoDrama 桌面端打开此工作空间，即可启动自动化服务。"
+                ? "在 DramaBridge 桌面端打开此工作空间，即可启动自动化服务。"
                 : entry?.error
                   ? entry.error
                   : running

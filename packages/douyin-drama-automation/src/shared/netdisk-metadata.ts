@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as mammoth from "mammoth";
 import { z } from "zod";
-import { listLocalPosterImages } from "@drama/drama-media-assets";
+import { listLocalPosterImages } from "@dramabridge/media-assets";
 import { log, warn } from "./logger.js";
 import type {
   ClaimedDouyinDramaTask,

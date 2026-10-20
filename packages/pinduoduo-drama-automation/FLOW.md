@@ -1,6 +1,6 @@
 # Pinduoduo Drama Automation Flow
 
-本文档说明 `@drama/pinduoduo-drama-automation` 当前真实运行逻辑。它不是目标设计稿，而是按现有代码整理的执行链路、状态转换、页面动作和已知断点。
+本文档说明 `@dramabridge/pinduoduo-drama-automation` 当前真实运行逻辑。它不是目标设计稿，而是按现有代码整理的执行链路、状态转换、页面动作和已知断点。
 
 ## 1. 代码边界
 
@@ -29,7 +29,7 @@
    - `registerPinduoduoDramaPlatformHandlers()`
    - `startRuntime()`
 4. 动态导入包：
-   - `import("@drama/pinduoduo-drama-automation")`
+   - `import("@dramabridge/pinduoduo-drama-automation")`
    - 调用 `startPinduoduoDramaRuntime(...)`
 5. 包内入口：
    - `packages/pinduoduo-drama-automation/src/app/runtime.ts`
@@ -190,7 +190,7 @@ startPinduoduoDramaRuntime()
 }
 ```
 
-API 客户端在 `src/api/http-client.ts`，基于 `@drama/axios`。
+API 客户端在 `src/api/http-client.ts`，基于 `@dramabridge/axios`。
 
 如果没有传 `apiConfig` 且没有传自定义 `client`：
 

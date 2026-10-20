@@ -1,5 +1,5 @@
 // oxlint-disable typescript/no-floating-promises
-import type { DramaAiClient, TextGenerationOptions } from "@drama/ai";
+import type { DramaAiClient, TextGenerationOptions } from "@dramabridge/ai";
 import assert from "node:assert/strict";
 import test from "node:test";
 

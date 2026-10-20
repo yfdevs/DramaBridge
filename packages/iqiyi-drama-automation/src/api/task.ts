@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatAutomationErrorReport, isBrowserClosedError } from "@drama/automation-logging";
+import { formatAutomationErrorReport, isBrowserClosedError } from "@dramabridge/automation-logging";
 
 import {
   claimedIqiyiDramaTaskSchema,

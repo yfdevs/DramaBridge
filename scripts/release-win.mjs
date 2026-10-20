@@ -74,10 +74,10 @@ function configurePublishProxyEnvironment() {
   ]) {
     delete process.env[name];
   }
-  if (httpProxy) process.env.AUTODRAMA_HTTP_PROXY = httpProxy;
-  if (httpsProxy) process.env.AUTODRAMA_HTTPS_PROXY = httpsProxy;
+  if (httpProxy) process.env.DRAMABRIDGE_HTTP_PROXY = httpProxy;
+  if (httpsProxy) process.env.DRAMABRIDGE_HTTPS_PROXY = httpsProxy;
   const noProxy = process.env.NO_PROXY || process.env.no_proxy;
-  if (noProxy) process.env.AUTODRAMA_NO_PROXY = noProxy;
+  if (noProxy) process.env.DRAMABRIDGE_NO_PROXY = noProxy;
 
   if (httpProxy || httpsProxy || allProxy) {
     const preloadOption = `--require=${JSON.stringify(nativeProxyPreload)}`;

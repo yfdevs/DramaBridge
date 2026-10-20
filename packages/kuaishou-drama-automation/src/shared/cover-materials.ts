@@ -2,13 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { analyzeImagesAsJson } from "@drama/ai";
+import { analyzeImagesAsJson } from "@dramabridge/ai";
 import {
   evaluateCommercialPosterTextValidation,
   prepareContainedImageVariant,
   readImageDimensions,
   type LocalPosterImageFile,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { z } from "zod";
 
 import { log } from "../automation/browser-session.js";

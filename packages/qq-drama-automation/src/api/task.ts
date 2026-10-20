@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { optimizeTextLength } from "@drama/ai";
-import { formatAutomationErrorReport, isBrowserClosedError } from "@drama/automation-logging";
+import { optimizeTextLength } from "@dramabridge/ai";
+import { formatAutomationErrorReport, isBrowserClosedError } from "@dramabridge/automation-logging";
 import { log } from "../shared/logger.js";
 import {
   claimedQqDramaTaskSchema,

@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "playwright";
-import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
+import { isNonRetryableBaiduNetdiskResourceError } from "@dramabridge/media-assets";
 import { prepareTaobaoCollectionCover } from "../shared/cover.js";
 import { taobaoMaterialRoot, validateTaobaoEpisodeVideos } from "../shared/local-materials.js";
 import { log } from "../shared/logger.js";

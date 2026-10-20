@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { resolveFromRoot, type ServiceConfig } from "../shared/config.js";
 import type { UpdateCredentialsRequest } from "../shared/types.js";
-import { FeishuNotifier } from "@drama/feishu-notifier";
+import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import type { VideoAccount } from "../api/video-accounts.js";
 import { loginQrCodeSelector, nativeDramaListUrl, playletUrl } from "./constants.js";
 import { waitForLoginIfNeeded } from "./browser-session.js";

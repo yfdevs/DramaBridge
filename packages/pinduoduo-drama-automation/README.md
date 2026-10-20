@@ -1,4 +1,4 @@
-# @drama/pinduoduo-drama-automation
+# @dramabridge/pinduoduo-drama-automation
 
 Pinduoduo short-play automation package.
 

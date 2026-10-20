@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   compressImageForUpload,
   type ImageCompressionPolicy,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { getWechatVideoRuntimeSettings } from "./runtime-settings.js";
 import type { Config } from "./types.js";
 

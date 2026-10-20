@@ -7,7 +7,7 @@ import {
   formatDateKey,
   type AutomationLogFields,
   type AutomationLogLevel,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 
 type MainLogLevel = Exclude<AutomationLogLevel, "debug"> | "debug";
 
@@ -177,6 +177,6 @@ function getUserDataPath() {
     return app.getPath("userData");
   } catch {
     const appDataPath = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
-    return path.join(appDataPath, "AutoDrama");
+    return path.join(appDataPath, "DramaBridge");
   }
 }

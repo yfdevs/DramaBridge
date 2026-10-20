@@ -1,6 +1,6 @@
 # MiSans global UI font
 
-AutoDrama uses **MiSans**, designed and distributed by Xiaomi, as its global UI font. Its clean Chinese sans-serif forms provide a desktop reading style similar to PingFang without requiring Apple system fonts.
+DramaBridge uses **MiSans**, designed and distributed by Xiaomi, as its global UI font. Its clean Chinese sans-serif forms provide a desktop reading style similar to PingFang without requiring Apple system fonts.
 
 - Official website: https://hyperos.mi.com/font/zh/
 - Original download: https://hyperos.mi.com/font-download/MiSans.zip

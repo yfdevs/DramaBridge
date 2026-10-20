@@ -16,7 +16,7 @@ import { attachFailStage } from "../shared/errors.js";
 import { getWechatMiniProgramRuntimeSettings } from "../shared/runtime-settings.js";
 import { booleanSetting, secondsSettingToMs } from "../shared/settings-value.js";
 import { cleanupWechatProductionProofMaterials } from "../shared/production-proof-materials.js";
-import { captureAutomationFailureDiagnostics } from "@drama/automation-logging";
+import { captureAutomationFailureDiagnostics } from "@dramabridge/automation-logging";
 
 const publishLogger = createLogger("publish");
 

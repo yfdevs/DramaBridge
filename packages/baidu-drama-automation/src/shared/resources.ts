@@ -1,4 +1,4 @@
-import { analyzeImagesAsJson, type DramaAiClient } from "@drama/ai";
+import { analyzeImagesAsJson, type DramaAiClient } from "@dramabridge/ai";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -8,7 +8,7 @@ import {
   prepareCroppedImageVariant,
   readImageDimensions,
   validateLocalEpisodeVideos,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { z } from "zod";
 import { log } from "./logger.js";
 import type { BaiduDramaRuntimeOptions, ClaimedBaiduDramaTask } from "./types.js";

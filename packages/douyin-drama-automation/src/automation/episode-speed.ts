@@ -4,7 +4,7 @@ import {
   adjustVideoPlaybackSpeed,
   readVideoDurationSeconds,
   type AdjustedVideoPlaybackSpeed,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 
 export type PreparedDouyinEpisodeSpeed = {
   file: string;

@@ -25,8 +25,8 @@ tests/             # mirrors the src structure
 ```
 
 ```powershell
-pnpm --filter @drama/baidu-netdisk-automation check
-pnpm --filter @drama/baidu-netdisk-automation test
-pnpm --filter @drama/baidu-netdisk-automation build
-pnpm --filter @drama/baidu-netdisk-automation download:share -- --share-file=D:\path\share.txt
+pnpm --filter @dramabridge/baidu-netdisk-automation check
+pnpm --filter @dramabridge/baidu-netdisk-automation test
+pnpm --filter @dramabridge/baidu-netdisk-automation build
+pnpm --filter @dramabridge/baidu-netdisk-automation download:share -- --share-file=D:\path\share.txt
 ```

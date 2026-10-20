@@ -4,7 +4,7 @@ import {
   listLocalOwnershipMaterials,
   listLocalPosterImages,
   validateLocalEpisodeVideos,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { log } from "./logger.js";
 import type { ClaimedTencentHuolongDramaTask, TencentHuolongRuntimeOptions } from "./types.js";
 

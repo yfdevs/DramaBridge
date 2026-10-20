@@ -1,4 +1,4 @@
-import { formatAutomationErrorReport, isBrowserClosedError } from "@drama/automation-logging";
+import { formatAutomationErrorReport, isBrowserClosedError } from "@dramabridge/automation-logging";
 import { z } from "zod";
 import {
   DOUYIN_DRAMA_AIGC_TOOL,

@@ -293,7 +293,7 @@ async function startRuntime() {
   const {
     fetchDouyinDramaAccounts,
     startDouyinDramaRuntime,
-  } = await import("@drama/douyin-drama-automation") as {
+  } = await import("@dramabridge/douyin-drama-automation") as {
     fetchDouyinDramaAccounts: (apiBaseUrl: string) => Promise<DouyinDramaAccount[]>;
     startDouyinDramaRuntime: (options: Record<string, unknown>) => Promise<DouyinDramaAccountRuntime>;
   };

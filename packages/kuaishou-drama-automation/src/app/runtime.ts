@@ -2,8 +2,8 @@ import { chromium, type BrowserContext, type Page } from "playwright";
 import {
   captureAutomationFailureDiagnostics,
   formatAutomationErrorReport,
-} from "@drama/automation-logging";
-import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
+} from "@dramabridge/automation-logging";
+import { isNonRetryableBaiduNetdiskResourceError } from "@dramabridge/media-assets";
 import { KUAISHOU_DRAMA_PLATFORM } from "../shared/constants.js";
 import { createKuaishouDramaPublishVariants } from "../shared/publish-variants.js";
 import { parseTaskConfig } from "../shared/task-config.js";

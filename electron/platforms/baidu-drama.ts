@@ -413,7 +413,7 @@ async function startRuntime() {
   if (!existsSync(localEpisodeVideoRoot) || !statSync(localEpisodeVideoRoot).isDirectory()) {
     throw new Error(`百度短剧剧集视频根目录不存在或不是文件夹：${localEpisodeVideoRoot}`);
   }
-  const { fetchBaiduDramaAccounts, startBaiduDramaRuntime } = await import("@drama/baidu-drama-automation") as {
+  const { fetchBaiduDramaAccounts, startBaiduDramaRuntime } = await import("@dramabridge/baidu-drama-automation") as {
     fetchBaiduDramaAccounts: (apiBaseUrl: string) => Promise<BaiduDramaAccount[]>;
     startBaiduDramaRuntime: (options: Record<string, unknown>) => Promise<BaiduDramaAccountRuntime>;
   };

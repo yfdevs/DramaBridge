@@ -5,7 +5,7 @@ import {
   formatDateKey,
   type AutomationLogFields,
   type AutomationLogLevel,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 
 import { getWechatVideoRuntimeSettings } from "./runtime-settings.js";
 import { integerSetting } from "./settings-value.js";

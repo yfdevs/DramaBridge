@@ -75,7 +75,7 @@ function createWindow() {
     minimizable: true,
     maximizable: true,
     fullscreenable: false,
-    title: "AutoDrama",
+    title: "DramaBridge",
     titleBarStyle: "hidden",
     icon: appIcon,
     autoHideMenuBar: true,

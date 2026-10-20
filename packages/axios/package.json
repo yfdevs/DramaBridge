@@ -1,5 +1,5 @@
 {
-  "name": "@drama/axios",
+  "name": "@dramabridge/axios",
   "version": "0.0.0",
   "description": "A typed axios wrapper with response unwrapping and reusable interceptors.",
   "keywords": [

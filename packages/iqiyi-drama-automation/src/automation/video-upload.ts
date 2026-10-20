@@ -4,7 +4,7 @@ import {
   cleanupEpisodeUploadFiles,
   prepareEpisodeUploadFiles,
   type PreparedEpisodeUploadFiles,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import type { FileChooser, Locator, Page } from "playwright";
 
 import { log } from "../shared/logger.js";

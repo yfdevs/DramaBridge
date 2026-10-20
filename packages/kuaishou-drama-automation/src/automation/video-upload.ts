@@ -4,7 +4,7 @@ import {
   cleanupEpisodeUploadFiles,
   prepareEpisodeUploadFiles,
   type PreparedEpisodeUploadFiles,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import type {
   KuaishouDramaPublishVariant,
   KuaishouDramaRuntimeOptions,

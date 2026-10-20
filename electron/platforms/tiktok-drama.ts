@@ -3,7 +3,7 @@ import Store from "electron-store";
 import { registerTaskAnalyticsHandler } from "./task-analytics";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { formatDateKey } from "@drama/automation-logging";
+import { formatDateKey } from "@dramabridge/automation-logging";
 import {
   assertGlobalDirectoriesConfigured,
   resolveGlobalPlatformDirectories,
@@ -210,7 +210,7 @@ async function startRuntime() {
 
   const config = readConfig();
   const operationDelayMs = Math.max(0, Number.parseFloat(config.operationDelaySeconds) || 0) * 1000;
-  const { startTiktokDramaCenterRuntime } = await import("@drama/tiktok-drama-automation");
+  const { startTiktokDramaCenterRuntime } = await import("@dramabridge/tiktok-drama-automation");
   return startTiktokDramaCenterRuntime({
     userDataDir: tiktokDramaCenterUserDataDir(),
     credentialStatePath: tiktokDramaCenterCredentialStatePath(),

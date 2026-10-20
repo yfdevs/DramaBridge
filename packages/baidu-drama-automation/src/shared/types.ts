@@ -1,4 +1,4 @@
-import type { DramaAiClient } from "@drama/ai";
+import type { DramaAiClient } from "@dramabridge/ai";
 import { z } from "zod";
 
 export type BaiduDramaLoginState = "login-required" | "logged-in" | "unknown";

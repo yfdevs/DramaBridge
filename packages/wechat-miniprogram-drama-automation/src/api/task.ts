@@ -1,4 +1,4 @@
-import { formatAutomationErrorReport, isBrowserClosedError } from "@drama/automation-logging";
+import { formatAutomationErrorReport, isBrowserClosedError } from "@dramabridge/automation-logging";
 import type { ClaimedAccountTask } from "../shared/types.js";
 import type { RpaFailStage } from "../shared/errors.js";
 import type { WechatMiniProgramAccount } from "./mini-program-accounts.js";

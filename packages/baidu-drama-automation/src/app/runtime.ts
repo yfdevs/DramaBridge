@@ -3,8 +3,8 @@ import { mkdir } from "node:fs/promises";
 import {
   captureAutomationFailureDiagnostics,
   formatAutomationErrorReport,
-} from "@drama/automation-logging";
-import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
+} from "@dramabridge/automation-logging";
+import { isNonRetryableBaiduNetdiskResourceError } from "@dramabridge/media-assets";
 import type { Page } from "playwright";
 import {
   claimNextBaiduDramaTaskApi,

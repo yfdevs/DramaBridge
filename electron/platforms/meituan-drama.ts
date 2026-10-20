@@ -344,7 +344,7 @@ async function startRuntime() {
   const {
     fetchMeituanCreationAccounts,
     startMeituanCreationRuntime,
-  } = await import("@drama/meituan-drama-automation");
+  } = await import("@dramabridge/meituan-drama-automation");
   const accounts = await fetchMeituanCreationAccounts(config.apiBaseUrl);
   meituanPlatformLogger("account").info("Loaded enabled accounts", {
     count: accounts.length,

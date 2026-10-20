@@ -4,7 +4,7 @@ import {
   formatReadableLogEntry,
   type AutomationLogFields,
   type AutomationLogLevel,
-} from "@drama/automation-logging";
+} from "@dramabridge/automation-logging";
 
 import type { BaiduDramaRuntimeOptions } from "./types.js";
 

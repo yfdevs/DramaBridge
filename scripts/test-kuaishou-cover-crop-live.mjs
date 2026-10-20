@@ -83,7 +83,7 @@ async function main() {
 
   const [{ chromium }, { maximizeKuaishouImageCropArea }] = await Promise.all([
     import("playwright"),
-    import("@drama/kuaishou-drama-automation"),
+    import("@dramabridge/kuaishou-drama-automation"),
   ]);
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext({

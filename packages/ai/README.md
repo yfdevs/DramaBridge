@@ -1,9 +1,9 @@
-# @drama/ai
+# @dramabridge/ai
 
 平台无关的 AI 能力包。通过 OpenAI Node SDK 连接任意 OpenAI 兼容模型服务，为各平台自动化复用文本生成、封面识别等能力。
 
 ```ts
-import { createOpenAiCompatibleClient } from "@drama/ai";
+import { createOpenAiCompatibleClient } from "@dramabridge/ai";
 
 const ai = createOpenAiCompatibleClient({
   apiKey: projectConfig.aiApiKey,
@@ -24,7 +24,7 @@ const result = await ai.analyzeImages({
 平台字段有长度限制时，统一使用 `optimizeTextLength`。合规文本会原样返回且不调用模型；超限文本会经过 AI 精炼、重试和最终安全长度兜底：
 
 ```ts
-import { optimizeTextLength } from "@drama/ai";
+import { optimizeTextLength } from "@dramabridge/ai";
 
 const summary = await optimizeTextLength({
   client: ai,

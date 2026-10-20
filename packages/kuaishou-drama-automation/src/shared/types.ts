@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DramaAiClient } from "@drama/ai";
+import type { DramaAiClient } from "@dramabridge/ai";
 
 export type KuaishouDramaLoginState = "login-required" | "logged-in" | "unknown";
 

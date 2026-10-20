@@ -7,7 +7,7 @@ import type { Config, PreparedEpisodeVideo } from "../../shared/types.js";
 import {
   cleanupEpisodeUploadFiles,
   prepareEpisodeUploadFiles,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import {
   fileInputByLabelPrefix,
   setInputFilesByLocator

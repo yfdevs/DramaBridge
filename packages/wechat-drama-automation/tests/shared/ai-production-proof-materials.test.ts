@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { LocalOwnershipMaterialFile } from "@drama/drama-media-assets";
+import type { LocalOwnershipMaterialFile } from "@dramabridge/media-assets";
 
 import { prepareWechatAiProductionProofMaterials } from "../../src/shared/ai-production-proof-materials.js";
 import { normalizeClaimedTaskConfig } from "../../src/shared/config.js";

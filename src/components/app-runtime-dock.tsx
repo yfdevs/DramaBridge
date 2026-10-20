@@ -155,7 +155,7 @@ export function AppRuntimeDock() {
         <TooltipContent side="top" align="end" sideOffset={8} className="grid max-w-72 gap-1.5">
           <span className="font-medium">{activePlatform.title}</span>
           <span className="text-background/70">
-            {stateLabel} · AutoDrama {versionText}
+            {stateLabel} · DramaBridge {versionText}
           </span>
           {activeLogDir ? (
             <span className="break-all text-background/70">日志目录：{activeLogDir}</span>

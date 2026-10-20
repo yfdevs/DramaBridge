@@ -2,7 +2,7 @@ import type { BrowserContext, Page } from "playwright";
 import {
   cleanupEpisodeUploadFiles,
   prepareEpisodeUploadFiles,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import { TENCENT_HUOLONG_DRAMA_ADD_URL } from "../shared/constants.js";
 import { prepareTencentHuolongCovers } from "../shared/covers.js";
 import {

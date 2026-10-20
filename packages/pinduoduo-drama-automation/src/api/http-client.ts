@@ -1,4 +1,4 @@
-import { ApiClient, AxiosError } from "@drama/axios";
+import { ApiClient, AxiosError } from "@dramabridge/axios";
 import { pinduoduoDramaApiConfigSchema, type PinduoduoDramaApiConfig } from "../shared/types.js";
 
 export interface PinduoduoDramaHttpClient {

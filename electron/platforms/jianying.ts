@@ -26,7 +26,7 @@ import {
   setJianyingElementValue,
   writeJianyingDraftVideoTrack,
   type JianyingUiaProbe,
-} from "@drama/jianying-automation";
+} from "@dramabridge/jianying-automation";
 
 import { selectDirectory } from "./shared";
 import { getConfiguredJianyingEpisodeCount } from "../global-app-config";
@@ -228,7 +228,7 @@ async function prepareAccessibilityConfig(executablePath: string) {
   const configPath = path.join(userDataDirectoryFromExecutable(executablePath), "Config", "globalSetting");
   if (!(await pathExists(configPath))) return null;
 
-  const backupPath = `${configPath}.autodrama-backup`;
+  const backupPath = `${configPath}.dramabridge-backup`;
   if (!(await pathExists(backupPath))) {
     await copyFile(configPath, backupPath);
   }
@@ -415,7 +415,7 @@ async function openJianyingPreset(presetName: string) {
   const executablePath = await resolveJianyingExecutable();
   if (!executablePath) throw new Error("没有找到剪映专业版");
 
-  const draftName = `AutoDrama-${presetName}`;
+  const draftName = `DramaBridge-${presetName}`;
   const draftRoot = path.join(userDataDirectoryFromExecutable(executablePath), "Projects", "com.lveditor.draft");
   const installedPath = path.join(draftRoot, draftName);
   const preset = await (await pathExists(installedPath)

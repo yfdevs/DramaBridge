@@ -1,4 +1,4 @@
-import type { DramaAiClient, ImageGenerationOptions } from "@drama/ai";
+import type { DramaAiClient, ImageGenerationOptions } from "@dramabridge/ai";
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

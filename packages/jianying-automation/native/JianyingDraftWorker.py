@@ -310,7 +310,7 @@ def _refresh_copied_draft_identity(draft_path: Path, new_id: str) -> list[str]:
 def _atomic_copy(source: Path, target: Path) -> None:
     if not target.is_file():
         return
-    backup = target.with_name(f"{target.name}.autodrama.bak")
+    backup = target.with_name(f"{target.name}.dramabridge.bak")
     if not backup.exists():
         shutil.copy2(target, backup)
     fd, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)

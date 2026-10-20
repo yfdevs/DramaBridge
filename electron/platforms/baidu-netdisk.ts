@@ -4,9 +4,9 @@ import {
   ensureAiPoster,
   selectBaiduEpisodePathsWithAi,
   VideoTranscodeQueue,
-} from "@drama/drama-media-assets";
-import { ensureBaiduNetdiskEpisodeVideos } from "@drama/drama-media-assets/baidu-netdisk";
-import { formatDateKey } from "@drama/automation-logging";
+} from "@dramabridge/media-assets";
+import { ensureBaiduNetdiskEpisodeVideos } from "@dramabridge/media-assets/baidu-netdisk";
+import { formatDateKey } from "@dramabridge/automation-logging";
 import { createHash } from "node:crypto";
 import { lstat, readdir, rm, statfs, utimes } from "node:fs/promises";
 import path from "node:path";
@@ -826,7 +826,7 @@ function cdpPort(config = readConfig()) {
 }
 
 async function importBaiduNetdiskRuntimePackage() {
-  const runtime = await import("@drama/baidu-netdisk-automation") as {
+  const runtime = await import("@dramabridge/baidu-netdisk-automation") as {
     configureBaiduNetdiskAutomationLogging: (options: {
       logFilePath: string;
       retentionDays?: number;
@@ -849,7 +849,7 @@ async function importBaiduNetdiskRuntimePackage() {
 }
 
 async function importBaiduNetdiskDownloadRuntimePackage() {
-  const runtime = await import("@drama/baidu-netdisk-automation/download-baidu-folder") as {
+  const runtime = await import("@dramabridge/baidu-netdisk-automation/download-baidu-folder") as {
     configureBaiduNetdiskAutomationLogging: (options: {
       logFilePath: string;
       retentionDays?: number;

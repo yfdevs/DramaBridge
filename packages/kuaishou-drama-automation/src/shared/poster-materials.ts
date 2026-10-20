@@ -1,4 +1,4 @@
-import { listLocalPosterImages } from "@drama/drama-media-assets";
+import { listLocalPosterImages } from "@dramabridge/media-assets";
 import type { KuaishouDramaRuntimeOptions, KuaishouDramaTaskConfig } from "./types.js";
 import { prepareKuaishouDramaCoverFiles } from "./cover-materials.js";
 import { getKuaishouDramaLocalEpisodeVideoRoot } from "./local-episode-videos.js";

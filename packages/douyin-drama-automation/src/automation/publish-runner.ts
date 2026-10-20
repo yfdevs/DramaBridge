@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   cleanupEpisodeUploadFiles,
   prepareEpisodeUploadFiles,
-} from "@drama/drama-media-assets";
+} from "@dramabridge/media-assets";
 import type { Page } from "playwright";
 import {
   DOUYIN_DRAMA_CREATE_URL,

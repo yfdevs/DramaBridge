@@ -1,7 +1,7 @@
 # 百度短剧自动化
 
 百度短剧上剧平台的独立 Playwright 运行时。运行时使用独立 Chromium 登录态，并通过
-`@drama/drama-media-assets` 校验、准备本地剧集与海报资源。
+`@dramabridge/media-assets` 校验、准备本地剧集与海报资源。
 
 ## 后端接口
 

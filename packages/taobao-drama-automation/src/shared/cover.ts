@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { prepareCroppedImageVariant } from "@drama/drama-media-assets";
+import { prepareCroppedImageVariant } from "@dramabridge/media-assets";
 import { TAOBAO_DRAMA_COVER_HEIGHT, TAOBAO_DRAMA_COVER_WIDTH } from "./constants.js";
 import { findTaobaoSourcePoster } from "./local-materials.js";
 import { log } from "./logger.js";
