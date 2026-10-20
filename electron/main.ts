@@ -56,7 +56,7 @@ function createWindow() {
 
   const appIcon = nativeImage.createFromPath(getAppIconPath());
   const minimumWindowSize = {
-    width: 780,
+    width: 900,
     height: 620,
   };
   const mainWindowState = windowStateKeeper({
@@ -67,8 +67,8 @@ function createWindow() {
   win = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
-    width: mainWindowState.width,
-    height: mainWindowState.height,
+    width: Math.max(mainWindowState.width, minimumWindowSize.width),
+    height: Math.max(mainWindowState.height, minimumWindowSize.height),
     minWidth: minimumWindowSize.width,
     minHeight: minimumWindowSize.height,
     resizable: true,
