@@ -60,7 +60,7 @@ function AppContent() {
               open={true}
               keyboardShortcutEnabled={false}
               className="app-desktop-shell h-full min-h-0"
-              style={{ "--sidebar-width": "260px" } as React.CSSProperties}
+              style={{ "--sidebar-width": "228px" } as React.CSSProperties}
             >
               <AppTitlebarMemory />
               <AppSidebar />

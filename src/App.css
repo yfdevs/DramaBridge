@@ -1,7 +1,7 @@
 :root {
   --app-titlebar-height: 32px;
   --app-titlebar-left-reserve: 4px;
-  --app-titlebar-right-reserve: 92px;
+  --app-titlebar-right-reserve: 138px;
   --app-shell-background: var(--sidebar);
 }
 
@@ -70,11 +70,23 @@ body {
 }
 
 .cet-titlebar .cet-title {
-  display: none !important;
+  display: flex !important;
+  align-items: center;
+  height: var(--app-titlebar-height);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .cet-titlebar .cet-title.cet-title-left {
-  margin-left: 2px;
+  margin-left: max(24px, var(--app-titlebar-left-reserve));
+}
+
+.cet-container .app-sidebar-brand {
+  display: none;
+}
+
+.cet-container .app-sidebar-content {
+  padding-top: 8px;
 }
 
 .cet-titlebar .cet-menubar {
@@ -157,10 +169,6 @@ body {
   transition:
     background-color 100ms ease,
     color 100ms ease;
-}
-
-.cet-titlebar .cet-control-maximize {
-  display: none !important;
 }
 
 :root[data-platform="darwin"] .cet-titlebar .cet-window-controls {

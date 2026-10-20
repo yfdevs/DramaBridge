@@ -56,7 +56,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   };
   return (
     <Sidebar collapsible="none" className="shrink-0 border-none" {...props}>
-      <SidebarHeader className="h-14 justify-center px-6 py-0">
+      <SidebarHeader className="app-sidebar-brand h-14 justify-center px-6 py-0">
         <NavLink
           to={routePath(defaultRoute)}
           className="w-fit rounded-md text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -64,7 +64,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
           AutoDrama
         </NavLink>
       </SidebarHeader>
-      <SidebarContent className="gap-0 px-3 pb-4">
+      <SidebarContent className="app-sidebar-content gap-0 px-3 pb-4">
         <SidebarGroup className="p-0">
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">

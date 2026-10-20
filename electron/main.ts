@@ -55,26 +55,25 @@ function createWindow() {
   logMain("info", "Creating main window");
 
   const appIcon = nativeImage.createFromPath(getAppIconPath());
-  const fixedWindowSize = {
+  const minimumWindowSize = {
     width: 780,
     height: 620,
   };
   const mainWindowState = windowStateKeeper({
-    defaultWidth: fixedWindowSize.width,
-    defaultHeight: fixedWindowSize.height,
+    defaultWidth: minimumWindowSize.width,
+    defaultHeight: minimumWindowSize.height,
   });
 
   win = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
-    width: fixedWindowSize.width,
-    height: fixedWindowSize.height,
-    minWidth: fixedWindowSize.width,
-    minHeight: fixedWindowSize.height,
-    maxWidth: fixedWindowSize.width,
-    maxHeight: fixedWindowSize.height,
-    resizable: false,
-    maximizable: false,
+    width: mainWindowState.width,
+    height: mainWindowState.height,
+    minWidth: minimumWindowSize.width,
+    minHeight: minimumWindowSize.height,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
     fullscreenable: false,
     title: "AutoDrama",
     titleBarStyle: "hidden",
