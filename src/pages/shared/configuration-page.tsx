@@ -1,3 +1,10 @@
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { CheckCircle, DangerTriangle, ExternalLink, Folder } from "@mynaui/icons-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -53,7 +60,18 @@ export type ConfigSwitchField<TConfig> = {
   inactiveLabel: string;
 };
 
-export type ConfigFieldDefinition<TConfig> = ConfigTextField<TConfig> | ConfigSwitchField<TConfig>;
+export type ConfigSelectField<TConfig> = {
+  kind: "select";
+  key: ConfigFieldKey<TConfig>;
+  label: string;
+  description?: string;
+  options: { value: string; label: string }[];
+};
+
+export type ConfigFieldDefinition<TConfig> =
+  | ConfigTextField<TConfig>
+  | ConfigSwitchField<TConfig>
+  | ConfigSelectField<TConfig>;
 
 export type ConfigSectionDefinition<TConfig> = {
   title: string;
@@ -343,6 +361,40 @@ function ConfigFieldControl<TConfig extends object>({
   onSelectDirectory?: (key: ConfigFieldKey<TConfig>) => void;
 }) {
   const value = String(config[field.key] ?? "");
+
+  if (field.kind === "select") {
+    return (
+      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
+        <FieldContent>
+          <FieldLabel className="text-[13px]" htmlFor={field.key}>
+            {field.label}
+          </FieldLabel>
+          {field.description && (
+            <FieldDescription className="text-xs">{field.description}</FieldDescription>
+          )}
+        </FieldContent>
+        <Select
+          value={value}
+          onValueChange={(next) => {
+            if (next) onChange?.(field.key, next);
+          }}
+        >
+          <SelectTrigger id={field.key} className="h-8 w-full text-[13px]">
+            <SelectValue>
+              {field.options.find((option) => option.value === value)?.label}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {field.options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+    );
+  }
 
   if (field.kind === "switch") {
     const checked = value === "true";

@@ -14,6 +14,7 @@ import {
 import { globalAppConfigService, type GlobalAppConfig } from "@/platforms/app-config/service";
 
 const emptyConfig: GlobalAppConfig = {
+  theme: "system",
   aiApiKey: "",
   aiBaseURL: "https://ark.cn-beijing.volces.com/api/v3",
   aiModel: "doubao-seed-2-0-pro-260215",
@@ -28,6 +29,23 @@ const emptyConfig: GlobalAppConfig = {
 };
 
 const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
+  {
+    title: "外观",
+    description: "保存后立即生效，无需重启应用",
+    fields: [
+      {
+        kind: "select",
+        key: "theme",
+        label: "主题",
+        description: "跟随系统会自动切换浅色与深色外观。",
+        options: [
+          { value: "system", label: "跟随系统" },
+          { value: "light", label: "浅色" },
+          { value: "dark", label: "深色" },
+        ],
+      },
+    ],
+  },
   {
     title: "文件与目录",
     description: "所有平台共用；运行数据与素材需放在同一磁盘",
@@ -70,7 +88,8 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
         kind: "switch",
         key: "baiduNetdiskCleanupPlayletAfterTaskSuccess",
         label: "任务成功后清理网盘剧目",
-        description: "任一平台任务成功并回写后，删除本次转存到“我的网盘”的剧目目录；本地素材不受影响。",
+        description:
+          "任一平台任务成功并回写后，删除本次转存到“我的网盘”的剧目目录；本地素材不受影响。",
         activeLabel: "自动清理",
         inactiveLabel: "保留目录",
       },
@@ -197,11 +216,7 @@ export function GlobalConfigurationPage() {
                   size="sm"
                   variant="ghost"
                 >
-                  <ExternalLink
-                    aria-hidden="true"
-                    className="size-3.5"
-                    data-icon="inline-start"
-                  />
+                  <ExternalLink aria-hidden="true" className="size-3.5" data-icon="inline-start" />
                   <span className="leading-none">前往火山方舟获取 API Key</span>
                 </Button>
                 <Button

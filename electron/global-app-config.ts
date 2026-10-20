@@ -5,6 +5,8 @@ import {
 } from "@drama/ai";
 import {
   app,
+  BrowserWindow,
+  nativeTheme,
   ipcMain,
   safeStorage,
   shell,
@@ -29,6 +31,7 @@ const MAX_JIANYING_EPISODE_COUNT = 100;
 export const GLOBAL_DIRECTORIES_REQUIRED_ERROR_CODE = "GLOBAL_APP_DIRECTORIES_REQUIRED";
 
 export type GlobalAppConfig = {
+  theme: "system" | "light" | "dark";
   aiApiKey: string;
   aiBaseURL: string;
   aiModel: string;
@@ -43,6 +46,7 @@ export type GlobalAppConfig = {
 };
 
 type StoredGlobalAppConfig = {
+  theme?: GlobalAppConfig["theme"];
   aiApiKeyCiphertext: string;
   aiBaseURL: string;
   aiModel: string;
@@ -61,6 +65,7 @@ type GlobalAppConfigStore = {
 };
 
 const defaultStoredConfig: StoredGlobalAppConfig = {
+  theme: "system",
   aiApiKeyCiphertext: "",
   aiBaseURL: RECOMMENDED_AI_BASE_URL,
   aiModel: RECOMMENDED_AI_MODEL,
@@ -114,9 +119,7 @@ function normalizeAiCoverGenerationRetryAttempts(value: string | undefined) {
   if (!normalized) return DEFAULT_AI_COVER_GENERATION_RETRY_ATTEMPTS;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return DEFAULT_AI_COVER_GENERATION_RETRY_ATTEMPTS;
-  return String(
-    Math.min(MAX_AI_COVER_GENERATION_RETRY_ATTEMPTS, Math.max(0, Math.floor(parsed))),
-  );
+  return String(Math.min(MAX_AI_COVER_GENERATION_RETRY_ATTEMPTS, Math.max(0, Math.floor(parsed))));
 }
 
 function normalizeJianyingEpisodeCount(value: string | undefined) {
@@ -157,8 +160,20 @@ function decryptApiKey(ciphertext: string) {
   }
 }
 
+function normalizeTheme(theme: unknown): GlobalAppConfig["theme"] {
+  return theme === "light" || theme === "dark" ? theme : "system";
+}
+
+function applyAppTheme(theme: GlobalAppConfig["theme"]) {
+  nativeTheme.themeSource = theme;
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("app:theme:changed", theme);
+  }
+}
+
 function normalizeGlobalAppConfig(config: Partial<GlobalAppConfig>): GlobalAppConfig {
   return {
+    theme: normalizeTheme(config.theme),
     aiApiKey: config.aiApiKey?.trim() ?? "",
     aiBaseURL: normalizeBaseURL(config.aiBaseURL),
     aiModel: config.aiModel?.trim() ?? "",
@@ -184,15 +199,16 @@ function normalizeGlobalAppConfig(config: Partial<GlobalAppConfig>): GlobalAppCo
 export function readGlobalAppConfig(): GlobalAppConfig {
   let config = getStore().get("config");
   if (
-    !config.aiApiKeyCiphertext
-    && !config.aiModel.trim()
-    && config.aiBaseURL === LEGACY_DEFAULT_AI_BASE_URL
+    !config.aiApiKeyCiphertext &&
+    !config.aiModel.trim() &&
+    config.aiBaseURL === LEGACY_DEFAULT_AI_BASE_URL
   ) {
     config = defaultStoredConfig;
     getStore().set("config", config);
   }
 
   return {
+    theme: normalizeTheme(config.theme),
     aiApiKey: decryptApiKey(config.aiApiKeyCiphertext),
     aiBaseURL: normalizeBaseURL(config.aiBaseURL),
     aiModel: config.aiModel.trim(),
@@ -245,6 +261,7 @@ function saveGlobalAppConfig(config: Partial<GlobalAppConfig>) {
   const normalized = normalizeGlobalAppConfig(config);
 
   getStore().set("config", {
+    theme: normalized.theme,
     aiApiKeyCiphertext: encryptApiKey(normalized.aiApiKey),
     aiBaseURL: normalized.aiBaseURL,
     aiModel: normalized.aiModel,
@@ -279,9 +296,7 @@ export function resolveGlobalPlatformDirectories(
   const localMaterialRoot = config.localMaterialRoot?.trim();
 
   return {
-    runDataDir: runDataRoot
-      ? path.join(runDataRoot, platformDirectoryName)
-      : fallback.runDataDir,
+    runDataDir: runDataRoot ? path.join(runDataRoot, platformDirectoryName) : fallback.runDataDir,
     localMaterialRoot: localMaterialRoot || fallback.localMaterialRoot,
   };
 }
@@ -355,10 +370,14 @@ async function testAiConfig(config: Partial<GlobalAppConfig>) {
       height: 64,
       width: 64,
     },
-  }).png().toBuffer();
+  })
+    .png()
+    .toBuffer();
   const startedAt = Date.now();
   const result = await client.analyzeImages({
-    images: [{ dataUrl: `data:image/png;base64,${testImage.toString("base64")}`, type: "data-url" }],
+    images: [
+      { dataUrl: `data:image/png;base64,${testImage.toString("base64")}`, type: "data-url" },
+    ],
     maxTokens: 16,
     prompt: "这是图片与文本能力连接测试。确认能读取图片后，只回复 OK。",
   });
@@ -370,16 +389,22 @@ async function testAiConfig(config: Partial<GlobalAppConfig>) {
   };
 }
 
-export function registerGlobalAppConfigHandlers(options: {
-  getRunningPlatformCount?: () => number;
-} = {}) {
+export function registerGlobalAppConfigHandlers(
+  options: {
+    getRunningPlatformCount?: () => number;
+  } = {},
+) {
   if (registered) return;
   registered = true;
+
+  applyAppTheme(normalizeTheme(getStore().get("config").theme));
+  ipcMain.handle("app:theme:get", () => normalizeTheme(getStore().get("config").theme));
 
   ipcMain.handle("app:config:get", () => configResult());
   ipcMain.handle("app:config:save", (_event, config: Partial<GlobalAppConfig>) => {
     const previous = readGlobalAppConfig();
     const saved = saveGlobalAppConfig(config);
+    if (previous.theme !== saved.theme) applyAppTheme(saved.theme);
     const directoryChanged =
       previous.runDataRoot !== saved.runDataRoot ||
       previous.localMaterialRoot !== saved.localMaterialRoot;

@@ -8,6 +8,7 @@ import {
 } from "echarts/components";
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
+import { useAppTheme } from "@/platforms/app-config/theme-provider";
 
 import {
   getTaskAnalytics,
@@ -32,6 +33,7 @@ function shortDate(value: string) {
 }
 
 export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatform }) {
+  const { resolvedTheme } = useAppTheme();
   const chartElementRef = useRef<HTMLDivElement>(null);
   const [result, setResult] = useState<TaskAnalyticsResult>(EMPTY_RESULT);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
     const element = chartElementRef.current;
     if (!element || loading || result.unavailableReason || !hasData) return;
 
-    const dark = document.documentElement.classList.contains("dark");
+    const dark = resolvedTheme === "dark";
     const fontFamily = getComputedStyle(document.documentElement)
       .getPropertyValue("--font-sans")
       .trim();
@@ -177,7 +179,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
       resizeObserver.disconnect();
       chart?.dispose();
     };
-  }, [hasData, loading, result]);
+  }, [hasData, loading, result, resolvedTheme]);
 
   const stateText = result.unavailableReason
     ? "任务统计暂不可用，请检查桌面服务连接。"

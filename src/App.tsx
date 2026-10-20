@@ -8,7 +8,8 @@ import { AppRuntimeProvider } from "@/platforms/app-runtime/context";
 import { AppTitlebarMemory } from "@/components/app-titlebar-memory";
 import { BaiduNetdiskDialogProvider } from "@/platforms/baidu-netdisk/dialog";
 import { JianyingDialogProvider } from "@/platforms/jianying/dialog";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster as BaseToaster } from "@/components/ui/sonner";
+import { useAppTheme } from "@/platforms/app-config/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppRoutes } from "@/routes/app-routes";
 import { WechatMiniProgramBaiduUploadWindow } from "@/pages/wechat-miniprogram-drama/baidu-upload-window";
@@ -17,13 +18,18 @@ import { PinduoduoDramaUploadRecordsPage } from "@/pages/pinduoduo-drama/upload-
 
 import "./App.css";
 
+function Toaster(props: React.ComponentProps<typeof BaseToaster>) {
+  const { resolvedTheme } = useAppTheme();
+  return <BaseToaster {...props} theme={resolvedTheme} />;
+}
+
 export default function App() {
   const windowMode = new URLSearchParams(window.location.search).get("window");
   if (windowMode === "wechat-miniprogram-baidu-upload") {
     return (
       <TooltipProvider delay={120} closeDelay={0} timeout={250}>
         <WechatMiniProgramBaiduUploadWindow />
-        <Toaster position="bottom-right" closeButton={true} theme="dark" richColors />
+        <Toaster position="bottom-right" closeButton={true} richColors />
       </TooltipProvider>
     );
   }
@@ -31,7 +37,7 @@ export default function App() {
     return (
       <TooltipProvider delay={120} closeDelay={0} timeout={250}>
         <WechatMiniProgramCatalogUploadWindow />
-        <Toaster position="bottom-right" closeButton={true} theme="dark" richColors />
+        <Toaster position="bottom-right" closeButton={true} richColors />
       </TooltipProvider>
     );
   }
@@ -39,7 +45,7 @@ export default function App() {
     return (
       <TooltipProvider delay={120} closeDelay={0} timeout={250}>
         <PinduoduoDramaUploadRecordsPage />
-        <Toaster position="bottom-right" closeButton={true} theme="dark" richColors />
+        <Toaster position="bottom-right" closeButton={true} richColors />
       </TooltipProvider>
     );
   }
