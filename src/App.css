@@ -50,7 +50,7 @@ body {
   z-index: 0;
   box-sizing: border-box;
   height: var(--app-titlebar-height) !important;
-  border-bottom: 1px solid color-mix(in oklch, var(--border) 58%, transparent);
+  border-bottom: 0;
   background: var(--app-shell-background) !important;
   color: var(--foreground) !important;
   font-family: var(--font-sans) !important;
@@ -246,7 +246,7 @@ body {
   overflow: hidden;
 }
 .app-workspace {
-  margin: 4px 5px 5px 0;
+  margin: 0 5px 5px 0;
   border: 1px solid var(--border);
   border-radius: 15px;
 }
