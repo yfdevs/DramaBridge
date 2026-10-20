@@ -44,18 +44,18 @@ const emptyStoragePaths: KuaishouDramaStoragePaths = {
 const configSections: ConfigSectionDefinition<KuaishouDramaConfig>[] = [
   {
     title: "任务接口",
-    description: "从后台读取已启用的快手账号，并为每个账号独立领取和回写任务。",
+    description: "按账号领取任务并提交结果。",
     fields: [
       {
         key: "apiBaseUrl",
         label: "接口地址",
-        description: "快手 RPA 账号配置、任务领取和结果回写接口根地址。",
+        description: "用于读取账号、领取任务和提交结果。",
         type: "url",
       },
       {
         key: "taskPollIntervalSeconds",
-        label: "任务轮询间隔",
-        description: "没有可领取任务或单次多版本上传结束后，再次请求任务的间隔。",
+        label: "任务检查间隔",
+        description: "无任务或任务结束后，等待多久再领取任务。",
         type: "number",
         suffix: "秒",
         min: 1,
@@ -64,36 +64,36 @@ const configSections: ConfigSectionDefinition<KuaishouDramaConfig>[] = [
   },
   {
     title: "浏览器与上传",
-    description: "快手使用独立登录态；共享目录在全局配置中统一管理。",
+    description: "账号登录信息独立保存，共享目录在全局配置中设置。",
     fields: [
       {
         key: "baiduNetdiskDownloadRetryAttempts",
-        label: "网盘下载重试",
-        description: "百度网盘资源准备失败后的额外重试次数。",
+        label: "网盘下载重试次数",
+        description: "下载失败后的额外重试次数，耗尽后任务失败。",
         type: "number",
         suffix: "次",
         min: 0,
       },
       {
         key: "videoUploadTimeoutMinutes",
-        label: "视频上传超时",
-        description: "批量视频开始上传后，等待全部剧集完成的最长时间。",
+        label: "上传时限",
+        description: "等待全部剧集上传完成的最长时间。",
         type: "number",
         suffix: "分钟",
         min: 1,
       },
       {
         key: "logRetentionDays",
-        label: "日志保留",
-        description: "超过天数的日志文件会在服务启动时清理。",
+        label: "日志保留天数",
+        description: "启动服务时，清理超过此天数的日志。",
         type: "number",
         suffix: "天",
         min: 1,
       },
       {
         key: "operationDelaySeconds",
-        label: "操作延迟",
-        description: "每一步 Playwright 操作之间的延迟。",
+        label: "操作间隔",
+        description: "每次浏览器操作之间的等待时间。",
         type: "number",
         suffix: "秒",
         step: "0.01",
@@ -101,10 +101,10 @@ const configSections: ConfigSectionDefinition<KuaishouDramaConfig>[] = [
       {
         kind: "switch",
         key: "headless",
-        label: "浏览器窗口",
-        description: "登录和排查问题时建议显示浏览器。",
-        activeLabel: "无头运行",
-        inactiveLabel: "显示浏览器",
+        label: "隐藏浏览器窗口",
+        description: "开启后隐藏窗口，登录或排查问题时请关闭。",
+        activeLabel: "已隐藏",
+        inactiveLabel: "显示窗口",
       },
     ],
   },
@@ -118,32 +118,32 @@ const storagePathRows: Array<{
   {
     key: "runDataDir",
     label: "运行数据目录",
-    description: "快手平台所有运行文件的根目录。",
+    description: "保存此平台的运行文件。",
   },
   {
     key: "accountDir",
     label: "账号目录",
-    description: "当前账号 profile 的独立目录。",
+    description: "保存当前账号的独立数据。",
   },
   {
     key: "userDataDir",
-    label: "浏览器登录态",
-    description: "Chromium 持久化 profile，登录后 cookie、Local Storage 和缓存会保存在这里。",
+    label: "浏览器数据",
+    description: "保存登录信息和浏览器缓存。",
   },
   {
     key: "credentialStatePath",
-    label: "登录态快照",
-    description: "用于排查的 storage-state.json，不作为共享登录态注入。",
+    label: "登录信息快照",
+    description: "用于排查登录问题，不与其他账号共享。",
   },
   {
     key: "logDir",
     label: "日志目录",
-    description: "运行日志按日期写入此目录。",
+    description: "按日期保存运行日志。",
   },
   {
     key: "assetDownloadDir",
     label: "素材缓存",
-    description: "远程封面、授权材料、海报下载后临时保存在这里。",
+    description: "临时存放下载的封面、海报和授权材料。",
   },
 ];
 
@@ -183,7 +183,7 @@ export function KuaishouDramaConfigurationPage() {
       hasChanges={hasChanges}
       loading={loading}
       restartRequired={restartRequired}
-      title="快手短剧配置"
+      title="快手配置"
       onDiscard={discardChanges}
       onSave={persistConfig}
     >
@@ -198,11 +198,11 @@ export function KuaishouDramaConfigurationPage() {
       ))}
 
       <ConfigPanelSection
-        description="当前配置会使用这些路径保存登录态、日志和下载素材。"
+        description="配置、账号和素材的实际保存位置"
         title="文件位置"
       >
         <StoragePathRow
-          description="electron-store 保存的配置文件。"
+          description="保存当前平台的设置。"
           label="配置文件"
           pathText={configFilePath}
           onOpen={() => openStoragePath("configFilePath")}
@@ -220,7 +220,7 @@ export function KuaishouDramaConfigurationPage() {
         ))}
         <Separator />
         <StoragePathRow
-          description="打开最近一次运行日志；没有日志时打开日志目录。"
+          description="打开最新日志，没有日志时打开目录。"
           label="最近日志"
           pathText={storagePaths.logFilePath}
           onOpen={() => openStoragePath("latestLog")}

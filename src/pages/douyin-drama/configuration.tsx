@@ -29,34 +29,34 @@ const emptyConfig: DouyinDramaConfig = {
 const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
   {
     title: "任务与素材",
-    description: "剧目业务字段由后台 RPA 任务提供；售卖确认页使用这里配置的期限、价格和付费起始集数。",
+    description: "剧目信息由后台提供，售价和付费集数在此设置。",
     fields: [
       {
         key: "apiBaseUrl",
         label: "接口地址",
-        description: "用于读取后台启用账号、领取任务并回报执行结果，默认连接 180.184.76.232:19090。",
+        description: "用于读取账号、领取任务和提交结果。",
         type: "url",
       },
       {
         key: "taskPollIntervalSeconds",
-        label: "任务轮询间隔",
-        description: "空闲或任务结束后再次调用领取接口的等待时间。",
+        label: "任务检查间隔",
+        description: "无任务或任务结束后，等待多久再领取任务。",
         type: "number",
         suffix: "秒",
         min: 1,
       },
       {
         key: "baiduNetdiskDownloadRetryAttempts",
-        label: "网盘下载重试",
-        description: "可重试的百度网盘下载错误最多重试次数。",
+        label: "网盘下载重试次数",
+        description: "网盘下载失败时，最多重试多少次。",
         type: "number",
         suffix: "次",
         min: 0,
       },
       {
         key: "episodeUploadBatchSize",
-        label: "视频并行上传数",
-        description: "同时保持上传的视频数量；任意一集完成后立即补充下一集，默认 3 集。",
+        label: "同时上传集数",
+        description: "最多同时上传多少集，完成后自动补充下一集。",
         type: "number",
         suffix: "集",
         min: 1,
@@ -64,8 +64,8 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       },
       {
         key: "episodeUploadReplaceAttempts",
-        label: "视频上传重试次数",
-        description: "单个剧集视频上传失败或时长异常后，删除异常条目并重新上传原视频的最多次数，默认 5 次。",
+        label: "重新上传次数",
+        description: "上传失败或时长异常时，删除异常条目并重新上传的最多次数。",
         type: "number",
         suffix: "次",
         min: 0,
@@ -73,8 +73,8 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       },
       {
         key: "episodeUploadWaitTimeoutMinutes",
-        label: "上传等待时间",
-        description: "等待全部剧集上传与处理完成的最长时间。",
+        label: "上传时限",
+        description: "等待全部剧集上传和处理完成的最长时间。",
         type: "number",
         suffix: "分钟",
         min: 1,
@@ -82,7 +82,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         key: "unitPriceYuan",
         label: "单集售价",
-        description: "填写抖音最终确认页的单集售价。",
+        description: "填写每集的付费价格。",
         type: "number",
         suffix: "元",
         min: 0.1,
@@ -91,8 +91,8 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       },
       {
         key: "paidEpisodeStart",
-        label: "付费起始集数",
-        description: "从该集开始到最后一集均设为付费；第 1 集为平台免费集，因此最早从第 2 集开始。",
+        label: "付费起始集",
+        description: "从此集起收费；第 1 集免费，最早从第 2 集起。",
         type: "number",
         suffix: "集起",
         min: 2,
@@ -102,20 +102,20 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
   },
   {
     title: "浏览器与日志",
-    description: "抖音短剧使用独立 Chromium 登录态；共享目录在全局配置中统一管理。",
+    description: "账号登录信息独立保存，共享目录在全局配置中设置。",
     fields: [
       {
         key: "logRetentionDays",
-        label: "日志保留",
-        description: "超过天数的日志文件会在服务启动时清理。",
+        label: "日志保留天数",
+        description: "启动服务时，清理超过此天数的日志。",
         type: "number",
         suffix: "天",
         min: 1,
       },
       {
         key: "operationDelaySeconds",
-        label: "操作延迟",
-        description: "每一步 Playwright 操作之间的延迟。",
+        label: "操作间隔",
+        description: "每次浏览器操作之间的等待时间。",
         type: "number",
         suffix: "秒",
         step: "0.01",
@@ -123,18 +123,18 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         kind: "switch",
         key: "headless",
-        label: "浏览器窗口",
-        description: "首次登录、测试任务和排查页面变化时建议显示浏览器。",
-        activeLabel: "无头运行",
-        inactiveLabel: "显示浏览器",
+        label: "隐藏浏览器窗口",
+        description: "开启后隐藏窗口，登录或排查问题时请关闭。",
+        activeLabel: "已隐藏",
+        inactiveLabel: "显示窗口",
       },
       {
         kind: "switch",
         key: "closeFailedTaskPages",
-        label: "失败任务页面",
-        description: "默认保留失败现场，便于结合截图和日志排查页面变化。",
-        activeLabel: "自动关闭失败页",
-        inactiveLabel: "保留失败页",
+        label: "自动关闭失败页",
+        description: "关闭后保留失败页面，便于排查问题。",
+        activeLabel: "自动关闭",
+        inactiveLabel: "保留页面",
       },
     ],
   },
@@ -151,7 +151,7 @@ export function DouyinDramaConfigurationPage() {
       hasChanges={configState.hasChanges}
       loading={configState.loading}
       restartRequired={configState.restartRequired}
-      title="抖音短剧配置"
+      title="抖音配置"
       onDiscard={configState.discardChanges}
       onSave={configState.persistConfig}
     >

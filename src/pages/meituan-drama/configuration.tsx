@@ -22,57 +22,57 @@ const emptyConfig: MeituanCreationConfig = {
 const sections: ConfigSectionDefinition<MeituanCreationConfig>[] = [
   {
     title: "账号连接",
-    description: "服务启动时从后台读取已启用账号，并为每个账号创建独立浏览器。",
+    description: "启动时读取已启用的账号，分别打开浏览器。",
     fields: [
       {
         key: "apiBaseUrl",
-        label: "后台接口地址",
+        label: "接口地址",
         type: "url",
-        description: "用于获取美团账号配置，默认连接 180.184.76.232:19090。",
+        description: "用于读取后台启用的美团账号。",
       },
     ],
   },
   {
     title: "浏览器与上传",
-    description: "美团使用独立登录态；共享目录在全局配置中统一管理。",
+    description: "账号登录信息独立保存，共享目录在全局配置中设置。",
     fields: [
       {
         key: "operationDelaySeconds",
-        label: "操作延迟",
+        label: "操作间隔",
         type: "number",
-        description: "每一步 Playwright 操作之间的延迟。",
+        description: "每次浏览器操作之间的等待时间。",
         suffix: "秒",
         step: "0.01",
       },
       {
         key: "episodeUploadFailedRetryAttempts",
-        label: "上传失败重试",
+        label: "上传重试次数",
         type: "number",
-        description: "单集视频出现“重试”时的最多重试次数，耗尽后上报任务失败。",
+        description: "单集上传失败时的重试次数，耗尽后任务失败。",
         suffix: "次",
         min: 0,
       },
       {
         kind: "switch",
         key: "headless",
-        label: "浏览器窗口",
-        description: "登录和排查问题时建议显示浏览器。",
-        activeLabel: "无头运行",
-        inactiveLabel: "显示浏览器",
+        label: "隐藏浏览器窗口",
+        description: "开启后隐藏窗口，登录或排查问题时请关闭。",
+        activeLabel: "已隐藏",
+        inactiveLabel: "显示窗口",
       },
     ],
   },
   {
     title: "任务页面",
-    description: "每个任务使用独立标签页，避免前一任务的页面状态影响下一任务。",
+    description: "每个任务使用独立页面，互不影响。",
     fields: [
       {
         kind: "switch",
         key: "closeTaskPageAfterRun",
-        label: "任务结束处理",
-        description: "任务成功或失败并完成结果上报后，是否关闭对应的任务标签页。",
-        activeLabel: "自动关闭标签页",
-        inactiveLabel: "保留标签页",
+        label: "结束后关闭页面",
+        description: "任务成功或失败并提交结果后，关闭任务页。",
+        activeLabel: "自动关闭",
+        inactiveLabel: "保留页面",
       },
     ],
   },
@@ -98,7 +98,7 @@ export function MeituanCreationConfigurationPage() {
       hasChanges={hasChanges}
       loading={loading}
       restartRequired={restartRequired}
-      title="美团创作平台配置"
+      title="美团配置"
       onDiscard={discardChanges}
       onSave={persistConfig}
     >
