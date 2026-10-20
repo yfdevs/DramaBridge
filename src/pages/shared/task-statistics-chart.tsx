@@ -72,12 +72,16 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
     if (!element || loading || result.unavailableReason || !hasData) return;
 
     const dark = document.documentElement.classList.contains("dark");
+    const fontFamily = getComputedStyle(document.documentElement)
+      .getPropertyValue("--font-sans")
+      .trim();
     const ink = dark ? "#fafafa" : "#18181b";
     const muted = dark ? "#a1a1aa" : "#71717a";
     const hairline = dark ? "#3f3f46" : "#e4e4e7";
     const splitLine = dark ? "#27272a" : "#f4f4f5";
     const warning = dark ? "#fbbf24" : "#f5a623";
     const option: echarts.EChartsCoreOption = {
+      textStyle: { fontFamily },
       animationDuration: 600,
       animationEasing: "cubicOut",
       color: [ink, warning],
@@ -87,7 +91,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
         top: 0,
         textStyle: {
           color: ink,
-          fontFamily: "Geist Variable, sans-serif",
+          fontFamily,
           fontSize: 14,
           fontWeight: 600,
         },
@@ -99,7 +103,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
         itemHeight: 8,
         itemWidth: 8,
         itemGap: 16,
-        textStyle: { color: muted, fontSize: 11 },
+        textStyle: { color: muted, fontSize: 11, fontFamily },
       },
       tooltip: {
         trigger: "axis",
@@ -111,7 +115,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
         borderColor: hairline,
         borderWidth: 1,
         padding: [8, 12],
-        textStyle: { color: ink, fontSize: 11 },
+        textStyle: { color: ink, fontSize: 11, fontFamily },
         extraCssText: "border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);",
       },
       grid: { left: 4, right: 4, top: 44, bottom: 8, containLabel: true },
@@ -122,6 +126,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
         axisTick: { show: false },
         axisLabel: {
           color: muted,
+          fontFamily,
           fontSize: 10,
           interval: 4,
           margin: 10,
@@ -130,7 +135,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
       yAxis: {
         type: "value",
         minInterval: 1,
-        axisLabel: { color: muted, fontSize: 10 },
+        axisLabel: { color: muted, fontSize: 10, fontFamily },
         splitLine: { lineStyle: { color: splitLine, type: [4, 4] } },
       },
       series: [
@@ -155,8 +160,9 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
     };
 
     let chart: echarts.ECharts | null = null;
+    let disposed = false;
     const renderChart = () => {
-      if (element.clientWidth <= 0 || element.clientHeight <= 0) return;
+      if (disposed || element.clientWidth <= 0 || element.clientHeight <= 0) return;
       chart ??= echarts.init(element, undefined, { renderer: "canvas" });
       chart.setOption(option);
       chart.resize();
@@ -164,7 +170,9 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
     const resizeObserver = new ResizeObserver(() => renderChart());
     resizeObserver.observe(element);
     const animationFrame = window.requestAnimationFrame(renderChart);
+    void document.fonts.ready.then(renderChart);
     return () => {
+      disposed = true;
       window.cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       chart?.dispose();
@@ -180,7 +188,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
         : null;
 
   return (
-    <section aria-label="近30天任务统计图" className="mt-4">
+    <section aria-label="近30天任务统计图">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-medium">发布统计</h2>
         <span className="text-xs text-muted-foreground">最近 30 天</span>

@@ -56,9 +56,9 @@ export function PinduoduoDramaServiceControlPage() {
         additionalAction={
           <Button
             type="button"
-            size="xs"
+            size="sm"
             variant="ghost"
-            className="h-10 gap-1.5 px-3 text-xs"
+            className="h-7 gap-1.5 px-3 text-xs"
             disabled={openingRecords}
             onClick={openUploadRecords}
           >

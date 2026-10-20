@@ -1,76 +1,67 @@
-import { useEffect, useState } from "react"
-import { toast } from "sonner"
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button"
-import {
-  ServiceControlButtonPage,
-  useServiceControl,
-} from "@/pages/shared/service-control"
+import { Button } from "@/components/ui/button";
+import { ServiceControlButtonPage, useServiceControl } from "@/pages/shared/service-control";
 import {
   type WechatMiniProgramServiceStatus,
   wechatMiniProgramService,
-} from "@/platforms/wechat-miniprogram-drama/service"
-import { wechatMiniProgramBaiduUploadService } from "@/platforms/wechat-miniprogram-drama/baidu-upload-service"
-import { wechatMiniProgramCatalogUploadService } from "@/platforms/wechat-miniprogram-drama/catalog-upload-service"
+} from "@/platforms/wechat-miniprogram-drama/service";
+import { wechatMiniProgramBaiduUploadService } from "@/platforms/wechat-miniprogram-drama/baidu-upload-service";
+import { wechatMiniProgramCatalogUploadService } from "@/platforms/wechat-miniprogram-drama/catalog-upload-service";
 
 const initialStatus: WechatMiniProgramServiceStatus = {
   running: false,
   pid: null,
   videoAccounts: [],
-}
+};
 
 function successMessage(status: WechatMiniProgramServiceStatus) {
-  return status.running ? "微信小程序服务已启动" : "微信小程序服务已停止"
+  return status.running ? "微信小程序服务已启动" : "微信小程序服务已停止";
 }
 
 export function WechatMiniProgramServiceControlPage() {
-  const [openingDirectUpload, setOpeningDirectUpload] = useState(false)
-  const [openingCatalogUpload, setOpeningCatalogUpload] = useState(false)
-  const {
-    loading,
-    pendingAction,
-    refreshStatus,
-    status,
-    toggleService,
-  } = useServiceControl({
+  const [openingDirectUpload, setOpeningDirectUpload] = useState(false);
+  const [openingCatalogUpload, setOpeningCatalogUpload] = useState(false);
+  const { loading, pendingAction, refreshStatus, status, toggleService } = useServiceControl({
     initialStatus,
     service: wechatMiniProgramService,
     successMessage,
-  })
+  });
 
   useEffect(() => {
     return wechatMiniProgramService.onConfigChanged(() => {
-      void refreshStatus(true)
-    })
-  }, [refreshStatus])
+      void refreshStatus(true);
+    });
+  }, [refreshStatus]);
 
   const openDirectUpload = async () => {
-    if (openingDirectUpload) return
-    setOpeningDirectUpload(true)
+    if (openingDirectUpload) return;
+    setOpeningDirectUpload(true);
     try {
-      await wechatMiniProgramBaiduUploadService.openWindow()
+      await wechatMiniProgramBaiduUploadService.openWindow();
     } catch (error) {
       toast.error("无法打开百度资源直传", {
         description: error instanceof Error ? error.message : String(error),
-      })
+      });
     } finally {
-      setOpeningDirectUpload(false)
+      setOpeningDirectUpload(false);
     }
-  }
+  };
 
   const openCatalogUpload = async () => {
-    if (openingCatalogUpload) return
-    setOpeningCatalogUpload(true)
+    if (openingCatalogUpload) return;
+    setOpeningCatalogUpload(true);
     try {
-      await wechatMiniProgramCatalogUploadService.openWindow()
+      await wechatMiniProgramCatalogUploadService.openWindow();
     } catch (error) {
       toast.error("无法打开前四集与封面入库", {
         description: error instanceof Error ? error.message : String(error),
-      })
+      });
     } finally {
-      setOpeningCatalogUpload(false)
+      setOpeningCatalogUpload(false);
     }
-  }
+  };
 
   return (
     <ServiceControlButtonPage
@@ -80,12 +71,12 @@ export function WechatMiniProgramServiceControlPage() {
       running={status.running}
       onToggle={() => void toggleService()}
       additionalAction={
-        <div className="flex flex-wrap justify-center gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
-            size="lg"
+            size="sm"
             variant="outline"
-            className="h-10 min-w-32 rounded-lg px-5"
+            className="h-7 px-3 text-xs"
             disabled={openingDirectUpload}
             onClick={() => void openDirectUpload()}
           >
@@ -93,9 +84,9 @@ export function WechatMiniProgramServiceControlPage() {
           </Button>
           <Button
             type="button"
-            size="lg"
+            size="sm"
             variant="outline"
-            className="h-10 min-w-32 rounded-lg px-5"
+            className="h-7 px-3 text-xs"
             disabled={openingCatalogUpload}
             onClick={() => void openCatalogUpload()}
           >
@@ -104,5 +95,5 @@ export function WechatMiniProgramServiceControlPage() {
         </div>
       }
     />
-  )
+  );
 }

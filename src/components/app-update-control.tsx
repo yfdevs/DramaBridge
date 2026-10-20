@@ -6,7 +6,6 @@ import {
   Refresh,
   SpinnerOne,
   StopCircle,
-  Zap,
 } from "@mynaui/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -189,10 +188,10 @@ function UpdateStateIcon({
     return <DangerTriangle className={iconClass} aria-hidden="true" />;
   }
 
-  return <Zap className={iconClass} aria-hidden="true" />;
+  return <Refresh className={iconClass} aria-hidden="true" />;
 }
 
-export function AppUpdateControl() {
+export function AppUpdateControl({ iconOnly = false }: { iconOnly?: boolean }) {
   const [status, setStatus] = useState<AppUpdateStatus | null>(null);
   const [actionPending, setActionPending] = useState<UpdateAction | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -221,9 +220,9 @@ export function AppUpdateControl() {
       if (!disposed) {
         setStatus(nextStatus);
         if (
-          nextStatus.state === "downloaded"
-          && nextStatus.latestVersion
-          && notifiedDownloadedVersion.current !== nextStatus.latestVersion
+          nextStatus.state === "downloaded" &&
+          nextStatus.latestVersion &&
+          notifiedDownloadedVersion.current !== nextStatus.latestVersion
         ) {
           notifiedDownloadedVersion.current = nextStatus.latestVersion;
           toast.success(`v${nextStatus.latestVersion} 已在后台下载完成`, {
@@ -281,14 +280,13 @@ export function AppUpdateControl() {
   const downloadText = progress
     ? `${formatBytes(progress.transferred)} / ${formatBytes(progress.total)} · ${formatBytes(progress.bytesPerSecond)}/s`
     : null;
-  const sourceLocked =
-    busy || status?.state === "installing" || status?.state === "downloaded";
+  const sourceLocked = busy || status?.state === "installing" || status?.state === "downloaded";
 
   const changeUpdateSource = (selection: AppUpdateSourceSelection) => {
     if (
-      !status
-      || (selection === "auto" && status.sourceMode === "auto")
-      || (selection !== "auto" && status.sourceMode === "manual" && selection === status.source.id)
+      !status ||
+      (selection === "auto" && status.sourceMode === "auto") ||
+      (selection !== "auto" && status.sourceMode === "manual" && selection === status.source.id)
     ) {
       return;
     }
@@ -299,7 +297,9 @@ export function AppUpdateControl() {
   const changePopoverOpen = (open: boolean) => {
     setPopoverOpen(open);
     if (open) {
-      void getAppUpdateStatus().then(setStatus).catch(() => undefined);
+      void getAppUpdateStatus()
+        .then(setStatus)
+        .catch(() => undefined);
     }
   };
 
@@ -334,7 +334,10 @@ export function AppUpdateControl() {
               render={
                 <button
                   type="button"
-                  className={cn(buttonVariants({ size: "xs", variant: "ghost" }))}
+                  className={cn(
+                    buttonVariants({ size: iconOnly ? "icon-sm" : "xs", variant: "ghost" }),
+                    iconOnly && "text-muted-foreground transition-none",
+                  )}
                   aria-label={`应用更新：${summary}`}
                 />
               }
@@ -343,7 +346,7 @@ export function AppUpdateControl() {
         >
           <span className="inline-flex h-full items-center gap-1 leading-none">
             <UpdateStateIcon status={status} actionPending={actionPending} />
-            <span>{updateButtonLabel(status, actionPending)}</span>
+            {!iconOnly && <span>{updateButtonLabel(status, actionPending)}</span>}
           </span>
         </TooltipTrigger>
         <TooltipContent side="top" align="end" sideOffset={8}>
@@ -364,9 +367,7 @@ export function AppUpdateControl() {
             </span>
             <div className="min-w-0">
               <PopoverTitle className="text-sm leading-5">应用更新</PopoverTitle>
-              <PopoverDescription className="text-xs leading-4">
-                {description}
-              </PopoverDescription>
+              <PopoverDescription className="text-xs leading-4">{description}</PopoverDescription>
             </div>
           </div>
         </PopoverHeader>
@@ -428,11 +429,7 @@ export function AppUpdateControl() {
                 <SelectTrigger id="app-update-source" size="sm" className="w-48 bg-background">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent
-                  align="end"
-                  positionerClassName="z-[100001]"
-                  className="max-w-64"
-                >
+                <SelectContent align="end" positionerClassName="z-[100001]" className="max-w-64">
                   <SelectItem value="auto">自动选择（推荐）</SelectItem>
                   {status.sources.map((source) => (
                     <SelectItem key={source.id} value={source.id}>
@@ -539,17 +536,13 @@ export function AppUpdateControl() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionPending === "install"}>
-              暂不安装
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={actionPending === "install"}>暂不安装</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={actionPending === "install"}
               onClick={() => {
                 setInstallConfirmOpen(false);
-                runUpdateAction("install", () =>
-                  installAppUpdate({ stopRunningServices: true }),
-                );
+                runUpdateAction("install", () => installAppUpdate({ stopRunningServices: true }));
               }}
             >
               <Power aria-hidden="true" />

@@ -1,9 +1,8 @@
-import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { ConfigurationToolbar } from "@/pages/shared/configuration-page";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Field,
@@ -251,7 +250,8 @@ const sections: Array<{
         kind: "switch",
         key: "mergeOwnershipMaterials",
         label: "合并权属工程图片",
-        description: "将权属目录中的全部图片平均分为两组，纵向合并为最多两张临时图片后上传，默认开启。",
+        description:
+          "将权属目录中的全部图片平均分为两组，纵向合并为最多两张临时图片后上传，默认开启。",
         activeLabel: "合并上传",
         inactiveLabel: "分别上传",
       },
@@ -279,7 +279,8 @@ const sections: Array<{
         key: "episodeVideoMinimumDurationSeconds",
         label: "单集最小时长",
         type: "number",
-        description: "任一集时长不超过该值时任务失败；设为 0 则关闭校验。正常任务和百度网盘直传同时生效。",
+        description:
+          "任一集时长不超过该值时任务失败；设为 0 则关闭校验。正常任务和百度网盘直传同时生效。",
         suffix: "秒",
       },
       {
@@ -391,45 +392,21 @@ export function WechatMiniProgramConfigurationPage() {
 
   return (
     <main className="flex min-h-svh flex-1 flex-col bg-background">
-      <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-215 gap-3 flex-row justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h1 className="mr-1 text-lg font-semibold tracking-normal">配置管理</h1>
-            <span
-              className={
-                hasChanges
-                  ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 text-xs font-medium text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-                  : "inline-flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-xs font-medium text-muted-foreground"
-              }
-            >
-              {hasChanges ? (
-                <DangerTriangle className="size-3.5" />
-              ) : (
-                <CheckCircle className="size-3.5 text-emerald-600" />
-              )}
-              {hasChanges ? "未保存" : "已保存"}
-            </span>
-            {restartRequired ? (
-              <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 text-xs font-medium text-orange-900 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200">
-                <DangerTriangle className="size-3.5" />
-                需重启
-              </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2 sm:justify-end">
-            <Button className="w-fit" disabled={loading} onClick={cancelConfig} variant="outline">
-              关闭
-            </Button>
-            <Button className="w-fit" disabled={loading || !hasChanges} onClick={saveConfig}>
-              保存配置
-            </Button>
-          </div>
-        </div>
-      </div>
+      <ConfigurationToolbar
+        title="配置管理"
+        hasChanges={hasChanges}
+        loading={loading}
+        restartRequired={restartRequired}
+        onCancel={cancelConfig}
+        onSave={() => void saveConfig()}
+      />
 
       <div className="mx-auto flex w-full max-w-190 flex-1 flex-col gap-7 p-6">
         <div className="flex w-full min-w-0 flex-col gap-4">
-          <section aria-labelledby="miniprogram-workflow-title" className="rounded-lg border bg-muted/35 p-4">
+          <section
+            aria-labelledby="miniprogram-workflow-title"
+            className="rounded-lg border bg-muted/35 p-4"
+          >
             <div className="space-y-1">
               <h2 id="miniprogram-workflow-title" className="text-sm font-semibold">
                 自动化顺序
@@ -438,8 +415,16 @@ export function WechatMiniProgramConfigurationPage() {
                 百度网盘资源会先下载到本地；剧集固定使用本地上传。剧目类型仅选择数字真人或漫剧。
               </p>
             </div>
-            <ol className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="微信小程序短剧提交流程">
-              {["下载并校验资源", "本地批量上传剧集", "填写剧目与证明材料", "勾选已上传剧集并提审"].map((step, index) => (
+            <ol
+              className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs"
+              aria-label="微信小程序短剧提交流程"
+            >
+              {[
+                "下载并校验资源",
+                "本地批量上传剧集",
+                "填写剧目与证明材料",
+                "勾选已上传剧集并提审",
+              ].map((step, index) => (
                 <li key={step} className="flex items-center gap-1.5">
                   <span className="grid size-5 shrink-0 place-items-center rounded-full bg-foreground text-[11px] font-medium text-background">
                     {index + 1}
@@ -461,11 +446,7 @@ export function WechatMiniProgramConfigurationPage() {
                     {section.fields.map((field, index) => (
                       <div key={field.key}>
                         {index > 0 ? <Separator /> : null}
-                        <ConfigFieldControl
-                          config={config}
-                          field={field}
-                          onChange={updateConfig}
-                        />
+                        <ConfigFieldControl config={config} field={field} onChange={updateConfig} />
                       </div>
                     ))}
                   </FieldGroup>
@@ -494,9 +475,11 @@ function ConfigFieldControl({
     const checked = value === "true";
 
     return (
-      <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-center">
+      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
         <FieldContent>
-          <FieldLabel className="text-[13px]" htmlFor={field.key}>{field.label}</FieldLabel>
+          <FieldLabel className="text-[13px]" htmlFor={field.key}>
+            {field.label}
+          </FieldLabel>
           {field.description ? (
             <FieldDescription className="text-xs">{field.description}</FieldDescription>
           ) : null}
@@ -516,9 +499,11 @@ function ConfigFieldControl({
   }
 
   return (
-    <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-start">
+    <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
       <FieldContent>
-        <FieldLabel className="text-[13px]" htmlFor={field.key}>{field.label}</FieldLabel>
+        <FieldLabel className="text-[13px]" htmlFor={field.key}>
+          {field.label}
+        </FieldLabel>
         {field.description ? (
           <FieldDescription className="text-xs">{field.description}</FieldDescription>
         ) : null}

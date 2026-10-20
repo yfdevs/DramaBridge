@@ -240,41 +240,40 @@ body {
 .app-workspace {
   margin: 4px 5px 5px 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 15px;
 }
 .app-page-scroll .min-h-svh {
   min-height: 100%;
 }
 .platform-menu-row {
+  --menu-hover: oklch(0 0 0 / 0.035);
+  --menu-selected: oklch(0 0 0 / 0.065);
   background: transparent;
+  color: var(--sidebar-foreground);
+  font-weight: 400;
   box-shadow: none;
   transition: none;
 }
-.platform-menu-row:hover {
-  background: oklch(0 0 0 / 0.045);
+.dark .platform-menu-row {
+  --menu-hover: oklch(1 0 0 / 0.055);
+  --menu-selected: oklch(1 0 0 / 0.1);
+}
+.platform-menu-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.platform-menu-row:hover,
+.platform-menu-row:active {
+  background: var(--menu-hover);
+  color: var(--sidebar-foreground);
 }
 .platform-menu-row[data-active],
-.platform-menu-row[data-active]:hover {
-  background: oklch(1 0 0 / 0.94);
-  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.045);
-}
-.platform-menu-row:active {
-  background: oklch(0 0 0 / 0.075);
-}
+.platform-menu-row[data-active]:hover,
 .platform-menu-row[data-active]:active {
-  background: oklch(0.985 0 0);
-}
-.dark .platform-menu-row:hover {
-  background: oklch(1 0 0 / 0.055);
-}
-.dark .platform-menu-row[data-active],
-.dark .platform-menu-row[data-active]:hover {
-  background: oklch(1 0 0 / 0.1);
-  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.035);
-}
-.dark .platform-menu-row:active,
-.dark .platform-menu-row[data-active]:active {
-  background: oklch(1 0 0 / 0.14);
+  background: var(--menu-selected);
+  color: var(--sidebar-foreground);
+  font-weight: 400;
+  box-shadow: none;
 }
 
 h1,
@@ -297,4 +296,12 @@ h3 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.platform-menu-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 4px;
 }

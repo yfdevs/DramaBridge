@@ -1,7 +1,8 @@
+import { WorkspaceActions } from "@/components/workspace-toolbar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Chrome, Play, StopCircle, CheckCircle, Cog, ChevronRight } from "@mynaui/icons-react";
+import { Chrome, CheckCircle, Cog, ChevronRight, ChevronDown } from "@mynaui/icons-react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { platformForPath, routePath } from "@/config/navigation";
 import { formatRuntimeDuration, useAppRuntime } from "@/platforms/app-runtime/context";
 import { toast } from "sonner";
@@ -9,7 +10,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { TaskAnalyticsPlatform } from "@/platforms/task-analytics/service";
-import { TaskStatisticsChart } from "./task-statistics-chart";
 
 type RuntimeStatus = {
   running: boolean;
@@ -148,7 +148,6 @@ export function ServiceControlButtonPage({
   const runtime = entries[platform.id]?.result?.platform;
   const entry = entries[platform.id];
   const connected = Boolean(window.ipcRenderer);
-  const [statisticsOpen, setStatisticsOpen] = useState(false);
   const label =
     pendingAction === "start"
       ? "正在启动…"
@@ -159,30 +158,42 @@ export function ServiceControlButtonPage({
           : startLabel;
   return (
     <main className="service-workspace flex min-h-full flex-col">
-      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 px-6 py-2">
-        <span className="text-xs text-muted-foreground">
-          {loading ? "正在处理服务…" : running ? "运行中" : "未启动"}
-          {running && (
-            <span className="ml-2 font-mono tabular-nums">
-              {formatRuntimeDuration(runtime?.startedAt, now)}
-            </span>
-          )}
-        </span>
-        <div className="flex flex-wrap items-center gap-2">
-          {additionalAction}
-          <Button
-            aria-busy={loading}
-            aria-pressed={running}
-            className="h-7 gap-1.5 px-3 text-xs"
-            disabled={loading || !connected}
-            variant={running ? "secondary" : "default"}
-            onClick={onToggle}
-          >
-            {running ? <StopCircle className="size-3.5" /> : <Play className="size-3.5" />}
-            <span>{label}</span>
-          </Button>
-        </div>
-      </div>
+      <WorkspaceActions label="服务操作">
+        <Button
+          aria-busy={loading}
+          aria-pressed={running}
+          className="h-7 min-w-20 gap-1.5 px-3 text-xs"
+          size="sm"
+          disabled={loading || !connected}
+          variant={running ? "secondary" : "default"}
+          onClick={onToggle}
+        >
+          <span>{label}</span>
+        </Button>
+        {additionalAction && (
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="size-7"
+                  aria-label="更多服务操作"
+                />
+              }
+            >
+              <ChevronDown className="size-3.5" />
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              className="w-fit min-w-44 p-2 [&_button]:w-full [&_button]:justify-start [&_div]:flex-col"
+            >
+              {additionalAction}
+            </PopoverContent>
+          </Popover>
+        )}
+      </WorkspaceActions>
       <div className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-7 pt-10 pb-8 md:px-12 md:pt-14">
         <div className="flex items-start gap-3">
           <span
@@ -270,33 +281,7 @@ export function ServiceControlButtonPage({
             </p>
           )}
         </section>
-        {analyticsPlatform && (
-          <Collapsible open={statisticsOpen} onOpenChange={setStatisticsOpen} className="mt-10">
-            <CollapsibleTrigger className="group flex items-center gap-2 rounded py-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-              <ChevronRight className="size-3.5 transition-transform group-data-panel-open:rotate-90" />
-              <span>近 30 天发布统计</span>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <TaskStatisticsChart platform={analyticsPlatform} />
-            </CollapsibleContent>
-          </Collapsible>
-        )}
       </div>
-      <footer className="flex min-h-10 flex-wrap items-center justify-between gap-2 border-t border-border/60 px-6 py-2 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              "size-1.5 rounded-full",
-              connected ? "bg-emerald-600" : "bg-muted-foreground/45",
-            )}
-          />
-          {connected ? "本地服务已连接" : "桌面服务未连接"}
-        </span>
-        <span>
-          AutoDrama<span className="mx-2">·</span>
-          {platform.title}
-        </span>
-      </footer>
     </main>
   );
 }

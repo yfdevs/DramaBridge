@@ -1,9 +1,8 @@
-import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { ConfigurationToolbar } from "@/pages/shared/configuration-page";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -37,7 +36,8 @@ import {
 
 const emptyConfig: WechatVideoConfig = {
   apiBaseUrl: "http://180.184.76.232:19090",
-  videoAccountContractSubjects: "MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU,YOUDIANNIU,ZHENCUIYIHAO,RUIXIAODOU",
+  videoAccountContractSubjects:
+    "MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU,YOUDIANNIU,ZHENCUIYIHAO,RUIXIAODOU",
   localEpisodeVideoRoot: "",
   closeFailedTaskPages: "false",
   runDataDir: ".drama-runs/wechat-drama",
@@ -419,41 +419,14 @@ export function WechatConfigurationPage() {
 
   return (
     <main className="flex min-h-svh flex-1 flex-col bg-background">
-      <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-215 gap-3 flex-row justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h1 className="mr-1 text-lg font-semibold tracking-normal">配置管理</h1>
-            <span
-              className={
-                hasChanges
-                  ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 text-xs font-medium text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-                  : "inline-flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-xs font-medium text-muted-foreground"
-              }
-            >
-              {hasChanges ? (
-                <DangerTriangle className="size-3.5" />
-              ) : (
-                <CheckCircle className="size-3.5 text-emerald-600" />
-              )}
-              {hasChanges ? "未保存" : "已保存"}
-            </span>
-            {restartRequired ? (
-              <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 text-xs font-medium text-orange-900 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200">
-                <DangerTriangle className="size-3.5" />
-                需重启
-              </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2 sm:justify-end">
-            <Button className="w-fit" disabled={loading} onClick={cancelConfig} variant="outline">
-              关闭
-            </Button>
-            <Button className="w-fit" disabled={loading || !hasChanges} onClick={saveConfig}>
-              保存配置
-            </Button>
-          </div>
-        </div>
-      </div>
+      <ConfigurationToolbar
+        title="配置管理"
+        hasChanges={hasChanges}
+        loading={loading}
+        restartRequired={restartRequired}
+        onCancel={cancelConfig}
+        onSave={() => void saveConfig()}
+      />
 
       <div className="mx-auto flex w-full max-w-190 flex-1 flex-col gap-7 p-6">
         <div className="flex w-full min-w-0 flex-col gap-4">
@@ -469,11 +442,7 @@ export function WechatConfigurationPage() {
                     {section.fields.map((field, index) => (
                       <div key={field.key}>
                         {index > 0 ? <Separator /> : null}
-                        <ConfigFieldControl
-                          config={config}
-                          field={field}
-                          onChange={updateConfig}
-                        />
+                        <ConfigFieldControl config={config} field={field} onChange={updateConfig} />
                       </div>
                     ))}
                   </FieldGroup>
@@ -525,7 +494,7 @@ function ConfigFieldControl({
     };
 
     return (
-      <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-start">
+      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
         <FieldContent>
           <FieldLabel className="text-[13px]">{field.label}</FieldLabel>
           {field.description ? (
@@ -555,9 +524,11 @@ function ConfigFieldControl({
     const checked = value === "true";
 
     return (
-      <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-center">
+      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
         <FieldContent>
-          <FieldLabel className="text-[13px]" htmlFor={field.key}>{field.label}</FieldLabel>
+          <FieldLabel className="text-[13px]" htmlFor={field.key}>
+            {field.label}
+          </FieldLabel>
           {field.description ? (
             <FieldDescription className="text-xs">{field.description}</FieldDescription>
           ) : null}
@@ -577,9 +548,11 @@ function ConfigFieldControl({
   }
 
   return (
-    <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-start">
+    <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
       <FieldContent>
-        <FieldLabel className="text-[13px]" htmlFor={field.key}>{field.label}</FieldLabel>
+        <FieldLabel className="text-[13px]" htmlFor={field.key}>
+          {field.label}
+        </FieldLabel>
         {field.description ? (
           <FieldDescription className="text-xs">{field.description}</FieldDescription>
         ) : null}
@@ -612,7 +585,7 @@ function ConfigFieldControl({
             <InputGroupInput
               className="text-[13px] md:text-[13px]"
               id={field.key}
-              min={field.type === "number" ? field.min ?? 0 : undefined}
+              min={field.type === "number" ? (field.min ?? 0) : undefined}
               step={field.type === "number" ? field.step : undefined}
               type={field.type ?? "text"}
               value={value}

@@ -2,6 +2,7 @@ import { HashRouter } from "react-router-dom";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppWorkspaceHeader } from "@/components/app-workspace-header";
+import { WorkspaceToolbarProvider } from "@/components/workspace-toolbar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppRuntimeProvider } from "@/platforms/app-runtime/context";
 import { AppTitlebarMemory } from "@/components/app-titlebar-memory";
@@ -56,17 +57,21 @@ function AppContent() {
         <JianyingDialogProvider>
           <AppRuntimeProvider>
             <SidebarProvider
+              open={true}
+              keyboardShortcutEnabled={false}
               className="app-desktop-shell h-full min-h-0"
               style={{ "--sidebar-width": "260px" } as React.CSSProperties}
             >
               <AppTitlebarMemory />
               <AppSidebar />
-              <div className="app-workspace flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
-                <AppWorkspaceHeader />
-                <div className="app-page-scroll min-h-0 flex-1 overflow-auto">
-                  <AppRoutes />
+              <WorkspaceToolbarProvider>
+                <div className="app-workspace flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+                  <AppWorkspaceHeader />
+                  <div className="app-page-scroll min-h-0 flex-1 overflow-auto">
+                    <AppRoutes />
+                  </div>
                 </div>
-              </div>
+              </WorkspaceToolbarProvider>
               <Toaster position="bottom-right" closeButton={true} richColors />
             </SidebarProvider>
           </AppRuntimeProvider>

@@ -1,3 +1,4 @@
+import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { CheckCircle, DangerTriangle, ExternalLink, Folder } from "@mynaui/icons-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -180,31 +181,70 @@ export function ConfigurationPageFrame({
 
   return (
     <main className="flex min-h-svh flex-1 flex-col bg-background">
-      <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-3 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-215 gap-3 flex-row justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h1 className="mr-1 text-lg font-semibold tracking-normal">{title}</h1>
-            <ConfigSaveStateBadge hasChanges={hasChanges} />
-            {restartRequired ? (
-              <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 text-xs font-medium text-orange-900 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-200">
-                <DangerTriangle className="size-3.5" />
-                需重启
-              </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2 sm:justify-end">
-            <Button className="w-fit" disabled={loading} onClick={cancelConfig} variant="outline">
-              关闭
-            </Button>
-            <Button className="w-fit" disabled={loading || !hasChanges} onClick={onSave}>
-              保存配置
-            </Button>
-          </div>
-        </div>
-      </div>
+      <ConfigurationToolbar
+        title={title}
+        hasChanges={hasChanges}
+        loading={loading}
+        restartRequired={restartRequired}
+        onCancel={cancelConfig}
+        onSave={onSave}
+      />
 
       <div className={`mx-auto flex w-full ${maxWidth} flex-1 flex-col gap-7 p-6`}>{children}</div>
     </main>
+  );
+}
+
+export function ConfigurationToolbar({
+  title,
+  hasChanges,
+  loading,
+  restartRequired,
+  onCancel,
+  onSave,
+}: {
+  title: string;
+  hasChanges: boolean;
+  loading: boolean;
+  restartRequired: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <WorkspaceActions label="配置操作">
+      <h1 className="sr-only">{title}</h1>
+      <Button
+        size="sm"
+        className="h-7 min-w-14 px-3 text-xs"
+        disabled={loading}
+        onClick={onCancel}
+        variant="outline"
+      >
+        取消
+      </Button>
+      <Button
+        size="sm"
+        className="h-7 min-w-14 px-3 text-xs"
+        disabled={loading || !hasChanges}
+        aria-busy={loading}
+        onClick={onSave}
+      >
+        保存
+      </Button>
+      <div className="ml-1 flex items-center">
+        {restartRequired ? (
+          <span
+            className="inline-flex items-center gap-1.5 text-xs text-orange-800 dark:text-orange-300"
+            title={hasChanges ? "存在未保存更改；保存后需重启服务" : "配置已保存，需重启服务生效"}
+          >
+            <DangerTriangle className="size-3.5" />
+            {hasChanges ? "未保存" : "需重启"}
+          </span>
+        ) : (
+          <ConfigSaveStateBadge hasChanges={hasChanges} />
+        )}
+      </div>
+    </WorkspaceActions>
   );
 }
 
@@ -213,8 +253,8 @@ function ConfigSaveStateBadge({ hasChanges }: { hasChanges: boolean }) {
     <span
       className={
         hasChanges
-          ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 text-xs font-medium text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-          : "inline-flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-xs font-medium text-muted-foreground"
+          ? "inline-flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300"
+          : "inline-flex items-center gap-1.5 text-xs text-muted-foreground"
       }
     >
       {hasChanges ? (
@@ -308,7 +348,7 @@ function ConfigFieldControl<TConfig extends object>({
     const checked = value === "true";
 
     return (
-      <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-center">
+      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
         <FieldContent>
           <FieldLabel className="text-[13px]" htmlFor={field.key}>
             {field.label}
@@ -334,7 +374,7 @@ function ConfigFieldControl<TConfig extends object>({
   }
 
   return (
-    <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-start">
+    <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
       <FieldContent>
         <FieldLabel className="text-[13px]" htmlFor={field.key}>
           {field.label}
@@ -390,7 +430,7 @@ export function StoragePathRow({
   pathText: string;
 }) {
   return (
-    <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_360px] md:items-start">
+    <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_360px] lg:items-start">
       <FieldContent>
         <FieldLabel className="text-[13px]">{label}</FieldLabel>
         <FieldDescription className="text-xs">{description}</FieldDescription>
