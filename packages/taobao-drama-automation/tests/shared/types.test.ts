@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { taobaoBatchUploadTaskSchema } from "../../src/shared/types.js";
+import {
+  taobaoBatchUploadTaskSchema,
+  taobaoDramaTaskFailStageValues,
+} from "../../src/shared/types.js";
 
 test("validates a local Taobao batch upload task", () => {
   const task = taobaoBatchUploadTaskSchema.parse({
@@ -29,4 +32,15 @@ test("validates a local Taobao batch upload task", () => {
     baiduPanResourceLink: "https://pan.baidu.com/s/example",
     episodeCount: 1001,
   }).success, false);
+});
+
+test("uses only failure stages accepted by the Taobao task API", () => {
+  assert.deepEqual(taobaoDramaTaskFailStageValues, [
+    "LOGIN",
+    "FILL_FORM",
+    "UPLOAD_FILE",
+    "SUBMIT",
+    "RECOGNIZE_RESULT",
+    "OTHER",
+  ]);
 });

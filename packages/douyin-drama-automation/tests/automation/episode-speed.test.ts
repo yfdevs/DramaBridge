@@ -33,3 +33,49 @@ test("slows only Douyin episode videos at or below 30 seconds", async () => {
   assert.equal(result[1]?.adjusted?.outputDurationSeconds.toFixed(2), "33.33");
   assert.equal(result[2]?.adjusted, undefined);
 });
+
+test("reports the episode and original source when a video is corrupt", async () => {
+  const failure = new Error(
+    "[video-transcode-failed] FFmpeg exited: moov atom not found; Invalid data found when processing input",
+  );
+  await assert.rejects(
+    prepareShortDouyinEpisodeVideos(["临时剧名-第40集.mp4"], {
+      concurrency: 1,
+      sourceFiles: ["D:\\BaiduNetdiskDownload\\测试剧\\测试剧 - 第40集.mp4"],
+      readDuration: async () => {
+        throw failure;
+      },
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /DOUYIN_DRAMA_EPISODE_VIDEO_INVALID/);
+      assert.match(error.message, /episode=40/);
+      assert.match(error.message, /测试剧 - 第40集\.mp4/);
+      assert.match(error.message, /reason=moov-atom-not-found/);
+      assert.equal((error as Error & { cause?: unknown }).cause, failure);
+      return true;
+    },
+  );
+});
+
+test("falls back to the original source when the temporary upload link cannot be probed", async () => {
+  const calls: string[] = [];
+  const logs: string[] = [];
+  const result = await prepareShortDouyinEpisodeVideos(["D:\\temp\\测试剧-第28集.mp4"], {
+    concurrency: 1,
+    sourceFiles: ["D:\\BaiduNetdiskDownload\\测试剧\\测试剧 - 第28集.mp4"],
+    readDuration: async (file) => {
+      calls.push(file);
+      if (file.includes("\\temp\\")) throw new Error("transient probe failure");
+      return 45;
+    },
+    onLog: (message) => logs.push(message),
+  });
+
+  assert.deepEqual(calls, [
+    "D:\\temp\\测试剧-第28集.mp4",
+    "D:\\BaiduNetdiskDownload\\测试剧\\测试剧 - 第28集.mp4",
+  ]);
+  assert.equal(result[0]?.sourceDurationSeconds, 45);
+  assert.match(logs.join("\n"), /改用原始视频复核/);
+});

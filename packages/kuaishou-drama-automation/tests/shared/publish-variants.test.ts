@@ -113,6 +113,40 @@ void test("publishes a dynamically configured number of ad variants", () => {
   assert.equal(variants.at(-1)?.title, "动态剧名10");
 });
 
+void test("treats backend 广告 tasks with a version count as dynamic multi-version tasks", () => {
+  const dynamicTask = kuaishouDramaTaskSchema.parse({
+    ...task("广告"),
+    adVersionCount: 8,
+    adVersionTitles: ["剧名二", "剧名三", "剧名四", "剧名五", "剧名六", "剧名七", "剧名八"],
+  });
+  assert.deepEqual(
+    createKuaishouDramaPublishVariants(dynamicTask).map((variant) => variant.kind),
+    [
+      "ad-unlock",
+      "ad-unlock-2",
+      "ad-unlock-3",
+      "ad-unlock-4",
+      "ad-unlock-5",
+      "ad-unlock-6",
+      "ad-unlock-7",
+      "ad-unlock-8",
+    ],
+  );
+});
+
+void test("infers a dynamic ad-version count from backend titles when the count is missing", () => {
+  const dynamicTask = kuaishouDramaTaskSchema.parse({
+    ...task("广告"),
+    adVersionCount: undefined,
+    adVersionTitles: ["剧名二", "剧名三", "剧名四"],
+  });
+  assert.equal(dynamicTask.adVersionCount, 4);
+  assert.deepEqual(
+    createKuaishouDramaPublishVariants(dynamicTask).map((variant) => variant.kind),
+    ["ad-unlock", "ad-unlock-2", "ad-unlock-3", "ad-unlock-4"],
+  );
+});
+
 void test("publishes only the paid variant when publishType is 付费", () => {
   assert.deepEqual(
     createKuaishouDramaPublishVariants(task("付费")).map((item) => ({

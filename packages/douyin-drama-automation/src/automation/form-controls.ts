@@ -266,8 +266,8 @@ function arcoDatePickerPopup(page: Page) {
 async function readArcoPickerYearMonth(popup: Locator) {
   const labels = (await popup.locator(".arco-picker-header-label").allTextContents())
     .map((text) => text.replace(/\s+/g, "").trim());
-  const year = Number(labels.find((text) => /年$/u.test(text))?.replace(/\D/gu, ""));
-  const month = Number(labels.find((text) => /月$/u.test(text))?.replace(/\D/gu, ""));
+  const year = Number(labels.find((text) => text.endsWith('年'))?.replace(/\D/gu, ""));
+  const month = Number(labels.find((text) => text.endsWith('月'))?.replace(/\D/gu, ""));
   if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month) || month < 1 || month > 12) {
     throw new Error(
       `DOUYIN_DRAMA_SCHEDULED_PUBLISH_CALENDAR_HEADER_INVALID: ${JSON.stringify(labels)}`,
@@ -656,6 +656,8 @@ function dropdownOptions(page: Page) {
   ].join(", "));
 }
 
+export const DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS = 20_000;
+
 function visibleDropdownSurfaces(page: Page) {
   return page.locator([
     ".arco-select-popup:visible",
@@ -719,7 +721,7 @@ async function confirmDropdownSelection(
 ) {
   const expected = compactDropdownText(value);
   const stableToken = expected.split(" ")[0] ?? expected;
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS;
   let closedSettledPasses = 0;
   while (Date.now() < deadline) {
     const [values, optionEvidence, visibleSurfaceCount] = await Promise.all([
@@ -760,10 +762,10 @@ async function confirmDropdownSelection(
 
 async function openDropdown(page: Page, trigger: Locator) {
   await closeVisibleDropdowns(page, "打开下拉前清理残留弹层");
-  await trigger.waitFor({ state: "visible", timeout: 10_000 });
+  await trigger.waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
   await trigger.click();
   const options = dropdownOptions(page);
-  await options.first().waitFor({ state: "visible", timeout: 10_000 });
+  await options.first().waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
   return options;
 }
 
@@ -773,6 +775,20 @@ async function observedOptions(options: Locator) {
       .map((text) => text.replace(/\s+/g, " ").trim())
       .filter(Boolean),
   )];
+}
+
+async function waitForObservedDropdownOptions(
+  page: Page,
+  options: Locator,
+  predicate: (values: string[]) => boolean,
+) {
+  const deadline = Date.now() + DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS;
+  while (true) {
+    const observed = await observedOptions(options);
+    if (predicate(observed)) return observed;
+    if (Date.now() >= deadline) return observed;
+    await page.waitForTimeout(200);
+  }
 }
 
 async function selectDropdownValuesFromTrigger(
@@ -789,17 +805,21 @@ async function selectDropdownValuesFromTrigger(
       continue;
     }
     const options = await openDropdown(page, trigger);
-    const observed = await observedOptions(options);
-    await recorder.record(field, observed);
     const option = options
       .filter({ hasText: exactTextPattern(value), visible: true })
       .first();
-    await option.waitFor({ state: "visible", timeout: 10_000 }).catch(() => {
+    const found = await option
+      .waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS })
+      .then(() => true)
+      .catch(() => false);
+    const observed = await observedOptions(options);
+    await recorder.record(field, observed);
+    if (!found) {
       throw new Error(
         `DOUYIN_DRAMA_DROPDOWN_OPTION_NOT_FOUND: ${field}=${value}; ` +
           `observed=${JSON.stringify(observed)}`,
       );
-    });
+    }
     await option.click();
     await confirmDropdownSelection(page, trigger, option, field, value);
     await closeVisibleDropdowns(page, field);
@@ -839,6 +859,7 @@ export async function selectRequiredDropdownByStableId(
   field: string,
   stableId: string,
   recorder: DouyinDramaDropdownRecorder,
+  retryOptions: { attempts?: number; delayMs?: number; loadTimeoutMs?: number } = {},
 ) {
   const input = page.getByPlaceholder(placeholder, { exact: true }).filter({ visible: true }).first();
   const selectRoot = input.locator(
@@ -851,31 +872,62 @@ export async function selectRequiredDropdownByStableId(
     return currentValues.display.find((value) => value.includes(stableId)) ?? stableId;
   }
 
-  const options = await openDropdown(page, trigger);
-  const observed = await observedOptions(options);
-  await recorder.record(field, observed);
-  const option = options
-    .filter({ hasText: new RegExp(`^\\s*${stableId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`), visible: true })
-    .first();
-  const exists = await option.count() > 0;
-  if (!exists) {
-    throw new Error(
-      `DOUYIN_DRAMA_REQUIRED_CONTRACT_NOT_FOUND: contractId=${stableId}; ` +
-        `observed=${JSON.stringify(observed)}`,
-    );
-  }
-  const disabled = await option.evaluate((element) =>
-    element.getAttribute("aria-disabled") === "true"
-      || element.classList.contains("arco-select-option-disabled")
+  const attempts = Math.max(1, retryOptions.attempts ?? 2);
+  const delayMs = Math.max(0, retryOptions.delayMs ?? 1_500);
+  const loadTimeoutMs = Math.max(1, retryOptions.loadTimeoutMs ?? DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS);
+  const stableIdPattern = new RegExp(
+    `^\\s*${stableId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`,
   );
-  if (disabled) {
-    throw new Error(`DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED: contractId=${stableId}`);
+  let lastObserved: string[] = [];
+  let requestedContract = stableId;
+  let availableContracts: string[] = [];
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const options = await openDropdown(page, trigger);
+    const option = options.filter({ hasText: stableIdPattern, visible: true }).first();
+    const found = await option
+      .waitFor({ state: "visible", timeout: loadTimeoutMs })
+      .then(() => true)
+      .catch(() => false);
+    lastObserved = await observedOptions(options);
+    await recorder.record(field, lastObserved);
+    if (!found) {
+      await closeVisibleDropdowns(page, field);
+      throw new Error(
+        `DOUYIN_DRAMA_REQUIRED_CONTRACT_NOT_FOUND: contractId=${stableId}; ` +
+          `observed=${JSON.stringify(lastObserved)}`,
+      );
+    }
+
+    requestedContract = compactDropdownText(await option.textContent()) || stableId;
+    const disabled = await option.evaluate((element) =>
+      element.getAttribute("aria-disabled") === "true"
+        || element.classList.contains("arco-select-option-disabled")
+    );
+    if (!disabled) {
+      await option.click();
+      await confirmDropdownSelection(page, trigger, option, field, stableId);
+      await closeVisibleDropdowns(page, field);
+      return requestedContract;
+    }
+
+    availableContracts = await options.evaluateAll((elements) => elements
+      .filter((element) => (
+        element.getAttribute("aria-disabled") !== "true"
+        && !element.classList.contains("arco-select-option-disabled")
+      ))
+      .map((element) => (element.textContent ?? "").replace(/\s+/g, " ").trim())
+      .filter(Boolean));
+    await closeVisibleDropdowns(page, field);
+    if (attempt < attempts && delayMs > 0) await page.waitForTimeout(delayMs);
   }
-  const selected = compactDropdownText(await option.textContent()) || stableId;
-  await option.click();
-  await confirmDropdownSelection(page, trigger, option, field, stableId);
-  await closeVisibleDropdowns(page, field);
-  return selected;
+
+  throw new Error(
+    `DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED: contractId=${stableId}; `
+      + `requested=${JSON.stringify(requestedContract)}; `
+      + `available=${JSON.stringify([...new Set(availableContracts)])}; `
+      + `observed=${JSON.stringify(lastObserved)}`,
+  );
 }
 
 function contractNameWithoutId(value: string) {
@@ -905,7 +957,11 @@ export async function selectRequiredDropdownByContractName(
   }
 
   const options = await openDropdown(page, trigger);
-  const observed = await observedOptions(options);
+  const observed = await waitForObservedDropdownOptions(
+    page,
+    options,
+    (values) => values.some((value) => contractNameWithoutId(value) === expectedName),
+  );
   await recorder.record(field, observed);
   const candidates = await options.evaluateAll((elements, expected) =>
     elements.map((element, index) => {
@@ -955,10 +1011,15 @@ export async function selectSearchableDropdownByPlaceholder(
   await input.click();
   await input.fill(value);
   const options = dropdownOptions(page);
-  await options.first().waitFor({ state: "visible", timeout: 10_000 });
-  const observed = await observedOptions(options);
-  await recorder.record(field, observed);
+  await options.first().waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
   const expected = compactDropdownText(value);
+  const observed = await waitForObservedDropdownOptions(
+    page,
+    options,
+    (values) => values.some((candidate) => compactDropdownText(candidate) === expected)
+      || values.some((candidate) => compactDropdownText(candidate).includes(expected)),
+  );
+  await recorder.record(field, observed);
   const matchedOptionText = observed.find((candidate) => compactDropdownText(candidate) === expected)
     ?? observed.find((candidate) => compactDropdownText(candidate).includes(expected));
   if (!matchedOptionText) {
@@ -971,7 +1032,7 @@ export async function selectSearchableDropdownByPlaceholder(
     hasText: exactTextPattern(matchedOptionText),
     visible: true,
   }).first();
-  await option.waitFor({ state: "visible", timeout: 10_000 });
+  await option.waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
   await option.click();
   await confirmDropdownSelection(page, trigger, option, field, value);
   await closeVisibleDropdowns(page, field);
@@ -989,9 +1050,13 @@ export async function selectFirstDropdownByPlaceholder(
   );
   const trigger = (await selectRoot.count()) ? selectRoot : input;
   const options = await openDropdown(page, trigger);
-  const observed = await observedOptions(options);
+  const observed = await waitForObservedDropdownOptions(
+    page,
+    options,
+    (values) => values.some((value) => !/请选择|暂无|无数据|加载中|正在加载/.test(value)),
+  );
   await recorder.record(field, observed);
-  const selected = observed.find((value) => !/请选择|暂无|无数据/.test(value));
+  const selected = observed.find((value) => !/请选择|暂无|无数据|加载中|正在加载/.test(value));
   if (!selected) {
     throw new Error(`DOUYIN_DRAMA_DROPDOWN_EMPTY: ${field}; observed=${JSON.stringify(observed)}`);
   }
@@ -1338,10 +1403,10 @@ async function renderPdfPagesForImageUpload(
         .toFile(output);
     }
   } catch (error) {
-    throw new Error(
+    throw Object.assign(new Error(
       `DOUYIN_DRAMA_PDF_IMAGE_CONVERSION_FAILED: ${label}; file=${file}; ` +
         `${error instanceof Error ? error.message : String(error)}`,
-    );
+    ), { cause: error });
   }
   for (const output of outputs) {
     const converted = await stat(output).catch(() => undefined);
@@ -1389,10 +1454,10 @@ async function mergePdfPagesForSingleImageUpload(
       .jpeg({ quality: 90, mozjpeg: true })
       .toFile(output);
   } catch (error) {
-    throw new Error(
+    throw Object.assign(new Error(
       `DOUYIN_DRAMA_PDF_PAGE_MERGE_FAILED: ${label}; file=${pdfFile}; ` +
         `${error instanceof Error ? error.message : String(error)}`,
-    );
+    ), { cause: error });
   }
   const converted = await stat(output).catch(() => undefined);
   if (!converted?.isFile() || converted.size <= 0 || converted.size > 10 * 1024 * 1024) {
@@ -1496,10 +1561,10 @@ export async function uploadFormFiles(
         }
       }
       if (!recovered) {
-        throw new Error(
+        throw Object.assign(new Error(
           `DOUYIN_DRAMA_UPLOAD_NOT_CONFIRMED: ${label}; stalledAt100Retries=5; `
             + `file=${JSON.stringify(retryFile)}; lastError=${lastError instanceof Error ? lastError.message : String(lastError)}`,
-        );
+        ), { cause: lastError });
       }
     }
     await waitForUploadSettlement(
@@ -1682,49 +1747,119 @@ export async function fillDouyinSeriesDialog(
   page: Page,
   data: { coverFile: string; summary: string; title: string },
 ) {
-  const addButton = page
-    .getByRole("button", { name: "点击添加系列剧信息", exact: true })
-    .filter({ visible: true })
-    .first();
-  await addButton.waitFor({ state: "visible", timeout: 10_000 });
-  await addButton.click();
-
   const dialog = page
-    .locator("[role='dialog']:visible, .arco-modal:visible")
-    .filter({ hasText: "添加系列剧信息" })
+    .locator(".series-add-modal:visible, [role='dialog']:visible, .arco-modal:visible")
+    .filter({ has: page.getByText("添加系列剧信息", { exact: true }) })
     .last();
-  await dialog.waitFor({ state: "visible", timeout: 10_000 });
+  const dialogAlreadyOpen = await dialog.waitFor({ state: "visible", timeout: 1_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!dialogAlreadyOpen) {
+    const addButton = page
+      .getByRole("button", { name: "点击添加系列剧信息", exact: true })
+      .filter({ visible: true })
+      .first();
+    await addButton.waitFor({ state: "visible", timeout: 30_000 });
+    await addButton.click();
+  }
+  await dialog.waitFor({ state: "visible", timeout: 30_000 }).catch(() => {
+    throw new Error("DOUYIN_DRAMA_SERIES_DIALOG_NOT_OPENED");
+  });
 
-  const seriesNameItem = dialog
-    .locator(".arco-form-item")
-    .filter({ has: dialog.getByText("系列剧名", { exact: true }) })
-    .first();
-  await seriesNameItem.locator("input").first().fill(data.title);
+  const seriesName = dialog.locator([
+    "#series_drama_book_name_input",
+    "#series_drama_book_name input:not([disabled])",
+    "input[placeholder='请输入系列剧名']:not([disabled])",
+  ].join(", ")).filter({ visible: true }).first();
+  const summary = dialog.locator([
+    "#series_abstract_input",
+    "#series_abstract textarea:not([disabled])",
+    "textarea[placeholder='请输入系列剧简介']:not([disabled])",
+  ].join(", ")).filter({ visible: true }).first();
+  const coverControl = dialog.locator("#series_drama_thumb_url_input").first();
+  const coverInput = coverControl.locator('input[type="file"]').first();
+  const typeRadio = dialog.locator("#series_drama_type input[type='radio'][value='1']").first();
+  await Promise.all([
+    seriesName.waitFor({ state: "visible", timeout: 30_000 }),
+    summary.waitFor({ state: "visible", timeout: 30_000 }),
+    coverInput.waitFor({ state: "attached", timeout: 30_000 }),
+    typeRadio.waitFor({ state: "attached", timeout: 30_000 }),
+  ]).catch(() => {
+    throw new Error("DOUYIN_DRAMA_SERIES_DIALOG_FIELDS_NOT_READY");
+  });
 
-  const typeText = dialog.getByText(DOUYIN_DRAMA_SERIES_TYPE, { exact: true }).first();
-  await typeText.waitFor({ state: "visible", timeout: 10_000 });
-  await typeText.click();
+  const fillStableValue = async (input: Locator, expected: string, errorCode: string) => {
+    const deadline = Date.now() + 30_000;
+    let stablePasses = 0;
+    while (Date.now() < deadline) {
+      if (await input.isEnabled().catch(() => false)) {
+        if (await input.inputValue().catch(() => "") !== expected) {
+          await input.fill(expected).catch(() => undefined);
+        }
+        await page.waitForTimeout(300);
+        if (await input.inputValue().catch(() => "") === expected) stablePasses += 1;
+        else stablePasses = 0;
+        if (stablePasses >= 2) return;
+      } else {
+        stablePasses = 0;
+        await page.waitForTimeout(300);
+      }
+    }
+    throw new Error(
+      `${errorCode}: expected=${JSON.stringify(expected)}; `
+        + `actual=${JSON.stringify(await input.inputValue().catch(() => ""))}`,
+    );
+  };
+  const selectSeriesType = async () => {
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      if (await typeRadio.isChecked().catch(() => false)) return;
+      const typeLabel = dialog.getByText(DOUYIN_DRAMA_SERIES_TYPE, { exact: true })
+        .filter({ visible: true })
+        .first();
+      await typeLabel.click().catch(() => undefined);
+      await page.waitForTimeout(300);
+    }
+    throw new Error("DOUYIN_DRAMA_SERIES_TYPE_NOT_SELECTED");
+  };
 
-  const coverItem = dialog
-    .locator(".arco-form-item")
-    .filter({ has: dialog.getByText("系列剧封面", { exact: true }) })
-    .first();
-  const coverInput = coverItem.locator('input[type="file"]').first();
-  await coverInput.waitFor({ state: "attached", timeout: 10_000 });
+  await fillStableValue(seriesName, data.title, "DOUYIN_DRAMA_SERIES_NAME_NOT_FILLED");
+  await selectSeriesType();
+
+  const coverItem = coverControl
+    .locator("xpath=ancestor::*[contains(@class, 'arco-form-item')][1]");
   await coverInput.setInputFiles(data.coverFile, { timeout: 120_000 });
   await confirmImageCropDialogIfPresent(page, "系列剧封面");
-  await waitForUploadSettlement(page, coverItem, "系列剧封面");
+  await waitForUploadSettlement(page, coverItem, "系列剧封面", 120_000, 1, [data.coverFile]);
 
-  const summary = dialog.locator("#series_abstract_input, textarea").first();
-  await summary.waitFor({ state: "visible", timeout: 10_000 });
-  await summary.fill(data.summary);
+  const seriesSummary = data.summary.slice(0, 200);
+  await fillStableValue(summary, seriesSummary, "DOUYIN_DRAMA_SERIES_SUMMARY_NOT_FILLED");
+
+  // The dialog fetches and binds upload metadata asynchronously. A late React
+  // render can replace the form controls, so verify every business field once
+  // more after the upload has fully settled.
+  await fillStableValue(seriesName, data.title, "DOUYIN_DRAMA_SERIES_NAME_NOT_FILLED");
+  await selectSeriesType();
+  await fillStableValue(summary, seriesSummary, "DOUYIN_DRAMA_SERIES_SUMMARY_NOT_FILLED");
+  await assertNoDouyinFormError(page, "填写系列剧信息");
 
   const confirm = dialog
     .getByRole("button", { name: "确定", exact: true })
     .filter({ visible: true })
     .last();
+  await confirm.waitFor({ state: "visible", timeout: 30_000 });
+  const confirmDeadline = Date.now() + 30_000;
+  while (!await confirm.isEnabled().catch(() => false)) {
+    if (Date.now() >= confirmDeadline) {
+      throw new Error("DOUYIN_DRAMA_SERIES_CONFIRM_NOT_ENABLED");
+    }
+    await page.waitForTimeout(300);
+  }
   await confirm.click();
-  await dialog.waitFor({ state: "hidden", timeout: 15_000 });
+  await dialog.waitFor({ state: "hidden", timeout: 60_000 }).catch(async () => {
+    await assertNoDouyinFormError(page, "确认系列剧信息");
+    throw new Error("DOUYIN_DRAMA_SERIES_DIALOG_NOT_CONFIRMED");
+  });
   await assertNoDouyinFormError(page, "填写系列剧信息");
 }
 
@@ -1806,13 +1941,13 @@ export async function addDouyinRole(page: Page, role: DouyinDramaRole) {
   );
   const roleType = role.roleType ?? "配角";
   const roleTypeTrigger = dialog.locator("#role_type_input, [role='combobox']").first();
-  await roleTypeTrigger.waitFor({ state: "visible", timeout: 10_000 });
+  await roleTypeTrigger.waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
   await roleTypeTrigger.click();
   const roleTypeOption = page
     .locator(".arco-select-popup:visible [role='option'], .arco-select-popup:visible .arco-select-option")
     .filter({ hasText: exactTextPattern(roleType), visible: true })
     .first();
-  await roleTypeOption.waitFor({ state: "visible", timeout: 10_000 });
+  await roleTypeOption.waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
   await roleTypeOption.click();
 
   const intro = dialog.locator("#role_intro_input, textarea").first();

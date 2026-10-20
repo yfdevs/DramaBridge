@@ -8,6 +8,8 @@ import type { DramaAiClient } from "@drama/ai";
 import {
   collectTaobaoSynopsis,
   createTaobaoCollectionMetadata,
+  ensureTaobaoCollectionSynopsis,
+  extractTaobaoCollectionSynopsis,
   formatTaobaoHashtags,
   formatTaobaoVideoDescription,
   prepareTaobaoEpisodeMetadata,
@@ -20,20 +22,65 @@ test("derives collection fields for the newly created Taobao collection", () => 
     originalTitle: "闪婚千金逆袭",
     baiduPanResourceLink: "https://pan.baidu.com/s/example?pwd=1234",
     episodeCount: 2,
+    productionCostProofFiles: [],
   }, {
     dramaTag: "逆袭",
     episodeSummaries: ["意外闪婚", "身份揭晓"],
     synopsisText: "女主遭遇背叛后闪婚，最终完成逆袭。",
   });
 
-  assert.deepEqual(collection, {
-    title: "闪婚千金逆袭",
-    summary: "女主遭遇背叛后闪婚，最终完成逆袭。\n第1集：意外闪婚；第2集：身份揭晓",
+  assert.equal(collection.title, "闪婚千金逆袭");
+  assert.match(collection.summary, /^女主遭遇背叛后闪婚，最终完成逆袭。/u);
+  assert.ok(collection.summary.length >= 100);
+  assert.equal(collection.episodeCount, 2);
+  assert.equal(collection.shortDramaType, "AI动漫短剧");
+  assert.deepEqual(collection.shortDramaTags, ["AI动漫解说漫", "逆袭"]);
+  assert.equal(collection.audience, "女");
+});
+
+test("uses only the story synopsis for a Taobao collection", () => {
+  const storySynopsis = "电商大促前夕，无良二房东王海恶意毁约企图敲诈。电商老板赵远文坚决不向恶势力妥协，果断当场退租，并为员工妥善安置了优质的园区公寓。面对反派雇人堵路、恶意举报消防隐患等卑劣手段，赵远文始终冷静应对，依靠规范管理与法律证据化解危机。最终，他查明违规群租房真相，联合真房东依法清算恶霸，带领团队在大促中创造佳绩。";
+  const source = [
+    "【海报封面\\剧情资料\\简介.txt】",
+    "根据您上传的《从退租开始清算》故事内容，为您生成故事简介：",
+    "### 故事简介（约150字）",
+    storySynopsis,
+    "---",
+    "### 男主简介（约100字）",
+    "**赵远文**：远文电商公司负责人。",
+    "第1集：二房东恶意涨租毁约；第2集：赵远文当场决定退租",
+  ].join("\n\n");
+
+  assert.equal(extractTaobaoCollectionSynopsis(source), storySynopsis);
+  const collection = createTaobaoCollectionMetadata({
+    id: "task-pure-summary",
+    originalTitle: "从退租开始清算",
+    baiduPanResourceLink: "https://pan.baidu.com/s/example?pwd=1234",
     episodeCount: 2,
-    shortDramaType: "AI动漫短剧",
-    shortDramaTags: ["AI动漫解说漫", "逆袭"],
-    audience: "女",
+    productionCostProofFiles: [],
+    summary: "过短的后台简介",
+  }, {
+    dramaTag: "都市",
+    episodeSummaries: ["二房东恶意毁约", "男主当场决定退租"],
+    synopsisText: source,
   });
+
+  assert.equal(collection.summary, storySynopsis);
+  assert.doesNotMatch(collection.summary, /简介\.txt|男主简介|第1集/u);
+});
+
+test("supplements a short collection synopsis to Taobao's minimum length", () => {
+  const shortSummary = "少年在维修铺中意外获得特殊能力，从此能够感知物品背后的故事，并在一次次委托中帮助身边的人解决难题。";
+  const summary = ensureTaobaoCollectionSynopsis({
+    title: "守温维修铺",
+    dramaTag: "都市",
+    episodeSummaries: ["少年发现特殊能力", "维修委托暗藏秘密", "伙伴携手化解危机"],
+    taskSummary: shortSummary,
+  });
+
+  assert.match(summary, new RegExp(`^${shortSummary}`, "u"));
+  assert.ok(summary.length >= 100);
+  assert.ok(summary.length <= 3_000);
 });
 
 test("reads synopsis text and generates all episode summaries", async () => {
@@ -55,7 +102,7 @@ test("reads synopsis text and generates all episode summaries", async () => {
         }),
       };
     },
-  } as DramaAiClient;
+  } as unknown as DramaAiClient;
   try {
     const synopsis = await collectTaobaoSynopsis(path.join(root, "逆风翻盘"));
     assert.match(synopsis.text ?? "", /男主遭到背叛/);
@@ -64,6 +111,7 @@ test("reads synopsis text and generates all episode summaries", async () => {
       originalTitle: "逆风翻盘",
       baiduPanResourceLink: "https://pan.baidu.com/s/example?pwd=1234",
       episodeCount: 2,
+      productionCostProofFiles: [],
     }, {
       localMaterialRoot: root,
       aiClientFactory: () => client,
@@ -105,6 +153,7 @@ test("generates metadata in 100-episode ranges for a long Taobao drama", async (
       originalTitle: "千集长剧",
       baiduPanResourceLink: "https://pan.baidu.com/s/example?pwd=1234",
       episodeCount: 101,
+      productionCostProofFiles: [],
     }, {
       localMaterialRoot: root,
       aiClientFactory: () => client,
@@ -119,6 +168,13 @@ test("generates metadata in 100-episode ranges for a long Taobao drama", async (
 
 test("formats Taobao description and hashtag text", () => {
   assert.equal(formatTaobaoVideoDescription(3, "第三集：女主揭开豪门秘密。"), "第3集|女主揭开豪门秘密");
-  assert.deepEqual(taobaoContentTags("顺手牵羊的代价", "现代"), ["AI短剧", "现代"]);
-  assert.equal(formatTaobaoHashtags("顺手牵羊的代价", "现代"), "#AI短剧 #现代");
+  assert.deepEqual(taobaoContentTags("顺手牵羊的代价", "现代"), [
+    "AI短剧",
+    "现代",
+    "顺手牵羊的代价",
+  ]);
+  assert.equal(
+    formatTaobaoHashtags("顺手牵羊的代价", "现代"),
+    "#AI短剧 #现代 #顺手牵羊的代价",
+  );
 });

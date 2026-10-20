@@ -41,12 +41,32 @@ async function ensureResource(
   const retries = Math.max(0, options.baiduNetdiskDownloadRetryAttempts ?? 3);
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const attemptNumber = attempt + 1;
+    const attemptCount = retries + 1;
+    const startedAt = Date.now();
+    log(options, `[taobao-drama] 开始准备百度网盘资源（第 ${attemptNumber}/${attemptCount} 次）：${task.originalTitle}`);
+    const heartbeat = setInterval(() => {
+      const elapsedSeconds = Math.max(1, Math.floor((Date.now() - startedAt) / 1_000));
+      const elapsedText = elapsedSeconds < 60
+        ? `${elapsedSeconds} 秒`
+        : `${Math.floor(elapsedSeconds / 60)} 分钟`;
+      log(options, `[taobao-drama] 百度网盘资源仍在下载或校验，已等待 ${elapsedText}：${task.originalTitle}`);
+    }, 30_000);
     try {
-      return await options.ensureBaiduNetdiskResource(taobaoBaiduResourceRequest(task, options));
+      const resource = await options.ensureBaiduNetdiskResource(taobaoBaiduResourceRequest(task, options));
+      log(options, `[taobao-drama] 百度网盘资源准备完成：${task.originalTitle}`);
+      return resource;
     } catch (error) {
       lastError = error;
-      if (isNonRetryableBaiduNetdiskResourceError(error) || attempt >= retries) break;
+      const message = error instanceof Error ? error.message : String(error);
+      if (isNonRetryableBaiduNetdiskResourceError(error) || attempt >= retries) {
+        log(options, `[taobao-drama] 百度网盘资源准备失败：${message}`);
+        break;
+      }
+      log(options, `[taobao-drama] 百度网盘资源准备失败，5 秒后重试：${message}`);
       await new Promise((resolve) => setTimeout(resolve, 5_000));
+    } finally {
+      clearInterval(heartbeat);
     }
   }
   throw lastError;

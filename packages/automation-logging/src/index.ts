@@ -282,6 +282,57 @@ function translateErrorMessage(message: string): string {
 }
 
 function translateActionableError(code: string, detail: string): string | undefined {
+  if (code === "DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED") {
+    const contractId = detail.match(/\bcontractId=([^;\s]+)/u)?.[1];
+    const requestedJson = detail.match(/\brequested=("(?:\\.|[^"])*")/u)?.[1];
+    const availableJson = detail.match(/\bavailable=(\[[^\]]*\])/u)?.[1];
+    const requested = requestedJson
+      ? (() => {
+          try { return String(JSON.parse(requestedJson)); } catch { return contractId; }
+        })()
+      : contractId;
+    const available = availableJson
+      ? (() => {
+          try {
+            const parsed = JSON.parse(availableJson);
+            return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+    return `任务配置的绑定合同${requested ? `“${requested}”` : ""}当前在抖音页面中为灰色不可选，`
+      + "系统已等待并重新检查，未点击该合同，以免绑定错误影响结算。"
+      + (available.length > 0 ? `当前页面可选合同：${available.join("；")}。` : "当前页面没有可用合同。")
+      + "请在任务后台改为适用于当前作品类型的可选合同，或先在抖音合同管理中恢复该合同后再重试";
+  }
+
+  if (code === "DOUYIN_DRAMA_REQUIRED_CONTRACT_NOT_FOUND") {
+    const contractId = detail.match(/\bcontractId=([^;\s]+)/u)?.[1];
+    return `任务配置的绑定合同${contractId ? `“${contractId}”` : ""}未出现在当前抖音账号的合同列表中。`
+      + "请核对任务所属账号及合同编号，或在任务后台重新选择该账号可用的合同后重试";
+  }
+
+  if (code === "DOUYIN_DRAMA_EPISODE_VIDEO_INVALID") {
+    const episode = detail.match(/\bepisode=(\d+)/u)?.[1];
+    const file = detail.match(/\bfile=(?:"([^"]+)"|([^;]+))/u)?.slice(1).find(Boolean)?.trim();
+    const source = detail.match(/\bsource=(?:"([^"]+)"|([^;]+))/u)?.slice(1).find(Boolean)?.trim();
+    const sizeBytes = Number(detail.match(/\bsizeBytes=(\d+)/u)?.[1]);
+    const reason = detail.match(/\breason=([^;\s]+)/u)?.[1];
+    const diagnosis = reason === "moov-atom-not-found"
+      ? "MP4 缺少 moov 索引，文件下载不完整或封装已损坏"
+      : reason === "invalid-media-data"
+        ? "视频数据无效，文件可能下载不完整或已经损坏"
+        : "无法读取视频时长，文件可能损坏或格式异常";
+    const target = episode ? `第 ${episode} 集视频` : "剧集视频";
+    const size = Number.isFinite(sizeBytes) && sizeBytes >= 0
+      ? `${(sizeBytes / 1024 / 1024).toFixed(2)} MiB（${sizeBytes} 字节）`
+      : "未知";
+    return `${target}${file ? `“${file}”` : ""}校验失败，已停止上传。`
+      + `诊断：${diagnosis}；文件大小：${size}`
+      + `${source ? `；原始文件：${source}` : ""}。请重新下载或更换该集源视频，确认可以正常播放和拖动进度条后重新执行任务`;
+  }
+
   if (code === "DOUYIN_DRAMA_EPISODE_DURATION_TOO_SHORT") {
     const file = detail.match(/\bfile=(?:"([^"]+)"|([^;]+))/u)?.slice(1).find(Boolean)?.trim();
     const duration = detail.match(/\bduration=([^;\s]+)/u)?.[1];
@@ -987,8 +1038,8 @@ function formatFieldValue(key: string, value: unknown) {
   }
   if (typeof value === "number") {
     if (key === "timeoutMinutes") return `${value}m`;
-    if (key === "size" || /Bytes$/.test(key)) return formatByteSize(value);
-    return /(?:duration|delay|elapsed|interval|timeout).*ms$/i.test(key) || /Ms$/.test(key)
+    if (key === "size" || key.endsWith('Bytes')) return formatByteSize(value);
+    return /(?:duration|delay|elapsed|interval|timeout).*ms$/i.test(key) || key.endsWith('Ms')
       ? `${value}ms`
       : String(value);
   }

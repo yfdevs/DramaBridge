@@ -9,7 +9,6 @@ import { registerAppUpdaterHandlers } from "./app-updater";
 import { registerGlobalAppConfigHandlers } from "./global-app-config";
 import { getMainLogDir, logMain, registerMainProcessLogging } from "./main-logger";
 import { ensureBaiduNetdiskCdpReadyOnStartup } from "./platforms/baidu-netdisk";
-import { ensureJianyingReadyOnStartup } from "./platforms/jianying";
 import {
   getGlobalRunningPlatformStatus,
   registerAllPlatformHandlers,
@@ -156,7 +155,6 @@ app.whenReady().then(() => {
       stopAllPlatformServices,
     });
     ensureBaiduNetdiskCdpReadyInBackground();
-    ensureJianyingReadyInBackground();
 
     if (process.platform === "darwin" && VITE_DEV_SERVER_URL) {
       app.dock?.setIcon(getAppIconPath());
@@ -184,24 +182,6 @@ function ensureBaiduNetdiskCdpReadyInBackground() {
       });
     } catch (error) {
       logMain("error", "Baidu Netdisk connection check failed", error);
-    }
-  })();
-}
-
-function ensureJianyingReadyInBackground() {
-  void (async () => {
-    try {
-      logMain("info", "Checking Jianying startup state");
-      const result = await ensureJianyingReadyOnStartup();
-      logMain("info", "Jianying startup check completed", {
-        action: result.action,
-        installed: result.status.installed,
-        appRunning: result.status.appRunning,
-        accessibilityPrepared: result.status.accessibilityPrepared,
-        message: result.status.message,
-      });
-    } catch (error) {
-      logMain("error", "Jianying automatic startup failed", error);
     }
   })();
 }

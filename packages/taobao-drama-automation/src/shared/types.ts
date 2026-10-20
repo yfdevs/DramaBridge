@@ -33,7 +33,6 @@ export const taobaoBatchUploadTaskSchema = z.object({
 export const taobaoDramaTaskFailStageValues = [
   "LOGIN",
   "FILL_FORM",
-  "DOWNLOAD",
   "UPLOAD_FILE",
   "SUBMIT",
   "RECOGNIZE_RESULT",

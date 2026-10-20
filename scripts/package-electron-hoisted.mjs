@@ -1,7 +1,10 @@
 import { spawn } from "node:child_process";
+import console from "node:console";
 import { access, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import process from "node:process";
+import { clearTimeout, setTimeout } from "node:timers";
+import { fileURLToPath, URL } from "node:url";
 
 // The package contains a full Playwright Chromium runtime. Lower compression
 // avoids exhausting the Windows runner's commit memory while creating NSIS.
@@ -18,6 +21,7 @@ const runtimeDependencyNames = [
   "electron-store",
   "electron-updater",
   "ffmpeg-static",
+  "ffprobe-static",
   "p-queue",
   "pdf-to-img",
   "playwright",

@@ -62,6 +62,7 @@ test("finds MP4 and MOV episodes and preserves their suffixes for upload", async
         "上传剧名-第1集.mp4",
         "上传剧名-第2集.mov",
       ]);
+      assert.deepEqual(prepared.sourceFiles, episodes.map((episode) => episode.file));
     } finally {
       await cleanupEpisodeUploadFiles(prepared);
     }

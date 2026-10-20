@@ -77,6 +77,7 @@ export type LocalAiProductionProofFile = {
 export type PreparedEpisodeUploadFiles = {
   uploadDir: string;
   files: string[];
+  sourceFiles?: string[];
 };
 
 export {
@@ -94,6 +95,7 @@ export {
   readVideoDimensions,
   readVideoStreamMetadata,
   resolveFfmpegExecutablePath,
+  resolveFfprobeExecutablePath,
   selectRandomVideoFrameTimestamps,
   VideoTranscodeQueue,
   type AdjustedVideoPlaybackSpeed,
@@ -1482,13 +1484,16 @@ async function cachedVideoDurationSeconds(
         : Object.assign(new Error("视频时长校验已终止。"), { name: "AbortError" });
     }
     if (controller.signal.aborted) {
-      throw new Error(`[episode-duration-invalid] 读取视频时长超时: ${file.file}`);
+      throw Object.assign(
+        new Error(`[episode-duration-invalid] 读取视频时长超时: ${file.file}`),
+        { cause: error },
+      );
     }
-    throw new Error(
+    throw Object.assign(new Error(
       `[episode-duration-invalid] 无法读取视频时长: ${file.file}; ${
         error instanceof Error ? error.message : String(error)
       }`,
-    );
+    ), { cause: error });
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", abortFromCaller);
@@ -1597,14 +1602,16 @@ export async function prepareEpisodeUploadFiles(options: {
     await createRuntimeArtifactLease(uploadDir);
     const playletName = safeEpisodeFileBaseName(options.uploadBaseName ?? options.resourceName);
     const files: string[] = [];
+    const sourceFiles: string[] = [];
     for (const episode of options.episodes ?? await findLocalEpisodeVideos(options)) {
       const extension = path.extname(episode.file).toLowerCase() || ".mp4";
       const target = path.join(uploadDir, `${playletName}-第${episode.index}集${extension}`);
       await createEpisodeUploadHardLink(episode.file, target);
       files.push(target);
+      sourceFiles.push(episode.file);
     }
 
-    return { uploadDir, files };
+    return { uploadDir, files, sourceFiles };
   } catch (error) {
     await rm(uploadDir, { recursive: true, force: true }).catch(() => undefined);
     throw error;

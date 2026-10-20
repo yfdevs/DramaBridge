@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { TAOBAO_DRAMA_FIXED_FIELDS } from "../../src/shared/constants.js";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "../../../../");
 process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(workspaceRoot, ".cache/playwright-browsers");
 
-const [{ chromium }, { fillAndCreateTaobaoCollection, selectTaobaoDramaCollectionTags, uploadTaobaoCollectionCover, uploadTaobaoCostConfigMaterial }] = await Promise.all([
+const [{ chromium }, { fillAndCreateTaobaoCollection, isTaobaoCollectionCreateSuccessSignal, selectTaobaoDramaCollectionTags, shouldRetryTaobaoCollectionCreate, uploadTaobaoCollectionCover, uploadTaobaoCostConfigMaterial }] = await Promise.all([
   import("playwright"),
   import("../../src/automation/collection.js"),
 ]);
@@ -29,6 +30,49 @@ const browser = await chromium.launch({
 
 after(async () => {
   await browser.close();
+});
+
+test("uses Yang Aiping for Taobao collection people fields", () => {
+  assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.producerName, "杨爱平");
+  assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.directorName, "杨爱平");
+  assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.scriptwriterName, "杨爱平");
+  assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.mainActors, "杨爱平");
+  assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.productionCompany, "明星说");
+});
+
+test("recognizes a missing collection-create button after the settle period", () => {
+  assert.equal(isTaobaoCollectionCreateSuccessSignal({
+    navigated: false,
+    successMessageVisible: false,
+    createButtonVisible: false,
+    settlePeriodComplete: true,
+  }), true);
+  assert.equal(isTaobaoCollectionCreateSuccessSignal({
+    navigated: false,
+    successMessageVisible: false,
+    createButtonVisible: false,
+    settlePeriodComplete: false,
+  }), false);
+  assert.equal(isTaobaoCollectionCreateSuccessSignal({
+    navigated: false,
+    successMessageVisible: false,
+    createButtonVisible: true,
+    settlePeriodComplete: true,
+  }), false);
+});
+
+test("retries collection creation only once when the button remains usable", () => {
+  const retryable = {
+    success: false,
+    alreadyRetried: false,
+    settlePeriodComplete: true,
+    createButtonVisible: true,
+    createButtonEnabled: true,
+  };
+  assert.equal(shouldRetryTaobaoCollectionCreate(retryable), true);
+  assert.equal(shouldRetryTaobaoCollectionCreate({ ...retryable, alreadyRetried: true }), false);
+  assert.equal(shouldRetryTaobaoCollectionCreate({ ...retryable, createButtonEnabled: false }), false);
+  assert.equal(shouldRetryTaobaoCollectionCreate({ ...retryable, settlePeriodComplete: false }), false);
 });
 
 test("fills a Fusion Next textbox without mistaking its label wrapper for the form item", async () => {

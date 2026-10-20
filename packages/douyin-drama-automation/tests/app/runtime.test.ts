@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyDouyinDramaFailStage,
+  douyinNetdiskOwnershipDownloadRequirements,
 } from "../../src/app/runtime.js";
+
+test("does not block netdisk completion on ambiguous ownership directory names", () => {
+  assert.deepEqual(douyinNetdiskOwnershipDownloadRequirements, {
+    minimumImages: 4,
+  });
+  assert.equal("minimumJianyingImages" in douyinNetdiskOwnershipDownloadRequirements, false);
+});
 
 test("maps netdisk and download failures to a backend-supported fail stage", () => {
   assert.equal(

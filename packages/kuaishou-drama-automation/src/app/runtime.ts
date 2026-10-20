@@ -5,6 +5,7 @@ import {
 } from "@drama/automation-logging";
 import { isNonRetryableBaiduNetdiskResourceError } from "@drama/drama-media-assets";
 import { KUAISHOU_DRAMA_PLATFORM } from "../shared/constants.js";
+import { createKuaishouDramaPublishVariants } from "../shared/publish-variants.js";
 import { parseTaskConfig } from "../shared/task-config.js";
 import type {
   ClaimedKuaishouDramaTask,
@@ -262,6 +263,17 @@ export async function startKuaishouDramaRuntime(
               baiduNetdiskResource = await prepareTask(resolvedTask, needsFormMaterials);
             },
           );
+          const expectedVariants = createKuaishouDramaPublishVariants(resolvedTask.taskConfig)
+            .map((variant) => variant.kind);
+          if (
+            publishedVariants.length !== expectedVariants.length
+            || publishedVariants.some((variant, index) => variant !== expectedVariants[index])
+          ) {
+            throw new Error(
+              `KUAISHOU_DRAMA_PUBLISH_VARIANTS_INCOMPLETE: `
+                + `expected=${expectedVariants.join(",")} actual=${publishedVariants.join(",") || "none"}`,
+            );
+          }
         }
         if (resolvedTask?.claimedTask) {
           const completedTask = resolvedTask.claimedTask;
@@ -270,6 +282,7 @@ export async function startKuaishouDramaRuntime(
             resultJson: {
               accountId: options.kuaishouAccountId,
               accountName: options.kuaishouAccountName,
+              requestedAdVersionCount: completedTask.task.adVersionCount,
               variants: publishedVariants,
             },
           });

@@ -26,11 +26,12 @@ import { runTaobaoPublishTask } from "../automation/publish-runner.js";
 
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
 
-function failStage(error: unknown): TaobaoDramaTaskFailStage {
+export function classifyTaobaoDramaFailStage(error: unknown): TaobaoDramaTaskFailStage {
   const message = errorMessage(error);
   if (/LOGIN|登录|校验/i.test(message)) return "LOGIN";
   if (/FIELD|TEXTBOX|SELECT|COLLECTION_FORM|字段|表单/i.test(message)) return "FILL_FORM";
-  if (/网盘|下载|DOWNLOAD/i.test(message)) return "DOWNLOAD";
+  // The task API has no DOWNLOAD stage. Treat source downloads as file preparation/upload failures.
+  if (/网盘|下载|DOWNLOAD/i.test(message)) return "UPLOAD_FILE";
   if (/UPLOAD|FILE|VIDEO|COVER|素材|封面|视频/i.test(message)) return "UPLOAD_FILE";
   if (/SUBMIT|PUBLISH|CREATE_RESULT|发布|创建结果/i.test(message)) return "SUBMIT";
   if (/RESULT|RECOGNIZED|识别/i.test(message)) return "RECOGNIZE_RESULT";
@@ -68,7 +69,7 @@ async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: Taobao
     setLastTask({ accountTaskId: task.accountTaskId, originalTitle: task.originalTitle, status: "succeeded", updatedAt: new Date().toISOString() });
   } catch (error) {
     const message = formatAutomationErrorReport(error, { fallbackMessage: "淘宝短剧任务提交失败，未获取到具体错误原因" });
-    const stage = failStage(error);
+    const stage = classifyTaobaoDramaFailStage(error);
     const diagnostics = await captureAutomationFailureDiagnostics({
       platform: "taobao-drama", error, page, logFilePath: options.logFilePath, stage,
       task: { accountTaskId: task.accountTaskId, title: task.originalTitle },

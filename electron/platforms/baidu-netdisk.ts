@@ -489,12 +489,19 @@ function shareKeyFromText(shareText: string) {
     if (error instanceof Error && error.message.includes("提取码")) {
       throw error;
     }
-    throw new Error("分享文本中的百度网盘链接格式不正确。");
+    throw Object.assign(new Error("分享文本中的百度网盘链接格式不正确。"), { cause: error });
   }
 }
 
 function uniqueBaiduDownloadDir(resourceName: string, shareKey: string) {
-  const safeName = resourceName.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim() || "资源";
+  const safeName = Array.from(
+    resourceName,
+    (character) => character.charCodeAt(0) <= 0x1f || '<>:"/\\|?*'.includes(character)
+      ? "_"
+      : character,
+  )
+    .join("")
+    .trim() || "资源";
   const suffix = createHash("sha1").update(shareKey).digest("hex").slice(0, 10);
   return path.join(defaultBaiduNetdiskDownloadDir, `${safeName}__${suffix}`);
 }
@@ -1316,7 +1323,10 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
         "AI 海报兜底重试前",
       );
       if (record.remoteCleanupPending) {
-        throw new Error("旧网盘中转目录尚未清理，已停止创建新的中转目录；下次启动将自动重试清理。");
+        throw Object.assign(
+          new Error("旧网盘中转目录尚未清理，已停止创建新的中转目录；下次启动将自动重试清理。"),
+          { cause: error },
+        );
       }
 
       const aiPosterLogger = baiduNetdiskLogger("ai-poster", {
@@ -1397,7 +1407,10 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
     throw Object.assign(new Error(message), { cause: error });
   } finally {
     if (!downloadArtifactsCleaned) {
-      void cleanupBaiduNetdiskDownloadArtifacts({
+      // The caller may retry as soon as this operation settles. Cleanup must
+      // finish first, otherwise an old attempt can delete the native download
+      // task created by the next attempt for the same resource.
+      await cleanupBaiduNetdiskDownloadArtifacts({
         downloadDir: uniqueDownloadDir,
         targetName: request.resourceName,
         port,
@@ -1465,7 +1478,10 @@ export async function cleanupBaiduNetdiskPlayletAfterTaskSuccess(
     cleanupLogger.warn("Remote playlet directory cleanup failed after task success", {
       error: cleanupError,
     });
-    throw new Error(`任务已成功，但自动清理百度网盘剧目目录失败：${cleanupError}`);
+    throw Object.assign(
+      new Error(`任务已成功，但自动清理百度网盘剧目目录失败：${cleanupError}`),
+      { cause: error },
+    );
   }
 }
 

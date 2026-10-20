@@ -298,10 +298,35 @@ async function validationMessages(page: Page) {
   return [...new Set(messages)];
 }
 
-async function createSucceeded(page: Page) {
-  if (isTaobaoCreatorSuccessNavigation(page.url(), "collection")) return true;
-  return page.getByText(/创建成功|合集创建成功|已创建/).filter({ visible: true }).first()
-    .isVisible().catch(() => false);
+export function isTaobaoCollectionCreateSuccessSignal(state: {
+  navigated: boolean;
+  successMessageVisible: boolean;
+  createButtonVisible: boolean;
+  settlePeriodComplete: boolean;
+}) {
+  return state.navigated || state.successMessageVisible ||
+    (state.settlePeriodComplete && !state.createButtonVisible);
+}
+
+export function shouldRetryTaobaoCollectionCreate(state: {
+  success: boolean;
+  alreadyRetried: boolean;
+  settlePeriodComplete: boolean;
+  createButtonVisible: boolean;
+  createButtonEnabled: boolean;
+}) {
+  return !state.success && !state.alreadyRetried && state.settlePeriodComplete &&
+    state.createButtonVisible && state.createButtonEnabled;
+}
+
+async function createSucceeded(page: Page, createButton: Locator, clickedAt: number) {
+  return isTaobaoCollectionCreateSuccessSignal({
+    navigated: isTaobaoCreatorSuccessNavigation(page.url(), "collection"),
+    successMessageVisible: await page.getByText(/创建成功|合集创建成功|已创建/)
+      .filter({ visible: true }).first().isVisible().catch(() => false),
+    createButtonVisible: await createButton.isVisible().catch(() => false),
+    settlePeriodComplete: Date.now() - clickedAt >= TAOBAO_DRAMA_MIN_SETTLE_MS,
+  });
 }
 
 export async function fillAndCreateTaobaoCollection(
@@ -342,24 +367,43 @@ export async function fillAndCreateTaobaoCollection(
   const createButton = page.getByRole("button", { name: /^\s*(?:确认创建|创建合集|创建)\s*$/ })
     .filter({ visible: true }).last();
   await createButton.waitFor({ state: "visible", timeout: 30_000 });
-  await createButton.click({ timeout: 30_000 });
-  let clickedAt = Date.now();
   const confirmDialog = page
     .locator(".next-dialog:visible, .ant-modal:visible, .semi-modal:visible, [role='dialog']:visible")
     .filter({ hasText: /创建/ }).last();
-  if (await confirmDialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await confirmDialog.getByRole("button", { name: /^\s*(?:确认创建|确定|确认)\s*$/ })
-      .filter({ visible: true }).last().click({ timeout: 30_000 });
-    clickedAt = Date.now();
-  }
+  const clickCreate = async () => {
+    await createButton.click({ timeout: 30_000 });
+    let submittedAt = Date.now();
+    if (await confirmDialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await confirmDialog.getByRole("button", { name: /^\s*(?:确认创建|确定|确认)\s*$/ })
+        .filter({ visible: true }).last().click({ timeout: 30_000 });
+      submittedAt = Date.now();
+    }
+    return submittedAt;
+  };
+  let clickedAt = await clickCreate();
   log(options, "[taobao-drama] 已点击创建合集，进入至少10秒结算期");
   let success = false;
-  const deadline = clickedAt + 60_000;
+  let retriedCreate = false;
+  let deadline = clickedAt + 60_000;
   while (Date.now() < deadline) {
     const validation = await validationMessages(page);
     if (validation.length) throw new Error(`TAOBAO_DRAMA_COLLECTION_FORM_INVALID: ${validation.join("；")}`);
-    success ||= await createSucceeded(page);
+    success ||= await createSucceeded(page, createButton, clickedAt);
     if (success && Date.now() - clickedAt >= TAOBAO_DRAMA_MIN_SETTLE_MS) break;
+    const settlePeriodComplete = Date.now() - clickedAt >= TAOBAO_DRAMA_MIN_SETTLE_MS;
+    if (shouldRetryTaobaoCollectionCreate({
+      success,
+      alreadyRetried: retriedCreate,
+      settlePeriodComplete,
+      createButtonVisible: await createButton.isVisible().catch(() => false),
+      createButtonEnabled: await createButton.isEnabled().catch(() => false),
+    })) {
+      retriedCreate = true;
+      clickedAt = await clickCreate();
+      deadline = clickedAt + 60_000;
+      log(options, "[taobao-drama] 创建按钮仍可用，已补点一次并重新进入结算期");
+      continue;
+    }
     await page.waitForTimeout(250);
   }
   if (!success) throw new Error("TAOBAO_DRAMA_COLLECTION_CREATE_RESULT_NOT_RECOGNIZED");

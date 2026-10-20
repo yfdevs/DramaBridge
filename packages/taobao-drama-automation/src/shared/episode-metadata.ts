@@ -64,13 +64,13 @@ async function readSynopsisFile(file: string) {
   if (!info?.isFile() || info.size <= 0 || info.size > MAX_SYNOPSIS_FILE_BYTES) return "";
   const extension = path.extname(file).toLowerCase();
   if (extension === ".docx") {
-    return (await mammoth.extractRawText({ path: file })).value.replace(/\0/g, "").trim();
+    return (await mammoth.extractRawText({ path: file })).value.split("\0").join("").trim();
   }
   if (extension === ".doc") {
     // Mammoth cannot decode the legacy binary DOC format. Ignore it without blocking upload.
     return "";
   }
-  return decodeText(await readFile(file)).replace(/\0/g, "").trim();
+  return decodeText(await readFile(file)).split("\0").join("").trim();
 }
 
 export async function collectTaobaoSynopsis(resourceDir: string): Promise<{
@@ -236,6 +236,76 @@ export function formatTaobaoVideoDescription(episodeIndex: number, summary: stri
 
 const femaleAudiencePattern = /女主|千金|王妃|嫡女|女帝|娇妻|萌宝|甜宠|闪婚|先婚后爱|追妻|替嫁|带球跑|女性成长|古代言情|现代言情/;
 
+function cleanTaobaoCollectionSynopsis(value: string) {
+  return value
+    .replace(/^\s*【[^\n】]+】\s*$/gmu, "")
+    .replace(/^\s*根据您上传的[^\n]*$/gmu, "")
+    .replace(/\*\*/g, "")
+    .replace(/^\s*>\s?/gmu, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function extractTaobaoCollectionSynopsis(value?: string) {
+  if (!value?.trim()) return "";
+  const text = value.replace(/\r\n?/g, "\n");
+  const heading = /(?:^|\n)\s{0,3}#{0,6}\s*(?:故事|剧情|内容|作品|短剧)(?:简介|梗概)[^\n]*\n/u.exec(text);
+  let synopsis = heading ? text.slice(heading.index + heading[0].length) : text;
+  const boundary = synopsis.search([
+    /^\s*-{3,}\s*$/mu,
+    /^\s*#{1,6}\s+/mu,
+    /^\s*(?:男主|女主|男配|女配|角色|人物)(?:简介|介绍)\s*[：:]?/mu,
+    /^\s*第\s*1\s*集\s*[：:|｜]/mu,
+    /^\s*【[^\n】]+】\s*$/mu,
+  ].reduce((combined, pattern) => new RegExp(
+    `${combined.source}|${pattern.source}`,
+    "mu",
+  )));
+  if (boundary >= 0) synopsis = synopsis.slice(0, boundary);
+  return cleanTaobaoCollectionSynopsis(synopsis).slice(0, 3_000);
+}
+
+export function resolveTaobaoCollectionSynopsis(
+  taskSummary: string | undefined,
+  synopsisText: string | undefined,
+) {
+  const taskSynopsis = cleanTaobaoCollectionSynopsis(taskSummary ?? "").slice(0, 3_000);
+  const fileSynopsis = extractTaobaoCollectionSynopsis(synopsisText);
+  if (taskSynopsis.length >= 100) return taskSynopsis;
+  if (fileSynopsis.length >= 100) return fileSynopsis;
+  return taskSynopsis || fileSynopsis;
+}
+
+export function ensureTaobaoCollectionSynopsis(options: {
+  title: string;
+  dramaTag: string;
+  episodeSummaries: string[];
+  taskSummary?: string;
+  synopsisText?: string;
+}) {
+  let summary = resolveTaobaoCollectionSynopsis(options.taskSummary, options.synopsisText);
+  if (summary.length >= 100) return summary;
+
+  const episodeHighlights = options.episodeSummaries
+    .map(cleanSummary)
+    .filter(Boolean)
+    .slice(0, 6);
+  const additions = [
+    summary
+      ? "剧情围绕主要人物的经历逐步展开，在接连发生的矛盾、选择与挑战中持续推动故事发展。"
+      : `《${options.title}》是一部以${options.dramaTag || "人物成长"}为主题的短剧，讲述主要人物面对现实困境并寻找解决办法的故事。`,
+    episodeHighlights.length > 0
+      ? `故事包含${episodeHighlights.join("、")}等情节，人物关系和事件走向也在过程中不断发生变化。`
+      : "随着矛盾不断升级，人物关系、目标与处境也随之发生变化，并逐步走向最终的选择。",
+    "全剧通过连续而完整的情节呈现人物的成长、抉择与情感变化，使故事主线得到充分展开。",
+  ];
+  for (const addition of additions) {
+    if (summary.length >= 100) break;
+    summary = `${summary}${summary && !/[。！？!?]$/u.test(summary) ? "。" : ""}${addition}`;
+  }
+  return summary.slice(0, 3_000);
+}
+
 export function createTaobaoCollectionMetadata(
   task: TaobaoBatchUploadTask,
   metadata: TaobaoEpisodeMetadata,
@@ -246,13 +316,13 @@ export function createTaobaoCollectionMetadata(
   );
   return {
     title: task.title ?? task.originalTitle,
-    summary: [
-      task.summary,
-      metadata.synopsisText,
-      metadata.episodeSummaries.map((summary, index) => `第${index + 1}集：${summary}`).join("；"),
-    ].filter((value, index, values): value is string => Boolean(value?.trim()) && values.indexOf(value) === index)
-      .join("\n")
-      .slice(0, 3_000),
+    summary: ensureTaobaoCollectionSynopsis({
+      title: task.title ?? task.originalTitle,
+      dramaTag: metadata.dramaTag,
+      episodeSummaries: metadata.episodeSummaries,
+      taskSummary: task.summary,
+      synopsisText: metadata.synopsisText,
+    }),
     episodeCount: task.episodeCount,
     shortDramaType: task.shortDramaType ?? "AI动漫短剧",
     shortDramaTags: task.shortDramaTags?.length
@@ -263,10 +333,8 @@ export function createTaobaoCollectionMetadata(
 }
 
 export function taobaoContentTags(title: string, dramaTag: string) {
-  void title;
-  // The hashtag picker only accepts topics returned by Taobao search. A full drama
-  // title normally has no matching topic and used to fail an otherwise ready upload.
-  return [...new Set(["AI短剧", cleanTag(dramaTag)].filter(Boolean))];
+  const dramaTitle = title.trim().replace(/^#+/, "");
+  return [...new Set(["AI短剧", cleanTag(dramaTag), dramaTitle].filter(Boolean))];
 }
 
 export function formatTaobaoHashtags(title: string, dramaTag: string) {

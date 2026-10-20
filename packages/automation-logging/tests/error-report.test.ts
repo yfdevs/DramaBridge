@@ -79,6 +79,34 @@ test("explains exhausted Douyin episode delete-and-reupload attempts", () => {
   assert.match(report, /错误码：DOUYIN_DRAMA_EPISODE_UPLOAD_REUPLOADS_EXHAUSTED/);
 });
 
+test("reports a corrupt Douyin source episode with actionable file details", () => {
+  const report = formatAutomationErrorReport(
+    'DOUYIN_DRAMA_EPISODE_VIDEO_INVALID: episode=40; file="末世宿舍：羁绊求生！-第40集.mp4"; ' +
+      'source="D:\\BaiduNetdiskDownload\\末世宿舍：羁绊求生！\\末世宿舍：羁绊求生！ - 第40集.mp4"; ' +
+      'sizeBytes=151866597; reason=moov-atom-not-found',
+  );
+
+  assert.match(report, /第 40 集视频/);
+  assert.match(report, /MP4 缺少 moov 索引/);
+  assert.match(report, /144\.83 MiB（151866597 字节）/);
+  assert.match(report, /BaiduNetdiskDownload/);
+  assert.match(report, /错误码：DOUYIN_DRAMA_EPISODE_VIDEO_INVALID/);
+});
+
+test("explains that a configured Douyin contract is disabled and lists selectable contracts", () => {
+  const report = formatAutomationErrorReport(
+    'DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED: contractId=CT20260521191189; ' +
+      'requested="CT20260521191189 【明星说】漫剧合作协议（框架）"; ' +
+      'available=["CT20260928151015 漫剧合作协议（对公签约-番茄 IP 改编）"]',
+  );
+
+  assert.match(report, /当前在抖音页面中为灰色不可选/u);
+  assert.match(report, /系统已等待并重新检查，未点击该合同/u);
+  assert.match(report, /当前页面可选合同：CT20260928151015/u);
+  assert.match(report, /任务后台改为适用于当前作品类型的可选合同/u);
+  assert.match(report, /错误码：DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED/u);
+});
+
 test("explains that a short Douyin episode is not retried", () => {
   const report = formatAutomationErrorReport(
     'DOUYIN_DRAMA_EPISODE_DURATION_TOO_SHORT: file="测试剧-第3集.mp4"; duration=00:00:29; minimumSeconds=30',

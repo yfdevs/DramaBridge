@@ -2,9 +2,12 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, open, rename, rm, stat } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 import PQueue from "p-queue";
+
+const runtimeRequire = createRequire(import.meta.url);
 
 export type VideoSizePolicy = {
   maxFileBytes: number;
@@ -123,6 +126,27 @@ export function resolveFfmpegExecutablePath() {
   );
 }
 
+export function resolveFfprobeExecutablePath() {
+  // ffprobe-static is CommonJS and reads __dirname. Loading it through Node's
+  // CommonJS loader keeps that variable defined instead of bundling its body
+  // into the Electron ESM output.
+  const ffprobeStatic = runtimeRequire("ffprobe-static") as { path?: string };
+  const configuredPath = (ffprobeStatic as { path?: string }).path;
+  const executableName = process.platform === "win32" ? "ffprobe.exe" : "ffprobe";
+  const candidates = [
+    configuredPath?.replace("app.asar", "app.asar.unpacked"),
+    path.resolve(process.cwd(), ".cache", "ffprobe-static", executableName),
+    configuredPath,
+  ].filter((value): value is string => Boolean(value));
+  const existing = candidates.find((candidate) => existsSync(candidate));
+  if (existing) return existing;
+  if (configuredPath && !path.isAbsolute(configuredPath)) return configuredPath;
+  if (process.env.PATH) return executableName;
+  throw new Error(
+    `[video-probe-failed] 找不到 FFprobe 可执行文件: candidates=${candidates.join(",")}`,
+  );
+}
+
 function secondsFromDurationMatch(match: RegExpExecArray) {
   return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 }
@@ -173,6 +197,66 @@ function runFfmpeg(
       ));
     });
   });
+}
+
+function runFfprobe(inputFile: string, signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(resolveFfprobeExecutablePath(), [
+      "-v", "error",
+      "-show_entries", "format=duration:stream=duration",
+      "-of", "json",
+      inputFile,
+    ], {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    const abort = () => {
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
+    };
+    if (signal?.aborted) abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr.on("data", (chunk: string) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("exit", (code, exitSignal) => {
+      signal?.removeEventListener("abort", abort);
+      if (signal?.aborted) {
+        reject(Object.assign(new Error("[video-probe-cancelled] FFprobe task was cancelled."), {
+          name: "AbortError",
+        }));
+        return;
+      }
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      const details = stderr.trim().split(/\r?\n/).slice(-8).join(" | ") || "no diagnostic output";
+      reject(new Error(
+        `[video-probe-failed] FFprobe exited with ${exitSignal ? `signal ${exitSignal}` : `code ${code}`}: ${details}`,
+      ));
+    });
+  });
+}
+
+function ffprobeDurationSeconds(stdout: string) {
+  const result = JSON.parse(stdout) as {
+    format?: { duration?: string | number };
+    streams?: Array<{ duration?: string | number }>;
+  };
+  const durations = [
+    result.format?.duration,
+    ...(result.streams ?? []).map((stream) => stream.duration),
+  ].map(Number).filter((value) => Number.isFinite(value) && value > 0);
+  return durations.length > 0 ? Math.max(...durations) : 0;
+}
+
+function diagnosticTail(value: string) {
+  return value.trim().split(/\r?\n/).slice(-8).join(" | ") || "no diagnostic output";
 }
 
 export function selectRandomVideoFrameTimestamps(
@@ -231,22 +315,40 @@ export async function extractRandomVideoFrames(options: ExtractRandomVideoFrames
 }
 
 export async function readVideoDurationSeconds(inputFile: string, signal?: AbortSignal) {
-  const result = await runFfmpeg(
-    ["-hide_banner", "-i", inputFile],
-    {
-      signal,
-      acceptExitCode: (code) => code === 1,
-    },
+  const probeErrors: string[] = [];
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    signal?.throwIfAborted();
+    try {
+      const result = await runFfprobe(inputFile, signal);
+      const durationSeconds = ffprobeDurationSeconds(result.stdout);
+      if (durationSeconds > 0) return durationSeconds;
+      probeErrors.push(`attempt=${attempt}: FFprobe 未返回有效时长; ${diagnosticTail(result.stderr)}`);
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+      probeErrors.push(`attempt=${attempt}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+  }
+
+  try {
+    const result = await runFfmpeg(
+      ["-hide_banner", "-i", inputFile],
+      { signal, acceptExitCode: (code) => code === 1 },
+    );
+    const match = durationPattern.exec(result.stderr);
+    if (match) {
+      const durationSeconds = secondsFromDurationMatch(match);
+      if (Number.isFinite(durationSeconds) && durationSeconds > 0) return durationSeconds;
+    }
+    probeErrors.push(`FFmpeg fallback: ${diagnosticTail(result.stderr)}`);
+  } catch (error) {
+    if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+    probeErrors.push(`FFmpeg fallback: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  throw new Error(
+    `[video-transcode-failed] 无法读取视频时长: ${inputFile}; diagnostics=${probeErrors.join(" || ")}`,
   );
-  const match = durationPattern.exec(result.stderr);
-  if (!match) {
-    throw new Error(`[video-transcode-failed] 无法读取视频时长: ${inputFile}`);
-  }
-  const durationSeconds = secondsFromDurationMatch(match);
-  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-    throw new Error(`[video-transcode-failed] 视频时长无效: ${inputFile}`);
-  }
-  return durationSeconds;
 }
 
 export async function readVideoStreamMetadata(
@@ -619,11 +721,11 @@ async function replaceSourceFile(options: {
         await rename(backupFile, options.sourceFile);
         originalBackedUp = false;
       } catch (restoreError) {
-        throw new Error(
+        throw Object.assign(new Error(
           `[video-transcode-failed] 替换失败且恢复原文件失败，原文件备份位于: ${backupFile}; ` +
             `替换错误=${error instanceof Error ? error.message : String(error)}; ` +
             `恢复错误=${restoreError instanceof Error ? restoreError.message : String(restoreError)}`,
-        );
+        ), { cause: restoreError });
       }
     }
     throw error;

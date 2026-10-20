@@ -145,6 +145,8 @@ export function resolveKuaishouAdVersionCount(config: KuaishouAdVersionConfig): 
   if (config.adVersionCount !== undefined && Number.isInteger(config.adVersionCount)) {
     return Math.max(1, config.adVersionCount);
   }
+  const dynamicTitleCount = config.adVersionTitles?.length ?? 0;
+  if (dynamicTitleCount > 0) return dynamicTitleCount + 1;
   if (config.publishType === "广告") return 1;
   return 8;
 }

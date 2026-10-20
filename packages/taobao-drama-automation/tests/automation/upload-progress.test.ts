@@ -7,13 +7,16 @@ import {
 
 import {
   advanceTaobaoDropdownSearchState,
+  isTaobaoDetachedFrameError,
   isTaobaoUploadReady,
+  isTaobaoVerificationChallenge,
   isTaobaoVideoInputCandidate,
   normalizeTaobaoDropdownText,
   taobaoDropdownOptionIndex,
   scoreTaobaoContentTagMatch,
   summarizeTaobaoBatchItems,
   summarizeTaobaoUploadText,
+  taobaoContentTagKeyEvents,
   taobaoFatalUploadDialogReason,
   TAOBAO_DROPDOWN_END_SETTLE_MS,
   TAOBAO_DROPDOWN_SEARCH_TIMEOUT_MS,
@@ -151,6 +154,36 @@ test("matches Taobao content tags case-insensitively with an approximate fallbac
   assert.ok(scoreTaobaoContentTagMatch("# 都市情感AI仿真人短剧", "都市") >= 0.45);
   assert.ok(scoreTaobaoContentTagMatch("# AI仿真人短剧", "AI短剧") >= 0.45);
   assert.ok(scoreTaobaoContentTagMatch("# 农村美食", "AI短剧") < 0.45);
+});
+
+test("types Taobao content-tag queries as real Unicode key events", () => {
+  assert.deepEqual(taobaoContentTagKeyEvents("都市"), [
+    { type: "keyDown", key: "都", text: "都", unmodifiedText: "都" },
+    { type: "keyUp", key: "都" },
+    { type: "keyDown", key: "市", text: "市", unmodifiedText: "市" },
+    { type: "keyUp", key: "市" },
+  ]);
+});
+
+test("recognizes detached Taobao upload frames for safe reacquisition", () => {
+  assert.equal(isTaobaoDetachedFrameError(new Error("locator.waitFor: Frame was detached")), true);
+  assert.equal(isTaobaoDetachedFrameError(new Error("frame has been detached")), true);
+  assert.equal(isTaobaoDetachedFrameError(new Error("locator.waitFor: Timeout 30000ms exceeded")), false);
+});
+
+test("resumes after Taobao reports that a persistent captcha widget passed", () => {
+  assert.equal(isTaobaoVerificationChallenge({
+    visibleControlCount: 1,
+    text: "验证通过",
+  }), false);
+  assert.equal(isTaobaoVerificationChallenge({
+    visibleControlCount: 1,
+    text: "请按住滑块，拖动到最右边 验证通过后继续",
+  }), true);
+  assert.equal(isTaobaoVerificationChallenge({
+    visibleControlCount: 1,
+    text: "",
+  }), true);
 });
 
 test("normalizes collection option whitespace before matching", () => {

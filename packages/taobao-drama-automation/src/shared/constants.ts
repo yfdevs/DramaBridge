@@ -20,9 +20,9 @@ export const TAOBAO_DRAMA_FIXED_FIELDS = {
   filingType: "备案号申请",
   producerName: "杨爱平",
   productionCompany: "明星说",
-  directorName: "明星说",
-  scriptwriterName: "明星说",
-  mainActors: "无",
+  directorName: "杨爱平",
+  scriptwriterName: "杨爱平",
+  mainActors: "杨爱平",
   averageEpisodeDurationMinutes: 1,
 } as const;
 

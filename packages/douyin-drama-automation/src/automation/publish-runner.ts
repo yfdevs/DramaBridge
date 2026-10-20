@@ -51,6 +51,18 @@ import {
   uploadFormFiles,
 } from "./form-controls.js";
 
+export function locateDouyinEpisodeUploadControls(page: Page) {
+  const panel = page
+    .locator([
+      ".edit-page-video-upload-shortplay:visible",
+      ".edit-page-video-upload-shortplay-container:visible",
+    ].join(", "))
+    .filter({ has: page.locator('input[type="file"][multiple]') })
+    .first();
+  const input = panel.locator('input[type="file"][multiple][accept*=".mp4"]').first();
+  return { input, panel };
+}
+
 type DouyinAutomationAction = <T>(name: string, action: () => Promise<T>) => Promise<T>;
 
 const episodeUploadPollIntervalMs = 5_000;
@@ -284,6 +296,7 @@ async function uploadEpisodes(
         thresholdSeconds: 30,
         speed: 0.9,
         concurrency: 2,
+        sourceFiles: prepared.sourceFiles,
         onLog: (message) => log(options, message, { accountTaskId: task.accountTaskId }, "upload"),
       }));
     const timeout = Math.max(1, options.episodeUploadWaitTimeoutMinutes ?? 120) * 60_000;
@@ -295,9 +308,8 @@ async function uploadEpisodes(
       1,
       Math.min(50, Math.floor(options.episodeUploadBatchSize ?? 3)),
     );
-    const panel = page.locator(".edit-page-video-upload-shortplay-container").filter({ visible: true }).first();
+    const { input, panel } = locateDouyinEpisodeUploadControls(page);
     await panel.waitFor({ state: "visible", timeout: 15_000 });
-    const input = panel.locator('input[type="file"][multiple][accept*=".mp4"]').first();
     await input.waitFor({ state: "attached", timeout: 15_000 });
     const deadline = Date.now() + timeout;
     const reuploadAttemptsByFile = new Map<string, number>();

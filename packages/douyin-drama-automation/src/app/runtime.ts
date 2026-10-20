@@ -45,6 +45,10 @@ import type {
   DouyinDramaTaskFailStage,
 } from "../shared/types.js";
 
+export const douyinNetdiskOwnershipDownloadRequirements = {
+  minimumImages: 4,
+} as const;
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -100,7 +104,13 @@ async function ensureNetdiskResource(
     resourceName: douyinDramaResourceName(task),
     localEpisodeVideoRoot: douyinDramaLocalRoot(options),
     episodeCount: task.playlet.episodeCount,
-    requiredOwnership: { minimumImages: 4, minimumJianyingImages: 4 },
+    // The source can place Jianying and Juchuang screenshots in one directory
+    // whose name contains both platform labels. Filename-only classification is
+    // intentionally ambiguous in that case, so the download gate must only wait
+    // for enough ownership images. prepareDouyinDramaResources performs the
+    // definitive image-content classification and still requires four Jianying
+    // screenshots before platform automation starts.
+    requiredOwnership: douyinNetdiskOwnershipDownloadRequirements,
     requiredPosterImages: 1,
     posterFallback: {
       title: task.playlet.title,

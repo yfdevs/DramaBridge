@@ -131,6 +131,27 @@ test("uses content classification after netdisk standardization removes source l
   assert.deepEqual(selected, materials.slice(4).map((material) => material.file));
 });
 
+test("uses content classification for a directory labeled with both Jianying and Juchuang", async () => {
+  const materials = Array.from({ length: 8 }, (_, index) => ({
+    file: `D:\\素材\\5.权属文件截图【剪映截图+剧创截图】\\工程截图${index + 1}.png`,
+    index: index + 1,
+    name: `工程截图${index + 1}.png`,
+    size: 100 + index,
+  }));
+  let classificationCalls = 0;
+  const selected = await selectDouyinJianyingProjectScreenshots(
+    materials,
+    4,
+    async (material) => {
+      classificationCalls += 1;
+      return material.index! <= 4 ? "juchuang" : "jianying";
+    },
+  );
+
+  assert.equal(classificationCalls, 8);
+  assert.deepEqual(selected, materials.slice(4).map((material) => material.file));
+});
+
 test("rejects fewer than four Jianying screenshots", async () => {
   await assert.rejects(
     selectDouyinJianyingProjectScreenshots([

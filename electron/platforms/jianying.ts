@@ -274,7 +274,9 @@ async function waitForJianyingOperable(timeoutMs = 15_000) {
     try {
       const probe = await probeJianyingUia();
       if (probe.operable) return probe;
-    } catch {}
+    } catch {
+      // Jianying can briefly reject UI Automation probes while its window initializes.
+    }
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
   throw new Error("剪映界面启动超时");
@@ -383,24 +385,6 @@ async function launchJianying(restart: boolean) {
   void releaseAccessibilitySessionWhenStopped(lockedConfigPath, lockGeneration);
 
   return getJianyingStatus();
-}
-
-export async function ensureJianyingReadyOnStartup() {
-  const currentStatus = await getJianyingStatus();
-  if (!currentStatus.isWindows) {
-    return { action: "unsupported" as const, status: currentStatus };
-  }
-  if (!currentStatus.installed) {
-    return { action: "not-installed" as const, status: currentStatus };
-  }
-  if (currentStatus.appRunning) {
-    return { action: "reuse" as const, status: currentStatus };
-  }
-
-  return {
-    action: "start" as const,
-    status: await launchJianying(false),
-  };
 }
 
 function presetSourcePath(presetName: string) {

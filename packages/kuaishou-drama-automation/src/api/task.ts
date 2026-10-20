@@ -147,13 +147,25 @@ function normalizeAdVersionTitles(
   const publishType = text(playlet.publishType) ?? text(payload.publishType);
   const explicitAdVersionCount = number(playlet.adVersionCount)
     ?? number(payload.adVersionCount);
-  const adVersionCount = resolveKuaishouAdVersionCount({
-    publishType,
-    adVersionCount: explicitAdVersionCount,
-  });
   const configuredTitles = [playlet.adVersionTitles, payload.adVersionTitles]
     .map(stringList)
     .find((titles) => titles !== undefined);
+  const individuallyConfiguredTitleCount = adVersionTitleFields.reduce((count, field, index) => (
+    text(playlet[field]) ?? text(payload[field]) ? index + 1 : count
+  ), 0);
+  const inferredAdVersionCount = Math.max(
+    configuredTitles?.reduce((count, configuredTitle, index) => (
+      configuredTitle ? index + 2 : count
+    ), 0) ?? 0,
+    individuallyConfiguredTitleCount > 0 ? individuallyConfiguredTitleCount + 1 : 0,
+  );
+  const adVersionCount = resolveKuaishouAdVersionCount({
+    publishType,
+    adVersionCount: explicitAdVersionCount ?? (inferredAdVersionCount || undefined),
+    adVersionTitles: configuredTitles?.flatMap(
+      (configuredTitle) => configuredTitle ? [configuredTitle] : [],
+    ),
+  });
   const adVersionTitles: string[] = [];
   for (let index = 0; index < Math.max(0, adVersionCount - 1); index += 1) {
     const field = adVersionTitleFields[index];
@@ -168,6 +180,7 @@ function normalizeAdVersionTitles(
     }
     adVersionTitles.push(configuredTitle ?? generatedAdVersionTitle(title, index));
   }
+  normalized.publishType = publishType;
   normalized.adVersionCount = adVersionCount > 0 ? adVersionCount : undefined;
   normalized.adVersionTitles = adVersionTitles;
   return normalized;
