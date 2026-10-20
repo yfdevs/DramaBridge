@@ -103,6 +103,8 @@ function createWindow() {
 
   mainWindowState.manage(win);
   attachTitlebarToWindow(win);
+  // The titlebar library resets minimum dimensions when attaching to a window.
+  win.setMinimumSize(minimumWindowSize.width, minimumWindowSize.height);
   win.setMenu(null);
 
   if (VITE_DEV_SERVER_URL) {
