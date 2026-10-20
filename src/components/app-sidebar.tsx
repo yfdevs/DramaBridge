@@ -1,10 +1,14 @@
-import { useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Circle, Cog, Folder, Refresh } from "@mynaui/icons-react";
+import { Circle, Cog, Folder, GitBranch, Refresh } from "@mynaui/icons-react";
 import { toast } from "sonner";
-import { AppUpdateControl } from "@/components/app-update-control";
+import { version as bundledVersion } from "../../package.json";
+import {
+  getAppUpdateStatus,
+  onAppUpdateChanged,
+  type AppUpdateStatus,
+} from "@/platforms/app-runtime/service";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Sidebar,
@@ -37,11 +41,30 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const platform = platformForPath(platformContextRoute(route, location.state));
   const { entries, now } = useAppRuntime();
   const [openingLogs, setOpeningLogs] = useState(false);
-  const runningCount = Object.values(entries).filter(
-    (entry) => entry.result?.platform.running,
-  ).length;
   const connected = Boolean(window.ipcRenderer);
-  const errorCount = Object.values(entries).filter((entry) => entry.error).length;
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null);
+  useEffect(() => {
+    let disposed = false;
+    void getAppUpdateStatus()
+      .then((status) => {
+        if (!disposed) setUpdateStatus(status);
+      })
+      .catch(() => undefined);
+    const unsubscribe = onAppUpdateChanged((status) => {
+      if (!disposed) setUpdateStatus(status);
+    });
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, []);
+  const hasUpdate = Boolean(
+    updateStatus &&
+    ["available", "downloading", "downloaded", "installing"].includes(updateStatus.state),
+  );
+  const version =
+    updateStatus?.currentVersion ?? entries[platform.id]?.result?.appVersion ?? bundledVersion;
+  const returnRoute = route.startsWith("app/") ? platform.serviceRoute : route;
   const openLogs = async () => {
     setOpeningLogs(true);
     try {
@@ -75,7 +98,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
-                      isActive={active && route !== globalConfigRoute}
+                      isActive={active && !route.startsWith("app/")}
                       render={<NavLink to={routePath(item.serviceRoute)} />}
                       className="platform-menu-row h-8 gap-2 rounded-lg px-3"
                     >
@@ -115,57 +138,24 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarFooter className="px-3 py-2">
         <div className="flex h-8 items-center justify-between gap-2">
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label="工作空间状态"
-                  className="h-8 min-w-0 gap-2 px-2 text-xs font-normal text-muted-foreground transition-none"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 min-w-0 flex-1 justify-start gap-2 px-2 text-xs font-normal text-muted-foreground transition-none"
+            aria-label={`版本与更新：v${version ?? "—"}${hasUpdate ? "，有可用更新" : ""}`}
+            onClick={() => navigate(routePath("app/updates"), { state: { returnRoute } })}
+          >
+            <span className="relative flex size-4 shrink-0 items-center justify-center">
+              {hasUpdate ? <Refresh className="size-3.5" /> : <GitBranch className="size-3.5" />}
+              {hasUpdate && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-emerald-500 ring-2 ring-sidebar"
                 />
-              }
-            >
-              <span
-                aria-hidden="true"
-                className={`size-1.5 shrink-0 rounded-full ${errorCount ? "bg-amber-600" : runningCount ? "bg-emerald-600" : "bg-muted-foreground/50"}`}
-              />
-              <span className="truncate">
-                {!connected
-                  ? "未连接"
-                  : errorCount
-                    ? `${errorCount} 个异常`
-                    : runningCount
-                      ? `${runningCount} 个运行中`
-                      : "就绪"}
-              </span>
-            </PopoverTrigger>
-            <PopoverContent side="top" align="start" sideOffset={10} className="w-64 gap-3 p-4">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">AutoDrama</span>
-                <span className="text-xs text-muted-foreground">
-                  {entries[platform.id]?.result?.appVersion
-                    ? `v${entries[platform.id]?.result?.appVersion}`
-                    : "桌面工作空间"}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">发布平台</span>
-                <span>
-                  {platformNavigation.length} 个 · {runningCount} 个运行中
-                </span>
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {!connected
-                  ? "请在桌面应用中连接服务。"
-                  : errorCount
-                    ? `${errorCount} 个平台状态读取失败，请查看平台日志。`
-                    : runningCount
-                      ? "服务正在后台运行，运行时长显示在对应菜单右侧。"
-                      : "所有平台已就绪，选择平台后可启动服务。"}
-              </p>
-            </PopoverContent>
-          </Popover>
+              )}
+            </span>
+            <span className="truncate tabular-nums">v{version ?? "—"}</span>
+          </Button>
           <div className="flex shrink-0 items-center gap-1" role="group" aria-label="工作空间工具">
             <Tooltip>
               <TooltipTrigger
@@ -195,7 +185,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                     onClick={() => {
                       navigate(routePath(globalConfigRoute), {
                         state: {
-                          returnRoute: route === globalConfigRoute ? platform.serviceRoute : route,
+                          returnRoute,
                         },
                       });
                     }}
@@ -206,26 +196,6 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
               </TooltipTrigger>
               <TooltipContent>全局设置</TooltipContent>
             </Tooltip>
-            {connected ? (
-              <AppUpdateControl iconOnly />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground transition-none"
-                      aria-label="应用更新"
-                      disabled
-                    />
-                  }
-                >
-                  <Refresh className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipContent>在桌面应用中检查更新</TooltipContent>
-              </Tooltip>
-            )}
           </div>
         </div>
       </SidebarFooter>

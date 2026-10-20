@@ -18,6 +18,7 @@ export type PlatformId =
 
 export type AppRoute =
   | `${PlatformId}/statistics`
+  | "app/updates"
   | "app/config"
   | "wechat-drama/publish"
   | "wechat-drama/config"
@@ -52,6 +53,7 @@ export type AppRoute =
   | "pinduoduo-drama/config";
 
 const appRoutes = [
+  "app/updates",
   "app/config",
   "wechat-drama/publish",
   "wechat-drama/config",
@@ -132,14 +134,14 @@ export function returnRouteFromLocationState(state: unknown): AppRoute {
 
   const returnRoute = (state as { returnRoute?: unknown }).returnRoute;
   return typeof returnRoute === "string" &&
-    returnRoute !== globalConfigRoute &&
+    !returnRoute.startsWith("app/") &&
     isAppRoute(returnRoute)
     ? returnRoute
     : defaultRoute;
 }
 
 export function platformContextRoute(route: AppRoute, state: unknown): AppRoute {
-  return route === globalConfigRoute ? returnRouteFromLocationState(state) : route;
+  return route.startsWith("app/") ? returnRouteFromLocationState(state) : route;
 }
 
 export const platformNavigation: PlatformNavigationItem[] = [
@@ -246,7 +248,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "微信视频号",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "wechat-drama/service",
         icon: Terminal,
       },
@@ -266,7 +268,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "微信小程序",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "wechat-miniprogram-drama/service",
         icon: Terminal,
       },
@@ -286,7 +288,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "美团创作平台",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "meituan-drama/service",
         icon: Terminal,
       },
@@ -306,7 +308,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "淘宝短剧",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "taobao-drama/service",
         icon: Terminal,
       },
@@ -326,7 +328,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "快手短剧",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "kuaishou-drama/service",
         icon: Terminal,
       },
@@ -346,7 +348,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "QQ 短剧",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "qq-drama/service",
         icon: Terminal,
       },
@@ -366,7 +368,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "腾讯火龙漫剧",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "tencent-huolong-drama/service",
         icon: Terminal,
       },
@@ -386,7 +388,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "爱奇艺",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "iqiyi-drama/service",
         icon: Terminal,
       },
@@ -406,7 +408,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "百度短剧",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "baidu-drama/service",
         icon: Terminal,
       },
@@ -426,7 +428,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "抖音短剧",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "douyin-drama/service",
         icon: Terminal,
       },
@@ -446,7 +448,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "TikTok",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "tiktok-drama/service",
         icon: Terminal,
       },
@@ -466,7 +468,7 @@ export const navigationGroups: NavigationGroup[] = [
     title: "拼多多短剧",
     items: [
       {
-        title: "服务控制",
+        title: "实例",
         route: "pinduoduo-drama/service",
         icon: Terminal,
       },

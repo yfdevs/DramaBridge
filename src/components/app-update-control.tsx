@@ -22,14 +22,7 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Popover,
-  PopoverContent,
-  PopoverDescription,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -191,7 +184,13 @@ function UpdateStateIcon({
   return <Refresh className={iconClass} aria-hidden="true" />;
 }
 
-export function AppUpdateControl({ iconOnly = false }: { iconOnly?: boolean }) {
+export function AppUpdateControl({
+  iconOnly = false,
+  page = false,
+}: {
+  iconOnly?: boolean;
+  page?: boolean;
+}) {
   const [status, setStatus] = useState<AppUpdateStatus | null>(null);
   const [actionPending, setActionPending] = useState<UpdateAction | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -325,203 +324,216 @@ export function AppUpdateControl({ iconOnly = false }: { iconOnly?: boolean }) {
     })();
   };
 
-  return (
-    <Popover open={popoverOpen} onOpenChange={changePopoverOpen}>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <PopoverTrigger
-              render={
-                <button
-                  type="button"
-                  className={cn(
-                    buttonVariants({ size: iconOnly ? "icon-sm" : "xs", variant: "ghost" }),
-                    iconOnly && "text-muted-foreground transition-none",
-                  )}
-                  aria-label={`应用更新：${summary}`}
-                />
-              }
-            />
-          }
-        >
-          <span className="inline-flex h-full items-center gap-1 leading-none">
+  const details = (
+    <>
+      <PopoverHeader className="gap-0">
+        <div className="flex items-center gap-2">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted">
             <UpdateStateIcon status={status} actionPending={actionPending} />
-            {!iconOnly && <span>{updateButtonLabel(status, actionPending)}</span>}
           </span>
-        </TooltipTrigger>
-        <TooltipContent side="top" align="end" sideOffset={8}>
-          应用更新：{summary}
-        </TooltipContent>
-      </Tooltip>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold leading-6">版本与更新</h2>
+            <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+          </div>
+        </div>
+      </PopoverHeader>
 
-      <PopoverContent
-        side="top"
-        align="end"
-        sideOffset={8}
-        className="z-[100000] w-72 max-w-[calc(100vw-1rem)] gap-2 p-2"
-      >
-        <PopoverHeader className="gap-0">
-          <div className="flex items-center gap-2">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted">
-              <UpdateStateIcon status={status} actionPending={actionPending} />
-            </span>
-            <div className="min-w-0">
-              <PopoverTitle className="text-sm leading-5">应用更新</PopoverTitle>
-              <PopoverDescription className="text-xs leading-4">{description}</PopoverDescription>
-            </div>
-          </div>
-        </PopoverHeader>
-
-        <div className="grid gap-1 rounded-md bg-muted/40 p-2 text-xs">
+      <div className="grid gap-1 rounded-md bg-muted/40 p-2 text-xs">
+        <div className="flex items-center justify-between gap-3 leading-5">
+          <span className="text-muted-foreground">状态</span>
+          <span className="min-w-0 truncate font-medium">{summary}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 leading-5">
+          <span className="text-muted-foreground">版本</span>
+          <span className="font-medium tabular-nums">{versionText}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 leading-5">
+          <span className="text-muted-foreground">更新方式</span>
+          <span className="min-w-0 truncate font-medium">
+            {status?.sourceMode === "auto" ? `自动 · ${status.source.label}` : "手动固定"}
+          </span>
+        </div>
+        {status?.lastCheckedAt ? (
           <div className="flex items-center justify-between gap-3 leading-5">
-            <span className="text-muted-foreground">状态</span>
-            <span className="min-w-0 truncate font-medium">{summary}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3 leading-5">
-            <span className="text-muted-foreground">版本</span>
-            <span className="font-medium tabular-nums">{versionText}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3 leading-5">
-            <span className="text-muted-foreground">更新方式</span>
-            <span className="min-w-0 truncate font-medium">
-              {status?.sourceMode === "auto" ? `自动 · ${status.source.label}` : "手动固定"}
+            <span className="text-muted-foreground">上次检查</span>
+            <span className="font-medium tabular-nums">
+              {new Date(status.lastCheckedAt).toLocaleTimeString()}
             </span>
           </div>
-          {status?.lastCheckedAt ? (
-            <div className="flex items-center justify-between gap-3 leading-5">
-              <span className="text-muted-foreground">上次检查</span>
-              <span className="font-medium tabular-nums">
-                {new Date(status.lastCheckedAt).toLocaleTimeString()}
-              </span>
-            </div>
-          ) : null}
-          {status?.nextCheckAt ? (
-            <div className="flex items-center justify-between gap-3 leading-5">
-              <span className="text-muted-foreground">下次检查</span>
-              <span className="font-medium tabular-nums">
-                {new Date(status.nextCheckAt).toLocaleTimeString()}
-              </span>
-            </div>
-          ) : null}
-          {status?.releaseDate ? (
-            <div className="flex items-center justify-between gap-3 leading-5">
-              <span className="text-muted-foreground">发布时间</span>
-              <span className="font-medium tabular-nums">
-                {new Date(status.releaseDate).toLocaleString()}
-              </span>
-            </div>
+        ) : null}
+        {status?.nextCheckAt ? (
+          <div className="flex items-center justify-between gap-3 leading-5">
+            <span className="text-muted-foreground">下次检查</span>
+            <span className="font-medium tabular-nums">
+              {new Date(status.nextCheckAt).toLocaleTimeString()}
+            </span>
+          </div>
+        ) : null}
+        {status?.releaseDate ? (
+          <div className="flex items-center justify-between gap-3 leading-5">
+            <span className="text-muted-foreground">发布时间</span>
+            <span className="font-medium tabular-nums">
+              {new Date(status.releaseDate).toLocaleString()}
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {status ? (
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="app-update-source" className="text-xs text-muted-foreground">
+              更新源
+            </label>
+            <Select
+              value={status.sourceMode === "auto" ? "auto" : status.source.id}
+              disabled={sourceLocked}
+              onValueChange={(value) => {
+                if (value) changeUpdateSource(value as AppUpdateSourceSelection);
+              }}
+            >
+              <SelectTrigger id="app-update-source" size="sm" className="w-48 bg-background">
+                <SelectValue>
+                  {status.sourceMode === "auto" ? "自动选择（推荐）" : status.source.label}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent align="end" positionerClassName="z-[100001]" className="max-w-64">
+                <SelectItem value="auto">自动选择（推荐）</SelectItem>
+                {status.sources.map((source) => (
+                  <SelectItem key={source.id} value={source.id}>
+                    {source.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {status.retryAttempt ? (
+            <p className="text-xs leading-4 text-amber-600 dark:text-amber-400">
+              正在尝试第 {status.retryAttempt + 1} 个更新源
+            </p>
           ) : null}
         </div>
+      ) : null}
 
-        {status ? (
-          <div className="grid gap-1.5">
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="app-update-source" className="text-xs text-muted-foreground">
-                更新源
-              </label>
-              <Select
-                value={status.sourceMode === "auto" ? "auto" : status.source.id}
-                disabled={sourceLocked}
-                onValueChange={(value) => {
-                  if (value) changeUpdateSource(value as AppUpdateSourceSelection);
-                }}
-              >
-                <SelectTrigger id="app-update-source" size="sm" className="w-48 bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="end" positionerClassName="z-[100001]" className="max-w-64">
-                  <SelectItem value="auto">自动选择（推荐）</SelectItem>
-                  {status.sources.map((source) => (
-                    <SelectItem key={source.id} value={source.id}>
-                      {source.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {status.retryAttempt ? (
-              <p className="text-xs leading-4 text-amber-600 dark:text-amber-400">
-                正在尝试第 {status.retryAttempt + 1} 个更新源
-              </p>
-            ) : null}
+      {progress ? (
+        <div className="grid gap-1">
+          <div className="flex items-center justify-between gap-3 text-xs leading-5">
+            <span className="text-muted-foreground">下载进度</span>
+            <span className="font-medium tabular-nums">{formatPercent(progress.percent)}</span>
           </div>
-        ) : null}
+          <Progress value={progress.percent} />
+          {downloadText ? (
+            <span className="text-xs leading-4 text-muted-foreground">{downloadText}</span>
+          ) : null}
+        </div>
+      ) : null}
 
-        {progress ? (
-          <div className="grid gap-1">
-            <div className="flex items-center justify-between gap-3 text-xs leading-5">
-              <span className="text-muted-foreground">下载进度</span>
-              <span className="font-medium tabular-nums">{formatPercent(progress.percent)}</span>
-            </div>
-            <Progress value={progress.percent} />
-            {downloadText ? (
-              <span className="text-xs leading-4 text-muted-foreground">{downloadText}</span>
-            ) : null}
-          </div>
-        ) : null}
+      {status?.error ? (
+        <div className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs leading-5 text-destructive">
+          {status.error}
+        </div>
+      ) : null}
 
-        {status?.error ? (
-          <div className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs leading-5 text-destructive">
-            {status.error}
-          </div>
-        ) : null}
+      {status?.releaseNotes ? (
+        <div className="max-h-24 overflow-auto rounded-md bg-muted/40 px-2 py-1.5 text-xs leading-5 whitespace-pre-wrap text-muted-foreground">
+          {status.releaseNotes}
+        </div>
+      ) : null}
 
-        {status?.releaseNotes ? (
-          <div className="max-h-24 overflow-auto rounded-md bg-muted/40 px-2 py-1.5 text-xs leading-5 whitespace-pre-wrap text-muted-foreground">
-            {status.releaseNotes}
-          </div>
-        ) : null}
-
-        <div className="flex items-center justify-end gap-1.5">
+      <div className="flex items-center justify-end gap-1.5">
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          disabled={!enabled || busy}
+          onClick={() => runUpdateAction("check", checkForAppUpdate)}
+        >
+          <Refresh className={actionPending === "check" ? "animate-spin" : ""} aria-hidden="true" />
+          <span>{actionPending === "check" ? "检查中" : "检查"}</span>
+        </Button>
+        {status?.state === "downloading" ? (
           <Button
             type="button"
             size="xs"
             variant="outline"
-            disabled={!enabled || busy}
-            onClick={() => runUpdateAction("check", checkForAppUpdate)}
+            disabled={actionPending === "cancel"}
+            onClick={() => runUpdateAction("cancel", cancelAppUpdateDownload)}
           >
-            <Refresh
-              className={actionPending === "check" ? "animate-spin" : ""}
-              aria-hidden="true"
-            />
-            <span>{actionPending === "check" ? "检查中" : "检查"}</span>
+            <StopCircle aria-hidden="true" />
+            <span>{actionPending === "cancel" ? "取消中" : "取消"}</span>
           </Button>
-          {status?.state === "downloading" ? (
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              disabled={actionPending === "cancel"}
-              onClick={() => runUpdateAction("cancel", cancelAppUpdateDownload)}
-            >
-              <StopCircle aria-hidden="true" />
-              <span>{actionPending === "cancel" ? "取消中" : "取消"}</span>
-            </Button>
-          ) : null}
-          {canDownload ? (
-            <Button
-              type="button"
-              size="xs"
-              disabled={actionPending !== null}
-              onClick={() => runUpdateAction("download", downloadAppUpdate)}
-            >
-              <Download aria-hidden="true" />
-              <span>{actionPending === "download" ? "下载中" : "下载"}</span>
-            </Button>
-          ) : null}
-          {canInstall ? (
-            <Button
-              type="button"
-              size="xs"
-              disabled={actionPending !== null}
-              onClick={requestUpdateInstallation}
-            >
-              <Power aria-hidden="true" />
-              <span>{actionPending === "install" ? "重启中" : "重启安装"}</span>
-            </Button>
-          ) : null}
-        </div>
-      </PopoverContent>
+        ) : null}
+        {canDownload ? (
+          <Button
+            type="button"
+            size="xs"
+            disabled={actionPending !== null}
+            onClick={() => runUpdateAction("download", downloadAppUpdate)}
+          >
+            <Download aria-hidden="true" />
+            <span>{actionPending === "download" ? "下载中" : "下载"}</span>
+          </Button>
+        ) : null}
+        {canInstall ? (
+          <Button
+            type="button"
+            size="xs"
+            disabled={actionPending !== null}
+            onClick={requestUpdateInstallation}
+          >
+            <Power aria-hidden="true" />
+            <span>{actionPending === "install" ? "重启中" : "重启安装"}</span>
+          </Button>
+        ) : null}
+      </div>
+    </>
+  );
+
+  return (
+    <Popover open={popoverOpen} onOpenChange={changePopoverOpen}>
+      {!page && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    className={cn(
+                      buttonVariants({ size: iconOnly ? "icon-sm" : "xs", variant: "ghost" }),
+                      iconOnly && "text-muted-foreground transition-none",
+                    )}
+                    aria-label={`应用更新：${summary}`}
+                  />
+                }
+              />
+            }
+          >
+            <span className="inline-flex h-full items-center gap-1 leading-none">
+              <UpdateStateIcon status={status} actionPending={actionPending} />
+              {!iconOnly && <span>{updateButtonLabel(status, actionPending)}</span>}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="end" sideOffset={8}>
+            应用更新：{summary}
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {page ? (
+        <section className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-6 py-8">
+          {details}
+        </section>
+      ) : (
+        <PopoverContent
+          side="top"
+          align="end"
+          sideOffset={8}
+          className="z-[100000] w-72 max-w-[calc(100vw-1rem)] gap-2 p-2"
+        >
+          {details}
+        </PopoverContent>
+      )}
       <AlertDialog open={installConfirmOpen} onOpenChange={setInstallConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

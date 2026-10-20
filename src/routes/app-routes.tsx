@@ -1,3 +1,4 @@
+import { AppUpdateControl } from "@/components/app-update-control";
 import { TaskStatisticsPage } from "@/pages/shared/task-statistics-page";
 import { WorkspacePageActivity } from "@/components/workspace-toolbar";
 import { useEffect, useState, type ComponentType } from "react";
@@ -39,6 +40,7 @@ import { TiktokDramaCenterServiceControlPage } from "@/pages/tiktok-drama/servic
 
 const appRouteComponents: Record<AppRoute, ComponentType> = {
   "app/config": GlobalConfigurationPage,
+  "app/updates": () => <AppUpdateControl page />,
   "wechat-drama/publish": WechatPublishTasksPage,
   "wechat-drama/config": WechatConfigurationPage,
   "wechat-drama/accounts": WechatAccountsPage,
