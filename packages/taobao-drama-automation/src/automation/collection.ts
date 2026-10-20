@@ -3,6 +3,10 @@ import { TAOBAO_DRAMA_FIXED_FIELDS, TAOBAO_DRAMA_MIN_SETTLE_MS } from "../shared
 import { log } from "../shared/logger.js";
 import type { TaobaoCollectionMetadata, TaobaoDramaRuntimeOptions } from "../shared/types.js";
 import { isTaobaoCreatorSuccessNavigation } from "./browser-session.js";
+import {
+  runWithTaobaoVerificationRetry,
+  waitForTaobaoHumanVerification,
+} from "./human-verification.js";
 
 const exactFieldContainerClasses = ["next-form-item", "ant-form-item", "semi-form-field"];
 const fieldControlPredicate =
@@ -342,27 +346,54 @@ export async function fillAndCreateTaobaoCollection(
     shortDramaTags: task.shortDramaTags,
     audience: task.audience,
   });
-  await fillTextField(page, ["合集标题", "合集名称", "短剧名称", "标题"], task.title);
-  await selectFieldValue(page, ["合集类型"], TAOBAO_DRAMA_FIXED_FIELDS.collectionType);
-  await selectFieldValue(page, ["短剧类型"], task.shortDramaType);
-  await selectFieldValue(page, ["付费方式"], TAOBAO_DRAMA_FIXED_FIELDS.paymentMode);
-  await selectTaobaoDramaCollectionTags(page, task.shortDramaTags);
-  await selectFieldValue(page, ["是否完结", "完结状态"], TAOBAO_DRAMA_FIXED_FIELDS.completionStatus);
-  await selectFieldValue(page, ["观看受众", "受众"], task.audience);
-  await uploadTaobaoCollectionCover(page, coverFile);
-  await selectFieldValue(page, ["备案类型"], TAOBAO_DRAMA_FIXED_FIELDS.filingType);
-  await fillTextField(page, ["制作机构"], TAOBAO_DRAMA_FIXED_FIELDS.productionCompany);
-  await fillTextField(page, ["制片人"], TAOBAO_DRAMA_FIXED_FIELDS.producerName);
-  await fillTextField(page, ["导演"], TAOBAO_DRAMA_FIXED_FIELDS.directorName);
-  await fillTextField(page, ["编剧"], TAOBAO_DRAMA_FIXED_FIELDS.scriptwriterName);
-  await fillTextField(page, ["主要演员"], TAOBAO_DRAMA_FIXED_FIELDS.mainActors);
-  await fillTextField(page, ["集数"], String(task.episodeCount));
-  await fillTextField(page, ["集均时长(分钟)", "集均时长（分钟）", "集均时长"], String(TAOBAO_DRAMA_FIXED_FIELDS.averageEpisodeDurationMinutes));
+  const runStep = <T>(
+    label: string,
+    action: () => Promise<T>,
+    retryAfterSuccessfulVerification = true,
+  ) => runWithTaobaoVerificationRetry(
+    page,
+    options,
+    action,
+    label,
+    retryAfterSuccessfulVerification,
+  );
+  await runStep("填写合集标题", () =>
+    fillTextField(page, ["合集标题", "合集名称", "短剧名称", "标题"], task.title));
+  await runStep("选择合集类型", () =>
+    selectFieldValue(page, ["合集类型"], TAOBAO_DRAMA_FIXED_FIELDS.collectionType));
+  await runStep("选择短剧类型", () => selectFieldValue(page, ["短剧类型"], task.shortDramaType));
+  await runStep("选择付费方式", () =>
+    selectFieldValue(page, ["付费方式"], TAOBAO_DRAMA_FIXED_FIELDS.paymentMode));
+  await runStep("选择短剧标签", () => selectTaobaoDramaCollectionTags(page, task.shortDramaTags));
+  await runStep("选择完结状态", () =>
+    selectFieldValue(page, ["是否完结", "完结状态"], TAOBAO_DRAMA_FIXED_FIELDS.completionStatus));
+  await runStep("选择观看受众", () => selectFieldValue(page, ["观看受众", "受众"], task.audience));
+  await runStep("上传合集封面", () => uploadTaobaoCollectionCover(page, coverFile));
+  await runStep("选择备案类型", () =>
+    selectFieldValue(page, ["备案类型"], TAOBAO_DRAMA_FIXED_FIELDS.filingType));
+  await runStep("填写制作机构", () =>
+    fillTextField(page, ["制作机构"], TAOBAO_DRAMA_FIXED_FIELDS.productionCompany));
+  await runStep("填写制片人", () =>
+    fillTextField(page, ["制片人"], TAOBAO_DRAMA_FIXED_FIELDS.producerName));
+  await runStep("填写导演", () =>
+    fillTextField(page, ["导演"], TAOBAO_DRAMA_FIXED_FIELDS.directorName));
+  await runStep("填写编剧", () =>
+    fillTextField(page, ["编剧"], TAOBAO_DRAMA_FIXED_FIELDS.scriptwriterName));
+  await runStep("填写主要演员", () =>
+    fillTextField(page, ["主要演员"], TAOBAO_DRAMA_FIXED_FIELDS.mainActors));
+  await runStep("填写集数", () => fillTextField(page, ["集数"], String(task.episodeCount)));
+  await runStep("填写集均时长", () =>
+    fillTextField(
+      page,
+      ["集均时长(分钟)", "集均时长（分钟）", "集均时长"],
+      String(TAOBAO_DRAMA_FIXED_FIELDS.averageEpisodeDurationMinutes),
+    ));
   if (task.summary.trim().length < 100) {
     throw new Error(`TAOBAO_DRAMA_COLLECTION_SUMMARY_TOO_SHORT: length=${task.summary.trim().length} min=100`);
   }
-  await fillTextField(page, ["内容概要"], task.summary.trim().slice(0, 3_000));
-  await uploadTaobaoCostConfigMaterial(page, costConfigImage);
+  await runStep("填写内容概要", () =>
+    fillTextField(page, ["内容概要"], task.summary.trim().slice(0, 3_000)));
+  await runStep("上传成本配置材料", () => uploadTaobaoCostConfigMaterial(page, costConfigImage));
 
   const createButton = page.getByRole("button", { name: /^\s*(?:确认创建|创建合集|创建)\s*$/ })
     .filter({ visible: true }).last();
@@ -380,12 +411,13 @@ export async function fillAndCreateTaobaoCollection(
     }
     return submittedAt;
   };
-  let clickedAt = await clickCreate();
+  let clickedAt = await runStep("创建合集", clickCreate, false);
   log(options, "[taobao-drama] 已点击创建合集，进入至少10秒结算期");
   let success = false;
   let retriedCreate = false;
   let deadline = clickedAt + 60_000;
   while (Date.now() < deadline) {
+    deadline += await waitForTaobaoHumanVerification(page, options);
     const validation = await validationMessages(page);
     if (validation.length) throw new Error(`TAOBAO_DRAMA_COLLECTION_FORM_INVALID: ${validation.join("；")}`);
     success ||= await createSucceeded(page, createButton, clickedAt);
@@ -399,7 +431,7 @@ export async function fillAndCreateTaobaoCollection(
       createButtonEnabled: await createButton.isEnabled().catch(() => false),
     })) {
       retriedCreate = true;
-      clickedAt = await clickCreate();
+      clickedAt = await runStep("再次确认创建合集", clickCreate, false);
       deadline = clickedAt + 60_000;
       log(options, "[taobao-drama] 创建按钮仍可用，已补点一次并重新进入结算期");
       continue;

@@ -23,6 +23,12 @@ import {
   isTaobaoCreatorSuccessNavigation,
   waitForTaobaoPage,
 } from "./browser-session.js";
+import {
+  runWithTaobaoVerificationRetry,
+  waitForTaobaoHumanVerification,
+} from "./human-verification.js";
+
+export { isTaobaoVerificationChallenge } from "./human-verification.js";
 
 export const TAOBAO_MAX_FILES_PER_SELECTION = TAOBAO_DRAMA_MAX_VIDEOS_PER_BATCH;
 export const TAOBAO_DROPDOWN_END_SETTLE_MS = 12_000;
@@ -66,87 +72,6 @@ function ownerPage(scope: TaobaoDomScope): Page {
 async function paceTaobaoForm(page: Page, minimumMs = 500, maximumMs = 900) {
   const duration = minimumMs + Math.floor(Math.random() * (maximumMs - minimumMs + 1));
   await page.waitForTimeout(duration);
-}
-
-export function isTaobaoVerificationChallenge(input: {
-  visibleControlCount: number;
-  text: string;
-}) {
-  const normalized = input.text.replace(/\s+/g, " ");
-  const activePrompt = /请拖动下方滑块完成验证|请按住滑块，拖动到最右边|通过验证以确保正常访问/;
-  if (activePrompt.test(normalized)) return true;
-  // Alibaba's no-captcha container and slider can remain visible after a
-  // successful manual verification. Do not keep the task paused merely because
-  // those persistent DOM nodes still exist.
-  if (/验证通过|校验通过|验证成功|验证已完成/.test(normalized)) return false;
-  return input.visibleControlCount > 0;
-}
-
-async function taobaoVerificationTargets(page: Page) {
-  const targets: string[] = [];
-  for (const candidate of page.context().pages()) {
-    if (candidate.isClosed()) continue;
-    for (const frame of candidate.frames()) {
-      const visible = await frame.locator([
-        "#nocaptcha:visible",
-        "#nc_1_n1z:visible",
-        "#nc-verify-form:visible",
-        ".captcha-tips:visible",
-        ".bannar:visible .slidetounlock:visible",
-      ].join(", ")).count().catch(() => 0);
-      const text = await frame.locator("body").innerText({ timeout: 500 }).catch(() => "");
-      if (isTaobaoVerificationChallenge({ visibleControlCount: visible, text })) {
-        targets.push(frame.url() || candidate.url());
-      }
-    }
-  }
-  return [...new Set(targets)];
-}
-
-async function waitForTaobaoHumanVerification(
-  page: Page,
-  options: TaobaoDramaRuntimeOptions,
-) {
-  const startedAt = Date.now();
-  let waiting = false;
-  while (true) {
-    const targets = await taobaoVerificationTargets(page);
-    if (targets.length === 0) {
-      if (waiting) {
-        log(options, "[taobao-drama] 淘宝滑块验证已完成，继续执行当前任务");
-        await page.bringToFront().catch(() => undefined);
-        await page.waitForTimeout(3_000);
-      }
-      return waiting ? Date.now() - startedAt : 0;
-    }
-    if (!waiting) {
-      waiting = true;
-      log(
-        options,
-        `[taobao-drama] 检测到淘宝滑块验证，任务已暂停，请运营人员手动完成验证；不会超时 ` +
-          `{ pages=${targets.join(" | ")} }`,
-      );
-      await page.bringToFront().catch(() => undefined);
-      await options.onHumanVerificationRequired?.({ pages: targets });
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-  }
-}
-
-async function runWithTaobaoVerificationRetry<T>(
-  page: Page,
-  options: TaobaoDramaRuntimeOptions,
-  action: () => Promise<T>,
-) {
-  while (true) {
-    await waitForTaobaoHumanVerification(page, options);
-    try {
-      return await action();
-    } catch (error) {
-      if ((await taobaoVerificationTargets(page)).length === 0) throw error;
-      await waitForTaobaoHumanVerification(page, options);
-    }
-  }
 }
 
 export type TaobaoUploadTextSummary = {
@@ -332,7 +257,8 @@ async function findLiveTaobaoBatchScope(
 
 export function isTaobaoDetachedFrameError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  return /frame (?:was|has been) detached/i.test(message);
+  return /frame (?:was|has been) detached|execution context was destroyed|cannot find context with specified id/i
+    .test(message);
 }
 
 async function runWithLiveTaobaoBatchScope<T>(
@@ -1141,16 +1067,21 @@ async function fillEpisodeMetadata(
           throw new Error(`TAOBAO_DRAMA_BATCH_ITEM_NOT_ACTIVE: ${fileName}`);
         });
         await paceTaobaoForm(page);
-      });
+      }, `选择第${episode.index}集视频`);
       log(options, `[taobao-drama] 第 ${episode.index} 集检查点：视频已选中`);
 
       await runWithTaobaoVerificationRetry(page, options, () =>
-        fillCurrentEpisodeDescription(scope, description));
+        fillCurrentEpisodeDescription(scope, description), `填写第${episode.index}集推荐标题`);
       await paceTaobaoForm(page);
       log(options, `[taobao-drama] 第 ${episode.index} 集检查点：视频描述已完成`);
 
       if (position === 0) {
-        await runWithTaobaoVerificationRetry(page, options, () => prepareCurrentEpisodeTags(scope));
+        await runWithTaobaoVerificationRetry(
+          page,
+          options,
+          () => prepareCurrentEpisodeTags(scope),
+          "准备内容标签",
+        );
         for (const [tagIndex, tag] of contentTags.entries()) {
           await runWithTaobaoVerificationRetry(page, options, async () => {
             const editor = scope
@@ -1160,32 +1091,37 @@ async function fillEpisodeMetadata(
             const selected = await selectTaobaoContentTag(scope, editor, tag, tagIndex > 0);
             log(options, `[taobao-drama] 内容标签已选择：#${selected}`);
             await paceTaobaoForm(page);
-          });
+          }, `填写内容标签#${tag}`);
         }
         log(options, `[taobao-drama] 第 ${episode.index} 集检查点：${contentTags.length}个内容标签已完成`);
 
-        await runWithTaobaoVerificationRetry(page, options, () => selectAiCreatorDeclaration(scope));
+        await runWithTaobaoVerificationRetry(
+          page,
+          options,
+          () => selectAiCreatorDeclaration(scope),
+          "选择AI创作者声明",
+        );
         await paceTaobaoForm(page);
         log(options, `[taobao-drama] 第 ${episode.index} 集检查点：AI 创作者声明已完成`);
 
         await runWithTaobaoVerificationRetry(page, options, () =>
-          selectMatchingCollectionTitle(scope, task.title ?? task.originalTitle));
+          selectMatchingCollectionTitle(scope, task.title ?? task.originalTitle), "选择所属合集");
         await runWithTaobaoVerificationRetry(page, options, () =>
-          selectMatchingCollectionEpisode(scope, episode.index));
+          selectMatchingCollectionEpisode(scope, episode.index), `选择第${episode.index}集`);
         log(options, `[taobao-drama] 第 ${episode.index} 集检查点：合集和集数已完成`);
 
         const activeItem = scope.locator("#publish-container .batchItemWrap-active").filter({
           has: scope.getByText(fileName, { exact: true }),
         }).first();
         await runWithTaobaoVerificationRetry(page, options, () =>
-          applyCurrentEpisodeToAll(scope, activeItem, options));
+          applyCurrentEpisodeToAll(scope, activeItem, options), "应用第一集信息至全部视频");
         log(
           options,
           `[taobao-drama] 已完整填写第 ${episode.index} 集，并将标签、AI声明和合集应用至全部视频`,
         );
       } else {
         await runWithTaobaoVerificationRetry(page, options, () =>
-          selectMatchingCollectionEpisode(scope, episode.index));
+          selectMatchingCollectionEpisode(scope, episode.index), `选择第${episode.index}集`);
         log(options, `[taobao-drama] 第 ${episode.index} 集检查点：合集集数已完成`);
         log(options, `[taobao-drama] 已更新第 ${episode.index} 集描述及合集集数`);
       }
@@ -1269,6 +1205,8 @@ export async function uploadAndPublishTaobaoEpisodes(
         batchPage,
         options,
         () => clickBatchPublish(batchPage, batchItemFileName, options),
+        "批量发布",
+        false,
       );
       log(
         options,

@@ -168,6 +168,7 @@ test("types Taobao content-tag queries as real Unicode key events", () => {
 test("recognizes detached Taobao upload frames for safe reacquisition", () => {
   assert.equal(isTaobaoDetachedFrameError(new Error("locator.waitFor: Frame was detached")), true);
   assert.equal(isTaobaoDetachedFrameError(new Error("frame has been detached")), true);
+  assert.equal(isTaobaoDetachedFrameError(new Error("Execution context was destroyed")), true);
   assert.equal(isTaobaoDetachedFrameError(new Error("locator.waitFor: Timeout 30000ms exceeded")), false);
 });
 
@@ -182,8 +183,19 @@ test("resumes after Taobao reports that a persistent captcha widget passed", () 
   }), true);
   assert.equal(isTaobaoVerificationChallenge({
     visibleControlCount: 1,
+    activeControlCount: 0,
+    text: "",
+  }), false);
+  assert.equal(isTaobaoVerificationChallenge({
+    visibleControlCount: 1,
+    activeControlCount: 1,
     text: "",
   }), true);
+  assert.equal(isTaobaoVerificationChallenge({
+    visibleControlCount: 1,
+    activeControlCount: 1,
+    text: "请按住滑块，拖动到最右边 验证通过后继续 验证通过",
+  }), false);
 });
 
 test("normalizes collection option whitespace before matching", () => {

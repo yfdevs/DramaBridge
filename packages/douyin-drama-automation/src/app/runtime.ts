@@ -49,6 +49,9 @@ export const douyinNetdiskOwnershipDownloadRequirements = {
   minimumImages: 4,
 } as const;
 
+const defaultNetdiskStallTimeoutMs = 10 * 60_000;
+const defaultNetdiskProgressLogIntervalMs = 30_000;
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -67,9 +70,10 @@ export function classifyDouyinDramaFailStage(error: unknown): DouyinDramaTaskFai
   return "OTHER";
 }
 
-async function ensureNetdiskResource(
+export async function ensureDouyinNetdiskResource(
   task: ClaimedDouyinDramaTask,
   options: DouyinDramaRuntimeOptions,
+  signal?: AbortSignal,
 ) {
   const shareText = task.playlet.baiduPanResourceLink?.trim();
   if (!shareText) return;
@@ -82,11 +86,82 @@ async function ensureNetdiskResource(
   >>[0]) => {
     let lastError: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      signal?.throwIfAborted();
+      const attemptController = new AbortController();
+      const stallTimeoutMs = Math.max(
+        1,
+        options.baiduNetdiskDownloadStallTimeoutMs ?? defaultNetdiskStallTimeoutMs,
+      );
+      const progressLogIntervalMs = Math.max(
+        1,
+        options.baiduNetdiskProgressLogIntervalMs ?? defaultNetdiskProgressLogIntervalMs,
+      );
+      const startedAt = Date.now();
+      let lastProgressAt = startedAt;
+      let stableEpisodeCount = 0;
+      const forwardAbort = () => attemptController.abort(signal?.reason);
+      signal?.addEventListener("abort", forwardAbort, { once: true });
+      const heartbeat = setInterval(() => {
+        const now = Date.now();
+        const stalledMs = now - lastProgressAt;
+        log(
+          options,
+          `[douyin-drama] 百度网盘资源仍在准备：attempt=${attempt}/${maxAttempts}，`
+            + `已等待=${Math.round((now - startedAt) / 1_000)}秒，`
+            + `已稳定=${stableEpisodeCount}/${task.playlet.episodeCount}集`,
+          {
+            accountTaskId: task.accountTaskId,
+            attempt,
+            maxAttempts,
+            stableEpisodeCount,
+            expectedEpisodeCount: task.playlet.episodeCount,
+            stalledSeconds: Math.round(stalledMs / 1_000),
+          },
+          "download",
+        );
+        if (stalledMs >= stallTimeoutMs && !attemptController.signal.aborted) {
+          attemptController.abort(new Error(
+            `DOUYIN_DRAMA_NETDISK_DOWNLOAD_STALLED: `
+              + `${Math.round(stalledMs / 1_000)}秒没有识别到新的完整剧集；`
+              + `stable=${stableEpisodeCount}/${task.playlet.episodeCount}`,
+          ));
+        }
+      }, progressLogIntervalMs);
+      heartbeat.unref();
+      log(
+        options,
+        `[douyin-drama] 开始准备百度网盘资源：attempt=${attempt}/${maxAttempts}，`
+          + `无进度超时=${Math.round(stallTimeoutMs / 1_000)}秒`,
+        {
+          accountTaskId: task.accountTaskId,
+          resourceName: request.resourceName,
+          episodeCount: task.playlet.episodeCount,
+          attempt,
+          maxAttempts,
+        },
+        "download",
+      );
       try {
-        return await options.ensureBaiduNetdiskResource!(request);
+        const resource = await options.ensureBaiduNetdiskResource!({
+          ...request,
+          signal: attemptController.signal,
+          onStableEpisodeFiles: (files) => {
+            const nextCount = files.length;
+            if (nextCount > stableEpisodeCount) lastProgressAt = Date.now();
+            stableEpisodeCount = Math.max(stableEpisodeCount, nextCount);
+            request.onStableEpisodeFiles?.(files);
+          },
+        });
+        attemptController.signal.throwIfAborted();
+        return resource;
       } catch (error) {
         lastError = error;
-        if (isNonRetryableBaiduNetdiskResourceError(error) || attempt === maxAttempts) break;
+        if (
+          signal?.aborted
+          || errorMessage(error).includes("DOUYIN_DRAMA_NETDISK_DOWNLOAD_STALLED")
+          || isNonRetryableBaiduNetdiskResourceError(error)
+          || attempt === maxAttempts
+        ) break;
         warn(
           options,
           `[douyin-drama] 百度网盘下载失败，准备重试：${attempt}/${maxAttempts}`,
@@ -94,6 +169,9 @@ async function ensureNetdiskResource(
           "download",
         );
         await new Promise((resolve) => setTimeout(resolve, 5_000));
+      } finally {
+        clearInterval(heartbeat);
+        signal?.removeEventListener("abort", forwardAbort);
       }
     }
     throw lastError;
@@ -119,6 +197,7 @@ async function ensureNetdiskResource(
     requiredAiProductionProofFiles: 0,
     requiredMetadataTextFiles: task.playlet.summary.trim().length <= 100 ? 1 : 0,
     mergeOwnershipMaterials: false,
+    signal,
   });
 
   if (!douyinTaskNeedsNetdiskMetadata(task)) return resource;
@@ -148,6 +227,7 @@ async function ensureNetdiskResource(
     requiredAiProductionProofFiles: 0,
     requiredMetadataTextFiles: missingRequiredText ? 1 : 0,
     mergeOwnershipMaterials: false,
+    signal,
   });
   return resource;
 }
@@ -157,6 +237,7 @@ async function runTask(
   task: ClaimedDouyinDramaTask,
   options: DouyinDramaRuntimeOptions,
   setLastTask: (lastTask: NonNullable<DouyinDramaRuntimeStatus["lastTask"]>) => void,
+  signal?: AbortSignal,
 ) {
   log(
     options,
@@ -171,15 +252,33 @@ async function runTask(
     updatedAt: new Date().toISOString(),
   });
   try {
-    const baiduNetdiskResource = await ensureNetdiskResource(task, options);
+    log(options, "[douyin-drama] 阶段开始：准备百度网盘资源。", {
+      accountTaskId: task.accountTaskId,
+    }, "task");
+    const baiduNetdiskResource = await ensureDouyinNetdiskResource(task, options, signal);
+    signal?.throwIfAborted();
+    log(options, "[douyin-drama] 阶段完成：百度网盘资源已就绪。", {
+      accountTaskId: task.accountTaskId,
+    }, "task");
+    log(options, "[douyin-drama] 阶段开始：读取并补全任务资料。", {
+      accountTaskId: task.accountTaskId,
+    }, "task");
     const enrichedTask = await enrichDouyinTaskFromNetdisk(task, options);
+    signal?.throwIfAborted();
+    log(options, "[douyin-drama] 阶段开始：校验视频、封面和权属素材。", {
+      accountTaskId: task.accountTaskId,
+    }, "task");
     const resources = await prepareDouyinDramaResources(enrichedTask, options);
+    signal?.throwIfAborted();
     log(
       options,
       "[douyin-drama] 任务资源准备完成。",
       { accountTaskId: task.accountTaskId, ...resources },
       "task",
     );
+    log(options, "[douyin-drama] 阶段开始：填写抖音表单并上传。", {
+      accountTaskId: task.accountTaskId,
+    }, "task");
     await runDouyinDramaPublishTask(taskPage, enrichedTask, options);
     await reportDouyinDramaTaskSuccessApi({
       apiConfig: options.apiConfig,
@@ -203,6 +302,21 @@ async function runTask(
     );
     return true;
   } catch (error) {
+    if (signal?.aborted) {
+      const message = errorMessage(signal.reason ?? error);
+      setLastTask({
+        accountTaskId: task.accountTaskId,
+        originalTitle: task.originalTitle,
+        status: "failed",
+        errorMessage: message,
+        updatedAt: new Date().toISOString(),
+      });
+      log(options, `[douyin-drama] 任务已随运行时停止而取消：taskId=${task.accountTaskId}`, {
+        accountTaskId: task.accountTaskId,
+        reason: message,
+      }, "task");
+      return false;
+    }
     const message = formatAutomationErrorReport(error, {
       fallbackMessage: "抖音任务提交失败，未获取到具体错误原因",
     });
@@ -270,6 +384,7 @@ export async function startDouyinDramaRuntime(
   const context = await launchDouyinDramaBrowserContext(userDataDir, options);
   const page = context.pages()[0] ?? (await context.newPage());
   let running = true;
+  const runtimeAbortController = new AbortController();
   let lastTask: DouyinDramaRuntimeStatus["lastTask"];
   try {
     await openDouyinDramaCreatePage(page);
@@ -293,7 +408,7 @@ export async function startDouyinDramaRuntime(
           const taskPage = await page.context().newPage();
           const succeeded = await runTask(taskPage, task, options, (value) => {
             lastTask = value;
-          });
+          }, runtimeAbortController.signal);
           const failedBeforeOpeningPlatformPage = taskPage.url() === "about:blank";
           if (
             !taskPage.isClosed()
@@ -317,7 +432,7 @@ export async function startDouyinDramaRuntime(
       );
     }
   };
-  void pollLoop();
+  const pollLoopPromise = pollLoop();
 
   return {
     getStatus() {
@@ -334,7 +449,12 @@ export async function startDouyinDramaRuntime(
     },
     async stop() {
       running = false;
+      runtimeAbortController.abort(new Error("DOUYIN_DRAMA_RUNTIME_STOPPED"));
       log(options, "[douyin-drama] 运行时停止。", undefined, "runtime");
+      await Promise.race([
+        pollLoopPromise,
+        new Promise<void>((resolve) => setTimeout(resolve, 15_000)),
+      ]).catch(() => undefined);
       await context.close().catch(() => undefined);
       await flushDouyinDramaLogs(options);
     },

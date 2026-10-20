@@ -328,9 +328,6 @@ export function AppUpdateControl({
     <>
       <PopoverHeader className="gap-0">
         <div className="flex items-center gap-2">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted">
-            <UpdateStateIcon status={status} actionPending={actionPending} />
-          </span>
           <div className="min-w-0">
             <h2 className="text-base font-semibold leading-6">版本与更新</h2>
             <p className="text-xs leading-5 text-muted-foreground">{description}</p>

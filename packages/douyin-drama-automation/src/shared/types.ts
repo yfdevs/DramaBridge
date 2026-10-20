@@ -243,6 +243,8 @@ export type DouyinDramaRuntimeOptions = {
   logRetentionDays?: number;
   localEpisodeVideoRoot?: string;
   baiduNetdiskDownloadRetryAttempts?: number;
+  baiduNetdiskDownloadStallTimeoutMs?: number;
+  baiduNetdiskProgressLogIntervalMs?: number;
   episodeUploadReplaceAttempts?: number;
   episodeUploadBatchSize?: number;
   episodeUploadWaitTimeoutMinutes?: number;
@@ -270,6 +272,13 @@ export type DouyinDramaRuntimeOptions = {
     downloadEpisodeVideos?: boolean;
     downloadAssetMaterials?: boolean;
     forceAssetDownload?: boolean;
+    signal?: AbortSignal;
+    onStableEpisodeFiles?: (files: Array<{
+      index: number;
+      file: string;
+      size: number;
+      modifiedAtMs: number;
+    }>) => void;
   }) => Promise<{ skippedExisting?: boolean } | unknown>;
   cleanupBaiduNetdiskResourceAfterTaskSuccess?: (resource: unknown) => Promise<void>;
 };

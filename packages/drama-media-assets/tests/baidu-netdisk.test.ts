@@ -474,3 +474,43 @@ test("fails after a completed native download remains locally incomplete for 15 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("fails quickly when a submitted native download task disappears", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-missing-native-task-"));
+  const resourceName = "传输列表消失测试剧";
+  let statusChecks = 0;
+
+  try {
+    await assert.rejects(
+      ensureBaiduNetdiskEpisodeVideos({
+        shareText: "https://pan.baidu.com/s/test?pwd=test",
+        resourceName,
+        localEpisodeVideoRoot: root,
+        episodeCount: 2,
+        requiredPosterImages: 0,
+        timeoutMs: 2_000,
+        pollIntervalMs: 1,
+        stableCompletePolls: 1,
+        downloadShare: async () => ({
+          share: { link: "https://pan.baidu.com/s/test", pwd: "test", name: resourceName },
+          localPath: path.join(root, "download"),
+          completed: false,
+          skippedExisting: false,
+        }),
+        getDownloadTaskStatus: async () => {
+          statusChecks += 1;
+          return {
+            found: false,
+            name: resourceName,
+            completed: false,
+            tasks: [],
+          };
+        },
+      }),
+      /\[download-task-missing\].*连续3次检查均不存在.*本地识别0\/2集/,
+    );
+    assert.equal(statusChecks, 3);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

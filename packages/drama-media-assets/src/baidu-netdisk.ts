@@ -782,6 +782,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
   onLog?: EnsureBaiduNetdiskEpisodeVideosOptions["onLog"];
 }) {
   const completedDownloadStallPollLimit = 15;
+  const missingNativeTaskPollLimit = 3;
   const startedAt = Date.now();
   const assetRequirements = resolveBaiduNetdiskAssetCompletionRequirements({
     requiredOwnershipImages: options.ownershipRequirements.minimumImages,
@@ -805,6 +806,8 @@ async function waitForCompleteLocalEpisodeVideos(options: {
   let lastProgressLogAt = 0;
   let stalledEpisodeSignature: string | undefined;
   let stalledEpisodePolls = 0;
+  let missingNativeTaskSignature: string | undefined;
+  let missingNativeTaskPolls = 0;
 
   while (Date.now() - startedAt < options.timeoutMs) {
     throwIfAborted(options.signal);
@@ -1027,6 +1030,30 @@ async function waitForCompleteLocalEpisodeVideos(options: {
               (taskStatus.status ? ` status=${taskStatus.status}` : ""),
           );
           lastProgressLogAt = Date.now();
+        }
+
+        if (taskStatus.found) {
+          missingNativeTaskSignature = undefined;
+          missingNativeTaskPolls = 0;
+        } else if (options.requireEpisodeVideos && !complete) {
+          const currentEpisodeSignature = fileSetSignature(files);
+          if (missingNativeTaskSignature === currentEpisodeSignature) {
+            missingNativeTaskPolls += 1;
+          } else {
+            missingNativeTaskSignature = currentEpisodeSignature;
+            missingNativeTaskPolls = 1;
+          }
+          options.onLog?.(
+            `[video-assets] 百度网盘客户端未找到已提交的下载任务：${options.downloadTaskName || options.resourceName}`
+              + `，连续${missingNativeTaskPolls}/${missingNativeTaskPollLimit}次，本地识别${files.length}/${options.episodeCount}集`,
+          );
+          if (missingNativeTaskPolls >= missingNativeTaskPollLimit) {
+            throw new Error(
+              `[download-task-missing] 百度网盘下载任务提交后未出现在客户端传输列表，`
+                + `连续${missingNativeTaskPollLimit}次检查均不存在；`
+                + `本地识别${files.length}/${options.episodeCount}集。请重新创建下载任务。`,
+            );
+          }
         }
 
         const ownershipDirectoryComplete =
