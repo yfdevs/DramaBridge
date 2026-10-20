@@ -42,8 +42,8 @@ type AppRuntimeStatus = {
   };
 };
 
-const titlebarMetricButtonClass =
-  "inline-flex h-6 cursor-pointer select-none items-center gap-1 rounded-md bg-transparent px-1.5 text-[11px] leading-none text-muted-foreground transition-colors duration-100 hover:bg-foreground/5 hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-0 focus-visible:outline-ring [-webkit-app-region:no-drag]";
+const titlebarMetricClass =
+  "inline-flex h-6 select-none items-center gap-1.5 px-1.5 text-[11px] leading-none text-muted-foreground";
 
 const titlebarIconButtonClass =
   "inline-flex size-6 cursor-pointer select-none items-center justify-center rounded-md bg-transparent text-muted-foreground transition-colors duration-100 hover:bg-foreground/5 hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-0 focus-visible:outline-ring [-webkit-app-region:no-drag]";
@@ -199,40 +199,20 @@ function ensureTitlebarMemoryHost() {
   return host;
 }
 
-type TitlebarMetricTooltipProps = {
+type TitlebarMetricProps = {
   ariaLabel: string;
   icon: ReactNode;
   label: string;
   value: ReactNode;
-  tooltipLabel: string;
-  tooltipValue: ReactNode;
 };
 
-function TitlebarMetricTooltip({
-  ariaLabel,
-  icon,
-  label,
-  value,
-  tooltipLabel,
-  tooltipValue,
-}: TitlebarMetricTooltipProps) {
+function TitlebarMetric({ ariaLabel, icon, label, value }: TitlebarMetricProps) {
   return (
-    <Tooltip>
-      <TooltipTrigger
-        aria-label={ariaLabel}
-        render={<button type="button" className={titlebarMetricButtonClass} />}
-      >
-        <div className="flex items-center gap-1.5">
-          {icon}
-          <span className="font-medium text-muted-foreground max-[840px]:hidden">{label}</span>
-          <span className="font-medium tabular-nums text-foreground">{value}</span>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={8} className="z-50">
-        <span className="text-background/70">{tooltipLabel}</span>
-        <span className="font-medium tabular-nums">{tooltipValue}</span>
-      </TooltipContent>
-    </Tooltip>
+    <span aria-label={ariaLabel} className={titlebarMetricClass}>
+      {icon}
+      <span className="font-medium text-muted-foreground max-[840px]:hidden">{label}</span>
+      <span className="font-medium tabular-nums text-foreground">{value}</span>
+    </span>
   );
 }
 
@@ -386,7 +366,7 @@ export function AppTitlebarMemory() {
   return createPortal(
     <div className="flex h-7 items-center gap-1.5 overflow-hidden whitespace-nowrap px-1 text-[11px] leading-none text-muted-foreground">
       <div className="flex h-6 items-center gap-1">
-        <TitlebarMetricTooltip
+        <TitlebarMetric
           ariaLabel={`系统内存：${memoryText}`}
           icon={
             <Activity
@@ -396,10 +376,8 @@ export function AppTitlebarMemory() {
           }
           label="内存"
           value={percentText}
-          tooltipLabel="系统内存"
-          tooltipValue={memoryText}
         />
-        <TitlebarMetricTooltip
+        <TitlebarMetric
           ariaLabel={`D 盘容量：${dDriveText}`}
           icon={
             <HardDrive
@@ -409,10 +387,8 @@ export function AppTitlebarMemory() {
           }
           label="D盘"
           value={dDrivePercentText}
-          tooltipLabel="D 盘容量"
-          tooltipValue={dDriveText}
         />
-        <TitlebarMetricTooltip
+        <TitlebarMetric
           ariaLabel={`运行平台：${runningPlatformText}`}
           icon={
             <Grid
@@ -422,10 +398,8 @@ export function AppTitlebarMemory() {
           }
           label="平台"
           value={runningPlatformText}
-          tooltipLabel="运行平台"
-          tooltipValue={runningPlatformText}
         />
-        <TitlebarMetricTooltip
+        <TitlebarMetric
           ariaLabel={`浏览器实例：${browserInstanceCount} 个`}
           icon={
             <Chrome
@@ -435,8 +409,6 @@ export function AppTitlebarMemory() {
           }
           label="页面"
           value={browserInstanceCount}
-          tooltipLabel="浏览器实例"
-          tooltipValue={`${browserInstanceCount} 个`}
         />
       </div>
       <div className="h-4 w-px shrink-0 bg-border" aria-hidden="true" />
