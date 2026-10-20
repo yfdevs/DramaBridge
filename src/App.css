@@ -305,3 +305,32 @@ h3 {
   object-fit: contain;
   border-radius: 4px;
 }
+
+.app-chrome-control {
+  --chrome-hover: oklch(0 0 0 / 0.035);
+  --chrome-selected: oklch(0 0 0 / 0.065);
+  background: transparent;
+  color: var(--muted-foreground);
+  box-shadow: none;
+  transition: none;
+  translate: none;
+}
+.dark .app-chrome-control {
+  --chrome-hover: oklch(1 0 0 / 0.055);
+  --chrome-selected: oklch(1 0 0 / 0.1);
+}
+.app-chrome-control:hover {
+  background: var(--chrome-hover);
+  color: var(--foreground);
+}
+.app-chrome-control:active,
+.app-chrome-control[aria-current="page"] {
+  background: var(--chrome-selected);
+  color: var(--foreground);
+  translate: none;
+}
+.app-chrome-control:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  box-shadow: none;
+}
