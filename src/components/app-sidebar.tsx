@@ -77,7 +77,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                     <SidebarMenuButton
                       isActive={active && route !== globalConfigRoute}
                       render={<NavLink to={routePath(item.serviceRoute)} />}
-                      className="platform-menu-row h-9 gap-2 rounded-lg px-3"
+                      className="platform-menu-row h-8 gap-2 rounded-lg px-3"
                     >
                       <img
                         className="platform-menu-icon"
