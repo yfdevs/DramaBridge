@@ -304,13 +304,13 @@ export function resolveGlobalPlatformDirectories(
 export function assertGlobalDirectoriesConfigured() {
   const config = getStore().get("config");
   const missingDirectories = [
-    !config.runDataRoot?.trim() ? "运行数据根目录" : null,
-    !config.localMaterialRoot?.trim() ? "素材根目录" : null,
+    !config.runDataRoot?.trim() ? "运行数据目录" : null,
+    !config.localMaterialRoot?.trim() ? "素材目录" : null,
   ].filter((label): label is string => Boolean(label));
 
   if (missingDirectories.length > 0) {
     throw new Error(
-      `${GLOBAL_DIRECTORIES_REQUIRED_ERROR_CODE}: 请先在“全局配置 → 文件与目录”中设置${missingDirectories.join("、")}。`,
+      `${GLOBAL_DIRECTORIES_REQUIRED_ERROR_CODE}: 请先在“全局配置 → 文件存储”中设置${missingDirectories.join("、")}。`,
     );
   }
 }
@@ -321,7 +321,7 @@ async function selectGlobalDirectory(
   currentPath?: string,
 ) {
   return selectDirectory(event, {
-    title: key === "runDataRoot" ? "选择全局运行数据根目录" : "选择全局素材根目录",
+    title: key === "runDataRoot" ? "选择运行数据目录" : "选择素材目录",
     defaultPath: directoryDefaultPath(currentPath, app.getPath("documents")),
     properties: ["openDirectory", "createDirectory"],
   });
