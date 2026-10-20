@@ -193,7 +193,12 @@ function ensureTitlebarMemoryHost() {
 
   const host = document.createElement("div");
   host.dataset.appTitlebarMemoryHost = "true";
-  host.className = "app-titlebar-memory-host";
+  host.className = [
+    "app-titlebar-memory-host absolute top-0 z-[100] flex h-(--app-titlebar-height) items-center [-webkit-app-region:no-drag]",
+    "mac:right-[max(12px,var(--app-titlebar-right-reserve))] mac:left-auto mac:pr-0 mac:pl-1",
+    "win:right-auto win:left-[max(12px,var(--app-titlebar-left-reserve))] win:pr-1",
+    "linux:right-auto linux:left-[max(12px,var(--app-titlebar-left-reserve))] linux:pr-1",
+  ].join(" ");
   titlebar.append(host);
 
   return host;

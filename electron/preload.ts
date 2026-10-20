@@ -10,6 +10,19 @@ const nativeTitlebarWindowModes = new Set([
   'pinduoduo-drama-upload-records',
 ])
 
+function rendererPlatformClass(platform: NodeJS.Platform) {
+  switch (platform) {
+    case 'darwin':
+      return 'platform-mac'
+    case 'win32':
+      return 'platform-win'
+    case 'linux':
+      return 'platform-linux'
+    default:
+      return 'platform-other'
+  }
+}
+
 function getListenerMap(channel: string) {
   let channelListeners = listenerMap.get(channel)
 
@@ -50,6 +63,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 })
 
 window.addEventListener('DOMContentLoaded', () => {
+  document.documentElement.classList.add(rendererPlatformClass(process.platform))
+
   const windowMode = new URLSearchParams(window.location.search).get('window')
   if (windowMode && nativeTitlebarWindowModes.has(windowMode)) return
 

@@ -47,6 +47,10 @@ export function createElectronPlugin(rootDir: string) {
               replacement: path.join(rootDir, "packages/drama-ai/src/index.ts"),
             },
             {
+              find: /^@drama\/automation-logging$/,
+              replacement: path.join(rootDir, "packages/automation-logging/src/index.ts"),
+            },
+            {
               find: /^@drama\/baidu-netdisk-automation\/download-baidu-folder$/,
               replacement: path.join(
                 rootDir,
@@ -111,6 +115,10 @@ export function createElectronPlugin(rootDir: string) {
             {
               find: /^@drama\/qq-drama-automation$/,
               replacement: path.join(rootDir, "packages/qq-drama-automation/src/index.ts"),
+            },
+            {
+              find: /^@drama\/taobao-drama-automation$/,
+              replacement: path.join(rootDir, "packages/taobao-drama-automation/src/index.ts"),
             },
             {
               find: /^@drama\/tencent-huolong-drama-automation$/,

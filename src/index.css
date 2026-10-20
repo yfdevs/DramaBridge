@@ -4,6 +4,9 @@
 @import "./assets/fonts/misans/fonts.css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant mac (&:is(.platform-mac *));
+@custom-variant win (&:is(.platform-win *));
+@custom-variant linux (&:is(.platform-linux *));
 
 @theme inline {
   --font-heading: var(--font-sans);

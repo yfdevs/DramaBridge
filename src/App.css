@@ -5,7 +5,7 @@
   --app-shell-background: var(--sidebar);
 }
 
-:root[data-platform="darwin"] {
+:root.platform-mac {
   --app-titlebar-height: 38px;
   --app-titlebar-left-reserve: 78px;
   --app-titlebar-right-reserve: 12px;
@@ -102,18 +102,6 @@ body {
   background: transparent !important;
 }
 
-.app-titlebar-memory-host {
-  position: absolute;
-  top: 0;
-  left: max(12px, var(--app-titlebar-left-reserve));
-  z-index: 100;
-  height: var(--app-titlebar-height);
-  display: flex;
-  align-items: center;
-  padding-right: 4px;
-  -webkit-app-region: no-drag;
-}
-
 .app-titlebar-platform-nav-host {
   position: absolute;
   inset: 0;
@@ -163,7 +151,7 @@ body {
     color 100ms ease;
 }
 
-:root[data-platform="darwin"] .cet-titlebar .cet-window-controls {
+:root.platform-mac .cet-titlebar .cet-window-controls {
   display: none !important;
 }
 
