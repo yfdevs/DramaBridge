@@ -184,6 +184,7 @@ export function getPinduoduoDramaPlatformRuntimeSummary() {
   return {
     platform: "pinduoduo-drama" as const,
     running,
+    startedAt: runtimeController.startedAt,
     browserInstanceCount: running ? 1 : 0,
     browserInstances: running
       ? [

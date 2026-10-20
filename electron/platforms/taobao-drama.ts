@@ -182,7 +182,8 @@ export function getTaobaoDramaBrowserInstanceCount() { return controller.current
 export function getTaobaoDramaRunningPlatformCount() { return controller.current?.getStatus().running ? 1 : 0; }
 export function getTaobaoDramaPlatformRuntimeSummary() {
   const current = controller.current?.getStatus(); const paths = storagePaths();
-  return { platform: "taobao-drama" as const, running: Boolean(current?.running), browserInstanceCount: current?.accounts.filter((a) => a.launched).length ?? 0,
+  return { platform: "taobao-drama" as const, running: Boolean(current?.running),
+    startedAt: controller.startedAt, browserInstanceCount: current?.accounts.filter((a) => a.launched).length ?? 0,
     browserInstances: current?.accounts.filter((a) => a.launched).map((a) => ({ id: a.accountId, label: a.accountName, loginState: a.loginState, activeUrl: a.activeUrl })) ?? [], logDir: paths.logDir };
 }
 export function openTaobaoDramaLogDir() { const paths = storagePaths(); ensureDirectories(paths); return openExistingPath(paths.logDir); }

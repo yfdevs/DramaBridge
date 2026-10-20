@@ -2,7 +2,7 @@
   --app-titlebar-height: 32px;
   --app-titlebar-left-reserve: 4px;
   --app-titlebar-right-reserve: 92px;
-  --app-shell-background: #ffffff;
+  --app-shell-background: var(--sidebar);
 }
 
 :root[data-platform="darwin"] {
@@ -12,7 +12,7 @@
 }
 
 .dark {
-  --app-shell-background: #f8f9fd;
+  --app-shell-background: var(--sidebar);
 }
 
 html,
@@ -154,7 +154,9 @@ body {
   padding: 0 !important;
   border-radius: 0;
   line-height: 0;
-  transition: background-color 100ms ease, color 100ms ease;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
 }
 
 .cet-titlebar .cet-control-maximize {
@@ -228,4 +230,71 @@ body {
   background: color-mix(in oklch, var(--foreground) 30%, transparent);
   border: 2px solid transparent;
   background-clip: padding-box;
+}
+
+/* Desktop workspace: quiet chrome around a distinct content surface. */
+.app-desktop-shell {
+  background: var(--sidebar);
+  overflow: hidden;
+}
+.app-workspace {
+  margin: 4px 5px 5px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.app-page-scroll .min-h-svh {
+  min-height: 100%;
+}
+.platform-menu-row {
+  background: transparent;
+  box-shadow: none;
+  transition: none;
+}
+.platform-menu-row:hover {
+  background: oklch(0 0 0 / 0.045);
+}
+.platform-menu-row[data-active],
+.platform-menu-row[data-active]:hover {
+  background: oklch(1 0 0 / 0.94);
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.045);
+}
+.platform-menu-row:active {
+  background: oklch(0 0 0 / 0.075);
+}
+.platform-menu-row[data-active]:active {
+  background: oklch(0.985 0 0);
+}
+.dark .platform-menu-row:hover {
+  background: oklch(1 0 0 / 0.055);
+}
+.dark .platform-menu-row[data-active],
+.dark .platform-menu-row[data-active]:hover {
+  background: oklch(1 0 0 / 0.1);
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.035);
+}
+.dark .platform-menu-row:active,
+.dark .platform-menu-row[data-active]:active {
+  background: oklch(1 0 0 / 0.14);
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+@media (max-width: 767px) {
+  .app-workspace {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-desktop-shell *,
+  .app-desktop-shell *::before,
+  .app-desktop-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

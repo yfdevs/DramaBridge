@@ -99,6 +99,7 @@ export function getMeituanCreationPlatformRuntimeSummary() {
   return {
     platform: "meituan-drama" as const,
     running,
+    startedAt: runtimeController.startedAt,
     browserInstanceCount:
       runtimeStatus?.accounts.filter((account) => account.launched).length ?? 0,
     browserInstances: runtimeStatus?.accounts

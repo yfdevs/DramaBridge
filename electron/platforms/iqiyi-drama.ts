@@ -144,6 +144,7 @@ export function getIqiyiDramaPlatformRuntimeSummary() {
   return {
     platform: "iqiyi-drama" as const,
     running: Boolean(status?.running),
+    startedAt: runtimeController.startedAt,
     browserInstanceCount: status?.accounts.filter((account) => account.launched).length ?? 0,
     browserInstances: status?.accounts.filter((account) => account.launched).map((account) => ({
       id: account.accountId,

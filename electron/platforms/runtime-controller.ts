@@ -23,8 +23,13 @@ async function waitForRuntimeStop(stopPromise: Promise<void>): Promise<RuntimeSt
 
 export class RuntimeController<TRuntime extends { stop: () => Promise<void> }> {
   private runtime: TRuntime | null = null
+  private runtimeStartedAt: number | null = null
   private starting: Promise<TRuntime> | null = null
   private stopping: Promise<void> | null = null
+
+  get startedAt() {
+    return this.runtime ? this.runtimeStartedAt : null
+  }
 
   get current() {
     return this.runtime
@@ -47,6 +52,7 @@ export class RuntimeController<TRuntime extends { stop: () => Promise<void> }> {
 
     try {
       this.runtime = await this.starting
+      this.runtimeStartedAt ??= Date.now()
       return this.runtime
     } finally {
       this.starting = null
@@ -56,6 +62,7 @@ export class RuntimeController<TRuntime extends { stop: () => Promise<void> }> {
   async resolveStarting() {
     if (this.starting) {
       this.runtime = await this.starting
+      this.runtimeStartedAt ??= Date.now()
       this.starting = null
     }
 
@@ -65,6 +72,7 @@ export class RuntimeController<TRuntime extends { stop: () => Promise<void> }> {
   async replace(factory: () => Promise<TRuntime>) {
     await this.stop()
     this.runtime = await factory()
+    this.runtimeStartedAt = Date.now()
     return this.runtime
   }
 
@@ -77,6 +85,7 @@ export class RuntimeController<TRuntime extends { stop: () => Promise<void> }> {
 
     const runtime = this.runtime
     this.runtime = null
+    this.runtimeStartedAt = null
 
     if (!runtime) {
       if (this.stopping) await waitForRuntimeStop(this.stopping)
@@ -107,6 +116,7 @@ export class RuntimeController<TRuntime extends { stop: () => Promise<void> }> {
   stopInBackground() {
     const runtime = this.runtime
     this.runtime = null
+    this.runtimeStartedAt = null
     this.starting = null
     if (runtime) {
       void runtime.stop().catch((error: unknown) => {

@@ -315,6 +315,7 @@ export function getTencentHuolongDramaPlatformRuntimeSummary() {
   return {
     platform: "tencent-huolong-drama" as const,
     running: Boolean(current?.running),
+    startedAt: controller.startedAt,
     browserInstanceCount: current?.accounts.filter((account) => account.launched).length ?? 0,
     browserInstances: current?.accounts.filter((account) => account.launched).map((account) => ({
       id: account.accountId,

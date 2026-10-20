@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ThinkingOrb } from "thinking-orbs";
-import { motion, useReducedMotion } from "motion/react";
+import { Chrome, Play, StopCircle, CheckCircle, Cog, ChevronRight } from "@mynaui/icons-react";
+import { NavLink, useLocation } from "react-router-dom";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { platformForPath, routePath } from "@/config/navigation";
+import { formatRuntimeDuration, useAppRuntime } from "@/platforms/app-runtime/context";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -30,28 +33,6 @@ type RuntimeService<TStatus extends RuntimeStatus> = {
   start: () => Promise<TStatus>;
   stop: () => Promise<TStatus>;
 };
-
-function ShinyButtonText({ children, disabled }: { children: ReactNode; disabled: boolean }) {
-  const shouldReduceMotion = useReducedMotion();
-  const showShine = !disabled && !shouldReduceMotion;
-
-  return (
-    <span className="relative inline-grid overflow-hidden [grid-template-areas:'stack']">
-      <span className="[grid-area:stack] opacity-[0.86]">{children}</span>
-      {showShine ? (
-        <motion.span
-          aria-hidden="true"
-          className="service-shiny-text pointer-events-none [grid-area:stack] text-white/90"
-          initial={false}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-        >
-          {children}
-        </motion.span>
-      ) : null}
-    </span>
-  );
-}
 
 export function useServiceControl<TStatus extends RuntimeStatus>({
   initialStatus,
@@ -114,10 +95,12 @@ export function useServiceControl<TStatus extends RuntimeStatus>({
       }
     } finally {
       setPendingAction(null);
+      window.dispatchEvent(new Event("app:service-changed"));
     }
   }, [pendingAction, service, status.running, successMessage]);
 
   useEffect(() => {
+    if (!window.ipcRenderer) return;
     void refreshStatus();
 
     const statusRefreshInterval = window.setInterval(() => {
@@ -157,51 +140,163 @@ export function ServiceControlButtonPage({
   analyticsPlatform?: TaskAnalyticsPlatform;
   onToggle: () => void;
 }) {
+  const location = useLocation();
+  const platform = platformForPath(
+    analyticsPlatform ? `${analyticsPlatform}/service` : location.pathname.replace(/^\/+/, ""),
+  );
+  const { entries, now } = useAppRuntime();
+  const runtime = entries[platform.id]?.result?.platform;
+  const entry = entries[platform.id];
+  const connected = Boolean(window.ipcRenderer);
+  const [statisticsOpen, setStatisticsOpen] = useState(false);
   const label =
     pendingAction === "start"
-      ? "启动中"
+      ? "正在启动…"
       : pendingAction === "stop"
-        ? "关闭中"
+        ? "正在停止…"
         : running
           ? stopLabel
           : startLabel;
-
   return (
-    <main className="relative flex min-h-svh flex-1 items-center justify-center bg-transparent p-6">
-      <div className="relative z-10 flex items-center justify-center gap-3">
-        <Button
-          aria-busy={loading}
-          aria-label={label}
-          aria-pressed={running}
-          className={cn(
-            "h-10 min-w-32 gap-2 rounded-lg px-6",
-            running &&
-              "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20",
+    <main className="service-workspace flex min-h-full flex-col">
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 px-6 py-2">
+        <span className="text-xs text-muted-foreground">
+          {loading ? "正在处理服务…" : running ? "运行中" : "未启动"}
+          {running && (
+            <span className="ml-2 font-mono tabular-nums">
+              {formatRuntimeDuration(runtime?.startedAt, now)}
+            </span>
           )}
-          disabled={loading}
-          size="lg"
-          type="button"
-          variant={running ? "destructive" : "default"}
-          onClick={onToggle}
-        >
-          <ThinkingOrb
-            aria-label={label}
-            state={loading ? "working" : running ? "composing" : "solving"}
-            size={20}
-            style={
-              running
-                ? {
-                    filter:
-                      "brightness(0) saturate(100%) invert(34%) sepia(88%) saturate(1800%) hue-rotate(335deg) brightness(92%) contrast(92%)",
-                  }
-                : undefined
-            }
-          />
-          <ShinyButtonText disabled={loading}>{label}</ShinyButtonText>
-        </Button>
-        {additionalAction}
+        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {additionalAction}
+          <Button
+            aria-busy={loading}
+            aria-pressed={running}
+            className="h-7 gap-1.5 px-3 text-xs"
+            disabled={loading || !connected}
+            variant={running ? "secondary" : "default"}
+            onClick={onToggle}
+          >
+            {running ? <StopCircle className="size-3.5" /> : <Play className="size-3.5" />}
+            <span>{label}</span>
+          </Button>
+        </div>
       </div>
-      {analyticsPlatform ? <TaskStatisticsChart platform={analyticsPlatform} /> : null}
+      <div className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-7 pt-10 pb-8 md:px-12 md:pt-14">
+        <div className="flex items-start gap-3">
+          <span
+            className={cn(
+              "mt-1.5 size-2 shrink-0 rounded-full",
+              loading ? "bg-amber-600" : running ? "bg-emerald-600" : "bg-muted-foreground/45",
+            )}
+            aria-hidden="true"
+          />
+          <div className="min-w-0">
+            <h1 className="text-[16px] font-semibold leading-6 tracking-normal">
+              {!connected
+                ? "等待连接桌面服务"
+                : entry?.error
+                  ? "暂时无法读取服务状态"
+                  : loading
+                    ? pendingAction === "start"
+                      ? "正在启动服务…"
+                      : "正在停止服务…"
+                    : running
+                      ? `${platform.title}服务正在运行`
+                      : `${platform.title}服务尚未启动`}
+            </h1>
+            <p className="mt-2 max-w-[60ch] text-[13px] leading-6 text-muted-foreground">
+              {!connected
+                ? "在 AutoDrama 桌面端打开此工作空间，即可启动自动化服务。"
+                : entry?.error
+                  ? entry.error
+                  : running
+                    ? "自动化任务将按当前平台配置执行。"
+                    : "确认平台配置后，点击右上角的“启动服务”开始运行。"}
+            </p>
+            {running && (
+              <p className="mt-4 text-xs text-muted-foreground">
+                已运行{" "}
+                <span className="font-mono tabular-nums">
+                  {formatRuntimeDuration(runtime?.startedAt, now)}
+                </span>
+                <span className="mx-2">·</span>
+                {runtime?.browserInstanceCount ?? 0} 个浏览器实例
+              </p>
+            )}
+            {!running && (
+              <Button
+                className="mt-3 h-7 gap-1.5 px-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
+                variant="ghost"
+                render={<NavLink to={routePath(platform.configRoute)} />}
+              >
+                <Cog className="size-3.5" />
+                查看平台配置
+                <ChevronRight className="size-3" />
+              </Button>
+            )}
+          </div>
+        </div>
+        <section aria-label="浏览器连接" className="mt-10">
+          <div className="mb-5 flex items-center gap-3 text-[13px] font-medium">
+            <Chrome className="size-4 text-muted-foreground" />
+            <h2>浏览器实例</h2>
+            <span className="font-normal text-muted-foreground">
+              {runtime?.browserInstanceCount ?? 0}
+            </span>
+          </div>
+          {runtime?.browserInstances.length ? (
+            <div className="ml-7 space-y-5">
+              {runtime.browserInstances.map((instance) => (
+                <div key={instance.id} className="flex items-start gap-3">
+                  <CheckCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <span className="text-[13px] font-medium">{instance.label}</span>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {instance.loginState === "logged-in"
+                        ? "已登录 · 浏览器已连接"
+                        : instance.loginState === "login-required"
+                          ? "等待登录，请在浏览器中完成登录"
+                          : "浏览器已连接"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="ml-7 text-[13px] leading-6 text-muted-foreground">
+              {running ? "等待浏览器连接…" : "服务启动后，浏览器连接会显示在这里。"}
+            </p>
+          )}
+        </section>
+        {analyticsPlatform && (
+          <Collapsible open={statisticsOpen} onOpenChange={setStatisticsOpen} className="mt-10">
+            <CollapsibleTrigger className="group flex items-center gap-2 rounded py-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+              <ChevronRight className="size-3.5 transition-transform group-data-panel-open:rotate-90" />
+              <span>近 30 天发布统计</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <TaskStatisticsChart platform={analyticsPlatform} />
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+      </div>
+      <footer className="flex min-h-10 flex-wrap items-center justify-between gap-2 border-t border-border/60 px-6 py-2 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              connected ? "bg-emerald-600" : "bg-muted-foreground/45",
+            )}
+          />
+          {connected ? "本地服务已连接" : "桌面服务未连接"}
+        </span>
+        <span>
+          AutoDrama<span className="mx-2">·</span>
+          {platform.title}
+        </span>
+      </footer>
     </main>
   );
 }

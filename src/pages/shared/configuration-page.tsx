@@ -282,8 +282,8 @@ export function ConfigPanelSection({
         <h2 className="text-sm font-semibold">{title}</h2>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <Card className="rounded-lg bg-background py-0">
-        <CardContent className="py-0">
+      <Card className="rounded-none border-0 bg-transparent py-0 shadow-none ring-0">
+        <CardContent className="px-0 py-0">
           <FieldGroup className="gap-0">{children}</FieldGroup>
         </CardContent>
       </Card>
@@ -310,7 +310,9 @@ function ConfigFieldControl<TConfig extends object>({
     return (
       <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-center">
         <FieldContent>
-          <FieldLabel className="text-[13px]" htmlFor={field.key}>{field.label}</FieldLabel>
+          <FieldLabel className="text-[13px]" htmlFor={field.key}>
+            {field.label}
+          </FieldLabel>
           {field.description ? (
             <FieldDescription className="text-xs">{field.description}</FieldDescription>
           ) : null}
@@ -334,7 +336,9 @@ function ConfigFieldControl<TConfig extends object>({
   return (
     <Field className="gap-2.5 py-3 md:grid md:grid-cols-[minmax(220px,1fr)_280px] md:items-start">
       <FieldContent>
-        <FieldLabel className="text-[13px]" htmlFor={field.key}>{field.label}</FieldLabel>
+        <FieldLabel className="text-[13px]" htmlFor={field.key}>
+          {field.label}
+        </FieldLabel>
         {field.description ? (
           <FieldDescription className="text-xs">{field.description}</FieldDescription>
         ) : null}

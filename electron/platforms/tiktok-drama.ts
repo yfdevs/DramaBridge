@@ -79,6 +79,7 @@ export function getTiktokDramaCenterPlatformRuntimeSummary() {
   return {
     platform: "tiktok-drama" as const,
     running,
+    startedAt: runtimeController.startedAt,
     browserInstanceCount: running ? 1 : 0,
     browserInstances: running
       ? [{

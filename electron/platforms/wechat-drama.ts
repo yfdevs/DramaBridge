@@ -181,6 +181,7 @@ export function getWechatVideoPlatformRuntimeSummary() {
   return {
     platform: 'wechat-drama' as const,
     running: runtimeController.running,
+    startedAt: runtimeController.startedAt,
     browserInstanceCount: browserInstances.length,
     browserInstances,
     logDir: logDirPath(),

@@ -11,6 +11,7 @@ export type AppBrowserInstanceSummary = {
 export type AppPlatformRuntimeSummary = {
   platform: PlatformId;
   running: boolean;
+  startedAt: number | null;
   browserInstanceCount: number;
   browserInstances: AppBrowserInstanceSummary[];
   logDir: string;
@@ -107,15 +108,11 @@ export function openAppPlatformLogs(platformId: PlatformId) {
 }
 
 export function getAppUpdateStatus() {
-  return requireIpcRenderer("应用更新状态").invoke(
-    "app:update:status",
-  ) as Promise<AppUpdateStatus>;
+  return requireIpcRenderer("应用更新状态").invoke("app:update:status") as Promise<AppUpdateStatus>;
 }
 
 export function checkForAppUpdate() {
-  return requireIpcRenderer("检查应用更新").invoke(
-    "app:update:check",
-  ) as Promise<AppUpdateStatus>;
+  return requireIpcRenderer("检查应用更新").invoke("app:update:check") as Promise<AppUpdateStatus>;
 }
 
 export function downloadAppUpdate() {

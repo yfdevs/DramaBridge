@@ -112,8 +112,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
         borderWidth: 1,
         padding: [8, 12],
         textStyle: { color: ink, fontSize: 11 },
-        extraCssText:
-          "border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);",
+        extraCssText: "border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);",
       },
       grid: { left: 4, right: 4, top: 44, bottom: 8, containLabel: true },
       xAxis: {
@@ -172,27 +171,29 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
     };
   }, [hasData, loading, result]);
 
-  if (result.unavailableReason) {
-    return null;
-  }
-
-  const stateText = loading
-    ? "正在加载任务统计…"
-    : !hasData
-      ? "近30天暂无任务统计数据"
-      : null;
+  const stateText = result.unavailableReason
+    ? "任务统计暂不可用，请检查桌面服务连接。"
+    : loading
+      ? "正在加载任务统计…"
+      : !hasData
+        ? "近30天暂无任务统计数据"
+        : null;
 
   return (
-    <section
-      aria-label="近30天任务统计图"
-      className="absolute inset-x-6 top-[55%] bottom-10"
-    >
+    <section aria-label="近30天任务统计图" className="mt-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-medium">发布统计</h2>
+        <span className="text-xs text-muted-foreground">最近 30 天</span>
+      </div>
       {stateText ? (
-        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          {stateText}
-        </div>
+        <div className="py-6 text-xs text-muted-foreground">{stateText}</div>
       ) : (
-        <div ref={chartElementRef} className="h-full w-full" role="img" />
+        <div
+          ref={chartElementRef}
+          className="h-56 w-full"
+          role="img"
+          aria-label="最近30天发布成功和失败数量"
+        />
       )}
     </section>
   );

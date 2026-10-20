@@ -171,6 +171,7 @@ export function getWechatMiniProgramPlatformRuntimeSummary() {
   return {
     platform: 'wechat-miniprogram-drama' as const,
     running: runtimeController.running || catalogUploadCoordinator.isActive(),
+    startedAt: runtimeController.startedAt,
     browserInstanceCount: browserInstances.length,
     browserInstances,
     logDir: logDirPath(),

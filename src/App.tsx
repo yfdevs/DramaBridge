@@ -1,8 +1,10 @@
 import { HashRouter } from "react-router-dom";
 
-import { AppRuntimeDock } from "@/components/app-runtime-dock";
+import { AppSidebar } from "@/components/app-sidebar";
+import { AppWorkspaceHeader } from "@/components/app-workspace-header";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppRuntimeProvider } from "@/platforms/app-runtime/context";
 import { AppTitlebarMemory } from "@/components/app-titlebar-memory";
-import { AppTitlebarPlatformNav } from "@/components/app-titlebar-platform-nav";
 import { BaiduNetdiskDialogProvider } from "@/platforms/baidu-netdisk/dialog";
 import { JianyingDialogProvider } from "@/platforms/jianying/dialog";
 import { Toaster } from "@/components/ui/sonner";
@@ -52,15 +54,22 @@ function AppContent() {
     <TooltipProvider delay={120} closeDelay={0} timeout={250}>
       <BaiduNetdiskDialogProvider>
         <JianyingDialogProvider>
-          <div className="flex h-full min-h-0 flex-col bg-transparent">
-            <AppTitlebarMemory />
-            <AppTitlebarPlatformNav />
-            <div className="min-h-0 flex-1 overflow-auto bg-transparent">
-              <AppRoutes />
-            </div>
-            <AppRuntimeDock />
-            <Toaster position="bottom-right" closeButton={true} theme="dark" richColors />
-          </div>
+          <AppRuntimeProvider>
+            <SidebarProvider
+              className="app-desktop-shell h-full min-h-0"
+              style={{ "--sidebar-width": "260px" } as React.CSSProperties}
+            >
+              <AppTitlebarMemory />
+              <AppSidebar />
+              <div className="app-workspace flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+                <AppWorkspaceHeader />
+                <div className="app-page-scroll min-h-0 flex-1 overflow-auto">
+                  <AppRoutes />
+                </div>
+              </div>
+              <Toaster position="bottom-right" closeButton={true} richColors />
+            </SidebarProvider>
+          </AppRuntimeProvider>
         </JianyingDialogProvider>
       </BaiduNetdiskDialogProvider>
     </TooltipProvider>

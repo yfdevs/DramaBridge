@@ -532,6 +532,7 @@ export function getBaiduDramaPlatformRuntimeSummary() {
   return {
     platform: "baidu-drama" as const,
     running: Boolean(runtime?.running),
+    startedAt: runtimeController.startedAt,
     browserInstanceCount: runningAccounts.length,
     browserInstances: runningAccounts.map((account) => ({
       id: account.accountId,

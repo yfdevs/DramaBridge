@@ -386,6 +386,7 @@ export function getDouyinDramaPlatformRuntimeSummary() {
   return {
     platform: "douyin-drama" as const,
     running: Boolean(runtime?.running),
+    startedAt: runtimeController.startedAt,
     browserInstanceCount: activeAccounts.length,
     browserInstances: activeAccounts.map((account) => ({
       id: account.accountId,
