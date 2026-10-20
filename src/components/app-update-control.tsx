@@ -338,7 +338,12 @@ export function AppUpdateControl({
         </div>
       </PopoverHeader>
 
-      <div className="grid gap-1 rounded-md bg-muted/40 p-2 text-xs">
+      <div
+        className={cn(
+          "grid text-xs",
+          page ? "gap-2 border-y border-border/60 py-3" : "gap-1 rounded-md bg-muted/40 p-2",
+        )}
+      >
         <div className="flex items-center justify-between gap-3 leading-5">
           <span className="text-muted-foreground">状态</span>
           <span className="min-w-0 truncate font-medium">{summary}</span>
@@ -435,7 +440,12 @@ export function AppUpdateControl({
       ) : null}
 
       {status?.releaseNotes ? (
-        <div className="max-h-24 overflow-auto rounded-md bg-muted/40 px-2 py-1.5 text-xs leading-5 whitespace-pre-wrap text-muted-foreground">
+        <div
+          className={cn(
+            "overflow-auto text-xs leading-5 whitespace-pre-wrap text-muted-foreground",
+            page ? "max-h-64" : "max-h-24 rounded-md bg-muted/40 px-2 py-1.5",
+          )}
+        >
           {status.releaseNotes}
         </div>
       ) : null}
@@ -521,7 +531,10 @@ export function AppUpdateControl({
       )}
 
       {page ? (
-        <section className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-6 py-8">
+        <section
+          aria-label="版本与更新"
+          className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 py-5"
+        >
           {details}
         </section>
       ) : (

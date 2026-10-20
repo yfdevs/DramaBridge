@@ -15,9 +15,9 @@ export function AppWorkspaceHeader() {
   const route = isAppRoute(path) ? path : defaultRoute;
   const platform = platformForPath(route);
   const pages = navigationGroups.find((group) => group.title === platform.title)?.items ?? [];
+  if (route === "app/updates") return null;
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-      {route === "app/updates" && <span className="text-xs font-medium">版本与更新</span>}
       {!route.startsWith("app/") && (
         <nav aria-label="当前平台页面" className="flex shrink-0 items-center gap-0.5">
           {pages.map((page) => (
