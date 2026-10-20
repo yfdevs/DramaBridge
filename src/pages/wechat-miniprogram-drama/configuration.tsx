@@ -100,84 +100,84 @@ const sections: Array<{
 }> = [
   {
     title: "接口连接",
-    description: "自动化服务连接的后端地址。",
+    description: "后台连接与任务来源",
     fields: [
       {
         key: "apiBaseUrl",
-        label: "后端接口地址",
+        label: "接口地址",
         type: "url",
-        description: "默认使用线上服务，必要时改成本地或测试地址。",
+        description: "填写后端服务地址，可使用线上或测试环境。",
       },
       {
         key: "taskApiPrefix",
-        label: "小程序任务接口前缀",
-        description: "使用独立前缀领取小程序任务，避免与微信视频号任务混用。",
+        label: "任务接口前缀",
+        description: "使用小程序专用前缀，避免领取视频号任务。",
       },
       {
         key: "catalogApiBaseUrl",
-        label: "剧目与素材接口地址",
+        label: "剧目素材接口",
         type: "url",
-        description: "前四集与封面入库的剧目列表、素材查询和上传统一使用此接口地址，无需访问令牌。",
+        description: "用于剧目查询和素材入库，无需访问令牌。",
       },
     ],
   },
   {
     title: "日志",
-    description: "共享素材与运行数据目录在全局配置中统一管理。",
+    description: "素材和运行数据目录在全局配置中设置。",
     fields: [
       {
         key: "logRetentionDays",
-        label: "日志保留",
+        label: "日志保留天数",
         type: "number",
-        description: "超过天数的日志会被清理。",
+        description: "超过此天数的日志会被清理。",
         suffix: "天",
       },
     ],
   },
   {
     title: "任务调度",
-    description: "领取任务和账号同步频率。",
+    description: "任务检查、账号同步和素材准备",
     fields: [
       {
         kind: "switch",
         key: "closeFailedTaskPages",
-        label: "任务页面处理",
-        description: "新任务开始前是否清理上次失败页面。",
-        activeLabel: "自动关闭旧页面",
-        inactiveLabel: "保留旧页面",
+        label: "自动关闭失败页",
+        description: "新任务开始前，关闭上次失败的页面。",
+        activeLabel: "自动关闭",
+        inactiveLabel: "保留页面",
       },
       {
         key: "workerEmptyClaimDelaySeconds",
-        label: "空任务短轮询",
+        label: "无任务检查间隔",
         type: "number",
-        description: "没有任务时，前几次领取的等待间隔。",
+        description: "暂时没有任务时，两次领取之间的等待时间。",
         suffix: "秒",
       },
       {
         key: "workerSlowEmptyClaimThreshold",
-        label: "慢轮询切换次数",
+        label: "连续无任务次数",
         type: "number",
-        description: "连续空任务达到此次数后，改用慢轮询。",
+        description: "连续无任务达到此次数后，改用较长的检查间隔。",
       },
       {
         key: "workerSlowEmptyClaimDelaySeconds",
-        label: "空任务慢轮询",
+        label: "长时间无任务间隔",
         type: "number",
-        description: "长时间无任务后的领取间隔。",
+        description: "连续多次没有任务后，两次领取之间的等待时间。",
         suffix: "秒",
       },
       {
         key: "videoAccountSyncIntervalSeconds",
         label: "账号同步间隔",
         type: "number",
-        description: "定时同步小程序账号状态。",
+        description: "更新后台账号状态的间隔。",
         suffix: "秒",
       },
       {
         kind: "select",
         key: "catalogAutoSyncIntervalSeconds",
-        label: "入库剧目获取频率",
-        description: "前四集与封面入库页面自动获取全部剧目的频率；处理队列运行时会自动暂停。",
+        label: "入库剧目刷新间隔",
+        description: "定时刷新全部剧目，处理队列运行时暂停。",
         options: [
           { value: "15", label: "每 15 秒" },
           { value: "30", label: "每 30 秒" },
@@ -188,70 +188,70 @@ const sections: Array<{
       },
       {
         key: "materialPreparationConcurrency",
-        label: "素材准备并发",
+        label: "素材并行任务数",
         type: "number",
-        description: "同时执行网盘下载、文件校验和材料整理的任务数。",
+        description: "同时下载、校验和整理素材的任务数。",
       },
       {
         key: "taskPrefetchPerAccount",
-        label: "单账号预取任务",
+        label: "每个账号预取任务数",
         type: "number",
-        description: "每个小程序最多提前领取并准备的任务数。",
+        description: "每个账号最多提前领取并准备多少个任务。",
       },
     ],
   },
   {
     title: "超时设置",
-    description: "页面等待和网络操作上限。",
+    description: "页面操作和素材下载的最长等待时间",
     fields: [
       {
         key: "idlePageRefreshIntervalSeconds",
-        label: "空闲保活间隔",
+        label: "空闲刷新间隔",
         type: "number",
-        description: "浏览器空闲多久后刷新保活。",
+        description: "无任务时，定期刷新页面以保持连接。",
         suffix: "秒",
       },
       {
         key: "idlePageRefreshTimeoutSeconds",
-        label: "空闲保活超时",
+        label: "空闲刷新时限",
         type: "number",
-        description: "保活刷新超过此时间视为失败。",
+        description: "刷新超过此时间视为失败。",
         suffix: "秒",
       },
       {
         key: "idlePageRefreshJitterSeconds",
-        label: "保活随机错峰",
+        label: "刷新随机延迟",
         type: "number",
-        description: "给保活时间增加随机偏移，避免同时刷新。",
+        description: "为刷新时间增加随机偏移，避免同时刷新。",
         suffix: "秒",
       },
       {
         key: "basicInfoStepTimeoutSeconds",
-        label: "基础信息填写超时",
+        label: "信息填写时限",
         type: "number",
-        description: "填写标题、简介等基础信息的最长等待。",
+        description: "填写标题、简介等信息的最长时间。",
         suffix: "秒",
       },
       {
         key: "remoteFileDownloadTimeoutSeconds",
-        label: "远程素材下载超时",
+        label: "素材下载时限",
         type: "number",
-        description: "下载远程视频素材的最长等待。",
+        description: "下载远程视频素材的最长时间。",
         suffix: "秒",
       },
       {
         key: "baiduNetdiskDownloadRetryAttempts",
-        label: "百度网盘下载重试",
+        label: "网盘下载重试次数",
         type: "number",
-        description: "百度网盘资源准备失败后的额外重试次数，耗尽后上报任务失败。",
+        description: "下载失败后的额外重试次数，耗尽后任务失败。",
         suffix: "次",
       },
       {
         kind: "switch",
         key: "mergeOwnershipMaterials",
-        label: "合并权属工程图片",
+        label: "合并权属图片",
         description:
-          "将权属目录中的全部图片平均分为两组，纵向合并为最多两张临时图片后上传，默认开启。",
+          "将全部图片均分为两组，合并为最多两张图片上传。",
         activeLabel: "合并上传",
         inactiveLabel: "分别上传",
       },
@@ -259,54 +259,54 @@ const sections: Array<{
   },
   {
     title: "上传与通知",
-    description: "视频压缩、上传等待、失败重试和飞书通知。",
+    description: "压缩大小、上传时限、重试和通知",
     fields: [
       {
         key: "episodeVideoMaxFileMegabytes",
-        label: "单集视频上限",
+        label: "单集大小上限",
         type: "number",
-        description: "超过该体积的视频会在百度下载扫描时提前进入转码队列。",
+        description: "单集超过此大小时，下载过程中提前安排压缩。",
         suffix: "MB",
       },
       {
         key: "episodeVideoTargetFileMegabytes",
-        label: "压缩目标体积",
+        label: "视频压缩目标",
         type: "number",
-        description: "为容器开销预留余量，必须小于单集视频上限。",
+        description: "压缩后的目标大小，需小于单集大小上限。",
         suffix: "MB",
       },
       {
         key: "episodeVideoMinimumDurationSeconds",
-        label: "单集最小时长",
+        label: "单集时长下限",
         type: "number",
         description:
-          "任一集时长不超过该值时任务失败；设为 0 则关闭校验。正常任务和百度网盘直传同时生效。",
+          "任一集不超过此时长则失败，填 0 不检查；普通上传和网盘直传均生效。",
         suffix: "秒",
       },
       {
         key: "videoTranscodeConcurrency",
-        label: "视频转码并发",
+        label: "同时压缩视频数",
         type: "number",
-        description: "同时运行的 FFmpeg 进程数量。",
+        description: "最多同时压缩多少个视频。",
       },
       {
         key: "videoTranscodeThreadsPerJob",
-        label: "单任务转码线程",
+        label: "每个视频压缩线程数",
         type: "number",
-        description: "每个 FFmpeg 转码任务使用的线程数。",
+        description: "每个压缩任务使用的线程数。",
       },
       {
         key: "episodeUploadWaitTimeoutSeconds",
-        label: "剧集上传等待",
+        label: "上传时限",
         type: "number",
-        description: "等待平台完成剧集上传及自动重试；超时后任务失败。默认 7200 秒（120 分钟）。",
+        description: "等待全部剧集上传和重试完成，超时则任务失败。",
         suffix: "秒",
       },
       {
         kind: "select",
         key: "episodeUploadFailedRetryAttempts",
-        label: "上传失败重试",
-        description: "页面显示“上传失败”时自动点击“重试”，单集默认最多 5 次。",
+        label: "上传重试次数",
+        description: "单集上传失败时，最多自动重试多少次。",
         options: [
           { value: "0", label: "不重试" },
           { value: "3", label: "最多 3 次" },
@@ -317,9 +317,9 @@ const sections: Array<{
       },
       {
         key: "feishuBotWebhookUrl",
-        label: "飞书机器人 Webhook",
+        label: "飞书通知地址",
         type: "url",
-        description: "留空不推送运行通知。",
+        description: "填写机器人 Webhook 地址，留空不通知。",
       },
     ],
   },
@@ -409,10 +409,10 @@ export function WechatMiniProgramConfigurationPage() {
           >
             <div className="space-y-1">
               <h2 id="miniprogram-workflow-title" className="text-sm font-semibold">
-                自动化顺序
+                上传流程
               </h2>
               <p className="text-xs leading-5 text-muted-foreground">
-                百度网盘资源会先下载到本地；剧集固定使用本地上传。剧目类型仅选择数字真人或漫剧。
+                先下载素材，再上传剧集；仅支持数字真人和漫剧。
               </p>
             </div>
             <ol
@@ -420,10 +420,10 @@ export function WechatMiniProgramConfigurationPage() {
               aria-label="微信小程序短剧提交流程"
             >
               {[
-                "下载并校验资源",
-                "本地批量上传剧集",
-                "填写剧目与证明材料",
-                "勾选已上传剧集并提审",
+                "下载校验素材",
+                "批量上传剧集",
+                "填写信息和证明",
+                "选择剧集并提审",
               ].map((step, index) => (
                 <li key={step} className="flex items-center gap-1.5">
                   <span className="grid size-5 shrink-0 place-items-center rounded-full bg-foreground text-[11px] font-medium text-background">

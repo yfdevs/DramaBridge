@@ -28,55 +28,55 @@ const emptyConfig: PinduoduoDramaConfig = {
 const sections: ConfigSectionDefinition<PinduoduoDramaConfig>[] = [
   {
     title: "浏览器与账号",
-    description: "拼多多登录态按账号隔离；共享目录在全局配置中统一管理。",
+    description: "账号登录信息独立保存，共享目录在全局配置中设置。",
     fields: [
       {
         key: "creatorUid",
         label: "创作者 UID",
-        description: "用于打开视频上传页面。",
+        description: "用于定位当前创作者的视频上传页。",
       },
       {
         key: "browserExecutablePath",
-        label: "浏览器可执行文件路径",
-        description: "浏览器 exe 路径；留空使用默认 Chrome。",
+        label: "浏览器路径",
+        description: "浏览器启动文件路径，留空使用系统 Chrome。",
       },
       {
         key: "accountProfileName",
-        label: "账号配置名",
-        description: "用于区分不同拼多多 MCN 登录态。",
+        label: "账号标识",
+        description: "用于区分账号，分别保存登录信息。",
       },
       {
         key: "logRetentionDays",
-        label: "日志保留",
+        label: "日志保留天数",
         type: "number",
-        description: "运行日志保留天数。",
+        description: "超过此天数的日志会被清理。",
         suffix: "天",
         min: 1,
         step: 1,
       },
       {
         key: "taskPollIntervalMinutes",
-        label: "任务轮询间隔",
+        label: "任务检查间隔",
         type: "number",
-        description: "每轮任务检查和审核状态复查的间隔。",
+        description: "检查新任务和审核结果的间隔。",
         suffix: "分钟",
         min: 1,
         step: 1,
       },
       {
         key: "videoUploadTimeoutMinutes",
-        label: "视频上传等待",
+        label: "上传时限",
         type: "number",
-        description: "等待整部剧所有视频上传完成的最长时间。",
+        description: "等待全部剧集上传完成的最长时间。",
         suffix: "分钟",
         min: 1,
         step: 1,
       },
       {
         key: "baiduNetdiskDownloadRetryAttempts",
-        label: "百度下载重试",
+        label: "网盘下载重试次数",
         type: "number",
-        description: "审核通过后准备视频资源时，百度网盘下载失败后的重试次数。",
+        description: "审核通过后下载视频，失败时最多重试多少次。",
         suffix: "次",
         min: 0,
         step: 1,
@@ -84,10 +84,10 @@ const sections: ConfigSectionDefinition<PinduoduoDramaConfig>[] = [
       {
         kind: "switch",
         key: "headless",
-        label: "浏览器窗口",
-        description: "登录和排查问题时建议显示浏览器。",
-        activeLabel: "无头运行",
-        inactiveLabel: "显示浏览器",
+        label: "隐藏浏览器窗口",
+        description: "开启后隐藏窗口，登录或排查问题时请关闭。",
+        activeLabel: "已隐藏",
+        inactiveLabel: "显示窗口",
       },
     ],
   },
@@ -128,7 +128,7 @@ export function PinduoduoDramaConfigurationPage() {
       hasChanges={hasChanges}
       loading={loading}
       restartRequired={restartRequired}
-      title="拼多多短剧配置"
+      title="拼多多配置"
       onDiscard={discardChanges}
       onSave={persistConfig}
     >
