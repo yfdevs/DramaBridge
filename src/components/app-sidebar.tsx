@@ -137,11 +137,11 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="px-3 py-2">
-        <div className="flex h-8 items-center justify-between gap-2">
+        <div className="flex h-7 items-center justify-between gap-1">
           <Button
             variant="ghost"
             size="sm"
-            className="app-chrome-control h-8 min-w-0 justify-start gap-2 rounded-lg px-2 text-xs font-normal"
+            className="app-chrome-control h-7 min-w-0 justify-start gap-1.5 rounded-lg px-1.5 text-xs font-normal"
             aria-current={route === "app/updates" ? "page" : undefined}
             aria-label={`版本与更新：v${version ?? "—"}${hasUpdate ? "，有可用更新" : ""}`}
             onClick={() => navigate(routePath("app/updates"), { state: { returnRoute } })}
@@ -157,14 +157,14 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
             </span>
             <span className="truncate tabular-nums">v{version ?? "—"}</span>
           </Button>
-          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="工作空间工具">
+          <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="工作空间工具">
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="app-chrome-control size-8 rounded-lg"
+                    className="app-chrome-control size-7 rounded-lg"
                     aria-label={`打开${platform.title}日志目录`}
                     disabled={!connected || openingLogs}
                     onClick={() => void openLogs()}
@@ -181,7 +181,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="app-chrome-control size-8 rounded-lg"
+                    className="app-chrome-control size-7 rounded-lg"
                     aria-current={route === globalConfigRoute ? "page" : undefined}
                     aria-label="全局配置"
                     onClick={() => {

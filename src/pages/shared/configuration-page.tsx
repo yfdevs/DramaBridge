@@ -6,6 +6,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { WorkspaceActions } from "@/components/workspace-toolbar";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CheckCircle, DangerTriangle, ExternalLink, Folder } from "@mynaui/icons-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -373,25 +374,45 @@ function ConfigFieldControl<TConfig extends object>({
             <FieldDescription className="text-xs">{field.description}</FieldDescription>
           )}
         </FieldContent>
-        <Select
-          value={value}
-          onValueChange={(next) => {
-            if (next) onChange?.(field.key, next);
-          }}
-        >
-          <SelectTrigger id={field.key} className="h-8 w-full text-[13px]">
-            <SelectValue>
-              {field.options.find((option) => option.value === value)?.label}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
+        {field.options.length <= 3 ? (
+          <RadioGroup
+            id={field.key}
+            aria-label={field.label}
+            value={value}
+            onValueChange={(next) => onChange?.(field.key, String(next))}
+            className="flex flex-wrap items-center gap-x-4 gap-y-1"
+          >
             {field.options.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
+              <label
+                key={option.value}
+                className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-1 text-xs hover:bg-muted/60"
+              >
+                <RadioGroupItem value={option.value} />
                 {option.label}
-              </SelectItem>
+              </label>
             ))}
-          </SelectContent>
-        </Select>
+          </RadioGroup>
+        ) : (
+          <Select
+            value={value}
+            onValueChange={(next) => {
+              if (next) onChange?.(field.key, next);
+            }}
+          >
+            <SelectTrigger id={field.key} className="h-8 w-full text-[13px]">
+              <SelectValue>
+                {field.options.find((option) => option.value === value)?.label}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {field.options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </Field>
     );
   }

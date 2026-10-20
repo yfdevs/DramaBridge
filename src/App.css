@@ -136,7 +136,7 @@ body {
 .app-titlebar-platform-button {
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   pointer-events: auto;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -240,7 +240,7 @@ body {
 .app-workspace {
   margin: 0 5px 5px 0;
   border: 1px solid var(--border);
-  border-radius: 15px;
+  border-radius: var(--radius);
 }
 .app-page-scroll .min-h-svh {
   min-height: 100%;
