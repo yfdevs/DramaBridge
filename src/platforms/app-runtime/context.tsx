@@ -55,7 +55,8 @@ export function formatRuntimeDuration(startedAt: number | null | undefined, now:
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds / 60) % 60;
-  return hours > 0
-    ? `${hours}时${String(minutes).padStart(2, "0")}分`
-    : `${minutes}分${String(seconds % 60).padStart(2, "0")}秒`;
+  if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (seconds >= 60) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
 }

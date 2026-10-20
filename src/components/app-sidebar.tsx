@@ -1,6 +1,6 @@
 import { useState, type ComponentProps } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Cog, Folder, SpinnerOne, Refresh } from "@mynaui/icons-react";
+import { Circle, Cog, Folder, Refresh } from "@mynaui/icons-react";
 import { toast } from "sonner";
 import { AppUpdateControl } from "@/components/app-update-control";
 import { Button } from "@/components/ui/button";
@@ -98,7 +98,8 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                           <span className="tabular-nums">
                             {formatRuntimeDuration(entry.result?.platform.startedAt, now)}
                           </span>
-                          <SpinnerOne
+                          <Circle
+                            strokeDasharray="3 3"
                             className="size-3.5 text-foreground motion-safe:animate-spin"
                             aria-hidden="true"
                           />
