@@ -28,12 +28,12 @@ export function BaiduNetdiskDialogProvider({ children }: { children: ReactNode }
     <>
       {children}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
-          <DialogHeader className="flex-row items-center gap-2.5 border-b px-4 py-3 pr-12">
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[400px]">
+          <DialogHeader className="h-11 flex-row items-center gap-2 border-b px-3 pr-11">
             <img
               src={`${import.meta.env.BASE_URL}baidu-netdisk.svg`}
               alt=""
-              className="size-5 shrink-0"
+              className="size-4 shrink-0"
             />
             <div className="grid gap-0.5">
               <DialogTitle className="text-sm">百度网盘连接管理</DialogTitle>

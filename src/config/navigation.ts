@@ -163,7 +163,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "meituan-drama",
-    title: "美团创作平台",
+    title: "美团短剧",
     routePrefix: "meituan-drama",
     serviceRoute: "meituan-drama/service",
     configRoute: "meituan-drama/config",
@@ -187,7 +187,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "qq-drama",
-    title: "QQ 短剧",
+    title: "QQ短剧",
     routePrefix: "qq-drama",
     serviceRoute: "qq-drama/service",
     configRoute: "qq-drama/config",
@@ -195,7 +195,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "tencent-huolong-drama",
-    title: "腾讯火龙漫剧",
+    title: "火龙漫剧",
     routePrefix: "tencent-huolong-drama",
     serviceRoute: "tencent-huolong-drama/service",
     configRoute: "tencent-huolong-drama/config",
@@ -203,7 +203,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "iqiyi-drama",
-    title: "爱奇艺",
+    title: "爱奇艺短剧",
     routePrefix: "iqiyi-drama",
     serviceRoute: "iqiyi-drama/service",
     configRoute: "iqiyi-drama/config",
@@ -227,7 +227,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
   {
     id: "tiktok-drama",
-    title: "TikTok",
+    title: "TikTok短剧",
     routePrefix: "tiktok-drama",
     serviceRoute: "tiktok-drama/service",
     configRoute: "tiktok-drama/config",
@@ -285,7 +285,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "美团创作平台",
+    title: "美团短剧",
     items: [
       {
         title: "实例",
@@ -345,7 +345,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "QQ 短剧",
+    title: "QQ短剧",
     items: [
       {
         title: "实例",
@@ -365,7 +365,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "腾讯火龙漫剧",
+    title: "火龙漫剧",
     items: [
       {
         title: "实例",
@@ -385,7 +385,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "爱奇艺",
+    title: "爱奇艺短剧",
     items: [
       {
         title: "实例",
@@ -445,7 +445,7 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
   {
-    title: "TikTok",
+    title: "TikTok短剧",
     items: [
       {
         title: "实例",

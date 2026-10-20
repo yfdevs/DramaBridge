@@ -145,11 +145,11 @@ export function BaiduNetdiskPanel() {
 
   return (
     <div className="bg-background">
-      <div className="grid gap-3 p-4">
-        <div className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+      <div className="grid gap-2.5 p-3">
+        <div className="flex min-h-8 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <span
-              className={`size-2.5 shrink-0 rounded-full ring-4 ${
+              className={`ml-0.5 size-2 shrink-0 rounded-full ring-2 ${
                 status?.ready
                   ? "bg-emerald-500 ring-emerald-500/10"
                   : statusError || status
@@ -158,10 +158,8 @@ export function BaiduNetdiskPanel() {
               }`}
               aria-hidden="true"
             />
-            <div className="grid min-w-0 gap-0.5">
-              <span className="text-xs text-muted-foreground">CDP 状态</span>
-              <span className="truncate text-sm font-medium">{summary}</span>
-            </div>
+            <span className="sr-only">连接状态：</span>
+            <span className="truncate text-xs font-medium">{summary}</span>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Button
@@ -187,29 +185,30 @@ export function BaiduNetdiskPanel() {
         </div>
 
         {statusError ? (
-          <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <div className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs leading-5 break-words text-destructive">
             {statusError}
           </div>
         ) : null}
 
         {showClientSetup ? (
-          <div className="grid gap-1.5">
+          <div className="grid gap-1.5 border-t border-border/60 pt-2.5">
             <label htmlFor="baidu-netdisk-install-path" className="text-xs font-medium">
               百度网盘启动文件
             </label>
-            <InputGroup>
+            <InputGroup className="h-8 rounded-lg">
               <InputGroupInput
                 id="baidu-netdisk-install-path"
                 value={installPath}
                 readOnly
                 title={installPath || undefined}
                 placeholder="未找到百度网盘启动文件"
-                className="text-xs"
+                className="text-xs md:text-xs"
                 aria-invalid={Boolean(installPathError)}
               />
               <InputGroupAddon align="inline-end">
                 {installPath ? (
                   <InputGroupButton
+                    className="text-xs"
                     disabled={installPathPending !== null || actionPending !== null}
                     onClick={handleResetInstallPath}
                   >
@@ -217,6 +216,7 @@ export function BaiduNetdiskPanel() {
                   </InputGroupButton>
                 ) : null}
                 <InputGroupButton
+                  className="text-xs"
                   aria-label="选择百度网盘启动文件"
                   disabled={installPathPending !== null || actionPending !== null}
                   onClick={handleSelectInstallPath}

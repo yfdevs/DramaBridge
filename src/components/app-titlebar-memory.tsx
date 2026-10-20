@@ -43,7 +43,7 @@ type AppRuntimeStatus = {
 };
 
 const titlebarMetricClass =
-  "inline-flex h-6 select-none items-center gap-1.5 px-1.5 text-[11px] leading-none text-muted-foreground";
+  "inline-flex h-6 select-none items-center gap-1.5 rounded-md px-1.5 text-[11px] leading-none text-muted-foreground hover:bg-foreground/5 hover:text-foreground [-webkit-app-region:no-drag]";
 
 const titlebarIconButtonClass =
   "inline-flex size-6 cursor-pointer select-none items-center justify-center rounded-md bg-transparent text-muted-foreground transition-colors duration-100 hover:bg-foreground/5 hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-0 focus-visible:outline-ring [-webkit-app-region:no-drag]";
