@@ -70,15 +70,7 @@ body {
 }
 
 .cet-titlebar .cet-title {
-  display: flex !important;
-  align-items: center;
-  height: var(--app-titlebar-height);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.cet-titlebar .cet-title.cet-title-left {
-  margin-left: max(24px, var(--app-titlebar-left-reserve));
+  display: none !important;
 }
 
 .cet-container .app-sidebar-brand {
@@ -113,7 +105,7 @@ body {
 .app-titlebar-memory-host {
   position: absolute;
   top: 0;
-  right: var(--app-titlebar-right-reserve);
+  left: max(12px, var(--app-titlebar-left-reserve));
   z-index: 100;
   height: var(--app-titlebar-height);
   display: flex;
