@@ -101,44 +101,69 @@ export async function openQqDramaAddPage(
   await saveCredentialState(context, options).catch(() => undefined);
 }
 
+export function isQqFinishUploadTimeout(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("QQ_DRAMA_PAGE_MESSAGE")
+    && /finish\s*upload/i.test(message)
+    && /(?:timeout|timed\s*out|context deadline exceeded)/i.test(message);
+}
+
 export async function runQqDramaPublishTask(
   page: Page,
   context: BrowserContext,
   task: ClaimedQqDramaTask,
   options: QqDramaRuntimeOptions,
 ) {
-  log(options, `[qq-drama] opening add page for accountTaskId=${task.accountTaskId}`);
-  await openQqDramaAddPage(page, context, options);
-  await installQqPageMessageCapture(page);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let submissionStarted = false;
+    try {
+      log(options, `[qq-drama] opening add page for accountTaskId=${task.accountTaskId}`);
+      await openQqDramaAddPage(page, context, options);
+      await installQqPageMessageCapture(page);
 
-  const messageErrors = qqPageMessageErrorLocator(page);
-  await page.addLocatorHandler(
-    messageErrors,
-    async (messages) => {
-      const texts = [
-        ...new Set(
-          (await messages.allInnerTexts())
-            .map((text) => text.replace(/\s+/g, " ").trim())
-            .filter(Boolean),
-        ),
-      ];
-      throw new Error(`QQ_DRAMA_PAGE_MESSAGE: ${texts.join("；") || "QQ 页面出现错误提示"}`);
-    },
-    { noWaitAfter: true },
-  );
+      const messageErrors = qqPageMessageErrorLocator(page);
+      await page.addLocatorHandler(
+        messageErrors,
+        async (messages) => {
+          const texts = [
+            ...new Set(
+              (await messages.allInnerTexts())
+                .map((text) => text.replace(/\s+/g, " ").trim())
+                .filter(Boolean),
+            ),
+          ];
+          throw new Error(`QQ_DRAMA_PAGE_MESSAGE: ${texts.join("；") || "QQ 页面出现错误提示"}`);
+        },
+        { noWaitAfter: true },
+      );
 
-  try {
-    log(options, `[qq-drama] start basic info step: accountTaskId=${task.accountTaskId}`);
-    await fillBasicInfoStep(page, task, options);
+      try {
+        log(options, `[qq-drama] start basic info step: accountTaskId=${task.accountTaskId}`);
+        await fillBasicInfoStep(page, task, options);
 
-    log(options, `[qq-drama] start episode upload step: accountTaskId=${task.accountTaskId}`);
-    await uploadEpisodeVideosStep(page, task, options);
+        log(options, `[qq-drama] start episode upload step: accountTaskId=${task.accountTaskId}`);
+        await uploadEpisodeVideosStep(page, task, options);
 
-    log(options, `[qq-drama] start confirm step: accountTaskId=${task.accountTaskId}`);
-    await confirmAndSubmitStep(page, task, options);
+        log(options, `[qq-drama] start confirm step: accountTaskId=${task.accountTaskId}`);
+        submissionStarted = true;
+        await confirmAndSubmitStep(page, task, options);
 
-    await saveCredentialState(context, options).catch(() => undefined);
-  } finally {
-    await page.removeLocatorHandler(messageErrors).catch(() => undefined);
+        await saveCredentialState(context, options).catch(() => undefined);
+      } finally {
+        await page.removeLocatorHandler(messageErrors).catch(() => undefined);
+      }
+      return;
+    } catch (error) {
+      if (attempt > 0 || submissionStarted || !isQqFinishUploadTimeout(error)) throw error;
+
+      log(
+        options,
+        `[qq-drama] finishupload timed out; refreshing page and restarting task `
+          + `(retry=1/1, accountTaskId=${task.accountTaskId}): ${String(error)}`,
+      );
+      // The failed attempt has removed its locator handler before refreshing.
+      // Reload clears the form and captured page messages; the next attempt starts from basic info.
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
+    }
   }
 }
