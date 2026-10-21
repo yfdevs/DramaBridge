@@ -153,6 +153,7 @@ export async function startMeituanCreationRuntime(
         `[meituan-drama] starting account browser: userDataDir=${userDataDir} existingProfile=${existingProfile}`,
       );
       const context = await chromium.launchPersistentContext(userDataDir, {
+        viewport: null,
         headless: options.config?.browser?.headless ?? false,
         slowMo: options.config?.browser?.slowMo ?? 20,
       });

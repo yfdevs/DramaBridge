@@ -1,34 +1,39 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
-import { registerTaskAnalyticsHandler } from "./task-analytics";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { createValidatedStore } from "../../core/config-store";
+import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   cleanupBaiduNetdiskPlayletAfterTaskSuccess,
   ensureBaiduNetdiskShareDownloaded,
   type BaiduNetdiskEnsureDownloadedRequest,
-} from "./baidu-netdisk";
+} from "../baidu-netdisk";
 import {
   configureNativeChildWindow,
   directoryDefaultPath,
+  ensureDirectories,
+  findLatestFile,
   normalizePlatformRunDataDir,
   openExistingPath,
+  openPathOrParent,
   platformWindowIconPath,
   playwrightBrowsersPath,
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from "./shared";
-import { automationDatabasePath } from "../storage/database";
+} from "../shared";
+import { automationDatabasePath } from "../../storage/database";
 import {
   PinduoduoApprovedUploadRecordsRepository,
   type ListUploadRecordsFilter,
-} from "../storage/pinduoduo-drama/upload-records-repository";
+} from "../../storage/pinduoduo-drama/upload-records-repository";
 import {
   assertGlobalDirectoriesConfigured,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
+} from "../../global-app-config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadRecordsWindowMode = "pinduoduo-drama-upload-records";
@@ -202,13 +207,13 @@ export function getPinduoduoDramaPlatformRuntimeSummary() {
 
 export function openPinduoduoDramaLogDir() {
   const paths = storagePaths();
-  mkdirSync(paths.logDir, { recursive: true });
+  ensureDirectories([paths.logDir]);
   return openExistingPath(paths.logDir);
 }
 
 function getStore() {
   if (!store) {
-    store = new Store<PinduoduoDramaStore>({
+    store = createValidatedStore<PinduoduoDramaStore>({
       name: "pinduoduo-drama-config",
       defaults: {
         config: defaultPinduoduoDramaConfig,
@@ -345,24 +350,14 @@ function storagePaths(config = readConfig()): PinduoduoDramaStoragePaths {
 }
 
 function ensureStorageDirectories(paths = storagePaths()) {
-  mkdirSync(paths.runDataDir, { recursive: true });
-  mkdirSync(paths.accountDir, { recursive: true });
-  mkdirSync(paths.userDataDir, { recursive: true });
-  mkdirSync(paths.logDir, { recursive: true });
+  ensureDirectories([paths.runDataDir, paths.accountDir, paths.userDataDir, paths.logDir]);
 }
 
 function findLatestLogPath(paths = storagePaths()) {
-  mkdirSync(paths.logDir, { recursive: true });
-  const latestLogFile = readdirSync(paths.logDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:log|jsonl)$/i.test(entry.name))
-    .map((entry) => path.join(paths.logDir, entry.name))
-    .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs)[0];
-
-  return latestLogFile ?? paths.logDir;
-}
-
-function openPathOrParent(targetPath: string) {
-  return openExistingPath(existsSync(targetPath) ? targetPath : path.dirname(targetPath));
+  return findLatestFile(
+    paths.logDir,
+    (fileName) => /^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:log|jsonl)$/i.test(fileName),
+  );
 }
 
 async function defaultStoppedStatus(): Promise<PinduoduoDramaServiceStatus> {

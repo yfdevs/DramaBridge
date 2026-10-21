@@ -1,6 +1,8 @@
-import { app, ipcMain, Notification } from "electron";
+import { app, Notification } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { createValidatedStore } from "../../core/config-store";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import {
   assertGlobalDirectoriesConfigured,
@@ -8,19 +10,22 @@ import {
   getConfiguredAiCoverGenerationRetryAttempts,
   getConfiguredAiImageModel,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
-import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
-import { registerTaskAnalyticsHandler } from "./task-analytics";
-import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+} from "../../global-app-config";
+import { registerRuntimeAssetCleanupRoot } from "../../runtime-asset-cleanup";
+import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk";
 import {
   directoryDefaultPath,
+  ensureDirectories as ensureDirectoryPaths,
+  findLatestFile,
   normalizePlatformRunDataDir,
   openExistingPath,
+  openPathOrParent,
   playwrightBrowsersPath,
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from "./shared";
+} from "../shared";
 
 type Account = {
   id: number;
@@ -71,7 +76,7 @@ const controller = new RuntimeController<Runtime>();
 let store: Store<{ config: TaobaoDramaConfig }> | null = null;
 
 function configStore(): Store<{ config: TaobaoDramaConfig }> {
-  if (!store) store = new Store({ name: "taobao-drama-config", defaults: { config: defaults } });
+  if (!store) store = createValidatedStore<{ config: TaobaoDramaConfig }>({ name: "taobao-drama-config", defaults: { config: defaults } });
   return store;
 }
 function numberText(value: string | undefined, fallback: string, minimum = 0) {
@@ -111,13 +116,12 @@ function storagePaths(
     logDir, logFilePath: path.join(logDir, `app-${new Date().toISOString().slice(0, 10)}.log`),
   };
 }
-function ensureDirectories(paths: StoragePaths) { Object.values(paths).filter((value) => !path.extname(value)).forEach((directory) => mkdirSync(directory, { recursive: true })); mkdirSync(paths.logDir, { recursive: true }); }
-function latestLog(paths = storagePaths()) {
-  mkdirSync(paths.logDir, { recursive: true });
-  return readdirSync(paths.logDir, { withFileTypes: true }).filter((entry) => entry.isFile() && /\.(?:log|jsonl)$/i.test(entry.name))
-    .map((entry) => path.join(paths.logDir, entry.name)).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0] ?? paths.logDir;
+function ensureDirectories(paths: StoragePaths) {
+  ensureDirectoryPaths([paths.runDataDir, paths.accountDir, paths.userDataDir, paths.assetDownloadDir, paths.logDir]);
 }
-function openPathOrParent(value: string) { return openExistingPath(existsSync(value) ? value : path.dirname(value)); }
+function latestLog(paths = storagePaths()) {
+  return findLatestFile(paths.logDir, (fileName) => /\.(?:log|jsonl)$/i.test(fileName));
+}
 async function runtimePackage() {
   return import("@dramabridge/taobao-drama-automation") as unknown as Promise<{
     fetchTaobaoDramaAccounts: (baseUrl: string) => Promise<Account[]>;

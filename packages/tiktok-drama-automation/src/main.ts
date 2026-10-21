@@ -180,7 +180,7 @@ async function launchContext(): Promise<BrowserContext> {
   logger.info({ userDataDir: config.userDataDir }, "using persistent browser profile");
   return chromium.launchPersistentContext(config.userDataDir, {
     headless: config.headless,
-    viewport: { width: 1440, height: 1000 },
+    viewport: null,
     acceptDownloads: true,
     timeout: 0,
   });

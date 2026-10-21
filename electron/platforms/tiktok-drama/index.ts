@@ -1,13 +1,15 @@
-﻿import { app, ipcMain } from "electron";
+import { app } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
-import { registerTaskAnalyticsHandler } from "./task-analytics";
+import { createValidatedStore } from "../../core/config-store";
+import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { formatDateKey } from "@dramabridge/automation-logging";
 import {
   assertGlobalDirectoriesConfigured,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
+} from "../../global-app-config";
 import {
   directoryDefaultPath,
   normalizePlatformRunDataDir,
@@ -16,7 +18,7 @@ import {
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from "./shared";
+} from "../shared";
 
 type TiktokDramaCenterRuntimeStatus = {
   platform: "tiktok-drama";
@@ -101,7 +103,7 @@ export function openTiktokDramaCenterLogDir() {
 
 function getStore() {
   if (!store) {
-    store = new Store<TiktokDramaCenterStore>({
+    store = createValidatedStore<TiktokDramaCenterStore>({
       name: "tiktok-drama-config",
       defaults: {
         config: defaultTiktokDramaCenterConfig,

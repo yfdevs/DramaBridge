@@ -450,7 +450,7 @@ export class BrowserContextManager {
     const context = await chromium.launchPersistentContext(userDataDir, {
       headless: this.config.browser.headless,
       slowMo: this.config.browser.slowMo, // 让每一步操作人为变慢
-      viewport: { width: 1440, height: 900 },
+      viewport: null,
       acceptDownloads: true, // 控制浏览器是否允许下载文件
       ignoreDefaultArgs: ["--enable-automation"],
     });

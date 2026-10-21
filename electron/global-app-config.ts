@@ -7,7 +7,6 @@ import {
   app,
   BrowserWindow,
   nativeTheme,
-  ipcMain,
   safeStorage,
   shell,
   type IpcMainInvokeEvent,
@@ -16,6 +15,8 @@ import Store from "electron-store";
 import path from "node:path";
 import sharp from "sharp";
 
+import { createValidatedStore } from "./core/config-store";
+import { trpcIpc as ipcMain } from "./ipc";
 import { directoryDefaultPath, selectDirectory } from "./platforms/shared";
 
 const ARK_API_KEY_URL = "https://console.volcengine.com/ark/region:ark+cn-beijing/apikey";
@@ -83,7 +84,7 @@ let registered = false;
 let store: Store<GlobalAppConfigStore> | null = null;
 
 function getStore() {
-  store ??= new Store<GlobalAppConfigStore>({
+  store ??= createValidatedStore<GlobalAppConfigStore>({
     name: "global-app-config",
     defaults: { config: defaultStoredConfig },
   });

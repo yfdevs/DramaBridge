@@ -99,7 +99,7 @@ export async function startTiktokDramaCenterRuntime(
     headless: config.headless,
     slowMo,
     timeout: 0,
-    viewport: { width: 1440, height: 1000 },
+    viewport: null,
   });
   context.on("close", () => {
     running = false;

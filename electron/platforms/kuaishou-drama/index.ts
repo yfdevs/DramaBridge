@@ -1,27 +1,32 @@
-﻿import { app, ipcMain } from "electron";
+import { app } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
-import { registerTaskAnalyticsHandler } from "./task-analytics";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { createValidatedStore } from "../../core/config-store";
+import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
-import { createElectronPlatformLogger } from "../platform-logger";
-import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk";
+import { createElectronPlatformLogger } from "../../platform-logger";
+import { registerRuntimeAssetCleanupRoot } from "../../runtime-asset-cleanup";
 import {
   assertGlobalDirectoriesConfigured,
   createConfiguredAiClient,
   getConfiguredAiCoverGenerationRetryAttempts,
   getConfiguredAiImageModel,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
+} from "../../global-app-config";
 import {
   directoryDefaultPath,
+  ensureDirectories,
+  findLatestFile,
   normalizePlatformRunDataDir,
   openExistingPath,
+  openPathOrParent,
   playwrightBrowsersPath,
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from "./shared";
+} from "../shared";
 
 type KuaishouDramaAccountRuntimeStatus = {
   platform: "kuaishou-drama";
@@ -157,7 +162,7 @@ export function getKuaishouDramaPlatformRuntimeSummary() {
 
 export function openKuaishouDramaLogDir() {
   const paths = storagePaths();
-  mkdirSync(paths.logDir, { recursive: true });
+  ensureDirectories([paths.logDir]);
   return openExistingPath(paths.logDir);
 }
 
@@ -177,7 +182,7 @@ function normalizeOperationDelaySeconds(value: string | undefined) {
 
 function getStore() {
   if (!store) {
-    store = new Store<KuaishouDramaStore>({
+    store = createValidatedStore<KuaishouDramaStore>({
       name: "kuaishou-drama-config",
       defaults: {
         config: defaultKuaishouDramaConfig,
@@ -354,11 +359,13 @@ function registerKuaishouRuntimeAssetCleanup(config = readConfig()) {
 }
 
 function ensureStorageDirectories(paths = storagePaths()) {
-  mkdirSync(paths.runDataDir, { recursive: true });
-  mkdirSync(paths.accountDir, { recursive: true });
-  mkdirSync(paths.userDataDir, { recursive: true });
-  mkdirSync(paths.assetDownloadDir, { recursive: true });
-  mkdirSync(paths.logDir, { recursive: true });
+  ensureDirectories([
+    paths.runDataDir,
+    paths.accountDir,
+    paths.userDataDir,
+    paths.assetDownloadDir,
+    paths.logDir,
+  ]);
 }
 
 async function importKuaishouDramaRuntimePackage() {
@@ -394,17 +401,10 @@ async function importKuaishouDramaRuntimePackage() {
 }
 
 function findLatestLogPath(paths = storagePaths()) {
-  mkdirSync(paths.logDir, { recursive: true });
-  const latestLogFile = readdirSync(paths.logDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:log|jsonl)$/i.test(entry.name))
-    .map((entry) => path.join(paths.logDir, entry.name))
-    .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs)[0];
-
-  return latestLogFile ?? paths.logDir;
-}
-
-function openPathOrParent(targetPath: string) {
-  return openExistingPath(existsSync(targetPath) ? targetPath : path.dirname(targetPath));
+  return findLatestFile(
+    paths.logDir,
+    (fileName) => /^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:log|jsonl)$/i.test(fileName),
+  );
 }
 
 async function defaultStoppedStatus(): Promise<KuaishouDramaServiceStatus> {

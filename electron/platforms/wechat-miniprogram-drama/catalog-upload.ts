@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from "electron"
+import { BrowserWindow } from "electron"
+import { trpcIpc as ipcMain } from "../../ipc"
 import { createHash } from "node:crypto"
 import { openAsBlob } from "node:fs"
 import { readdir, stat } from "node:fs/promises"

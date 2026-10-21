@@ -1,29 +1,33 @@
-﻿import { app, ipcMain } from "electron";
+import { app } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
-import { registerTaskAnalyticsHandler } from "./task-analytics";
+import { createValidatedStore } from "../../core/config-store";
+import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import cron, { type ScheduledTask } from "node-cron";
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { lstat, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   directoryDefaultPath,
+  ensureDirectories,
   normalizePlatformRunDataDir,
+  numberText,
   openExistingPath,
   playwrightBrowsersPath,
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from "./shared";
-import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
-import { createElectronPlatformLogger } from "../platform-logger";
-import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
+} from "../shared";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk";
+import { createElectronPlatformLogger } from "../../platform-logger";
+import { registerRuntimeAssetCleanupRoot } from "../../runtime-asset-cleanup";
 import {
   assertGlobalDirectoriesConfigured,
   createConfiguredAiClient,
   getConfiguredAiCoverGenerationRetryAttempts,
   getConfiguredAiImageModel,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
+} from "../../global-app-config";
 
 type BaiduDramaAccount = {
   id: number;
@@ -121,16 +125,11 @@ let store: Store<BaiduDramaStore> | null = null;
 let temporaryAssetCleanupTask: ScheduledTask | null = null;
 
 function getStore() {
-  store ??= new Store<BaiduDramaStore>({
+  store ??= createValidatedStore<BaiduDramaStore>({
     name: "baidu-drama-config",
     defaults: { config: defaultConfig },
   });
   return store;
-}
-
-function numberText(value: string | undefined, fallback: string, minimum: number) {
-  const number = Number.parseFloat(value ?? "");
-  return Number.isFinite(number) && number >= minimum ? String(value).trim() : fallback;
 }
 
 function normalizeConfig(config: Partial<BaiduDramaConfig>): BaiduDramaConfig {
@@ -374,9 +373,7 @@ function scheduleBaiduTemporaryAssetCleanup() {
 }
 
 function ensureStorageDirectories(paths = storagePaths()) {
-  for (const target of [paths.runDataDir, paths.accountDir, paths.userDataDir, paths.assetDownloadDir, paths.logDir]) {
-    mkdirSync(target, { recursive: true });
-  }
+  ensureDirectories([paths.runDataDir, paths.accountDir, paths.userDataDir, paths.assetDownloadDir, paths.logDir]);
 }
 
 async function defaultStoppedStatus(): Promise<BaiduDramaServiceStatus> {
@@ -546,7 +543,7 @@ export function getBaiduDramaPlatformRuntimeSummary() {
 
 export function openBaiduDramaLogDir() {
   const paths = storagePaths();
-  mkdirSync(paths.logDir, { recursive: true });
+  ensureDirectories([paths.logDir]);
   return openExistingPath(paths.logDir);
 }
 

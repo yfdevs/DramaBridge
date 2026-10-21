@@ -1,7 +1,8 @@
-﻿import { app, ipcMain } from "electron";
+import { app } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
-import { registerTaskAnalyticsHandler } from "./task-analytics";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { createValidatedStore } from "../../core/config-store";
+import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import path from "node:path";
 import {
   assertGlobalDirectoriesConfigured,
@@ -9,19 +10,22 @@ import {
   getConfiguredAiCoverGenerationRetryAttempts,
   getConfiguredAiImageModel,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
-import { createElectronPlatformLogger } from "../platform-logger";
-import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
-import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+} from "../../global-app-config";
+import { createElectronPlatformLogger } from "../../platform-logger";
+import { registerRuntimeAssetCleanupRoot } from "../../runtime-asset-cleanup";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk";
 import {
   directoryDefaultPath,
+  ensureDirectories as ensureDirectoryPaths,
+  findLatestFile,
   normalizePlatformRunDataDir,
   openExistingPath,
+  openPathOrParent,
   playwrightBrowsersPath,
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from "./shared";
+} from "../shared";
 
 type Account = {
   id: number;
@@ -113,7 +117,7 @@ let store: Store<{ config: TencentHuolongDramaConfig }> | null = null;
 
 function configStore(): Store<{ config: TencentHuolongDramaConfig }> {
   if (!store) {
-    store = new Store<{ config: TencentHuolongDramaConfig }>({
+    store = createValidatedStore<{ config: TencentHuolongDramaConfig }>({
       name: "tencent-huolong-drama-config",
       defaults: { config: defaults },
     });
@@ -172,20 +176,11 @@ function storagePaths(config = readConfig(), accountId = config.accountProfileNa
 }
 
 function ensureDirectories(paths: StoragePaths) {
-  [paths.runDataDir, paths.accountDir, paths.userDataDir, paths.assetDownloadDir, paths.logDir]
-    .forEach((directory) => mkdirSync(directory, { recursive: true }));
+  ensureDirectoryPaths([paths.runDataDir, paths.accountDir, paths.userDataDir, paths.assetDownloadDir, paths.logDir]);
 }
 
 function latestLog(paths = storagePaths()) {
-  mkdirSync(paths.logDir, { recursive: true });
-  return readdirSync(paths.logDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /\.(?:log|jsonl)$/i.test(entry.name))
-    .map((entry) => path.join(paths.logDir, entry.name))
-    .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs)[0] ?? paths.logDir;
-}
-
-function openPathOrParent(value: string) {
-  return openExistingPath(existsSync(value) ? value : path.dirname(value));
+  return findLatestFile(paths.logDir, (fileName) => /\.(?:log|jsonl)$/i.test(fileName));
 }
 
 function platformLogger() {

@@ -4,8 +4,10 @@ import { execFile as execFileCallback } from "node:child_process";
 import { access, copyFile, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { app, ipcMain } from "electron";
+import { app } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
+import { createValidatedStore } from "../../core/config-store";
 import {
   captureJianyingWindow,
   closeJianyingEditorWindow,
@@ -28,13 +30,13 @@ import {
   type JianyingUiaProbe,
 } from "@dramabridge/jianying-automation";
 
-import { selectDirectory } from "./shared";
-import { getConfiguredJianyingEpisodeCount } from "../global-app-config";
+import { selectDirectory } from "../shared";
+import { getConfiguredJianyingEpisodeCount } from "../../global-app-config";
 import {
   ownershipScreenshotPath,
   presetNameForEpisode,
   sortNumberedPresetNames,
-} from "./jianying/collection-plan";
+} from "./collection-plan";
 
 type JianyingConfig = {
   executablePath: string;
@@ -73,7 +75,7 @@ const presetSubtitleGapCache = new Map<string, Array<[number, number]>>();
 
 function getStore() {
   if (!store) {
-    store = new Store<JianyingStore>({
+    store = createValidatedStore<JianyingStore>({
       name: "jianying-config",
       defaults: { config: defaultConfig, automationSession: null },
     });

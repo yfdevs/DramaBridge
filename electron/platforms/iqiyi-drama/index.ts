@@ -1,7 +1,8 @@
-﻿import { app, ipcMain } from "electron";
+import { app } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
-import { registerTaskAnalyticsHandler } from "./task-analytics";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { createValidatedStore } from "../../core/config-store";
+import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import path from "node:path";
 
 import {
@@ -10,18 +11,22 @@ import {
   getConfiguredAiCoverGenerationRetryAttempts,
   getConfiguredAiImageModel,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
-import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
-import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+} from "../../global-app-config";
+import { registerRuntimeAssetCleanupRoot } from "../../runtime-asset-cleanup";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk";
 import {
   directoryDefaultPath,
+  ensureDirectories,
+  findLatestFile,
   normalizePlatformRunDataDir,
+  numberText,
   openExistingPath,
+  openPathOrParent,
   playwrightBrowsersPath,
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from "./shared";
+} from "../shared";
 
 type IqiyiDramaLoginState = "login-required" | "logged-in" | "unknown";
 
@@ -158,23 +163,16 @@ export function getIqiyiDramaPlatformRuntimeSummary() {
 
 export function openIqiyiDramaLogDir() {
   const dir = storagePaths().logDir;
-  mkdirSync(dir, { recursive: true });
+  ensureDirectories([dir]);
   return openExistingPath(dir);
 }
 
 function getStore() {
-  store ??= new Store<IqiyiDramaStore>({
+  store ??= createValidatedStore<IqiyiDramaStore>({
     name: "iqiyi-drama-config",
     defaults: { config: defaultConfig },
   });
   return store;
-}
-
-function numberText(value: string | undefined, fallback: string, minimum = 0) {
-  const normalized = value?.trim();
-  if (!normalized) return fallback;
-  const number = Number.parseFloat(normalized);
-  return Number.isFinite(number) && number >= minimum ? normalized : fallback;
 }
 
 function normalizeConfig(
@@ -283,25 +281,20 @@ function registerIqiyiRuntimeAssetCleanup(config = readConfig()) {
 }
 
 function ensureStorageDirectories(paths = storagePaths()) {
-  for (const dir of [
+  ensureDirectories([
     paths.runDataDir,
     paths.accountDir,
     paths.userDataDir,
     paths.assetDownloadDir,
     paths.logDir,
-  ]) mkdirSync(dir, { recursive: true });
-}
-
-function openPathOrParent(target: string) {
-  return openExistingPath(existsSync(target) ? target : path.dirname(target));
+  ]);
 }
 
 function latestLog(paths = storagePaths()) {
-  mkdirSync(paths.logDir, { recursive: true });
-  return readdirSync(paths.logDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:log|jsonl)$/i.test(entry.name))
-    .map((entry) => path.join(paths.logDir, entry.name))
-    .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs)[0] ?? paths.logDir;
+  return findLatestFile(
+    paths.logDir,
+    (fileName) => /^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:log|jsonl)$/i.test(fileName),
+  );
 }
 
 async function importRuntimePackage() {

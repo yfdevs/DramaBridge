@@ -141,6 +141,7 @@ export async function startKuaishouDramaRuntime(
   await cleanupOldLogFiles(options).catch(() => undefined);
   log(options, "[kuaishou-drama] starting browser");
   context = await chromium.launchPersistentContext(userDataDir, {
+    viewport: null,
     headless: options.config?.browser?.headless ?? false,
     slowMo: options.config?.browser?.slowMo ?? 0,
   });

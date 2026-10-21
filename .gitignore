@@ -18,6 +18,7 @@ release
 .auth
 .playwright-mcp
 *.local
+*.tsbuildinfo
 __pycache__/
 *.pyc
 

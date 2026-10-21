@@ -1,5 +1,6 @@
-import { app, ipcMain } from "electron";
+import { app } from "electron";
 
+import { trpcIpc as ipcMain } from "./ipc";
 import { openMainLogDir } from "./main-logger";
 import {
   getGlobalBrowserInstanceCount,

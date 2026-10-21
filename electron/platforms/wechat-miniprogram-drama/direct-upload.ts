@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from "electron"
+import { BrowserWindow } from "electron"
+import { trpcIpc as ipcMain } from "../../ipc"
 import { createHash } from "node:crypto"
 import path from "node:path"
 import { fileURLToPath } from "node:url"

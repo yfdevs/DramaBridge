@@ -1,5 +1,12 @@
 const runtimeStopGracePeriodMs = 5_000
 
+class RuntimeStartCancelledError extends Error {
+  constructor() {
+    super('Runtime start was cancelled')
+    this.name = 'RuntimeStartCancelledError'
+  }
+}
+
 type RuntimeStopResult =
   | { state: 'stopped' }
   | { state: 'failed'; error: unknown }
@@ -46,34 +53,43 @@ export class RuntimeController<TRuntime extends { stop: () => Promise<void> }> {
   async start(factory: () => Promise<TRuntime>) {
     if (this.runtime) return this.runtime
 
-    if (!this.starting) {
-      this.starting = factory()
+    if (this.stopping) {
+      const stopResult = await waitForRuntimeStop(this.stopping)
+      if (stopResult.state === 'failed') throw stopResult.error
     }
 
+    if (!this.starting) {
+      const startOperation: Promise<TRuntime> = factory().then(async (runtime) => {
+        // stopInBackground can invalidate an in-flight start. Never publish the
+        // late runtime after shutdown; clean it up as soon as creation finishes.
+        if (this.starting !== startOperation) {
+          await runtime.stop()
+          throw new RuntimeStartCancelledError()
+        }
+        this.runtime = runtime
+        this.runtimeStartedAt = Date.now()
+        return runtime
+      })
+      this.starting = startOperation
+    }
+
+    const startOperation = this.starting
     try {
-      this.runtime = await this.starting
-      this.runtimeStartedAt ??= Date.now()
-      return this.runtime
+      return await startOperation
     } finally {
-      this.starting = null
+      if (this.starting === startOperation) this.starting = null
     }
   }
 
   async resolveStarting() {
-    if (this.starting) {
-      this.runtime = await this.starting
-      this.runtimeStartedAt ??= Date.now()
-      this.starting = null
-    }
+    if (this.starting) await this.starting
 
     return this.runtime
   }
 
   async replace(factory: () => Promise<TRuntime>) {
     await this.stop()
-    this.runtime = await factory()
-    this.runtimeStartedAt = Date.now()
-    return this.runtime
+    return this.start(factory)
   }
 
   async stop() {
@@ -117,7 +133,15 @@ export class RuntimeController<TRuntime extends { stop: () => Promise<void> }> {
     const runtime = this.runtime
     this.runtime = null
     this.runtimeStartedAt = null
+    const starting = this.starting
     this.starting = null
+    if (starting) {
+      void starting.catch((error: unknown) => {
+        if (!(error instanceof RuntimeStartCancelledError)) {
+          console.error('[runtime-controller] background runtime start failed', error)
+        }
+      })
+    }
     if (runtime) {
       void runtime.stop().catch((error: unknown) => {
         console.error('[runtime-controller] background runtime stop failed', error)

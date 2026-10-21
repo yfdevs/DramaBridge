@@ -1,9 +1,11 @@
-import { app, BrowserWindow, ipcMain, net, powerMonitor } from "electron";
+import { app, BrowserWindow, net, powerMonitor } from "electron";
 import { CancellationError, CancellationToken } from "builder-util-runtime";
 import Store from "electron-store";
 import { createRequire } from "node:module";
 import type { ProgressInfo, UpdateInfo } from "electron-updater";
 
+import { createValidatedStore } from "./core/config-store";
+import { trpcIpc as ipcMain } from "./ipc";
 import { logMain } from "./main-logger";
 
 const require = createRequire(import.meta.url);
@@ -177,7 +179,7 @@ let shuttingDown = false;
 
 function getStore() {
   if (!store) {
-    store = new Store<AppUpdateStore>({
+    store = createValidatedStore<AppUpdateStore>({
       name: "app-update-config",
       defaults: {
         sourceId: "accelerated",
@@ -782,7 +784,7 @@ async function installAppUpdate(options: AppUpdateInstallOptions = {}) {
     } catch (error) {
       const message = `未能停止全部平台服务：${readableError(error)} 请稍后重试，或手动停止服务。`;
       setStatus({ state: "downloaded", error: message });
-      throw new Error(message);
+      throw Object.assign(new Error(message), { cause: error });
     }
 
     const remainingPlatformCount = getRunningPlatformCount();

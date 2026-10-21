@@ -130,7 +130,7 @@ export function startWechatMiniProgramDirectUploadRuntime(
       const launched = await chromium.launchPersistentContext(userDataDir, {
         headless: false,
         slowMo: 20,
-        viewport: { width: 1440, height: 900 },
+        viewport: null,
         acceptDownloads: true,
         ignoreDefaultArgs: ["--enable-automation"],
       })

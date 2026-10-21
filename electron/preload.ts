@@ -1,9 +1,29 @@
 import { ipcRenderer, contextBridge } from 'electron'
+import { createTRPCProxyClient } from '@trpc/client'
 import { Titlebar, TitlebarColor } from 'custom-electron-titlebar'
+import { ipcLink } from 'electron-trpc/renderer'
+
+import type { ElectronIpcRouter } from './ipc/router'
 
 type IpcRendererListener = Parameters<typeof ipcRenderer.on>[1]
 
 const listenerMap = new Map<string, WeakMap<IpcRendererListener, IpcRendererListener>>()
+const electronTrpcBridge = {
+  sendMessage: (operation: unknown) => ipcRenderer.send('electron-trpc', operation),
+  onMessage: (callback: (response: unknown) => void) =>
+    ipcRenderer.on('electron-trpc', (_event, response) => callback(response)),
+}
+
+Object.defineProperty(globalThis, 'electronTRPC', {
+  configurable: false,
+  enumerable: false,
+  value: electronTrpcBridge,
+  writable: false,
+})
+
+const trpcClient = createTRPCProxyClient<ElectronIpcRouter>({
+  links: [ipcLink()],
+})
 const nativeTitlebarWindowModes = new Set([
   'wechat-miniprogram-baidu-upload',
   'wechat-miniprogram-catalog-upload',
@@ -55,7 +75,7 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
   invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
     const [channel, ...omit] = args
-    return ipcRenderer.invoke(channel, ...omit)
+    return trpcClient.invoke.mutate({ channel, args: omit })
   },
 
   // You can expose other APTs you need here.

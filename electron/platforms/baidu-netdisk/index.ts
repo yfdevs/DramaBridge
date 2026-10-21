@@ -1,5 +1,7 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
+import { createValidatedStore } from "../../core/config-store";
 import {
   ensureAiPoster,
   selectBaiduEpisodePathsWithAi,
@@ -14,7 +16,7 @@ import {
   BaiduNetdiskDownloadRecordsRepository,
   type BaiduNetdiskDownloadRecord,
   type BaiduNetdiskDownloadState,
-} from "../storage/baidu-netdisk";
+} from "../../storage/baidu-netdisk";
 import {
   createConfiguredAiClient,
   getConfiguredAiCoverGenerationRetryAttempts,
@@ -23,10 +25,10 @@ import {
   isAiPosterFallbackEnabled,
   isBaiduNetdiskPlayletCleanupEnabled,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
-import { resolveFromAppRoot, selectDirectory } from "./shared";
-import { createElectronPlatformLogger } from "../platform-logger";
-import { runRuntimeAssetCleanup } from "../runtime-asset-cleanup";
+} from "../../global-app-config";
+import { resolveFromAppRoot, selectDirectory } from "../shared";
+import { createElectronPlatformLogger } from "../../platform-logger";
+import { runRuntimeAssetCleanup } from "../../runtime-asset-cleanup";
 
 export type BaiduNetdiskConfig = {
   debugPort: string;
@@ -389,7 +391,7 @@ function runBaiduCdpOperationExclusive<T>(label: string, operation: () => Promis
 
 function getStore() {
   if (!store) {
-    store = new Store<BaiduNetdiskStore>({
+    store = createValidatedStore<BaiduNetdiskStore>({
       name: "baidu-netdisk-config",
       defaults: {
         config: defaultBaiduNetdiskConfig,
@@ -1430,7 +1432,9 @@ export async function cleanupBaiduNetdiskPlayletAfterTaskSuccess(
   if (!isBaiduNetdiskPlayletCleanupEnabled()) return;
   if (!resource || typeof resource !== "object") return;
   const candidate = resource as { id?: unknown; shareText?: unknown; resourceName?: unknown };
-  const id = candidate.id
+  const id = typeof candidate.id === "string"
+    || typeof candidate.id === "number"
+    || typeof candidate.id === "bigint"
     ? String(candidate.id)
     : typeof candidate.shareText === "string" && typeof candidate.resourceName === "string"
       ? createRecordId(shareKeyFromText(candidate.shareText), candidate.resourceName)

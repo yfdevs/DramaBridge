@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 
 export type TaskAnalyticsPlatformOptions = {
   platform: string;
@@ -36,11 +36,20 @@ function asRecord(value: unknown): JsonRecord {
     : {};
 }
 
+function scalarText(value: unknown, fallback = "") {
+  return typeof value === "string"
+    || typeof value === "number"
+    || typeof value === "bigint"
+    || typeof value === "boolean"
+    ? String(value)
+    : fallback;
+}
+
 function asRows(payload: unknown) {
   const response = asRecord(payload);
   const code = Number(response.code ?? 0);
   if (Number.isFinite(code) && code !== 0) {
-    throw new Error(String(response.msg ?? `code=${code}`));
+    throw new Error(scalarText(response.msg, `code=${code}`));
   }
 
   const page = asRecord(response.data);
@@ -104,7 +113,7 @@ function taskTimestamp(task: JsonRecord) {
 }
 
 function taskOutcome(task: JsonRecord, statusField: string) {
-  const status = String(task[statusField] ?? task.status ?? task.rpaStatus ?? "").toUpperCase();
+  const status = scalarText(task[statusField] ?? task.status ?? task.rpaStatus).toUpperCase();
   if (SUCCESS_STATUSES.has(status)) return "succeeded" as const;
   if (FAILED_STATUSES.has(status)) return "failed" as const;
   if (task.lastErrorMessage || task.rpaFailStage) return "failed" as const;
@@ -180,7 +189,7 @@ async function fetchTasks(
       const result = await postPage(apiBaseUrl, path, body);
       fetchedCount += result.rows.length;
       for (const task of result.rows) {
-        const id = String(task.id ?? `${accountId}:${page}:${uniqueTasks.size}`);
+        const id = scalarText(task.id, `${accountId}:${page}:${uniqueTasks.size}`);
         uniqueTasks.set(id, task);
       }
 

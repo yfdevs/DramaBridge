@@ -1,9 +1,11 @@
-import { app, BrowserWindow, dialog, shell, type IpcMainInvokeEvent, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, type IpcMainInvokeEvent, type OpenDialogOptions } from 'electron'
 import path from 'node:path'
-import { existsSync } from 'node:fs'
 import { fsSize, mem } from 'systeminformation'
+import { createAsyncCache } from '../../core/async-cache'
 
 export { RuntimeController } from './runtime-controller'
+export { ensureDirectories, findLatestFile, openExistingPath, openPathOrParent } from './storage'
+export { numberText } from './config'
 
 export type PlatformMemoryStatus = {
   processRssBytes: number
@@ -20,8 +22,11 @@ export type PlatformDriveStatus = {
   usedPercent: number
 }
 
+const readCachedMemory = createAsyncCache(() => mem(), 5_000)
+const readCachedDriveList = createAsyncCache(() => fsSize(), 10_000)
+
 export async function readMemoryStatus(processRssBytes = process.memoryUsage().rss): Promise<PlatformMemoryStatus> {
-  const memory = await mem()
+  const memory = await readCachedMemory()
   const systemUsedBytes = memory.total - memory.available
 
   return {
@@ -36,7 +41,7 @@ export async function readDriveStatus(targetMount = 'D:'): Promise<PlatformDrive
   let driveList: Awaited<ReturnType<typeof fsSize>>
 
   try {
-    driveList = await fsSize()
+    driveList = await readCachedDriveList()
   } catch {
     return null
   }
@@ -134,16 +139,4 @@ export function configureNativeChildWindow(window: BrowserWindow, title: string)
     event.preventDefault()
     window.setTitle(title)
   })
-}
-
-export async function openExistingPath(targetPath: string) {
-  const errorMessage = existsSync(targetPath)
-    ? await shell.openPath(targetPath)
-    : `路径不存在：${targetPath}`
-
-  if (errorMessage) {
-    throw new Error(errorMessage)
-  }
-
-  return targetPath
 }

@@ -1,25 +1,29 @@
-﻿import { app, ipcMain } from "electron";
+import { app } from "electron";
+import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
-import { registerTaskAnalyticsHandler } from "./task-analytics";
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { createValidatedStore } from "../../core/config-store";
+import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import {
   directoryDefaultPath,
+  ensureDirectories,
   normalizePlatformRunDataDir,
+  numberText,
   openExistingPath,
   playwrightBrowsersPath,
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from "./shared";
-import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "./baidu-netdisk";
+} from "../shared";
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk";
 import {
   assertGlobalDirectoriesConfigured,
   createConfiguredAiClient,
   getConfiguredAiImageModel,
   resolveGlobalPlatformDirectories,
-} from "../global-app-config";
-import { registerRuntimeAssetCleanupRoot } from "../runtime-asset-cleanup";
+} from "../../global-app-config";
+import { registerRuntimeAssetCleanupRoot } from "../../runtime-asset-cleanup";
 
 type DouyinDramaAccount = {
   id: number;
@@ -116,27 +120,11 @@ const runtimeController = new RuntimeController<DouyinDramaRuntime>();
 let store: Store<DouyinDramaStore> | null = null;
 
 function getStore() {
-  store ??= new Store<DouyinDramaStore>({
+  store ??= createValidatedStore<DouyinDramaStore>({
     name: "douyin-drama-config",
     defaults: { config: defaultConfig },
   });
   return store;
-}
-
-function numberText(
-  value: string | undefined,
-  fallback: string,
-  minimum: number,
-  maximum = Number.POSITIVE_INFINITY,
-  integer = false,
-) {
-  const number = Number.parseFloat(value ?? "");
-  return Number.isFinite(number)
-      && number >= minimum
-      && number <= maximum
-      && (!integer || Number.isInteger(number))
-    ? String(value).trim()
-    : fallback;
 }
 
 function normalizeConfig(config: Partial<DouyinDramaConfig>): DouyinDramaConfig {
@@ -244,15 +232,13 @@ function registerDouyinRuntimeAssetCleanup(config = readConfig()) {
 }
 
 function ensureStorageDirectories(paths = storagePaths()) {
-  for (const target of [
+  ensureDirectories([
     paths.runDataDir,
     paths.accountDir,
     paths.userDataDir,
     paths.assetDownloadDir,
     paths.logDir,
-  ]) {
-    mkdirSync(target, { recursive: true });
-  }
+  ]);
 }
 
 function defaultStoppedStatus(): DouyinDramaServiceStatus {
@@ -400,7 +386,7 @@ export function getDouyinDramaPlatformRuntimeSummary() {
 
 export function openDouyinDramaLogDir() {
   const paths = storagePaths();
-  mkdirSync(paths.logDir, { recursive: true });
+  ensureDirectories([paths.logDir]);
   return openExistingPath(paths.logDir);
 }
 

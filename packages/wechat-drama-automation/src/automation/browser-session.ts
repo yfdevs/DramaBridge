@@ -17,7 +17,7 @@ export async function launchContext(playletConfig: Config): Promise<BrowserConte
   return chromium.launchPersistentContext(userDataDir, {
     headless: playletConfig.browser?.headless ?? false,
     slowMo: playletConfig.browser?.slowMo ?? 20,
-    viewport: { width: 1440, height: 900 },
+    viewport: null,
     acceptDownloads: true,
   });
 }

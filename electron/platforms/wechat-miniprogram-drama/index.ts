@@ -1,6 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow } from 'electron'
+import { trpcIpc as ipcMain } from '../../ipc'
 import Store from 'electron-store'
-import { registerTaskAnalyticsHandler } from './task-analytics'
+import { createValidatedStore } from '../../core/config-store'
+import { registerTaskAnalyticsHandler } from '../shared/task-analytics'
 import cron, { type ScheduledTask } from 'node-cron'
 import { mkdirSync, readdirSync, statSync } from 'node:fs'
 import { lstat, readdir, rm } from 'node:fs/promises'
@@ -13,16 +15,16 @@ import {
   resolveFromAppRoot,
   RuntimeController,
   selectDirectory,
-} from './shared'
-import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from './baidu-netdisk'
-import { createElectronPlatformLogger } from '../platform-logger'
-import { registerRuntimeAssetCleanupRoot } from '../runtime-asset-cleanup'
+} from '../shared'
+import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from '../baidu-netdisk'
+import { createElectronPlatformLogger } from '../../platform-logger'
+import { registerRuntimeAssetCleanupRoot } from '../../runtime-asset-cleanup'
 import {
   assertGlobalDirectoriesConfigured,
   resolveGlobalPlatformDirectories,
-} from '../global-app-config'
-import { WechatMiniProgramDirectUploadCoordinator } from './wechat-miniprogram-drama/direct-upload'
-import { WechatMiniProgramCatalogUploadCoordinator } from './wechat-miniprogram-drama/catalog-upload'
+} from '../../global-app-config'
+import { WechatMiniProgramDirectUploadCoordinator } from './direct-upload'
+import { WechatMiniProgramCatalogUploadCoordinator } from './catalog-upload'
 
 type WechatMiniProgramRuntime = {
   getStatus: () => {
@@ -196,7 +198,7 @@ async function status(): Promise<WechatMiniProgramServiceStatus> {
 
 function getStore() {
   if (!store) {
-    store = new Store<WechatMiniProgramStore>({
+    store = createValidatedStore<WechatMiniProgramStore>({
       name: 'wechat-miniprogram-drama-config',
       defaults: {
         config: defaultWechatMiniProgramConfig,

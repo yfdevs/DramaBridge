@@ -29,7 +29,7 @@
     "@types/node": "latest",
     "fast-glob": "^3.3.3",
     "tsx": "latest",
-    "typescript": "^6.0.3",
+    "typescript": "7.0.2",
     "vite": "catalog:"
   }
 }
