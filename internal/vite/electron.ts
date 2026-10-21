@@ -4,7 +4,7 @@ import electron from "vite-plugin-electron/simple";
 
 import { developmentWatchIgnored } from "./watch";
 
-const electronRequireBanner = [
+export const electronRequireBanner = [
   "import { createRequire as __electronCreateRequire } from 'node:module';",
   "globalThis.require = __electronCreateRequire(import.meta.url);",
 ].join("\n");
@@ -16,6 +16,9 @@ const electronMainExternalPatterns = [
   /^playwright-core(?:\/.*)?$/,
   /^chromium-bidi(?:\/.*)?$/,
   /^sharp(?:\/.*)?$/,
+  // This CommonJS package reads __filename when creating its temporary files.
+  // Keep Node's module wrapper instead of inlining it into the ESM bundle.
+  /^write-file-atomic(?:\/.*)?$/,
   /^pdf-to-img(?:\/.*)?$/,
   /^pdfjs-dist(?:\/.*)?$/,
   /^@napi-rs\/canvas(?:\/.*)?$/,
@@ -26,7 +29,7 @@ const electronMainExternalPatterns = [
   /^@img(?:\/.*)?$/,
 ];
 
-const electronMainExternals = (id: string) =>
+export const electronMainExternals = (id: string) =>
   electronMainExternalPatterns.some((pattern) => pattern.test(id)) ||
   /[\\/]node_modules[\\/](?:\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?(?:ffmpeg-static|sharp|pdf-to-img|pdfjs-dist|tesseract\.js|tesseract\.js-core|@tesseract\.js-data[\\/]chi_sim|@napi-rs[\\/]canvas(?:-[^\\/]+)?|@img)(?:[\\/]|$)/.test(id);
 

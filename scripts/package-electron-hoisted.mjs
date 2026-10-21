@@ -25,6 +25,7 @@ const runtimeDependencyNames = [
   "pdf-to-img",
   "playwright",
   "sharp",
+  "write-file-atomic",
 ];
 
 async function runExecutable(command, args, options = {}) {
