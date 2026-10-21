@@ -1,5 +1,6 @@
 import { execFile, spawn } from "node:child_process";
-import { access, stat } from "node:fs/promises";
+import { pathExists } from "@dramabridge/file-utils";
+import { stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Effect } from "effect";
@@ -57,15 +58,6 @@ export type StartBaiduNetdiskCdpOptions = BaiduNetdiskCdpOptions & {
   restart?: boolean;
   waitMs?: number;
 };
-
-async function pathExists(filePath: string) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 async function pathKind(filePath: string) {
   try {

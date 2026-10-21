@@ -1,4 +1,5 @@
-import { access, copyFile, link, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { pathExists, safeFileName } from "@dramabridge/file-utils";
+import { copyFile, link, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type { DramaAiClient } from "@dramabridge/ai";
@@ -198,17 +199,9 @@ const ownershipDirectoryMarkers = ["工程", "权属", "资质", "版权"] as co
 const ownershipImageExtensions = new Set([".png", ".jpg", ".jpeg", ".bmp", ".webp"]);
 const aiProductionProofExtensions = new Set([".png", ".jpg", ".jpeg", ".bmp", ".webp", ".pdf"]);
 const episodeVideoExtensions = new Set([".mp4", ".mov"]);
-const invalidUploadFileNameChars = new Set(["<", ">", ":", '"', "/", "\\", "|", "?", "*"]);
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function pathExists(filePath: string) {
-  return access(filePath).then(
-    () => true,
-    () => false,
-  );
 }
 
 export function isOwnershipDirectoryName(value: string) {
@@ -238,14 +231,7 @@ export function playletDir(root: string, resourceName: string) {
 }
 
 export function safeEpisodeFileBaseName(value: string) {
-  return (
-    Array.from(value, (char) =>
-      invalidUploadFileNameChars.has(char) || char.charCodeAt(0) <= 0x1f ? " " : char,
-    )
-      .join("")
-      .replace(/\s+/g, " ")
-      .trim() || "短剧"
-  );
+  return safeFileName(value, { fallback: "短剧", replacement: " " });
 }
 
 export function localEpisodeFilePatterns(resourceName: string) {
@@ -1518,7 +1504,7 @@ export async function validateLocalEpisodeMinimumDuration(options: {
     root: options.localEpisodeVideoRoot,
     resourceName: options.resourceName,
   });
-  const durations = new Array<EpisodeVideoDuration>(files.length);
+  const durations: EpisodeVideoDuration[] = [];
   const concurrency = Math.min(files.length, Math.max(1, Math.floor(options.concurrency ?? 4)));
   const perFileTimeoutMs = Math.max(1_000, options.perFileTimeoutMs ?? 15_000);
   let cursor = 0;

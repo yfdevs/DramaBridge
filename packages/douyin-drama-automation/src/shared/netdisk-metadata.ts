@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { safeFileName, walkFiles } from "@dramabridge/file-utils";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as mammoth from "mammoth";
 import { z } from "zod";
@@ -64,7 +65,7 @@ type MetadataInputs = {
 };
 
 function replacementCharacterCount(value: string) {
-  return [...value].filter((character) => character === "\uFFFD").length;
+  return value.split("").filter((character) => character === "\uFFFD").length;
 }
 
 function decodeText(buffer: Buffer) {
@@ -106,7 +107,7 @@ function decodeRtf(buffer: Buffer) {
     .replace(/\\[a-z]+-?\d* ?/gi, "")
     .replace(/\\([{}\\])/g, "$1")
     .replace(/[{}]/g, "")
-    .replace(/\0/g, "")
+    .split("\u0000").join("")
     .trim();
 }
 
@@ -115,7 +116,7 @@ async function readMetadataText(file: string) {
   if (!info?.isFile() || info.size <= 0 || info.size > MAX_TEXT_FILE_BYTES) return "";
   const extension = path.extname(file).toLowerCase();
   if (extension === ".docx") {
-    return (await mammoth.extractRawText({ path: file })).value.replace(/\0/g, "").trim();
+    return (await mammoth.extractRawText({ path: file })).value.split("\u0000").join("").trim();
   }
   if (extension === ".doc") {
     // Legacy binary DOC is discovered and downloaded, but cannot be decoded safely by Mammoth.
@@ -124,23 +125,12 @@ async function readMetadataText(file: string) {
   const buffer = await readFile(file);
   return extension === ".rtf"
     ? decodeRtf(buffer)
-    : decodeText(buffer).replace(/\0/g, "").trim();
+    : decodeText(buffer).split("\u0000").join("").trim();
 }
 
 function metadataTextPriority(file: string) {
   const normalized = file.replace(/\\/g, "/");
   return Number(!/剧情资料|简介|剧情|梗概|故事|介绍/u.test(normalized));
-}
-
-async function walkFiles(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const files: string[] = [];
-  for (const entry of entries) {
-    const target = path.join(root, entry.name);
-    if (entry.isDirectory()) files.push(...await walkFiles(target));
-    else if (entry.isFile()) files.push(target);
-  }
-  return files;
 }
 
 export async function collectDouyinNetdiskMetadataInputs(
@@ -263,10 +253,6 @@ function buildPrompt(task: ClaimedDouyinDramaTask, inputs: MetadataInputs) {
   ].join("\n");
 }
 
-function safeRoleFileName(value: string) {
-  return value.replace(/[<>:"/\\|?*\u0000-\u001f]/gu, " ").replace(/\s+/gu, " ").trim() || "角色";
-}
-
 function buildRolePortraitPrompt(
   task: ClaimedDouyinDramaTask,
   role: DouyinDramaRole,
@@ -307,7 +293,7 @@ async function generateMissingRolePortraits(
   for (const role of missing) {
     const prompt = buildRolePortraitPrompt(task, role, summary);
     const cacheKey = createHash("sha256").update(model).update(prompt).digest("hex").slice(0, 12);
-    const output = path.join(outputDir, `AI角色头像-${safeRoleFileName(role.name)}-${cacheKey}.png`);
+    const output = path.join(outputDir, `AI角色头像-${safeFileName(role.name, { fallback: "角色", replacement: " " })}-${cacheKey}.png`);
     const existing = await stat(output).catch(() => undefined);
     if (existing?.isFile() && existing.size > 0) {
       role.photoFile = output;

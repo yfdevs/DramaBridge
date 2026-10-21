@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { safeFileName } from "@dramabridge/file-utils";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { QqDramaRuntimeOptions } from "../shared/types.js";
@@ -11,10 +12,6 @@ function extensionFromContentType(contentType: string | null) {
   if (contentType.includes("pdf")) return ".pdf";
   if (contentType.includes("mp4")) return ".mp4";
   return "";
-}
-
-function safeFileName(value: string) {
-  return value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").slice(0, 160) || "asset";
 }
 
 export async function downloadRemoteAsset(
@@ -36,7 +33,11 @@ export async function downloadRemoteAsset(
   const sourceExtension = path.extname(sourceName);
   const extension = sourceExtension || extensionFromContentType(contentType);
   const digest = createHash("sha1").update(url).digest("hex").slice(0, 10);
-  const fileName = `${safeFileName(path.basename(sourceName, sourceExtension) || fallbackFileName)}-${digest}${extension}`;
+  const fileName = `${safeFileName(path.basename(sourceName, sourceExtension) || fallbackFileName, {
+    fallback: "asset",
+    maxLength: 160,
+    replacement: "_",
+  })}-${digest}${extension}`;
   const filePath = path.join(options.assetDownloadDir, fileName);
 
   await mkdir(options.assetDownloadDir, { recursive: true });

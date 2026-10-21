@@ -1,10 +1,9 @@
 import { execFile } from "node:child_process";
-import { access, readdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { pathExists, temporaryWriteTask } from "@dramabridge/file-utils";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { randomUUID } from "node:crypto";
 
 const execFileAsync = promisify(execFile);
 
@@ -25,15 +24,6 @@ export type JianyingDraftTrackResult = {
 
 function processResourcesPath() {
   return (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
-}
-
-async function pathExists(targetPath: string) {
-  try {
-    await access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export async function resolveJianyingDraftWorkerPath() {
@@ -105,13 +95,12 @@ export async function writeJianyingDraftVideoTrack(input: {
 
   const workerPath = await resolveJianyingDraftWorkerPath();
   const codecInstallDirectory = await resolveCodecInstallDirectory(input.installDirectory);
-  const inputPath = path.join(os.tmpdir(), `jianying-track-${randomUUID()}.json`);
-  await writeFile(inputPath, JSON.stringify({
+  const workerInput = JSON.stringify({
     segments: input.segmentFiles,
     preferredTimelineTime: input.preferredTimelineTime,
-  }), "utf8");
-  try {
-    let stdout = "";
+  });
+  return temporaryWriteTask(workerInput, async (inputPath) => {
+    let stdout: string;
     try {
       const result = await execFileAsync(workerPath, [
         "write-track",
@@ -132,9 +121,12 @@ export async function writeJianyingDraftVideoTrack(input: {
     } catch (error) {
       const output = decodeWorkerOutput((error as { stdout?: string | Buffer }).stdout);
       const result = parseWorkerOutput(output);
-      throw new Error(result && !result.success && result.message
-        ? result.message
-        : "剪映草稿轨道写入失败");
+      throw Object.assign(
+        new Error(result && !result.success && result.message
+          ? result.message
+          : "剪映草稿轨道写入失败"),
+        { cause: error },
+      );
     }
 
     const result = parseWorkerOutput(stdout);
@@ -144,7 +136,5 @@ export async function writeJianyingDraftVideoTrack(input: {
       throw new Error("写入草稿的视频片段数量不一致");
     }
     return result;
-  } finally {
-    await rm(inputPath, { force: true }).catch(() => undefined);
-  }
+  }, { extension: "json", parentDirectory: "dramabridge" });
 }

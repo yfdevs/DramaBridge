@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
-import { mkdir, readdir, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { writeJsonAtomic } from "@dramabridge/file-utils";
+import { mkdir, readdir, rm, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import {
   createLogger as createWinstonLogger,
@@ -54,8 +55,12 @@ export function isBrowserClosedError(error: unknown): boolean {
         : typeof current === "string"
           ? current
           : typeof current === "object" && "message" in current
-            ? String((current as { message?: unknown }).message ?? "")
-            : String(current);
+            ? typeof (current as { message?: unknown }).message === "string"
+              ? (current as { message: string }).message
+              : ""
+            : typeof current === "number" || typeof current === "boolean"
+              ? String(current)
+              : "";
     if (browserClosedErrorPattern.test(message)) return true;
     current =
       typeof current === "object" && "cause" in current
@@ -722,7 +727,7 @@ export async function captureAutomationFailureDiagnostics(
         : { status: "unavailable", error: screenshotError },
       details: redactFields(options.details ?? {}),
     };
-    await writeFile(recordFile, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+    await writeJsonAtomic(recordFile, record);
     return { directory, recordFile, screenshotFile, screenshotError };
   } catch {
     return undefined;
@@ -1117,7 +1122,7 @@ function formatFieldValue(key: string, value: unknown) {
   try {
     return JSON.stringify(value).slice(0, 500);
   } catch {
-    return String(value).slice(0, 500);
+    return "[无法序列化]";
   }
 }
 

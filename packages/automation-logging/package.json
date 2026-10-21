@@ -17,6 +17,7 @@
     "test": "tsx --conditions=development --test tests/**/*.test.ts"
   },
   "dependencies": {
+    "@dramabridge/file-utils": "workspace:*",
     "winston": "^3.19.0"
   },
   "devDependencies": {

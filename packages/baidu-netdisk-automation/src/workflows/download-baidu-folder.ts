@@ -130,12 +130,20 @@ export function areBaiduNetdiskFilesStrictlyIdentical(
     || Number(target.isdir ?? target.is_dir ?? 0) === 1
   ) return false;
 
-  const sourceFsId = String(source.fs_id ?? source.fsid ?? source.id ?? "");
-  const targetFsId = String(target.fs_id ?? target.fsid ?? target.id ?? "");
+  const sourceFsIdValue = source.fs_id ?? source.fsid ?? source.id;
+  const targetFsIdValue = target.fs_id ?? target.fsid ?? target.id;
+  const sourceFsId = typeof sourceFsIdValue === "string" || typeof sourceFsIdValue === "number"
+    ? String(sourceFsIdValue)
+    : "";
+  const targetFsId = typeof targetFsIdValue === "string" || typeof targetFsIdValue === "number"
+    ? String(targetFsIdValue)
+    : "";
   if (sourceFsId && targetFsId && sourceFsId === targetFsId) return true;
 
-  const sourceMd5 = String(source.md5 ?? source.server_md5 ?? "").trim().toLowerCase();
-  const targetMd5 = String(target.md5 ?? target.server_md5 ?? "").trim().toLowerCase();
+  const sourceMd5Value = source.md5 ?? source.server_md5;
+  const targetMd5Value = target.md5 ?? target.server_md5;
+  const sourceMd5 = typeof sourceMd5Value === "string" ? sourceMd5Value.trim().toLowerCase() : "";
+  const targetMd5 = typeof targetMd5Value === "string" ? targetMd5Value.trim().toLowerCase() : "";
   const sourceSize = Number(source.size ?? 0);
   const targetSize = Number(target.size ?? 0);
   return Boolean(
@@ -1074,6 +1082,19 @@ async function saveShareToOwnNetdisk(
   const isGenericMaterialDirectoryName = ${isGenericBaiduNetdiskMaterialDirectoryName.toString()};
   const planSyncItem = ${planBaiduNetdiskSyncItem.toString()};
   const strictlyIdenticalFile = ${areBaiduNetdiskFilesStrictlyIdentical.toString()};
+  // This helper runs inside the Baidu page and therefore cannot import the Node file-utils package.
+  const safeFileName = (value, options = {}) => {
+    const fallback = String(options.fallback || "file").trim() || "file";
+    const replacement = String(options.replacement || "-");
+    const maxLength = Number.isFinite(options.maxLength) ? options.maxLength : 120;
+    const cleaned = String(value || "")
+      .normalize("NFKC")
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, replacement)
+      .replace(/[. ]+$/g, "")
+      .trim();
+    const bounded = cleaned.slice(0, maxLength).replace(/[. ]+$/g, "");
+    return bounded || fallback;
+  };
 
   for (const item of document.querySelectorAll(
     ".dialog-close,#dialog1 .close,#moduleDownloadDialog .dialog-close,.nd-dialog-close",
@@ -1405,9 +1426,10 @@ async function saveShareToOwnNetdisk(
     ownDirListCache.set(normalizedDir, results);
     return results;
   };
-  const safeExpectedName = String(expectedName || sourceName || "百度网盘资源")
-    .replace(/[\\\\/:*?"<>|]/g, "_")
-    .slice(0, 180);
+  const safeExpectedName = safeFileName(
+    String(expectedName || sourceName || "百度网盘资源"),
+    { fallback: "百度网盘资源", maxLength: 180, replacement: "_" },
+  );
   const topLevelDirectories = transferableFiles.filter(itemIsDir);
   const wrapperCandidate = transferableFiles.length === 1 && topLevelDirectories.length === 1
     ? topLevelDirectories[0]
@@ -1802,9 +1824,10 @@ async function saveShareToOwnNetdisk(
   };
 
   const stableSuffix = String(surl || shareId).replace(/[^a-zA-Z0-9]/g, "").slice(-10) || "share";
-  let finalFileName = String(shareHasDramaWrapper ? wrapperName : safeExpectedName)
-    .replace(/[\\\\/:*?"<>|]/g, "_")
-    .slice(0, 180);
+  let finalFileName = safeFileName(
+    String(shareHasDramaWrapper ? wrapperName : safeExpectedName),
+    { fallback: "百度网盘资源", maxLength: 180, replacement: "_" },
+  );
   if (isolateRoot) {
     const isolatedBase = (safeExpectedName + "__" + stableSuffix).slice(0, 170);
     const uniqueSuffix = isolateRootUnique ? "__" + Date.now().toString(36).slice(-8) : "";
@@ -2789,7 +2812,7 @@ async function getNativeDownloadTask(
   const normalized = (value) => String(value || "").replace(/\\s+/g, " ").trim();
   const nameFromPath = (value) => String(value || "").split(/[\\\\/]/).filter(Boolean).pop() || "";
   const normalizeServerPath = (value) => "/" + String(value || "").split("/").filter(Boolean).join("/");
-  const normalizeLocalPath = (value) => String(value || "").replace(/\\\//g, "\\\\").replace(/\\\\+$/g, "").toLowerCase();
+  const normalizeLocalPath = (value) => String(value || "").replace(/[/]/g, "\\\\").replace(/\\\\+$/g, "").toLowerCase();
   const isWanted = (task) => {
     const name = normalized(task?.name || nameFromPath(task?.server_path) || nameFromPath(task?.local_path));
     const nameMatches = name === wanted || nameFromPath(task?.server_path) === wanted || nameFromPath(task?.local_path) === wanted;

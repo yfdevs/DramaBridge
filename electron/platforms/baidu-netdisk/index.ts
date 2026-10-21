@@ -8,6 +8,7 @@ import {
 } from "@dramabridge/media-assets";
 import { ensureBaiduNetdiskEpisodeVideos } from "@dramabridge/media-assets/baidu-netdisk";
 import { formatDateKey } from "@dramabridge/automation-logging";
+import { safeFileName } from "@dramabridge/file-utils";
 import { createHash } from "node:crypto";
 import { lstat, readdir, rm, statfs, utimes } from "node:fs/promises";
 import path from "node:path";
@@ -462,8 +463,7 @@ function trimShareLink(value: string) {
 }
 
 function sanitizeWindowsName(value: string) {
-  const sanitized = value.replace(/[\\/:*?"<>|]/g, "_").trim();
-  return sanitized || "百度网盘分享";
+  return safeFileName(value, { fallback: "百度网盘分享", replacement: "_" });
 }
 
 function shareKeyFromText(shareText: string) {

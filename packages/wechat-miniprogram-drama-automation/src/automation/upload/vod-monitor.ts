@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { writeJsonAtomic } from "@dramabridge/file-utils";
 import type { Page, Request, Response } from "playwright";
 import { resolveRunDataPath } from "../../shared/config.js";
 import { minutesToMs } from "../../shared/settings-value.js";
@@ -150,7 +150,7 @@ async function readVodFinishedResponse(
 
 async function writeVodUploadReport(report: VodUploadReport): Promise<void> {
   const reportPath = resolveRunDataPath("episode-vod-upload-report.json");
-  await writeFile(reportPath, JSON.stringify(report, null, 2), "utf8");
+  await writeJsonAtomic(reportPath, report);
   vodLogger.info("上传诊断报告已保存", { path: reportPath });
 }
 

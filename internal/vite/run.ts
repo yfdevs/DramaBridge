@@ -28,8 +28,15 @@ export const runConfig = {
     "pkg:logging:build": {
       command: "vp pack",
       cwd: "packages/automation-logging",
+      dependsOn: ["pkg:file-utils:build"],
       input: packageBuildInputs(),
       output: ["packages/automation-logging/dist/**"],
+    },
+    "pkg:file-utils:build": {
+      command: "vp pack",
+      cwd: "packages/file-utils",
+      input: packageBuildInputs(),
+      output: ["packages/file-utils/dist/**"],
     },
     "pkg:axios:build": {
       command: "vp pack",
@@ -137,6 +144,7 @@ export const runConfig = {
       command: "node -e \"console.log('workspace packages built')\"",
       dependsOn: [
         "pkg:ai:build",
+        "pkg:file-utils:build",
         "pkg:logging:build",
         "pkg:wechat:build",
         "pkg:wechat-miniprogram:build",
@@ -167,6 +175,11 @@ export const runConfig = {
     "pkg:logging:check": {
       command: "tsc --noEmit",
       cwd: "packages/automation-logging",
+      output: [],
+    },
+    "pkg:file-utils:check": {
+      command: "tsc --noEmit",
+      cwd: "packages/file-utils",
       output: [],
     },
     "pkg:ai:check": {

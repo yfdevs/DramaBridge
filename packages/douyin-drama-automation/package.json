@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@dramabridge/automation-logging": "workspace:*",
+    "@dramabridge/file-utils": "workspace:*",
     "@dramabridge/media-assets": "workspace:*",
     "@napi-rs/canvas": "0.1.100",
     "mammoth": "1.11.0",

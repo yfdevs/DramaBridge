@@ -1,4 +1,5 @@
-import { copyFile, mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { walkFiles } from "@dramabridge/file-utils";
+import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import sharp from "sharp";
@@ -112,17 +113,6 @@ export function douyinDramaLocalRoot(options: DouyinDramaRuntimeOptions) {
 
 function playletResourceDir(task: ClaimedDouyinDramaTask, options: DouyinDramaRuntimeOptions) {
   return path.join(douyinDramaLocalRoot(options), douyinDramaResourceName(task));
-}
-
-async function walkFiles(root: string): Promise<string[]> {
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const files: string[] = [];
-  for (const entry of entries) {
-    const target = path.join(root, entry.name);
-    if (entry.isDirectory()) files.push(...await walkFiles(target));
-    else if (entry.isFile()) files.push(target);
-  }
-  return files;
 }
 
 async function findLocalMaterialFiles(

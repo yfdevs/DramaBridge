@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { safeFileName, walkFiles } from '@dramabridge/file-utils';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, lstat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -53,7 +54,7 @@ async function walkEpisodeVideoCandidates(videoDir: string): Promise<string[]> {
     const fullPath = path.join(videoDir, entry.name);
     if (entry.isFile() && isVideoFile(fullPath)) candidates.push(fullPath);
     if (entry.isDirectory() && ['成片', '成品', '视频'].includes(entry.name)) {
-      candidates.push(...await walk(fullPath));
+      candidates.push(...(await walkFiles(fullPath)).filter(isVideoFile));
     }
   }
 
@@ -88,17 +89,6 @@ async function normalizeCover(file: string) {
     // ponytail: no image library dependency; original file is used if macOS sips is unavailable.
     return file;
   }
-}
-
-async function walk(dir: string): Promise<string[]> {
-  const files: string[] = [];
-  for (const entry of await readdir(dir)) {
-    const full = path.join(dir, entry);
-    const entryStats = await lstat(full);
-    if (entryStats.isDirectory()) files.push(...await walk(full));
-    else if (entryStats.isFile() && isVideoFile(full)) files.push(full);
-  }
-  return files;
 }
 
 function isVideoFile(file: string) {
@@ -141,8 +131,5 @@ function coverDownloadPath(taskId: string, url: URL) {
 }
 
 function safeFileStem(value: string) {
-  return value
-    .replace(/[^a-zA-Z0-9._-]+/g, '_')
-    .replace(/^[._-]+|[._-]+$/g, '')
-    .slice(0, 80) || 'cover';
+  return safeFileName(value, { fallback: 'cover', maxLength: 80, replacement: '_' });
 }

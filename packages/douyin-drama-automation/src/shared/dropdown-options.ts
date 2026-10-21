@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeJsonAtomic } from "@dramabridge/file-utils";
 import path from "node:path";
 import { z } from "zod";
 import {
@@ -45,10 +45,8 @@ export function createDouyinDramaDropdownRecorder(options: DouyinDramaRuntimeOpt
       fields,
     });
     if (!options.assetDownloadDir) return snapshot;
-    const targetDir = path.join(options.assetDownloadDir, "observations");
-    const targetFile = path.join(targetDir, "dropdown-options.json");
-    await mkdir(targetDir, { recursive: true });
-    await writeFile(targetFile, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+    const targetFile = path.join(options.assetDownloadDir, "observations", "dropdown-options.json");
+    await writeJsonAtomic(targetFile, snapshot);
     log(options, "下拉选项记录已更新", { path: targetFile }, "config");
     return snapshot;
   };

@@ -1,3 +1,4 @@
+import { writeJsonAtomic } from "@dramabridge/file-utils";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { Locator, Page } from "playwright";
@@ -243,7 +244,7 @@ async function saveVideoUploadStartDiagnostics(options: {
   };
 
   await Promise.all([
-    writeFile(join(diagnosticDir, "details.json"), JSON.stringify(record, null, 2), "utf8"),
+    writeJsonAtomic(join(diagnosticDir, "details.json"), record),
     writeFile(join(diagnosticDir, "upload-area.html"), uploadAreaHtml, "utf8"),
     page.screenshot({ path: join(diagnosticDir, "page.png"), fullPage: true }),
     page.locator(".mtd-upload-dragger").first().screenshot({

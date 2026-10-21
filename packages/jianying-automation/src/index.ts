@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { access, cp, readFile, readdir } from "node:fs/promises";
+import { pathExists, safeFileName } from "@dramabridge/file-utils";
+import { cp, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -69,15 +70,6 @@ function processResourcesPath() {
   return (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
 }
 
-async function pathExists(targetPath: string) {
-  try {
-    await access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function resolveJianyingUiaHelperPath() {
   const resourcesPath = processResourcesPath();
   const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -142,7 +134,9 @@ async function runHelper<T>(args: string[], timeout = 30_000) {
     if (stdout) {
       try {
         const result = parseOutput(stdout) as { message?: string };
-        if (result.message) throw new Error(result.message);
+        if (result.message) {
+          throw Object.assign(new Error(result.message), { cause: error });
+        }
       } catch (parseError) {
         if (parseError instanceof Error && parseError.message.startsWith("剪映辅助程序返回了无效数据")) {
           throw parseError;
@@ -311,8 +305,8 @@ function hasMissingMediaDialog(tree: JianyingUiaProbe) {
 
 export async function dismissJianyingMissingMediaDialog(detectionTimeoutMs = 2_500) {
   const detectionDeadline = Date.now() + detectionTimeoutMs;
-  let tree: JianyingUiaProbe;
-  do {
+  let tree: JianyingUiaProbe | undefined;
+  while (Date.now() <= detectionDeadline) {
     // Do not wait for the limited UI tree sample to notice the auxiliary
     // window. The native helper scans every Jianying top-level window.
     const nativeResult = await runHelper<{ success: boolean; closedCount: number }>([
@@ -328,7 +322,9 @@ export async function dismissJianyingMissingMediaDialog(detectionTimeoutMs = 2_5
     if (hasMissingMediaDialog(tree)) break;
     if (Date.now() >= detectionDeadline) return { dismissed: false };
     await new Promise((resolve) => setTimeout(resolve, 200));
-  } while (true);
+  }
+
+  if (!tree) return { dismissed: false };
 
   const cancel = tree.samples.find((element) => (
     [element.name, element.value, element.helpText, element.legacyName]
@@ -458,8 +454,9 @@ export async function installJianyingPreset(input: {
   const preset = await inspectJianyingPreset(input.presetPath);
   if (!preset.valid) throw new Error("不是有效的剪映草稿预设");
 
-  const safeName = input.draftName.trim().replace(/[<>:"/\\|?*]/g, "-");
-  if (!safeName) throw new Error("草稿名称不能为空");
+  const requestedName = input.draftName.trim();
+  if (!requestedName) throw new Error("草稿名称不能为空");
+  const safeName = safeFileName(requestedName, { fallback: "剪映草稿", replacement: "-" });
   const draftRoot = path.resolve(input.draftRoot);
   const targetPath = path.join(draftRoot, safeName);
   if (path.dirname(targetPath) !== draftRoot) throw new Error("草稿目标路径无效");

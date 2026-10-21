@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { writeJsonAtomic } from "@dramabridge/file-utils";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -466,7 +467,7 @@ async function generateMissingCover(options: {
               validated.warnings.join("; "),
           );
         }
-        await writeFile(metadataFile, JSON.stringify({
+        await writeJsonAtomic(metadataFile, {
           cacheKey,
           promptVersion,
           sourceFile: options.sourceFile,
@@ -485,7 +486,7 @@ async function generateMissingCover(options: {
             requestId: validated.requestId,
           },
           createdAt: new Date().toISOString(),
-        }, null, 2));
+        });
         log(options.runtime, `[kuaishou-drama] AI ${options.kind} cover ready: ${output}`);
         return output;
       } catch (error) {

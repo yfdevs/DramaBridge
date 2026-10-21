@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { safeFileName } from "@dramabridge/file-utils";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -13,10 +14,6 @@ function extension(contentType: string | null, source: string) {
   if (contentType?.includes("webp")) return ".webp";
   if (contentType?.includes("pdf")) return ".pdf";
   return ".jpg";
-}
-
-function safeName(value: string) {
-  return value.replace(/[<>:"/\\|?*\p{Cc}]/gu, "_").slice(0, 120) || "asset";
 }
 
 export async function resolveIqiyiAsset(
@@ -41,15 +38,18 @@ export async function resolveIqiyiAsset(
     const outputDir = path.join(options.assetDownloadDir, "remote-assets");
     const output = path.join(
       outputDir,
-      `${safeName(fallbackName)}-${digest}${extension(response.headers.get("content-type"), normalized)}`,
+      `${safeFileName(fallbackName, { fallback: "asset", replacement: "_" })}-${digest}${extension(response.headers.get("content-type"), normalized)}`,
     );
     await mkdir(outputDir, { recursive: true });
     await writeFile(output, Buffer.from(await response.arrayBuffer()));
     return output;
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(
-        `IQIYI_DRAMA_ASSET_DOWNLOAD_TIMEOUT: ${remoteAssetDownloadTimeoutMs / 1_000}s ${normalized}`,
+      throw Object.assign(
+        new Error(
+          `IQIYI_DRAMA_ASSET_DOWNLOAD_TIMEOUT: ${remoteAssetDownloadTimeoutMs / 1_000}s ${normalized}`,
+        ),
+        { cause: error },
       );
     }
     throw error;

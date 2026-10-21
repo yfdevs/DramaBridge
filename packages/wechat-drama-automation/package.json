@@ -19,14 +19,13 @@
   "dependencies": {
     "@dramabridge/axios": "workspace:*",
     "@dramabridge/automation-logging": "workspace:*",
+    "@dramabridge/file-utils": "workspace:*",
     "@dramabridge/media-assets": "workspace:*",
     "p-queue": "^9.3.3",
     "playwright": "1.61.1"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/node": "latest",
-    "fast-glob": "^3.3.3",
     "tsx": "latest",
     "typescript": "7.0.2",
     "vite": "catalog:"

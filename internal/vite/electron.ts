@@ -93,6 +93,10 @@ export function createElectronPlugin(rootDir: string) {
               replacement: path.join(rootDir, "packages/iqiyi-drama-automation/src/index.ts"),
             },
             {
+              find: /^@dramabridge\/file-utils$/,
+              replacement: path.join(rootDir, "packages/file-utils/src/index.ts"),
+            },
+            {
               find: /^@dramabridge\/kuaishou-drama-automation$/,
               replacement: path.join(rootDir, "packages/kuaishou-drama-automation/src/index.ts"),
             },

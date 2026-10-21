@@ -1,3 +1,4 @@
+import { safeFileName } from "@dramabridge/file-utils";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -9,8 +10,10 @@ function trimShareLink(value: string) {
 }
 
 export function sanitizeWindowsName(value: string) {
-  const sanitized = value.replace(/[\\/:*?"<>|]/g, "_").trim();
-  return sanitized || DEFAULT_BAIDU_NETDISK_SHARE_NAME;
+  return safeFileName(value, {
+    fallback: DEFAULT_BAIDU_NETDISK_SHARE_NAME,
+    replacement: "_",
+  });
 }
 
 export function parseBaiduNetdiskShareText(

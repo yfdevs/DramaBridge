@@ -1,5 +1,6 @@
 import { parseAiJsonObject, type DramaAiClient } from "@dramabridge/ai";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { findFiles } from "@dramabridge/file-utils";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import * as mammoth from "mammoth";
 import { z } from "zod";
@@ -15,7 +16,6 @@ import type {
   TaobaoDramaRuntimeOptions,
 } from "./types.js";
 
-const synopsisExtensions = new Set([".txt", ".md", ".docx", ".doc"]);
 const MAX_SYNOPSIS_FILES = 8;
 const MAX_SYNOPSIS_CHARACTERS = 24_000;
 const MAX_SYNOPSIS_FILE_BYTES = 8 * 1024 * 1024;
@@ -28,7 +28,7 @@ export type TaobaoEpisodeMetadata = {
 };
 
 function replacementCharacterCount(value: string) {
-  return [...value].filter((character) => character === "\uFFFD").length;
+  return value.split("").filter((character) => character === "\uFFFD").length;
 }
 
 function decodeText(buffer: Buffer) {
@@ -40,18 +40,6 @@ function decodeText(buffer: Buffer) {
   } catch {
     return utf8;
   }
-}
-
-async function walkSynopsisFiles(root: string, depth = 0): Promise<string[]> {
-  if (depth > 8) return [];
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const files: string[] = [];
-  for (const entry of entries) {
-    const target = path.join(root, entry.name);
-    if (entry.isDirectory()) files.push(...await walkSynopsisFiles(target, depth + 1));
-    else if (entry.isFile() && synopsisExtensions.has(path.extname(entry.name).toLowerCase())) files.push(target);
-  }
-  return files;
 }
 
 function synopsisPriority(file: string) {
@@ -77,7 +65,11 @@ export async function collectTaobaoSynopsis(resourceDir: string): Promise<{
   text?: string;
   source?: string;
 }> {
-  const candidates = (await walkSynopsisFiles(resourceDir))
+  const candidates = (await findFiles("**/*.{txt,md,docx,doc}", {
+    caseSensitiveMatch: false,
+    cwd: resourceDir,
+    deep: 9,
+  }))
     .sort((left, right) => synopsisPriority(left) - synopsisPriority(right)
       || left.localeCompare(right, "zh-CN", { numeric: true }))
     .slice(0, MAX_SYNOPSIS_FILES);

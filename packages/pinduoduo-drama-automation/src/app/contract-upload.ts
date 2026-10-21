@@ -1,3 +1,4 @@
+import { safeFileName } from "@dramabridge/file-utils";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Page } from "playwright";
@@ -9,7 +10,6 @@ const CONTRACT_UPLOAD_INPUT_TIMEOUT_MS = 30_000;
 const CONTRACT_REQUIRED_FILE_COUNT = 2;
 const CONTRACT_UPLOAD_INPUT_SELECTOR =
   'input[data-testid="beast-core-upload-input"][type="file"][accept=".pdf"]';
-const invalidFileNameChars = new Set(["<", ">", ":", '"', "/", "\\", "|", "?", "*"]);
 
 type ContractAsset = {
   fileName: string;
@@ -18,14 +18,7 @@ type ContractAsset = {
 };
 
 function safeFileNamePart(value: string): string {
-  return (
-    Array.from(value, (char) =>
-      invalidFileNameChars.has(char) || char.charCodeAt(0) <= 0x1f ? " " : char,
-    )
-      .join("")
-      .replace(/\s+/g, " ")
-      .trim() || "未命名短剧"
-  );
+  return safeFileName(value, { fallback: "未命名短剧", replacement: " " });
 }
 
 function contractDownloadDir(options: PinduoduoDramaRuntimeOptions): string {

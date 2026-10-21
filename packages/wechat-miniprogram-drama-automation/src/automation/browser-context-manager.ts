@@ -1,5 +1,6 @@
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeJsonAtomic } from "@dramabridge/file-utils";
+import { mkdir } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { resolveFromRoot, type ServiceConfig } from "../shared/config.js";
 import type { UpdateCredentialsRequest } from "../shared/types.js";
@@ -548,6 +549,6 @@ export class BrowserContextManager {
 
   private async writeStorageState(channel: ManagedChannel): Promise<void> {
     const state = await channel.context.storageState();
-    await writeFile(channel.stateFile, JSON.stringify(state, null, 2), "utf8");
+    await writeJsonAtomic(channel.stateFile, state);
   }
 }

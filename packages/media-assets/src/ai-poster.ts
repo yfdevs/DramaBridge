@@ -1,4 +1,5 @@
 import type { DramaAiClient } from "@dramabridge/ai";
+import { safeFileName } from "@dramabridge/file-utils";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -6,7 +7,6 @@ import sharp from "sharp";
 
 const AI_POSTER_PROMPT_VERSION = "missing-netdisk-poster-v5-episode-frames";
 const activeGenerations = new Map<string, Promise<AiPosterResult>>();
-const invalidFileNameChars = /[<>:"/\\|?*\u0000-\u001f]/g;
 
 export type EnsureAiPosterOptions = {
   client: DramaAiClient;
@@ -40,10 +40,6 @@ function nonEmpty(value: string, code: string) {
   const normalized = value.trim();
   if (!normalized) throw new Error(code);
   return normalized;
-}
-
-function safeFileName(value: string) {
-  return value.replace(invalidFileNameChars, " ").replace(/\s+/g, " ").trim() || "短剧";
 }
 
 export function buildMissingPosterPrompt(title: string, summary: string, referenceImageCount = 0) {
@@ -151,7 +147,7 @@ async function generatePoster(options: EnsureAiPosterOptions): Promise<AiPosterR
   const referenceImages = options.referenceImages?.filter((file) => file.trim()) ?? [];
   const cacheKey = posterCacheKey({ model, title, summary, referenceImages });
   const posterDirectory = path.join(localMaterialRoot, resourceName, "海报封面");
-  const fileBaseName = `${safeFileName(resourceName)} - AI海报`;
+  const fileBaseName = `${safeFileName(resourceName, { fallback: "短剧", replacement: " " })} - AI海报`;
   const metadataFile = path.join(posterDirectory, `${fileBaseName}.json`);
   const cached = await reusablePoster(posterDirectory, fileBaseName, metadataFile, cacheKey);
   if (cached) {

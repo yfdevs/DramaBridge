@@ -1,7 +1,8 @@
 import path from "node:path";
+import { writeJsonAtomic } from "@dramabridge/file-utils";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { resolveFromRoot } from "../shared/config.js";
 import { minutesToMs } from "../shared/settings-value.js";
@@ -25,7 +26,7 @@ export async function launchContext(playletConfig: Config): Promise<BrowserConte
 export async function saveStorageState(context: BrowserContext, stateFile: string): Promise<void> {
   const statePath = resolveFromRoot(stateFile);
   await mkdir(path.dirname(statePath), { recursive: true });
-  await writeFile(statePath, JSON.stringify(await context.storageState(), null, 2), "utf8");
+  await writeJsonAtomic(statePath, await context.storageState());
 }
 
 function isLoginUrl(url: string): boolean {

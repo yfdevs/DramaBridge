@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { writeJsonAtomic } from "@dramabridge/file-utils";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -231,7 +232,7 @@ async function generateSecondVersionPoster(
           warnings: validation.warnings,
         });
       }
-      await writeFile(metadataOutput, JSON.stringify({
+      await writeJsonAtomic(metadataOutput, {
         cacheKey,
         promptVersion,
         title,
@@ -240,7 +241,7 @@ async function generateSecondVersionPoster(
         sourceFile,
         output,
         createdAt: new Date().toISOString(),
-      }, null, 2));
+      });
       log(options, `[qq-drama] AI second-version cover ready: ${output}`);
       return output;
     } catch (error) {
