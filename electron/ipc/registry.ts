@@ -1,4 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron'
+import { EventEmitter } from 'node:events'
 
 type RegisteredHandler = (
   event: IpcMainInvokeEvent,
@@ -6,6 +7,8 @@ type RegisteredHandler = (
 ) => unknown
 
 const handlers = new Map<string, RegisteredHandler>()
+const eventBus = new EventEmitter()
+eventBus.setMaxListeners(100)
 
 function handle<Args extends unknown[], Result>(
   channel: string,
@@ -42,4 +45,13 @@ export function invokeRegisteredHandler(
 
 export function registeredIpcChannels() {
   return [...handlers.keys()].sort()
+}
+
+export function emitIpcEvent(channel: string, ...args: unknown[]) {
+  eventBus.emit(channel, args)
+}
+
+export function subscribeIpcEvent(channel: string, listener: (args: unknown[]) => void) {
+  eventBus.on(channel, listener)
+  return () => eventBus.off(channel, listener)
 }

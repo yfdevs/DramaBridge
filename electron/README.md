@@ -16,4 +16,4 @@ When adding behavior, keep automation and website interaction inside `packages/<
 
 New platform-specific files belong under the matching `platforms/<platform>/` directory. Do not reintroduce flat `platforms/<platform>.ts` files or copy shared filesystem/runtime helpers into a platform adapter.
 
-Renderer request/response calls keep the compatibility-facing `window.ipcRenderer.invoke` method, but preload routes it through the tRPC client. Electron event channels remain available only for main-process broadcasts and window controls.
+Renderer calls keep the compatibility-facing `window.ipcRenderer` methods, but preload routes requests through tRPC mutations and broadcasts through tRPC subscriptions. Application code must not register separate raw Electron IPC channels.

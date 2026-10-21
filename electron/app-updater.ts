@@ -1,11 +1,11 @@
-import { app, BrowserWindow, net, powerMonitor } from "electron";
+import { app, net, powerMonitor } from "electron";
 import { CancellationError, CancellationToken } from "builder-util-runtime";
 import Store from "electron-store";
 import { createRequire } from "node:module";
 import type { ProgressInfo, UpdateInfo } from "electron-updater";
 
 import { createValidatedStore } from "./core/config-store";
-import { trpcIpc as ipcMain } from "./ipc";
+import { emitIpcEvent, trpcIpc as ipcMain } from "./ipc";
 import { logMain } from "./main-logger";
 
 const require = createRequire(import.meta.url);
@@ -1085,9 +1085,5 @@ function readableError(error: unknown) {
 }
 
 function broadcastAppUpdateStatus(nextStatus: AppUpdateStatus) {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) {
-      window.webContents.send("app:update:changed", nextStatus);
-    }
-  }
+  emitIpcEvent("app:update:changed", nextStatus);
 }

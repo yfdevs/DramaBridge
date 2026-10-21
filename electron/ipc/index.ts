@@ -17,4 +17,4 @@ export function initializeTrpcIpc() {
   initialized = true
 }
 
-export { trpcIpc } from './registry'
+export { emitIpcEvent, trpcIpc } from './registry'

@@ -25,7 +25,7 @@
     "pdf-to-img": "5.0.0",
     "playwright": "1.61.1",
     "sharp": "^0.35.3",
-    "zod": "3.22.4"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "latest",

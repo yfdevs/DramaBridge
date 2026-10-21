@@ -164,7 +164,7 @@ export const pinduoduoDramaClaimedTaskSchema = z.object({
 export const pinduoduoDramaApiConfigSchema = z.object({
   apiBaseUrl: requiredText,
   timeoutMs: z.coerce.number().int().positive().default(30000),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 });
 
 export type PinduoduoDramaTaskStatus = (typeof pinduoduoDramaTaskStatusValues)[number];

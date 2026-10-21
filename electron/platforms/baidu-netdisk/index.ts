@@ -1,5 +1,4 @@
-import { BrowserWindow } from "electron";
-import { trpcIpc as ipcMain } from "../../ipc";
+import { emitIpcEvent, trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
 import {
@@ -1586,12 +1585,7 @@ function clearDownloadRecords(): BaiduNetdiskDownloadRecordResult {
 
 function broadcastDownloadRecordsChanged() {
   const result = downloadRecordsResult();
-
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) {
-      window.webContents.send("baidu-netdisk:downloads:changed", result);
-    }
-  }
+  emitIpcEvent("baidu-netdisk:downloads:changed", result);
 }
 
 export function registerBaiduNetdiskPlatformHandlers() {

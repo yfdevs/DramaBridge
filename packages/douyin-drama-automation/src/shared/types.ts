@@ -111,7 +111,7 @@ export const douyinDramaTaskPayloadSchema = z
     contractName: z.preprocess(
       (value) => typeof value === "string" && !value.trim() ? undefined : value,
       z.enum(DOUYIN_DRAMA_CONTRACT_NAMES, {
-        errorMap: () => ({ message: "必须选择后台配置的抖音绑定合同" }),
+        error: "必须选择后台配置的抖音绑定合同",
       }).optional(),
     ),
     brandAccountName: optionalText,

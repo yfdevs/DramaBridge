@@ -1,5 +1,5 @@
-import { app, BrowserWindow } from 'electron'
-import { trpcIpc as ipcMain } from '../../ipc'
+import { app } from 'electron'
+import { emitIpcEvent, trpcIpc as ipcMain } from '../../ipc'
 import Store from 'electron-store'
 import { createValidatedStore } from '../../core/config-store'
 import { registerTaskAnalyticsHandler } from '../shared/task-analytics'
@@ -231,9 +231,7 @@ function writeConfig(config: WechatMiniProgramConfig) {
 }
 
 function broadcastConfigChanged(result: WechatMiniProgramConfigResult) {
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send('wechat-miniprogram-drama:config:changed', result)
-  }
+  emitIpcEvent('wechat-miniprogram-drama:config:changed', result)
 }
 
 function normalizeConfig(

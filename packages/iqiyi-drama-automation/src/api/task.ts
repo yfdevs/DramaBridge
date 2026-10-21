@@ -77,7 +77,7 @@ const claimDataSchema = z.object({
   originalTitle: z.string().nullish(),
   accountId: z.string().nullish(),
   rpaProfileKey: z.string().nullish(),
-  accountConfigJson: z.record(z.unknown()).nullish(),
+  accountConfigJson: z.record(z.string(), z.unknown()).nullish(),
   payloadJson: z.unknown(),
 });
 const claimResponseSchema = apiResponseBaseSchema.extend({
@@ -87,7 +87,7 @@ const claimPayloadJsonSchema = z
   .object({
     name: z.string().trim().min(1),
     copyright: z.unknown(),
-    iqiyiPlaylet: z.record(z.unknown()),
+    iqiyiPlaylet: z.record(z.string(), z.unknown()),
   })
   .passthrough();
 const reportResponseSchema = apiResponseBaseSchema.extend({
@@ -129,10 +129,10 @@ function formatZodIssues(issues: z.ZodIssue[], playlet?: Record<string, unknown>
               : 1
             : -1;
       if (branchIndex >= 0) {
-        return formatZodIssues(issue.unionErrors[branchIndex]?.issues ?? []);
+        return formatZodIssues(issue.errors[branchIndex] ?? []);
       }
-      const discriminatorIssues = issue.unionErrors
-        .flatMap((error) => error.issues)
+      const discriminatorIssues = issue.errors
+        .flatMap((error) => error)
         .filter((item) => item.path[item.path.length - 1] === "dramaType");
       return formatZodIssues(discriminatorIssues.slice(0, 1));
     }

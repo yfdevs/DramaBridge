@@ -9,7 +9,7 @@ import { claimedMeituanDramaTaskSchema } from "../shared/types.js";
 
 const requiredText = z.string().trim().min(1);
 const nullableText = z.string().nullish();
-const jsonRecord = z.record(z.unknown());
+const jsonRecord = z.record(z.string(), z.unknown());
 const readyTaskPageSize = 100;
 
 const apiResponseBaseSchema = z.object({

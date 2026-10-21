@@ -6,8 +6,9 @@ import { ipcLink } from 'electron-trpc/renderer'
 import type { ElectronIpcRouter } from './ipc/router'
 
 type IpcRendererListener = Parameters<typeof ipcRenderer.on>[1]
+type TrpcSubscription = { unsubscribe: () => void }
 
-const listenerMap = new Map<string, WeakMap<IpcRendererListener, IpcRendererListener>>()
+const listenerMap = new Map<string, WeakMap<IpcRendererListener, TrpcSubscription>>()
 const electronTrpcBridge = {
   sendMessage: (operation: unknown) => ipcRenderer.send('electron-trpc', operation),
   onMessage: (callback: (response: unknown) => void) =>
@@ -47,7 +48,7 @@ function getListenerMap(channel: string) {
   let channelListeners = listenerMap.get(channel)
 
   if (!channelListeners) {
-    channelListeners = new WeakMap()
+    channelListeners = new WeakMap<IpcRendererListener, TrpcSubscription>()
     listenerMap.set(channel, channelListeners)
   }
 
@@ -58,20 +59,27 @@ function getListenerMap(channel: string) {
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args
-    const wrappedListener: IpcRendererListener = (event, ...args) => listener(event, ...args)
-    getListenerMap(channel).set(listener, wrappedListener)
-    return ipcRenderer.on(channel, wrappedListener)
+    const channelListeners = getListenerMap(channel)
+    channelListeners.get(listener)?.unsubscribe()
+    const subscription = trpcClient.events.subscribe(
+      { channel },
+      {
+        onData: (eventArgs) => listener(undefined as never, ...eventArgs),
+      },
+    )
+    channelListeners.set(listener, subscription)
+    return undefined
   },
   off(...args: Parameters<typeof ipcRenderer.off>) {
     const [channel, listener] = args
     const channelListeners = getListenerMap(channel)
-    const wrappedListener = channelListeners.get(listener) ?? listener
+    channelListeners.get(listener)?.unsubscribe()
     channelListeners.delete(listener)
-    return ipcRenderer.off(channel, wrappedListener)
+    return undefined
   },
   send(...args: Parameters<typeof ipcRenderer.send>) {
     const [channel, ...omit] = args
-    return ipcRenderer.send(channel, ...omit)
+    void trpcClient.invoke.mutate({ channel, args: omit })
   },
   invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
     const [channel, ...omit] = args

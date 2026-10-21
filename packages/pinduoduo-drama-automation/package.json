@@ -16,12 +16,12 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@dramabridge/axios": "workspace:*",
     "@dramabridge/automation-logging": "workspace:*",
+    "@dramabridge/axios": "workspace:*",
     "@dramabridge/media-assets": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "playwright": "1.61.1",
-    "zod": "3.22.4"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "latest",

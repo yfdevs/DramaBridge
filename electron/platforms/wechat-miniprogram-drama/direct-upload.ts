@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron"
-import { trpcIpc as ipcMain } from "../../ipc"
+import { emitIpcEvent, trpcIpc as ipcMain } from "../../ipc"
 import { createHash } from "node:crypto"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -533,12 +533,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
 
   private broadcast(): void {
     const workspace = this.workspace()
-    for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(
-        "wechat-miniprogram-drama:baidu-upload:workspace:changed",
-        workspace,
-      )
-    }
+    emitIpcEvent("wechat-miniprogram-drama:baidu-upload:workspace:changed", workspace)
   }
 
   private interruptActiveTask(reason: string): void {

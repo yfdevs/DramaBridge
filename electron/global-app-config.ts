@@ -5,7 +5,6 @@ import {
 } from "@dramabridge/ai";
 import {
   app,
-  BrowserWindow,
   nativeTheme,
   safeStorage,
   shell,
@@ -16,7 +15,7 @@ import path from "node:path";
 import sharp from "sharp";
 
 import { createValidatedStore } from "./core/config-store";
-import { trpcIpc as ipcMain } from "./ipc";
+import { emitIpcEvent, trpcIpc as ipcMain } from "./ipc";
 import { directoryDefaultPath, selectDirectory } from "./platforms/shared";
 
 const ARK_API_KEY_URL = "https://console.volcengine.com/ark/region:ark+cn-beijing/apikey";
@@ -167,9 +166,7 @@ function normalizeTheme(theme: unknown): GlobalAppConfig["theme"] {
 
 function applyAppTheme(theme: GlobalAppConfig["theme"]) {
   nativeTheme.themeSource = theme;
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("app:theme:changed", theme);
-  }
+  emitIpcEvent("app:theme:changed", theme);
 }
 
 function normalizeGlobalAppConfig(config: Partial<GlobalAppConfig>): GlobalAppConfig {

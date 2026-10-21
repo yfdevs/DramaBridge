@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron"
-import { trpcIpc as ipcMain } from "../../ipc"
+import { emitIpcEvent, trpcIpc as ipcMain } from "../../ipc"
 import { createHash } from "node:crypto"
 import { openAsBlob } from "node:fs"
 import { readdir, stat } from "node:fs/promises"
@@ -872,12 +872,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
 
   private broadcast(): void {
     const workspace = this.workspace()
-    for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(
-        "wechat-miniprogram-drama:catalog-upload:workspace:changed",
-        workspace,
-      )
-    }
+    emitIpcEvent("wechat-miniprogram-drama:catalog-upload:workspace:changed", workspace)
   }
 
   private logger(task?: WechatMiniProgramCatalogUploadTask) {

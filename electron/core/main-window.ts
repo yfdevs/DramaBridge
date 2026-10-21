@@ -1,8 +1,9 @@
-import { BrowserWindow, ipcMain, nativeImage } from "electron";
+import { BrowserWindow, nativeImage } from "electron";
 import { attachTitlebarToWindow, setupTitlebar } from "custom-electron-titlebar/main";
 import windowStateKeeper from "electron-window-state";
 import path from "node:path";
 
+import { trpcIpc } from "../ipc";
 import { logMain } from "../main-logger";
 import type { AppEnvironment } from "./app-environment";
 
@@ -10,10 +11,8 @@ const minimumWindowSize = { width: 900, height: 620 };
 
 export function initializeMainWindowIntegration() {
   setupTitlebar();
-  ipcMain.removeAllListeners("update-window-controls");
-  ipcMain.on("update-window-controls", (event) => {
-    event.returnValue = false;
-  });
+  trpcIpc.removeHandler("update-window-controls");
+  trpcIpc.handle("update-window-controls", () => false);
 }
 
 export function appIconPath(environment: AppEnvironment) {
