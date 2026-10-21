@@ -203,7 +203,7 @@ function runFfprobe(inputFile: string, signal?: AbortSignal): Promise<{ stdout: 
   return new Promise((resolve, reject) => {
     const child = spawn(resolveFfprobeExecutablePath(), [
       "-v", "error",
-      "-show_entries", "format=duration:stream=duration",
+      "-show_entries", "format=duration:stream=codec_type,duration,width,height,bit_rate",
       "-of", "json",
       inputFile,
     ], {
@@ -243,16 +243,74 @@ function runFfprobe(inputFile: string, signal?: AbortSignal): Promise<{ stdout: 
   });
 }
 
+type FfprobeResult = {
+  format?: { duration?: string | number };
+  streams?: Array<{
+    codec_type?: string;
+    duration?: string | number;
+    width?: string | number;
+    height?: string | number;
+    bit_rate?: string | number;
+  }>;
+};
+
+function parseFfprobeResult(stdout: string) {
+  return JSON.parse(stdout) as FfprobeResult;
+}
+
 function ffprobeDurationSeconds(stdout: string) {
-  const result = JSON.parse(stdout) as {
-    format?: { duration?: string | number };
-    streams?: Array<{ duration?: string | number }>;
-  };
+  const result = parseFfprobeResult(stdout);
   const durations = [
     result.format?.duration,
     ...(result.streams ?? []).map((stream) => stream.duration),
   ].map(Number).filter((value) => Number.isFinite(value) && value > 0);
   return durations.length > 0 ? Math.max(...durations) : 0;
+}
+
+function ffprobeVideoMetadata(stdout: string) {
+  const result = parseFfprobeResult(stdout);
+  const stream = result.streams?.find((candidate) => candidate.codec_type === "video")
+    ?? result.streams?.find((candidate) => Number(candidate.width) > 0 && Number(candidate.height) > 0);
+  return {
+    durationSeconds: ffprobeDurationSeconds(stdout),
+    width: Number(stream?.width),
+    height: Number(stream?.height),
+    videoBitrateKbps: Number(stream?.bit_rate) / 1_000,
+  };
+}
+
+async function probeVideoMetadataWithFfprobe(
+  inputFile: string,
+  signal?: AbortSignal,
+  requireDuration = true,
+) {
+  const errors: string[] = [];
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    signal?.throwIfAborted();
+    try {
+      const result = await runFfprobe(inputFile, signal);
+      const metadata = ffprobeVideoMetadata(result.stdout);
+      if (
+        Number.isInteger(metadata.width)
+        && metadata.width > 0
+        && Number.isInteger(metadata.height)
+        && metadata.height > 0
+        && (!requireDuration || metadata.durationSeconds > 0)
+      ) {
+        return { metadata, errors };
+      }
+      errors.push(
+        `attempt=${attempt}: FFprobe 元数据无效 ` +
+          `(duration=${metadata.durationSeconds}, width=${metadata.width}, height=${metadata.height})`,
+      );
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+      errors.push(`attempt=${attempt}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (attempt < maxAttempts) await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
+  }
+  return { metadata: undefined, errors };
 }
 
 function diagnosticTail(value: string) {
@@ -355,6 +413,26 @@ export async function readVideoStreamMetadata(
   inputFile: string,
   signal?: AbortSignal,
 ): Promise<VideoStreamMetadata> {
+  const ffprobe = await probeVideoMetadataWithFfprobe(inputFile, signal);
+  if (ffprobe.metadata) {
+    const fileStat = await stat(inputFile);
+    const streamBitrate = ffprobe.metadata.videoBitrateKbps;
+    if (Number.isFinite(streamBitrate) && streamBitrate > 0) {
+      return { ...ffprobe.metadata, videoBitrateKbps: streamBitrate, bitrateSource: "stream" };
+    }
+    const estimatedVideoBitrateKbps = Math.max(
+      minimumVideoBitrateKbps,
+      Math.floor(fileStat.size * 8 / ffprobe.metadata.durationSeconds / 1000)
+        - defaultAudioBitrateKbps - 32,
+    );
+    return {
+      durationSeconds: ffprobe.metadata.durationSeconds,
+      width: ffprobe.metadata.width,
+      height: ffprobe.metadata.height,
+      videoBitrateKbps: estimatedVideoBitrateKbps,
+      bitrateSource: "estimated",
+    };
+  }
   const [result, fileStat] = await Promise.all([
     runFfmpeg(
       ["-hide_banner", "-i", inputFile],
@@ -368,10 +446,16 @@ export async function readVideoStreamMetadata(
   const width = Number(dimensionsMatch?.[1]);
   const height = Number(dimensionsMatch?.[2]);
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-    throw new Error(`[video-transcode-failed] 无法读取视频时长: ${inputFile}`);
+    throw new Error(
+      `[video-transcode-failed] 无法读取视频时长: ${inputFile}; ` +
+        `diagnostics=${ffprobe.errors.join(" || ")} || FFmpeg: ${diagnosticTail(result.stderr)}`,
+    );
   }
   if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
-    throw new Error(`[video-transcode-failed] 无法读取视频分辨率: ${inputFile}`);
+    throw new Error(
+      `[video-transcode-failed] 无法读取视频分辨率: ${inputFile}; ` +
+        `diagnostics=${ffprobe.errors.join(" || ")} || FFmpeg: ${diagnosticTail(result.stderr)}`,
+    );
   }
   const videoStreamLine = [...result.stderr.matchAll(videoStreamPattern)][0]?.[0] ?? "";
   const streamBitrate = Number(streamBitratePattern.exec(videoStreamLine)?.[1]);
@@ -398,6 +482,10 @@ export async function readVideoDimensions(
   inputFile: string,
   signal?: AbortSignal,
 ): Promise<VideoDimensions> {
+  const ffprobe = await probeVideoMetadataWithFfprobe(inputFile, signal, false);
+  if (ffprobe.metadata) {
+    return { width: ffprobe.metadata.width, height: ffprobe.metadata.height };
+  }
   const result = await runFfmpeg(
     ["-hide_banner", "-i", inputFile],
     { signal, acceptExitCode: (code) => code === 1 },
@@ -406,7 +494,10 @@ export async function readVideoDimensions(
   const width = Number(match?.[1]);
   const height = Number(match?.[2]);
   if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
-    throw new Error(`[video-transcode-failed] 无法读取视频分辨率: ${inputFile}`);
+    throw new Error(
+      `[video-transcode-failed] 无法读取视频分辨率: ${inputFile}; ` +
+        `diagnostics=${ffprobe.errors.join(" || ")} || FFmpeg: ${diagnosticTail(result.stderr)}`,
+    );
   }
   return { width, height };
 }

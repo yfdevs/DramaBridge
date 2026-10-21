@@ -12,7 +12,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "pnpm --filter @dramabridge/axios build && pnpm --filter @dramabridge/feishu-notifier build && vp pack",
+    "build": "pnpm --filter @dramabridge/axios build && vp pack",
     "check": "tsc --noEmit",
     "test": "tsx --conditions=development --test tests/**/*.test.ts"
   },
@@ -20,7 +20,6 @@
     "@dramabridge/axios": "workspace:*",
     "@dramabridge/automation-logging": "workspace:*",
     "@dramabridge/media-assets": "workspace:*",
-    "@dramabridge/feishu-notifier": "workspace:*",
     "p-queue": "^9.3.3",
     "playwright": "1.61.1"
   },

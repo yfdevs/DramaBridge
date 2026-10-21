@@ -26,7 +26,6 @@ export interface WechatMiniProgramRuntimeSettings {
   episodeVideoMinimumDurationSeconds: string;
   episodeUploadWaitTimeoutSeconds: string;
   episodeUploadFailedRetryAttempts: string;
-  feishuBotWebhookUrl: string;
 }
 
 export const defaultWechatMiniProgramRuntimeSettings: WechatMiniProgramRuntimeSettings = {
@@ -57,7 +56,6 @@ export const defaultWechatMiniProgramRuntimeSettings: WechatMiniProgramRuntimeSe
   episodeVideoMinimumDurationSeconds: "0",
   episodeUploadWaitTimeoutSeconds: "7200",
   episodeUploadFailedRetryAttempts: "5",
-  feishuBotWebhookUrl: "",
 };
 
 let runtimeSettings = defaultWechatMiniProgramRuntimeSettings;

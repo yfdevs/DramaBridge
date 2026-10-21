@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Page } from "playwright";
 
 import {
   hideTaobaoWebDriver,
@@ -10,6 +11,7 @@ import {
   taobaoLoginStateFromPage,
   taobaoLoginStateFromUrl,
   testTaobaoBrowserExecutable,
+  waitForTaobaoPage,
 } from "../../src/automation/browser-session.js";
 
 test("launches Taobao Chromium without the standard automation switches", () => {
@@ -19,6 +21,7 @@ test("launches Taobao Chromium without the standard automation switches", () => 
 
   assert.deepEqual(launchOptions.args, ["--disable-blink-features=AutomationControlled"]);
   assert.deepEqual(launchOptions.ignoreDefaultArgs, ["--enable-automation"]);
+  assert.ok("channel" in launchOptions);
   assert.equal(launchOptions.channel, "chrome");
   assert.equal(launchOptions.headless, false);
   assert.equal(launchOptions.locale, "zh-CN");
@@ -119,4 +122,35 @@ test("only accepts safe creator-host navigation as a workflow success signal", (
     "https://creator.guanghe.taobao.com/page/unify/collect-create?mode=1",
     "collection",
   ), false);
+});
+
+test("notifies once for a persistent verification page and resumes when it clears", async () => {
+  let bodyReads = 0;
+  let notifications = 0;
+  let bringToFrontCalls = 0;
+  const visibleLocator = {
+    filter: () => visibleLocator,
+    first: () => visibleLocator,
+    isVisible: async () => true,
+  };
+  const page = {
+    isClosed: () => false,
+    url: () => "https://creator.guanghe.taobao.com/page/unify/collect-create?type=1",
+    locator: () => ({
+      innerText: async () => (++bodyReads <= 2
+        ? "请完成安全验证 滑块验证"
+        : "合集类型 短剧类型"),
+    }),
+    getByText: () => visibleLocator,
+    getByRole: () => visibleLocator,
+    waitForTimeout: async () => undefined,
+    bringToFront: async () => { bringToFrontCalls += 1; },
+  } as unknown as Page;
+
+  await waitForTaobaoPage(page, "collection", {
+    onHumanVerificationRequired: () => { notifications += 1; },
+  });
+
+  assert.equal(notifications, 1);
+  assert.equal(bringToFrontCalls, 2);
 });

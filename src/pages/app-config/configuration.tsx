@@ -23,7 +23,6 @@ const emptyConfig: GlobalAppConfig = {
   aiPosterFallbackEnabled: true,
   baiduNetdiskDownloadTimeoutMinutes: "60",
   baiduNetdiskCleanupPlayletAfterTaskSuccess: false,
-  jianyingEpisodeCount: "4",
   runDataRoot: "",
   localMaterialRoot: "",
 };
@@ -84,21 +83,6 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
         description: "任一平台完成任务并保存结果后，清理本次网盘文件，保留本地文件。",
         activeLabel: "自动清理",
         inactiveLabel: "保留目录",
-      },
-    ],
-  },
-  {
-    title: "剪映",
-    description: "剧集处理范围",
-    fields: [
-      {
-        key: "jianyingEpisodeCount",
-        label: "处理集数",
-        description: "从第 1 集开始处理，多个预设依次轮换。",
-        type: "number",
-        suffix: "集",
-        min: 1,
-        max: 100,
       },
     ],
   },

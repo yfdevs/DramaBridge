@@ -1,11 +1,9 @@
 import { BrowserContextManager, type VideoAccountRuntimeStatus } from "../automation/browser-context-manager.js";
-import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import type { findOwnershipProjectProofFiles } from "@dramabridge/media-assets";
 import { loadServiceConfig } from "../shared/config.js";
 import { createLogger } from "../shared/logger.js";
 import {
   configureWechatVideoRuntimeSettings,
-  getWechatVideoRuntimeSettings,
   type WechatVideoRuntimeSettings,
 } from "../shared/runtime-settings.js";
 import { IdlePageRefreshService } from "./idle-page-refresh-service.js";
@@ -64,21 +62,14 @@ function log(options: WechatVideoRuntimeOptions, message: string) {
 export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions = {}): Promise<WechatVideoRuntime> {
   configureWechatVideoRuntimeSettings(options.settings);
   const serviceConfig = await loadServiceConfig();
-  const notifier = new FeishuNotifier({
-    channelIdLabel: "videoAccountId",
-    channelLabel: "视频号",
-    logger,
-    webhookUrl: getWechatVideoRuntimeSettings().feishuBotWebhookUrl,
-  });
-  const browserContexts = new BrowserContextManager(serviceConfig, notifier);
+  const browserContexts = new BrowserContextManager(serviceConfig);
   await browserContexts.initialize();
 
-  const taskService = new TaskService(browserContexts, notifier);
+  const taskService = new TaskService(browserContexts);
   const taskWorkerPool = new TaskWorkerPool(
     serviceConfig,
     browserContexts,
     taskService,
-    notifier,
     options.ensureBaiduNetdiskResource,
     options.ownershipAiClient,
     options.cleanupBaiduNetdiskResourceAfterTaskSuccess,

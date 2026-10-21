@@ -1127,6 +1127,43 @@ test("selects the publish account name returned by the task API", async () => {
   }
 });
 
+test("reports an explicit error when the publish account has no options", async () => {
+  const browser = await launchTestBrowser();
+  const page = await browser.newPage();
+  const recorder = createDouyinDramaDropdownRecorder({});
+  try {
+    await page.setContent(`
+      <div id="publish-account" role="combobox" class="arco-select">
+        <input placeholder="请选择发布账号" value="">
+      </div>
+      <div id="publish-account-popup" class="arco-select-popup" role="listbox" style="display:none">
+        <div class="arco-empty">暂无数据</div>
+      </div>
+      <script>
+        const trigger = document.querySelector('#publish-account');
+        const popup = document.querySelector('#publish-account-popup');
+        trigger.addEventListener('click', () => { popup.style.display = 'block'; });
+        trigger.querySelector('input').addEventListener('input', () => {
+          popup.style.display = 'block';
+        });
+      </script>
+    `);
+
+    await assert.rejects(
+      selectSearchableDropdownByPlaceholder(
+        page,
+        "请选择发布账号",
+        "publishAccount",
+        "不存在的账号",
+        recorder,
+      ),
+      /DOUYIN_DRAMA_PUBLISH_ACCOUNT_OPTIONS_EMPTY: 发布账号没有可选项/u,
+    );
+  } finally {
+    await browser.close();
+  }
+});
+
 test("confirms a publish account when Arco moves its value outside the searchable trigger", async () => {
   const browser = await launchTestBrowser();
   const page = await browser.newPage();

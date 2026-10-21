@@ -10,7 +10,6 @@ import {
 } from "@/platforms/tiktok-drama/service"
 
 const emptyConfig: TiktokDramaCenterConfig = {
-  feishuBotWebhookUrl: "",
   headless: "false",
   localEpisodeVideoRoot: "",
   operationDelaySeconds: "0.02",
@@ -19,15 +18,9 @@ const emptyConfig: TiktokDramaCenterConfig = {
 
 const sections: ConfigSectionDefinition<TiktokDramaCenterConfig>[] = [
   {
-    title: "浏览器与通知",
+    title: "浏览器",
     description: "账号登录信息独立保存，共享目录在全局配置中设置。",
     fields: [
-      {
-        key: "feishuBotWebhookUrl",
-        label: "飞书通知地址",
-        type: "url",
-        description: "填写机器人 Webhook 地址，留空不通知。",
-      },
       {
         key: "operationDelaySeconds",
         label: "操作间隔",
@@ -59,8 +52,8 @@ export function TiktokDramaCenterConfigurationPage() {
     updateConfig,
   } = usePlatformConfig({
     emptyConfig,
-    getConfig: tiktokDramaCenterService.getConfig,
-    saveConfig: tiktokDramaCenterService.saveConfig,
+    getConfig: () => tiktokDramaCenterService.getConfig(),
+    saveConfig: (config) => tiktokDramaCenterService.saveConfig(config),
   })
 
   return (

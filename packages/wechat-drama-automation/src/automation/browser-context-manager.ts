@@ -3,7 +3,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { resolveFromRoot, type ServiceConfig } from "../shared/config.js";
 import type { UpdateCredentialsRequest } from "../shared/types.js";
-import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import type { VideoAccount } from "../api/video-accounts.js";
 import { loginQrCodeSelector, nativeDramaListUrl, playletUrl } from "./constants.js";
 import { waitForLoginIfNeeded } from "./browser-session.js";
@@ -41,12 +40,7 @@ export type VideoAccountRuntimeStatus = {
 export class BrowserContextManager {
   private readonly channels = new Map<string, ManagedChannel>();
   private readonly videoAccountsById = new Map<string, VideoAccount>();
-  private readonly loginRequiredNotifiedChannelIds = new Set<string>();
-
-  constructor(
-    private readonly config: ServiceConfig,
-    private readonly notifier = new FeishuNotifier(),
-  ) {
+  constructor(private readonly config: ServiceConfig) {
     this.syncVideoAccounts(config.videoAccounts);
   }
 
@@ -88,7 +82,7 @@ export class BrowserContextManager {
       });
       const loginState: VideoAccountRuntimeStatus["loginState"] = !channel
         ? "not-launched"
-        : hasLoginPage || this.loginRequiredNotifiedChannelIds.has(account.id)
+        : hasLoginPage
           ? "login-required"
           : hasPlatformPage
             ? "logged-in"
@@ -159,7 +153,6 @@ export class BrowserContextManager {
     for (const previous of this.videoAccountsById.values()) {
       if (!nextAccountsById.has(previous.id)) {
         removed.push(previous);
-        this.loginRequiredNotifiedChannelIds.delete(previous.id);
       }
     }
 
@@ -222,10 +215,8 @@ export class BrowserContextManager {
     await page.goto(playletUrl, { waitUntil: "domcontentloaded" });
 
     const accountLabel = `videoAccountId=${channelId} name=${this.getVideoAccountName(channelId)}`;
-    const loggedIn = await waitForLoginIfNeeded(page, accountLabel, this.getPageTitle(channelId), () =>
-      this.notifyLoginRequired(channelId));
+    const loggedIn = await waitForLoginIfNeeded(page, accountLabel, this.getPageTitle(channelId));
     if (loggedIn) {
-      this.loginRequiredNotifiedChannelIds.delete(channelId);
       browserLogger.info("登录状态已保存", {
         accountId: channelId,
         accountName: this.getVideoAccountName(channelId),
@@ -251,10 +242,8 @@ export class BrowserContextManager {
       accountId: channelId,
       accountName: this.getVideoAccountName(channelId),
     });
-    const loggedIn = await waitForLoginIfNeeded(loginPage, accountLabel, this.getPageTitle(channelId), () =>
-      this.notifyLoginRequired(channelId));
+    const loggedIn = await waitForLoginIfNeeded(loginPage, accountLabel, this.getPageTitle(channelId));
     if (loggedIn) {
-      this.loginRequiredNotifiedChannelIds.delete(channelId);
       await this.save(channelId);
     }
     return loggedIn;
@@ -295,7 +284,6 @@ export class BrowserContextManager {
         );
         if (!loggedIn) continue;
 
-        this.loginRequiredNotifiedChannelIds.delete(channelId);
         await this.save(channelId);
         browserLogger.info("登录成功", {
           accountId: channelId,
@@ -336,7 +324,6 @@ export class BrowserContextManager {
       const loggedIn = await this.hasAuthenticatedPlatformSession(page, timeoutMs);
       if (!loggedIn) {
         await this.setPageTitle(page, this.getPageTitle(channelId));
-        this.notifyLoginRequired(channelId);
         browserLogger.warn("空闲页刷新时需要重新登录", {
           accountId: channelId,
           accountName: this.getVideoAccountName(channelId),
@@ -344,7 +331,6 @@ export class BrowserContextManager {
         return false;
       }
 
-      this.loginRequiredNotifiedChannelIds.delete(channelId);
       await this.save(channelId);
       browserLogger.info("空闲页刷新后已保存登录状态", {
         accountId: channelId,
@@ -467,13 +453,6 @@ export class BrowserContextManager {
       await this.setPageTitle(page, this.getPageTitle(channelId));
     }
     return context;
-  }
-
-  private notifyLoginRequired(channelId: string): void {
-    if (this.loginRequiredNotifiedChannelIds.has(channelId)) return;
-
-    this.loginRequiredNotifiedChannelIds.add(channelId);
-    void this.notifier.notifyLoginRequired(channelId, this.getVideoAccountName(channelId));
   }
 
   private getPageTitle(channelId: string): string {

@@ -8,7 +8,6 @@ import type {
   TaskRunOptions,
 } from "../shared/types.js";
 import { createLogger, type LogContext, runWithLogContext } from "../shared/logger.js";
-import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import { classifyError, ErrorType } from "../shared/errors.js";
 
 const logger = createLogger("task");
@@ -45,10 +44,7 @@ export class TaskService {
   private readonly activeTaskKeyByChannelId = new Map<string, string>();
   private readonly channelReservationsById = new Map<string, ChannelReservation>();
 
-  constructor(
-    private readonly browserContexts: BrowserContextManager,
-    private readonly notifier = new FeishuNotifier(),
-  ) {}
+  constructor(private readonly browserContexts: BrowserContextManager) {}
 
   list(): TaskRecord[] {
     return Array.from(this.taskRecordsByKey.values()).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -269,16 +265,6 @@ export class TaskService {
       taskRecord.status = "running";
       taskRecord.startedAt = new Date().toISOString();
       logger.info("task started", this.createTaskLogFields(taskRecord));
-      await this.notifier.notifyTaskStarted({
-        mode: taskRecord.mode,
-        accountTaskId: taskRecord.accountTaskId,
-        dramaId: taskRecord.dramaId,
-        originalTitle: taskRecord.originalTitle,
-        videoAccountId: taskRecord.videoAccountId ?? taskRecord.channelId,
-        videoAccountName: taskRecord.videoAccountName ?? this.browserContexts.getVideoAccountName(taskRecord.channelId),
-        dramaAiRpaId: taskRecord.dramaAiRpaId,
-      });
-
       try {
         const browserContext = await this.browserContexts.getOrLaunch(taskRecord.channelId);
         await runPlayletTask({
@@ -314,16 +300,6 @@ export class TaskService {
           errorType: errorInfo.type,
           errorMessage: errorInfo.message,
         });
-        if (taskRecord.accountTaskId === undefined) {
-          await this.notifier.notifyTaskFailed({
-            dramaId: taskRecord.dramaId,
-            originalTitle: taskRecord.originalTitle,
-            videoAccountId: taskRecord.videoAccountId ?? taskRecord.channelId,
-            videoAccountName: taskRecord.videoAccountName ?? this.browserContexts.getVideoAccountName(taskRecord.channelId),
-            errorMessage: taskRecord.error,
-            errorType: taskRecord.errorType,
-          });
-        }
         throw error;
       } finally {
         await this.browserContexts.save(taskRecord.channelId).catch(() => undefined);

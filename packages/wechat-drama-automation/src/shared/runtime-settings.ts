@@ -27,7 +27,6 @@ export interface WechatVideoRuntimeSettings {
   episodeVideoTargetFileMegabytes: string;
   episodeUploadWaitTimeoutSeconds: string;
   episodeUploadFailedRetryAttempts: string;
-  feishuBotWebhookUrl: string;
 }
 
 export const defaultWechatVideoRuntimeSettings: WechatVideoRuntimeSettings = {
@@ -59,7 +58,6 @@ export const defaultWechatVideoRuntimeSettings: WechatVideoRuntimeSettings = {
   episodeVideoTargetFileMegabytes: "480",
   episodeUploadWaitTimeoutSeconds: "7200",
   episodeUploadFailedRetryAttempts: "3",
-  feishuBotWebhookUrl: "",
 };
 
 let runtimeSettings = defaultWechatVideoRuntimeSettings;

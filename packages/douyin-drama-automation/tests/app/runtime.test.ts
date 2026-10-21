@@ -43,6 +43,15 @@ test("maps AI-generated role image failures to the upload stage", () => {
   );
 });
 
+test("maps an empty publish-account list to the form stage for backend reporting", () => {
+  assert.equal(
+    classifyDouyinDramaFailStage(
+      new Error("DOUYIN_DRAMA_PUBLISH_ACCOUNT_OPTIONS_EMPTY: 发布账号没有可选项"),
+    ),
+    "FILL_FORM",
+  );
+});
+
 test("fails a netdisk task after a bounded period without episode progress", async () => {
   let calls = 0;
   await assert.rejects(

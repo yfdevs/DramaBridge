@@ -37,12 +37,6 @@ export const runConfig = {
       input: packageBuildInputs(),
       output: ["packages/axios/dist/**"],
     },
-    "pkg:feishu:build": {
-      command: "vp pack",
-      cwd: "packages/feishu-notifier",
-      input: packageBuildInputs(),
-      output: ["packages/feishu-notifier/dist/**"],
-    },
     "pkg:ai:build": {
       command: "vp pack",
       cwd: "packages/ai",
@@ -52,14 +46,14 @@ export const runConfig = {
     "pkg:wechat:build": {
       command: "vp pack",
       cwd: "packages/wechat-drama-automation",
-      dependsOn: ["pkg:axios:build", "pkg:feishu:build", "pkg:logging:build"],
+      dependsOn: ["pkg:axios:build", "pkg:logging:build"],
       input: packageBuildInputs(),
       output: ["packages/wechat-drama-automation/dist/**"],
     },
     "pkg:wechat-miniprogram:build": {
       command: "vp pack",
       cwd: "packages/wechat-miniprogram-drama-automation",
-      dependsOn: ["pkg:axios:build", "pkg:feishu:build", "pkg:logging:build"],
+      dependsOn: ["pkg:axios:build", "pkg:logging:build"],
       input: packageBuildInputs(),
       output: ["packages/wechat-miniprogram-drama-automation/dist/**"],
     },
@@ -121,7 +115,7 @@ export const runConfig = {
     "pkg:tiktok:build": {
       command: "vp pack",
       cwd: "packages/tiktok-drama-automation",
-      dependsOn: ["pkg:feishu:build", "pkg:logging:build"],
+      dependsOn: ["pkg:logging:build"],
       input: packageBuildInputs(),
       output: ["packages/tiktok-drama-automation/dist/**"],
     },
@@ -138,15 +132,6 @@ export const runConfig = {
       dependsOn: ["pkg:logging:build"],
       input: packageBuildInputs(),
       output: ["packages/baidu-netdisk-automation/dist/**"],
-    },
-    "pkg:jianying:build": {
-      command: "pnpm run build",
-      cwd: "packages/jianying-automation",
-      input: packageBuildInputs(),
-      output: [
-        "packages/jianying-automation/dist/**",
-        "packages/jianying-automation/native/bin/JianyingUia.exe",
-      ],
     },
     "packages:build": {
       command: "node -e \"console.log('workspace packages built')\"",
@@ -166,7 +151,6 @@ export const runConfig = {
         "pkg:tiktok:build",
         "pkg:douyin:build",
         "pkg:baidu:build",
-        "pkg:jianying:build",
       ],
       output: [],
     },

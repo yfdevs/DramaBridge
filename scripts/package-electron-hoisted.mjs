@@ -113,29 +113,6 @@ function stagingFfmpegPath() {
   return path.join(stagingDir, "node_modules", "ffmpeg-static", ffmpegExecutableName());
 }
 
-function jianyingNativeSourcePath(fileName) {
-  return path.join(
-    rootDir,
-    "packages",
-    "jianying-automation",
-    "native",
-    "bin",
-    fileName,
-  );
-}
-
-async function validateJianyingPackagingInputs() {
-  const requiredFiles = ["JianyingUia.exe", "JianyingDraftWorker.exe"];
-  for (const fileName of requiredFiles) {
-    const filePath = jianyingNativeSourcePath(fileName);
-    await access(filePath);
-    const { size } = await stat(filePath);
-    if (size <= 0) throw new Error(`Jianying native helper is empty: ${filePath}`);
-    console.log(`Validated Jianying native helper: ${filePath} (${size} bytes).`);
-  }
-  await access(path.join(rootDir, "assets", "presets"));
-}
-
 async function validateFfmpegExecutable(filePath, label) {
   await access(filePath);
   const output = await runExecutable(filePath, ["-version"]);
@@ -218,26 +195,6 @@ async function validatePackagedFfmpeg(version) {
     "ffmpeg.exe",
   );
   await validateFfmpegExecutable(packagedFile, "packaged FFmpeg");
-}
-
-async function validatePackagedJianyingAutomation(version) {
-  if (process.platform !== "win32" && !process.argv.includes("--win")) return;
-  const resourcesDirectory = path.join(
-    rootDir,
-    "release",
-    version,
-    "win-unpacked",
-    "resources",
-    "jianying-automation",
-  );
-  for (const fileName of ["JianyingUia.exe", "JianyingDraftWorker.exe"]) {
-    const filePath = path.join(resourcesDirectory, fileName);
-    await access(filePath);
-    const { size } = await stat(filePath);
-    if (size <= 0) throw new Error(`Packaged Jianying native helper is empty: ${filePath}`);
-    console.log(`Validated packaged Jianying helper: ${filePath} (${size} bytes).`);
-  }
-  await access(path.join(rootDir, "release", version, "win-unpacked", "resources", "presets"));
 }
 
 function toJsonString(value) {
@@ -351,18 +308,6 @@ async function writeBuilderConfig() {
     .replace(
       /from:\s*"\.cache\/playwright-browsers"/,
       `from: ${toJsonString(path.join(rootDir, ".cache", "playwright-browsers"))}`,
-    )
-    .replace(
-      /from:\s*"packages\/jianying-automation\/native\/bin\/JianyingUia\.exe"/,
-      `from: ${toJsonString(jianyingNativeSourcePath("JianyingUia.exe"))}`,
-    )
-    .replace(
-      /from:\s*"packages\/jianying-automation\/native\/bin\/JianyingDraftWorker\.exe"/,
-      `from: ${toJsonString(jianyingNativeSourcePath("JianyingDraftWorker.exe"))}`,
-    )
-    .replace(
-      /from:\s*"assets\/presets"/,
-      `from: ${toJsonString(path.join(rootDir, "assets", "presets"))}`,
     );
   await writeFile(path.join(stagingDir, "electron-builder.json5"), config);
 }
@@ -379,7 +324,6 @@ async function copyBuildInputs() {
 }
 
 async function main() {
-  await validateJianyingPackagingInputs();
   await ensurePlaywrightBrowserInstalled();
   // ffmpeg-static normally downloads its binary from GitHub during every clean
   // install. Reuse a validated workspace/cache/previous-package binary through its
@@ -430,10 +374,7 @@ async function main() {
     ...builderArguments,
   ]);
   const packageJson = await readJson(packageJsonPath);
-  await Promise.all([
-    validatePackagedFfmpeg(packageJson.version),
-    validatePackagedJianyingAutomation(packageJson.version),
-  ]);
+  await validatePackagedFfmpeg(packageJson.version);
 }
 
 main().catch((error) => {

@@ -10,7 +10,6 @@ export type GlobalAppConfig = {
   aiPosterFallbackEnabled: boolean;
   baiduNetdiskDownloadTimeoutMinutes: string;
   baiduNetdiskCleanupPlayletAfterTaskSuccess: boolean;
-  jianyingEpisodeCount: string;
   runDataRoot: string;
   localMaterialRoot: string;
 };

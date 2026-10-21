@@ -79,7 +79,6 @@ export type WechatMiniProgramConfig = {
   episodeVideoMinimumDurationSeconds: string
   episodeUploadWaitTimeoutSeconds: string
   episodeUploadFailedRetryAttempts: string
-  feishuBotWebhookUrl: string
 }
 
 type WechatMiniProgramConfigResult = {
@@ -121,7 +120,6 @@ const defaultWechatMiniProgramConfig: WechatMiniProgramConfig = {
   episodeVideoMinimumDurationSeconds: '0',
   episodeUploadWaitTimeoutSeconds: '7200',
   episodeUploadFailedRetryAttempts: '5',
-  feishuBotWebhookUrl: '',
 }
 
 const invalidLogFileSegmentChars = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
@@ -283,7 +281,6 @@ function normalizeConfig(
     episodeVideoMinimumDurationSeconds: normalizedMinimumDuration,
     episodeUploadWaitTimeoutSeconds: config.episodeUploadWaitTimeoutSeconds ?? defaultWechatMiniProgramConfig.episodeUploadWaitTimeoutSeconds,
     episodeUploadFailedRetryAttempts: config.episodeUploadFailedRetryAttempts ?? defaultWechatMiniProgramConfig.episodeUploadFailedRetryAttempts,
-    feishuBotWebhookUrl: config.feishuBotWebhookUrl ?? defaultWechatMiniProgramConfig.feishuBotWebhookUrl,
   }
 }
 

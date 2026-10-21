@@ -64,7 +64,6 @@ const emptyConfig: WechatVideoConfig = {
   episodeVideoTargetFileMegabytes: "480",
   episodeUploadWaitTimeoutSeconds: "7200",
   episodeUploadFailedRetryAttempts: "3",
-  feishuBotWebhookUrl: "",
 };
 
 type TextField = {
@@ -341,12 +340,6 @@ const sections: Array<{
           { value: "8", label: "最多 8 次" },
           { value: "12", label: "最多 12 次" },
         ],
-      },
-      {
-        key: "feishuBotWebhookUrl",
-        label: "飞书通知地址",
-        type: "url",
-        description: "填写机器人 Webhook 地址，留空不通知。",
       },
     ],
   },

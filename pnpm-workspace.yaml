@@ -5,6 +5,8 @@ allowBuilds:
   better-sqlite3: true
   canvas: false
   electron: true
+  # Only needed for the unused Squirrel target; this app packages Windows with NSIS.
+  electron-winstaller: false
   esbuild: true
   ffmpeg-static: true
   tesseract.js: false
@@ -18,6 +20,8 @@ minimumReleaseAgeExclude:
 overrides:
   # ffmpeg-static 5.3.0 bundles an agent that fails Node 24's protocol check.
   ffmpeg-static>https-proxy-agent: 7.0.6
+  # electron-builder 26 uses the cache-mode API added after @electron/get 3.0.0.
+  app-builder-lib>@electron/get: 3.1.0
   vite: 'catalog:'
 patchedDependencies:
   ffmpeg-static@5.3.0: patches/ffmpeg-static@5.3.0.patch

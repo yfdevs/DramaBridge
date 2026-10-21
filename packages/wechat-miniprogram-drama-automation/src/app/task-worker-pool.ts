@@ -16,7 +16,6 @@ import {
 } from "../shared/config.js";
 import { createLogger, runWithLogContext } from "../shared/logger.js";
 import { validateLocalEpisodeVideos } from "../shared/local-episode-videos.js";
-import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import {
   claimNextWechatMiniProgramTaskApi,
   reportClaimedTaskErrorApi,
@@ -98,7 +97,6 @@ export class TaskWorkerPool {
     private readonly serviceConfig: ServiceConfig,
     private readonly browserContexts: BrowserContextManager,
     private readonly taskService: TaskService,
-    private readonly notifier = new FeishuNotifier(),
     private readonly ensureBaiduNetdiskResource?: EnsureBaiduNetdiskResource,
     private readonly cleanupBaiduNetdiskResourceAfterTaskSuccess?: CleanupBaiduNetdiskResource,
   ) {
@@ -475,13 +473,6 @@ export class TaskWorkerPool {
           accountTaskId: claimedAccountTask.accountTaskId,
           error,
         }));
-      await this.notifier.notifyTaskSucceeded({
-        accountTaskId: claimedAccountTask.accountTaskId,
-        dramaId: claimedAccountTask.dramaId,
-        originalTitle: claimedAccountTask.originalTitle,
-        videoAccountId: videoAccount.id,
-        videoAccountName: videoAccount.name,
-      });
     } finally {
       reservation.release();
     }
@@ -516,15 +507,6 @@ export class TaskWorkerPool {
       videoAccountId: videoAccount.id,
       errorMessage: errorInfo.message,
     });
-    await this.notifier.notifyTaskFailed({
-      accountTaskId: claimedAccountTask.accountTaskId,
-      dramaId: claimedAccountTask.dramaId,
-      originalTitle: claimedAccountTask.originalTitle,
-      videoAccountId: videoAccount.id,
-      videoAccountName: videoAccount.name,
-      errorMessage: errorInfo.message,
-      errorType: errorInfo.type,
-    }).catch(() => undefined);
     logger.error("task failed, pipeline continues", {
       accountTaskId: claimedAccountTask.accountTaskId,
       videoAccountId: videoAccount.id,

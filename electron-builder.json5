@@ -26,18 +26,6 @@
   files: ["dist", "dist-electron"],
   extraResources: [
     {
-      from: "packages/jianying-automation/native/bin/JianyingUia.exe",
-      to: "jianying-automation/JianyingUia.exe",
-    },
-    {
-      from: "packages/jianying-automation/native/bin/JianyingDraftWorker.exe",
-      to: "jianying-automation/JianyingDraftWorker.exe",
-    },
-    {
-      from: "assets/presets",
-      to: "presets",
-    },
-    {
       from: ".cache/playwright-browsers",
       to: "playwright-browsers",
       filter: ["**/*", "!winldd-*", "!winldd-*/**"],

@@ -34,7 +34,6 @@ type TiktokDramaCenterRuntime = {
 };
 
 export type TiktokDramaCenterConfig = {
-  feishuBotWebhookUrl: string;
   headless: string;
   localEpisodeVideoRoot: string;
   operationDelaySeconds: string;
@@ -56,7 +55,6 @@ type TiktokDramaCenterStore = {
 };
 
 const defaultTiktokDramaCenterConfig: TiktokDramaCenterConfig = {
-  feishuBotWebhookUrl: "",
   headless: "false",
   localEpisodeVideoRoot: "",
   operationDelaySeconds: "0.02",
@@ -118,8 +116,6 @@ function normalizeConfig(
   config: Partial<TiktokDramaCenterConfig> & Record<string, string | undefined>,
 ): TiktokDramaCenterConfig {
   return {
-    feishuBotWebhookUrl:
-      config.feishuBotWebhookUrl ?? defaultTiktokDramaCenterConfig.feishuBotWebhookUrl,
     headless: config.headless ?? defaultTiktokDramaCenterConfig.headless,
     localEpisodeVideoRoot:
       config.localEpisodeVideoRoot ?? defaultTiktokDramaCenterConfig.localEpisodeVideoRoot,
@@ -218,7 +214,6 @@ async function startRuntime() {
     credentialStatePath: tiktokDramaCenterCredentialStatePath(),
     config: {
       logFile: tiktokDramaCenterLogFile(),
-      feishuBotWebhookUrl: config.feishuBotWebhookUrl,
       schemeFile: tiktokDramaCenterSchemeFile(),
       tempDir: tiktokDramaCenterTempDir(),
       videoDir: config.localEpisodeVideoRoot,

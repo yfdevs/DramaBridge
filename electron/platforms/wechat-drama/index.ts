@@ -81,7 +81,6 @@ export type WechatVideoConfig = {
   episodeVideoTargetFileMegabytes: string
   episodeUploadWaitTimeoutSeconds: string
   episodeUploadFailedRetryAttempts: string
-  feishuBotWebhookUrl: string
 }
 
 type WechatVideoConfigResult = {
@@ -123,7 +122,6 @@ const defaultWechatVideoConfig: WechatVideoConfig = {
   episodeVideoTargetFileMegabytes: '480',
   episodeUploadWaitTimeoutSeconds: '7200',
   episodeUploadFailedRetryAttempts: '3',
-  feishuBotWebhookUrl: '',
 }
 
 const contractSubjectOptions = [
@@ -323,7 +321,6 @@ function normalizeConfig(
     episodeVideoTargetFileMegabytes: config.episodeVideoTargetFileMegabytes ?? defaultWechatVideoConfig.episodeVideoTargetFileMegabytes,
     episodeUploadWaitTimeoutSeconds: config.episodeUploadWaitTimeoutSeconds ?? defaultWechatVideoConfig.episodeUploadWaitTimeoutSeconds,
     episodeUploadFailedRetryAttempts: config.episodeUploadFailedRetryAttempts ?? defaultWechatVideoConfig.episodeUploadFailedRetryAttempts,
-    feishuBotWebhookUrl: config.feishuBotWebhookUrl ?? defaultWechatVideoConfig.feishuBotWebhookUrl,
   }
 }
 

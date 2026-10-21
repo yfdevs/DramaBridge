@@ -9,7 +9,6 @@ import {
   stopBaiduDramaPlatformService,
 } from "./baidu-drama";
 import { registerBaiduNetdiskPlatformHandlers } from "./baidu-netdisk";
-import { registerJianyingPlatformHandlers } from "./jianying";
 import {
   getDouyinDramaBrowserInstanceCount,
   getDouyinDramaPlatformRuntimeSummary,
@@ -286,7 +285,6 @@ export function registerAllPlatformHandlers() {
     definition.registerHandlers();
   }
   registerBaiduNetdiskPlatformHandlers();
-  registerJianyingPlatformHandlers();
 }
 
 export function stopAllPlatformRuntimes() {

@@ -45,7 +45,6 @@ export type WechatMiniProgramConfig = {
   episodeVideoMinimumDurationSeconds: string
   episodeUploadWaitTimeoutSeconds: string
   episodeUploadFailedRetryAttempts: string
-  feishuBotWebhookUrl: string
 }
 
 export type WechatMiniProgramConfigResult = {

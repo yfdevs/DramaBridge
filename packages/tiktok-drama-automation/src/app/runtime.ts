@@ -1,9 +1,7 @@
 import { mkdir } from "node:fs/promises";
-import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import path from "node:path";
 import {
   captureAutomationFailureDiagnostics,
-  formatAutomationErrorReport,
   formatDateKey,
 } from "@dramabridge/automation-logging";
 import { chromium, type BrowserContext, type Page } from "playwright";
@@ -37,7 +35,6 @@ type TiktokDramaCenterRuntimeConfig = {
   draftUrl?: string;
   headless?: boolean;
   keepBrowserOpen?: boolean;
-  feishuBotWebhookUrl?: string;
   logFile?: string;
   logLevel?: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent";
   loginUrl?: string;
@@ -85,13 +82,6 @@ export async function startTiktokDramaCenterRuntime(
     },
     options.onLog ? (entry) => options.onLog?.(formatReadableLogEntry(entry)) : undefined,
   );
-  const notifier = new FeishuNotifier({
-    channelIdLabel: "platform",
-    channelLabel: "TikTok",
-    logger,
-    webhookUrl: config.feishuBotWebhookUrl,
-  });
-
   await mkdir(userDataDir, { recursive: true });
   log(options, "[tiktok-drama] starting browser");
   context = await chromium.launchPersistentContext(userDataDir, {
@@ -106,7 +96,7 @@ export async function startTiktokDramaCenterRuntime(
   });
 
   page = context.pages()[0] ?? (await context.newPage());
-  void runDraftTask(page, options, notifier).catch((error) => {
+  void runDraftTask(page, options).catch((error) => {
     log(options, `[tiktok-drama] task failed: ${errorMessage(error)}`);
     logger.error({ err: error }, "task failed");
   });
@@ -137,7 +127,6 @@ export async function startTiktokDramaCenterRuntime(
 async function runDraftTask(
   page: Page,
   options: TiktokDramaCenterRuntimeOptions,
-  notifier: FeishuNotifier,
 ) {
   await page.goto(config.draftUrl, { waitUntil: "domcontentloaded" });
   await waitForDraftPage(page);
@@ -151,13 +140,6 @@ async function runDraftTask(
   }
 
   const scheme = task.scheme;
-  const notificationPayload = {
-    accountTaskId: task.accountTaskId,
-    channelId: "tiktok-drama",
-    channelName: "TikTok Drama Center",
-    dramaId: task.dramaId,
-    originalTitle: task.originalTitle,
-  };
   logger.info(
     {
       accountTaskId: task.accountTaskId,
@@ -168,11 +150,6 @@ async function runDraftTask(
     "claimed task",
   );
   log(options, `[tiktok-drama] claimed task: ${scheme.title}`);
-
-  await notifier.notifyTaskStarted({
-    ...notificationPayload,
-    mode: "run",
-  });
 
   try {
     const videos = scheme.baiduPanResourceLink
@@ -200,7 +177,6 @@ async function runDraftTask(
       stopWatchingToast.abort();
     }
 
-    await notifier.notifyTaskSucceeded(notificationPayload);
     log(options, `[tiktok-drama] task finished: ${scheme.id}`);
   } catch (error) {
     const diagnostics = await captureAutomationFailureDiagnostics({
@@ -216,12 +192,6 @@ async function runDraftTask(
       },
     });
     logger.error({ diagnosticDir: diagnostics?.directory }, "failure diagnostics saved");
-    await notifier.notifyTaskFailed({
-      ...notificationPayload,
-      errorMessage: formatAutomationErrorReport(error, {
-        fallbackMessage: "TikTok 任务提交失败，未获取到具体错误原因",
-      }),
-    });
     throw error;
   }
 }

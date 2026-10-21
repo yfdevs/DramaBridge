@@ -1,10 +1,8 @@
 import { BrowserContextManager, type VideoAccountRuntimeStatus } from "../automation/browser-context-manager.js";
-import { FeishuNotifier } from "@dramabridge/feishu-notifier";
 import { loadServiceConfig } from "../shared/config.js";
 import { createLogger } from "../shared/logger.js";
 import {
   configureWechatMiniProgramRuntimeSettings,
-  getWechatMiniProgramRuntimeSettings,
   type WechatMiniProgramRuntimeSettings,
 } from "../shared/runtime-settings.js";
 import { IdlePageRefreshService } from "./idle-page-refresh-service.js";
@@ -64,21 +62,14 @@ export async function startWechatMiniProgramRuntime(options: WechatMiniProgramRu
   configureWechatMiniProgramRuntimeSettings(options.settings);
   resetMockWechatMiniProgramTaskApi();
   const serviceConfig = await loadServiceConfig();
-  const notifier = new FeishuNotifier({
-    channelIdLabel: "videoAccountId",
-    channelLabel: "小程序",
-    logger,
-    webhookUrl: getWechatMiniProgramRuntimeSettings().feishuBotWebhookUrl,
-  });
-  const browserContexts = new BrowserContextManager(serviceConfig, notifier);
+  const browserContexts = new BrowserContextManager(serviceConfig);
   await browserContexts.initialize();
 
-  const taskService = new TaskService(browserContexts, notifier);
+  const taskService = new TaskService(browserContexts);
   const taskWorkerPool = new TaskWorkerPool(
     serviceConfig,
     browserContexts,
     taskService,
-    notifier,
     options.ensureBaiduNetdiskResource,
     options.cleanupBaiduNetdiskResourceAfterTaskSuccess,
   );

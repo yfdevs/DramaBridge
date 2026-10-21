@@ -657,6 +657,7 @@ function dropdownOptions(page: Page) {
 }
 
 export const DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS = 20_000;
+const emptyDropdownPattern = /暂无数据|暂无选项|没有可选|无可用(?:账号|选项)|未查询到/;
 
 function visibleDropdownSurfaces(page: Page) {
   return page.locator([
@@ -760,12 +761,47 @@ async function confirmDropdownSelection(
   throw new Error(`DOUYIN_DRAMA_DROPDOWN_SELECTION_NOT_CONFIRMED: ${field}=${value}`);
 }
 
-async function openDropdown(page: Page, trigger: Locator) {
+function dropdownEmptyError(field: string, observed: string[] = []) {
+  if (field === "publishAccount") {
+    return new Error(
+      `DOUYIN_DRAMA_PUBLISH_ACCOUNT_OPTIONS_EMPTY: 发布账号没有可选项；` +
+        `observed=${JSON.stringify(observed)}`,
+    );
+  }
+  return new Error(`DOUYIN_DRAMA_DROPDOWN_EMPTY: ${field}; observed=${JSON.stringify(observed)}`);
+}
+
+async function waitForDropdownOptions(
+  page: Page,
+  options: Locator,
+  field: string,
+) {
+  const deadline = Date.now() + DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS;
+  let emptySince = 0;
+  let lastObserved: string[] = [];
+  while (Date.now() < deadline) {
+    if (await options.count() > 0) return;
+    lastObserved = (await visibleDropdownSurfaces(page).allTextContents())
+      .map(compactDropdownText)
+      .filter(Boolean);
+    const explicitlyEmpty = lastObserved.some((value) => emptyDropdownPattern.test(value));
+    if (explicitlyEmpty) {
+      emptySince ||= Date.now();
+      if (Date.now() - emptySince >= 600) throw dropdownEmptyError(field, lastObserved);
+    } else {
+      emptySince = 0;
+    }
+    await page.waitForTimeout(200);
+  }
+  throw dropdownEmptyError(field, lastObserved);
+}
+
+async function openDropdown(page: Page, trigger: Locator, field = "dropdown") {
   await closeVisibleDropdowns(page, "打开下拉前清理残留弹层");
   await trigger.waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
   await trigger.click();
   const options = dropdownOptions(page);
-  await options.first().waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
+  await waitForDropdownOptions(page, options, field);
   return options;
 }
 
@@ -1011,15 +1047,19 @@ export async function selectSearchableDropdownByPlaceholder(
   await input.click();
   await input.fill(value);
   const options = dropdownOptions(page);
-  await options.first().waitFor({ state: "visible", timeout: DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS });
+  await waitForDropdownOptions(page, options, field);
   const expected = compactDropdownText(value);
   const observed = await waitForObservedDropdownOptions(
     page,
     options,
     (values) => values.some((candidate) => compactDropdownText(candidate) === expected)
-      || values.some((candidate) => compactDropdownText(candidate).includes(expected)),
+      || values.some((candidate) => compactDropdownText(candidate).includes(expected))
+      || values.some((candidate) => emptyDropdownPattern.test(candidate)),
   );
   await recorder.record(field, observed);
+  if (observed.every((candidate) => emptyDropdownPattern.test(compactDropdownText(candidate)))) {
+    throw dropdownEmptyError(field, observed);
+  }
   const matchedOptionText = observed.find((candidate) => compactDropdownText(candidate) === expected)
     ?? observed.find((candidate) => compactDropdownText(candidate).includes(expected));
   if (!matchedOptionText) {
@@ -1049,16 +1089,17 @@ export async function selectFirstDropdownByPlaceholder(
     "xpath=ancestor::*[@role='combobox' or contains(@class, 'arco-select')][1]",
   );
   const trigger = (await selectRoot.count()) ? selectRoot : input;
-  const options = await openDropdown(page, trigger);
+  const options = await openDropdown(page, trigger, field);
   const observed = await waitForObservedDropdownOptions(
     page,
     options,
-    (values) => values.some((value) => !/请选择|暂无|无数据|加载中|正在加载/.test(value)),
+    (values) => values.some((value) => !/请选择|暂无|无数据|加载中|正在加载/.test(value))
+      || values.some((value) => emptyDropdownPattern.test(value)),
   );
   await recorder.record(field, observed);
   const selected = observed.find((value) => !/请选择|暂无|无数据|加载中|正在加载/.test(value));
   if (!selected) {
-    throw new Error(`DOUYIN_DRAMA_DROPDOWN_EMPTY: ${field}; observed=${JSON.stringify(observed)}`);
+    throw dropdownEmptyError(field, observed);
   }
   const option = options.filter({ hasText: exactTextPattern(selected), visible: true }).first();
   await option.click();

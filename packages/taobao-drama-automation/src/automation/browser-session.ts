@@ -225,6 +225,7 @@ export async function waitForTaobaoPage(
   }
 
   let loginLogged = false;
+  let verificationNotified = false;
   let lastReadyReloadAt = Date.now();
   while (!page.isClosed()) {
     const state = await currentLoginState(page);
@@ -238,9 +239,17 @@ export async function waitForTaobaoPage(
         );
         loginLogged = true;
       }
+      if (state === "verification-required" && !verificationNotified) {
+        verificationNotified = true;
+        await page.bringToFront().catch(() => undefined);
+        await options.onHumanVerificationRequired?.({ pages: [page.url()] });
+        await page.bringToFront().catch(() => undefined);
+      }
       await page.waitForTimeout(1_000);
       continue;
     }
+
+    verificationNotified = false;
 
     if (!isTaobaoTargetUrl(page.url(), target)) {
       await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });

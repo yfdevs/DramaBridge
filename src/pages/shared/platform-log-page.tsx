@@ -8,7 +8,16 @@ import {
   Search,
   Trash,
 } from "@mynaui/icons-react";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { toast } from "sonner";
 
@@ -48,6 +57,8 @@ type LevelFilter = "all" | AutomationLogLevel;
 type ViewerStatus = "connecting" | "live" | "waiting" | "error";
 
 const MAX_VISIBLE_ENTRIES = 5_000;
+const APPEND_BATCH_INTERVAL_MS = 120;
+const searchableTextCache = new WeakMap<ViewerEntry, string>();
 const levelLabels: Record<AutomationLogLevel, string> = {
   debug: "调试",
   info: "信息",
@@ -84,7 +95,9 @@ function timeLabel(value: string) {
 }
 
 function searchableText(entry: ViewerEntry) {
-  return [
+  const cached = searchableTextCache.get(entry);
+  if (cached !== undefined) return cached;
+  const text = [
     entry.message,
     entry.scope,
     entry.platform,
@@ -97,6 +110,8 @@ function searchableText(entry: ViewerEntry) {
     .filter(Boolean)
     .join(" ")
     .toLocaleLowerCase();
+  searchableTextCache.set(entry, text);
+  return text;
 }
 
 function scopeLabel(scope: string) {
@@ -104,14 +119,14 @@ function scopeLabel(scope: string) {
   return segments[segments.length - 1] || scope;
 }
 
-function LogRow({
+const LogRow = memo(function LogRow({
   entry,
   expanded,
   onToggle,
 }: {
   entry: ViewerEntry;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (viewerId: number) => void;
 }) {
   const expandable = Boolean(entry.error || entry.details || entry.context);
   const metadataDetail = {
@@ -182,7 +197,7 @@ function LogRow({
             type="button"
             className="col-span-3 grid min-w-0 grid-cols-[minmax(0,1fr)_84px_16px] items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
             aria-expanded={expanded}
-            onClick={onToggle}
+            onClick={() => onToggle(entry.viewerId)}
           >
             {rowContent}
           </button>
@@ -228,7 +243,7 @@ function LogRow({
       )}
     </div>
   );
-}
+});
 
 function PlatformLogViewer({ platform }: { platform: PlatformId }) {
   const [entries, setEntries] = useState<ViewerEntry[]>([]);
@@ -248,17 +263,49 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
   const sequence = useRef(0);
   const pausedRef = useRef(false);
   const pendingRef = useRef<ViewerEntry[]>([]);
+  const appendBufferRef = useRef<ViewerEntry[]>([]);
+  const appendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  const identify = (items: AutomationLogEntry[]) =>
-    items.map((entry) => ({ ...entry, viewerId: ++sequence.current }));
+  const identify = useCallback(
+    (items: AutomationLogEntry[]) =>
+      items.map((entry) => ({ ...entry, viewerId: ++sequence.current })),
+    [],
+  );
+
+  const cancelAppendBatch = useCallback(() => {
+    if (appendTimerRef.current !== null) clearTimeout(appendTimerRef.current);
+    appendTimerRef.current = null;
+    appendBufferRef.current = [];
+  }, []);
+
+  const flushAppendBatch = useCallback(() => {
+    if (appendTimerRef.current !== null) clearTimeout(appendTimerRef.current);
+    appendTimerRef.current = null;
+    const batch = appendBufferRef.current;
+    appendBufferRef.current = [];
+    if (batch.length === 0) return;
+    startTransition(() => {
+      setEntries((current) => appendEntries(current, batch));
+    });
+  }, []);
+
+  const queueAppendBatch = useCallback(
+    (items: ViewerEntry[]) => {
+      appendBufferRef.current.push(...items);
+      if (appendTimerRef.current !== null) return;
+      appendTimerRef.current = setTimeout(flushAppendBatch, APPEND_BATCH_INTERVAL_MS);
+    },
+    [flushAppendBatch],
+  );
 
   useEffect(() => {
     setStatus("connecting");
     setStatusMessage("正在连接日志流…");
-    return subscribeToPlatformLogs(platform, {
+    const unsubscribe = subscribeToPlatformLogs(platform, {
       onData(event) {
         if (event.type === "snapshot") {
+          cancelAppendBatch();
           pendingRef.current = [];
           setPendingCount(0);
           setEntries(identify(event.entries));
@@ -276,11 +323,12 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
             pendingRef.current = appendEntries(pendingRef.current, next);
             setPendingCount(pendingRef.current.length);
           } else {
-            setEntries((current) => appendEntries(current, next));
+            queueAppendBatch(next);
           }
           return;
         }
         if (event.type === "reset") {
+          cancelAppendBatch();
           pendingRef.current = [];
           setPendingCount(0);
           setEntries([]);
@@ -302,19 +350,32 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
         setStatusMessage(message);
       },
     });
-    // identify only relies on the subscription-local sequence ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform]);
+    return () => {
+      unsubscribe();
+      cancelAppendBatch();
+    };
+  }, [cancelAppendBatch, identify, platform, queueAppendBatch]);
 
   const filteredEntries = useMemo(
-    () =>
-      entries.filter(
+    () => {
+      if (level === "all" && !deferredQuery) return entries;
+      return entries.filter(
         (entry) =>
           (level === "all" || entry.level === level) &&
           (!deferredQuery || searchableText(entry).includes(deferredQuery)),
-      ),
+      );
+    },
     [deferredQuery, entries, level],
   );
+
+  const toggleExpanded = useCallback((viewerId: number) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(viewerId)) next.delete(viewerId);
+      else next.add(viewerId);
+      return next;
+    });
+  }, []);
 
   const togglePaused = () => {
     if (pausedRef.current) {
@@ -323,9 +384,14 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
       pausedRef.current = false;
       setPaused(false);
       setPendingCount(0);
-      if (pending.length > 0) setEntries((current) => appendEntries(current, pending));
+      if (pending.length > 0) {
+        startTransition(() => {
+          setEntries((current) => appendEntries(current, pending));
+        });
+      }
       return;
     }
+    flushAppendBatch();
     pausedRef.current = true;
     setPaused(true);
   };
@@ -340,6 +406,7 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
         return;
       }
       pendingRef.current = [];
+      cancelAppendBatch();
       setPendingCount(0);
       setEntries([]);
       toast.success("当前日志已清空，实时监听继续运行");
@@ -512,14 +579,7 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
               <LogRow
                 entry={entry}
                 expanded={expanded.has(entry.viewerId)}
-                onToggle={() =>
-                  setExpanded((current) => {
-                    const next = new Set(current);
-                    if (next.has(entry.viewerId)) next.delete(entry.viewerId);
-                    else next.add(entry.viewerId);
-                    return next;
-                  })
-                }
+                onToggle={toggleExpanded}
               />
             )}
           />

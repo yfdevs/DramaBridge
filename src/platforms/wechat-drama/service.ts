@@ -48,7 +48,6 @@ export type WechatVideoConfig = {
   episodeVideoTargetFileMegabytes: string
   episodeUploadWaitTimeoutSeconds: string
   episodeUploadFailedRetryAttempts: string
-  feishuBotWebhookUrl: string
 }
 
 export type WechatVideoConfigResult = {
@@ -78,7 +77,7 @@ async function invokeWechatVideo<T>(channel: string, ...args: unknown[]): Promis
     return result as T
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    throw new Error(readableWechatVideoError(message))
+    throw Object.assign(new Error(readableWechatVideoError(message)), { cause: error })
   }
 }
 

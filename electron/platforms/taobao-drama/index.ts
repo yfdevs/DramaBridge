@@ -1,4 +1,4 @@
-import { app, Notification } from "electron";
+import { app, dialog, Notification } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
@@ -74,6 +74,27 @@ const defaults: TaobaoDramaConfig = {
 };
 const controller = new RuntimeController<Runtime>();
 let store: Store<{ config: TaobaoDramaConfig }> | null = null;
+
+async function showTaobaoHumanVerificationAlert(account: Account) {
+  const accountLabel = account.accountName?.trim() || account.accountId;
+  if (Notification.isSupported()) {
+    new Notification({
+      title: "重要提示：淘宝需要验证码",
+      body: `${accountLabel} 的发布任务已暂停，请打开淘宝浏览器手动完成验证。`,
+      urgency: "critical",
+    }).show();
+  }
+  await dialog.showMessageBox({
+    type: "warning",
+    title: "重要提示：淘宝需要验证码",
+    message: "淘宝发布任务已暂停，需要手动完成验证码",
+    detail: `账号：${accountLabel}\n\n请点击下方按钮切换到淘宝浏览器，然后手动拖动滑块或完成页面要求的验证。验证通过后任务会自动继续。`,
+    buttons: ["去手动验证"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+}
 
 function configStore(): Store<{ config: TaobaoDramaConfig }> {
   if (!store) store = createValidatedStore<{ config: TaobaoDramaConfig }>({ name: "taobao-drama-config", defaults: { config: defaults } });
@@ -161,7 +182,7 @@ async function startRuntime(): Promise<Runtime> {
         taskPollIntervalMs: Math.max(1, Number(config.taskPollIntervalSeconds) || 10) * 1_000,
         closeFailedTaskPages: config.closeFailedTaskPages === "true", aiClientFactory: createConfiguredAiClient,
         aiImageModel: getConfiguredAiImageModel(), aiCoverGenerationRetryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
-        onHumanVerificationRequired: () => Notification.isSupported() && new Notification({ title: "淘宝需要人工验证", body: `${account.accountName} 需要完成淘宝安全校验。` }).show(),
+        onHumanVerificationRequired: () => showTaobaoHumanVerificationAlert(account),
         ensureBaiduNetdiskResource: (request: Parameters<typeof ensureBaiduNetdiskShareDownloaded>[0]) => ensureBaiduNetdiskShareDownloaded({ ...request, requesterPlatform: "taobao-drama" }),
         cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
         config: { browser: { executablePath: config.browserExecutablePath || undefined, headless: config.headless === "true", slowMo: (Number(config.operationDelaySeconds) || 0) * 1_000 } },

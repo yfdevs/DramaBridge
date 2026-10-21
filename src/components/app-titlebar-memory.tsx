@@ -7,7 +7,6 @@ import {
   CloudDownload,
   Grid,
   HardDrive,
-  Scissors,
 } from "@mynaui/icons-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -16,11 +15,6 @@ import {
   type BaiduNetdiskCdpStatus,
 } from "@/platforms/baidu-netdisk/service";
 import { openBaiduNetdiskDialog } from "@/platforms/baidu-netdisk/dialog";
-import { openJianyingDialog } from "@/platforms/jianying/dialog-controller";
-import {
-  getJianyingStatus,
-  type JianyingStatus,
-} from "@/platforms/jianying/service";
 
 type AppRuntimeStatus = {
   browserInstanceCount: number;
@@ -152,20 +146,6 @@ function baiduNetdiskSummary(status: BaiduNetdiskCdpStatus | null, error: string
   return status.message;
 }
 
-function jianyingIconClass(status: JianyingStatus | null, error: string | null) {
-  if (!error && status?.appRunning && status.accessibilityPrepared) return "text-emerald-500";
-  return "text-rose-500";
-}
-
-function jianyingSummary(status: JianyingStatus | null, error: string | null) {
-  if (error) return error;
-  if (!status) return "读取中";
-  if (!status.installed || !status.pathValid) return "应用路径无效";
-  if (status.appRunning && status.accessibilityPrepared) return "自动化可用";
-  if (status.appRunning) return "不可操作，请重新启动";
-  return "剪映未运行";
-}
-
 async function getAppRuntimeStatus() {
   if (!window.ipcRenderer) {
     throw new Error("应用运行状态仅在 Electron 应用内可用。");
@@ -226,8 +206,6 @@ export function AppTitlebarMemory() {
   const [runtimeStatus, setRuntimeStatus] = useState<AppRuntimeStatus | null>(null);
   const [baiduStatus, setBaiduStatus] = useState<BaiduNetdiskCdpStatus | null>(null);
   const [baiduError, setBaiduError] = useState<string | null>(null);
-  const [jianyingStatus, setJianyingStatus] = useState<JianyingStatus | null>(null);
-  const [jianyingError, setJianyingError] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -260,29 +238,6 @@ export function AppTitlebarMemory() {
     return () => {
       disposed = true;
       observer?.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
-    let disposed = false;
-
-    const refreshJianyingStatus = async () => {
-      try {
-        const nextStatus = await getJianyingStatus();
-        if (!disposed) {
-          setJianyingStatus(nextStatus);
-          setJianyingError(null);
-        }
-      } catch (error) {
-        if (!disposed) setJianyingError(errorMessage(error));
-      }
-    };
-
-    void refreshJianyingStatus();
-    const interval = window.setInterval(() => void refreshJianyingStatus(), 3000);
-    return () => {
-      disposed = true;
-      window.clearInterval(interval);
     };
   }, []);
 
@@ -366,7 +321,6 @@ export function AppTitlebarMemory() {
       ? "未找到 D 盘"
       : "读取中";
   const baiduSummary = baiduNetdiskSummary(baiduStatus, baiduError);
-  const jianyingStatusSummary = jianyingSummary(jianyingStatus, jianyingError);
 
   return createPortal(
     <div className="flex h-7 items-center gap-1.5 overflow-hidden whitespace-nowrap px-1 text-[11px] leading-none text-muted-foreground">
@@ -435,26 +389,6 @@ export function AppTitlebarMemory() {
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end" sideOffset={8} className="z-[100000]">
           百度网盘：{baiduSummary}
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger
-          aria-label={`打开剪映控制：${jianyingStatusSummary}`}
-          render={
-            <button
-              type="button"
-              className={titlebarIconButtonClass}
-              onClick={openJianyingDialog}
-            />
-          }
-        >
-          <Scissors
-            className={`size-3.5 shrink-0 ${jianyingIconClass(jianyingStatus, jianyingError)}`}
-            aria-hidden="true"
-          />
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="end" sideOffset={8} className="z-[100000]">
-          剪映：{jianyingStatusSummary}
         </TooltipContent>
       </Tooltip>
     </div>,

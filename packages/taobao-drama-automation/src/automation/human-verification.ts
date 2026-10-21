@@ -104,6 +104,10 @@ export async function waitForTaobaoHumanVerification(
         );
         await page.bringToFront().catch(() => undefined);
         await options.onHumanVerificationRequired?.({ pages: targets });
+        // The native warning dialog temporarily takes focus. Bring the browser
+        // back after the user acknowledges it so the slider can be handled
+        // immediately without searching for the correct window.
+        await page.bringToFront().catch(() => undefined);
       } else if (Date.now() - lastHeartbeatAt >= 30_000) {
         lastHeartbeatAt = Date.now();
         log(options, `[taobao-drama] 仍在等待人工完成淘宝验证，完成后将自动恢复当前步骤 ` +

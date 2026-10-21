@@ -12,7 +12,6 @@ const configSchema = z.object({
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   loginUrl: z.string().url().default('https://www.tiktokdramacenter.com/login'),
   draftUrl: z.string().url().default('https://www.tiktokdramacenter.com/series/draft'),
-  feishuBotWebhookUrl: z.string().trim().default(''),
   userDataDir: z.string().min(1).default(path.resolve('.auth/tiktok')),
   videoDir: z.string().min(1).default(path.resolve('videos')),
   schemeApi: z.string().url().optional(),

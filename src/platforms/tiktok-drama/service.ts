@@ -1,7 +1,6 @@
 ﻿export type TiktokDramaCenterLoginState = "login-required" | "logged-in" | "unknown"
 
 export type TiktokDramaCenterConfig = {
-  feishuBotWebhookUrl: string
   headless: string
   localEpisodeVideoRoot: string
   operationDelaySeconds: string
@@ -33,7 +32,7 @@ async function invokeTiktokDramaCenter<T>(channel: string, ...args: unknown[]): 
     return result as T
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    throw new Error(readableTiktokDramaCenterError(message))
+    throw Object.assign(new Error(readableTiktokDramaCenterError(message)), { cause: error })
   }
 }
 
