@@ -1,10 +1,11 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
   captureAutomationFailureDiagnostics,
   formatDateKey,
 } from "@dramabridge/automation-logging";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { config, configureTiktokDramaCenterRuntimeSettings, logger } from "../config.js";
 import { formatReadableLogEntry } from "@dramabridge/automation-logging";
 import { claimNextTiktokDramaTaskApi } from "../api/index.js";
@@ -84,7 +85,7 @@ export async function startTiktokDramaCenterRuntime(
   );
   await mkdir(userDataDir, { recursive: true });
   log(options, "[tiktok-drama] starting browser");
-  context = await chromium.launchPersistentContext(userDataDir, {
+  context = await launchPlatformBrowserContext(userDataDir, {
     acceptDownloads: true,
     headless: config.headless,
     slowMo,

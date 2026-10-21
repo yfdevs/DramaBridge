@@ -1,4 +1,5 @@
-import { chromium, type BrowserContext, type Page } from "playwright";
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
+import type { BrowserContext, Page } from "playwright";
 import {
   captureAutomationFailureDiagnostics,
   formatAutomationErrorReport,
@@ -140,7 +141,7 @@ export async function startKuaishouDramaRuntime(
 
   await cleanupOldLogFiles(options).catch(() => undefined);
   log(options, "[kuaishou-drama] starting browser");
-  context = await chromium.launchPersistentContext(userDataDir, {
+  context = await launchPlatformBrowserContext(userDataDir, {
     viewport: null,
     headless: options.config?.browser?.headless ?? false,
     slowMo: options.config?.browser?.slowMo ?? 0,

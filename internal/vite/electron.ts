@@ -43,6 +43,10 @@ export function createElectronPlugin(rootDir: string) {
         resolve: {
           alias: [
             {
+              find: /^@dramabridge\/browser-window$/,
+              replacement: path.join(rootDir, "packages/browser-window/src/index.ts"),
+            },
+            {
               find: /^@dramabridge\/ai$/,
               replacement: path.join(rootDir, "packages/ai/src/index.ts"),
             },

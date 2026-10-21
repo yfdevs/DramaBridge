@@ -1,5 +1,6 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import { mkdir } from "node:fs/promises";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { claimNextTiktokDramaTaskApi } from "./api/index.js";
 import { config, configureTiktokDramaCenterRuntimeSettings, logger } from "./config.js";
 import { fillDraft, waitForDraftPage } from "./draft-form.js";
@@ -147,7 +148,7 @@ async function clickToastConfirm(page: Page, message: string) {
 async function launchContext(): Promise<BrowserContext> {
   await mkdir(config.userDataDir, { recursive: true });
   logger.info({ userDataDir: config.userDataDir }, "using persistent browser profile");
-  return chromium.launchPersistentContext(config.userDataDir, {
+  return launchPlatformBrowserContext(config.userDataDir, {
     headless: config.headless,
     viewport: null,
     acceptDownloads: true,

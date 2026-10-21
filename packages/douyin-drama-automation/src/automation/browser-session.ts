@@ -1,6 +1,7 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { DOUYIN_DRAMA_CREATE_URL, DOUYIN_DRAMA_LOGIN_URL } from "../shared/constants.js";
 import { log } from "../shared/logger.js";
 import type { DouyinDramaLoginState, DouyinDramaRuntimeOptions } from "../shared/types.js";
@@ -88,7 +89,7 @@ export async function launchDouyinDramaBrowserContext(
   userDataDir: string,
   options: DouyinDramaRuntimeOptions,
 ) {
-  const context = await chromium.launchPersistentContext(userDataDir, {
+  const context = await launchPlatformBrowserContext(userDataDir, {
     args: ["--disable-blink-features=AutomationControlled"],
     extraHTTPHeaders: { "accept-language": "zh-CN,zh;q=0.9,en;q=0.8" },
     headless: options.config?.browser?.headless ?? false,

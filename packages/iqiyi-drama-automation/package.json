@@ -19,6 +19,7 @@
   "dependencies": {
     "@dramabridge/ai": "workspace:*",
     "@dramabridge/automation-logging": "workspace:*",
+    "@dramabridge/browser-window": "workspace:*",
     "@dramabridge/file-utils": "workspace:*",
     "@dramabridge/media-assets": "workspace:*",
     "playwright": "1.61.1",

@@ -1,6 +1,7 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { QQ_DRAMA_ADD_URL, QQ_DRAMA_LOGIN_URL } from "../shared/constants.js";
 import { log } from "../shared/logger.js";
 import type { QqDramaLoginState, QqDramaRuntimeOptions } from "../shared/types.js";
@@ -71,7 +72,7 @@ function qqDramaBrowserLaunchOptions(options: QqDramaRuntimeOptions) {
     slowMo: options.config?.browser?.slowMo ?? 0,
     timezoneId: "Asia/Shanghai",
     viewport: null,
-  } satisfies Parameters<typeof chromium.launchPersistentContext>[1];
+  } satisfies Parameters<typeof launchPlatformBrowserContext>[1];
 }
 
 export async function launchQqDramaBrowserContext(
@@ -79,7 +80,7 @@ export async function launchQqDramaBrowserContext(
   options: QqDramaRuntimeOptions,
 ) {
   const launchOptions = qqDramaBrowserLaunchOptions(options);
-  const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
+  const context = await launchPlatformBrowserContext(userDataDir, launchOptions);
   log(options, "[qq-drama] started browser with Playwright Chromium");
   return context;
 }

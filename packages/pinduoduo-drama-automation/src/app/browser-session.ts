@@ -1,3 +1,4 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { chromium, type BrowserContext } from "playwright";
@@ -19,7 +20,7 @@ function pinduoduoBrowserLaunchOptions(options: PinduoduoDramaRuntimeOptions) {
     slowMo: options.config?.browser?.slowMo ?? 0,
     timezoneId: "Asia/Shanghai",
     viewport: null,
-  } satisfies Parameters<typeof chromium.launchPersistentContext>[1];
+  } satisfies Parameters<typeof launchPlatformBrowserContext>[1];
 }
 
 export async function launchPinduoduoBrowserContext(
@@ -29,7 +30,7 @@ export async function launchPinduoduoBrowserContext(
   const launchOptions = pinduoduoBrowserLaunchOptions(options);
 
   try {
-    const context = await chromium.launchPersistentContext(userDataDir, {
+    const context = await launchPlatformBrowserContext(userDataDir, {
       ...launchOptions,
       ...(options.config?.browser?.executablePath
         ? { executablePath: options.config.browser.executablePath }

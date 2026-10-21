@@ -1,3 +1,4 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { chromium, type BrowserContext, type Page } from "playwright";
@@ -55,7 +56,7 @@ export function taobaoBrowserLaunchOptions(options: TaobaoDramaRuntimeOptions) {
     slowMo: options.config?.browser?.slowMo ?? 0,
     timezoneId: "Asia/Shanghai",
     viewport: null,
-  } satisfies Parameters<typeof chromium.launchPersistentContext>[1];
+  } satisfies Parameters<typeof launchPlatformBrowserContext>[1];
 }
 
 export function taobaoLoginStateFromUrl(url?: string): TaobaoDramaLoginState {
@@ -155,7 +156,7 @@ export async function launchTaobaoBrowserContext(
 ) {
   const executablePath = options.config?.browser?.executablePath?.trim();
   try {
-    const context = await chromium.launchPersistentContext(
+    const context = await launchPlatformBrowserContext(
       userDataDir,
       taobaoBrowserLaunchOptions(options),
     );

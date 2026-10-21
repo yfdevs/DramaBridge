@@ -1,7 +1,8 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import path from "node:path";
 import { writeJsonAtomic } from "@dramabridge/file-utils";
 import { mkdir } from "node:fs/promises";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { resolveFromRoot, type ServiceConfig } from "../shared/config.js";
 import type { UpdateCredentialsRequest } from "../shared/types.js";
 import type { VideoAccount } from "../api/video-accounts.js";
@@ -431,7 +432,7 @@ export class BrowserContextManager {
       path: userDataDir,
     });
 
-    const context = await chromium.launchPersistentContext(userDataDir, {
+    const context = await launchPlatformBrowserContext(userDataDir, {
       headless: this.config.browser.headless,
       slowMo: this.config.browser.slowMo, // 让每一步操作人为变慢
       viewport: null,

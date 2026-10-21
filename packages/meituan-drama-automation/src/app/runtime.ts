@@ -1,10 +1,7 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import path from "node:path";
 import { mkdir, stat } from "node:fs/promises";
-import {
-  chromium,
-  type BrowserContext,
-  type Page,
-} from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import {
   MEITUAN_CREATION_LOGIN_URL,
   MEITUAN_CREATION_PUBLISH_VIDEO_URL,
@@ -152,7 +149,7 @@ export async function startMeituanCreationRuntime(
         browserOptions,
         `[meituan-drama] starting account browser: userDataDir=${userDataDir} existingProfile=${existingProfile}`,
       );
-      const context = await chromium.launchPersistentContext(userDataDir, {
+      const context = await launchPlatformBrowserContext(userDataDir, {
         viewport: null,
         headless: options.config?.browser?.headless ?? false,
         slowMo: options.config?.browser?.slowMo ?? 20,

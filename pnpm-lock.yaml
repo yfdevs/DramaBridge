@@ -383,6 +383,9 @@ importers:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/media-assets':
         specifier: workspace:*
         version: link:../media-assets
@@ -440,11 +443,33 @@ importers:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
         version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
+  packages/browser-window:
+    dependencies:
+      playwright:
+        specifier: 1.61.1
+        version: 1.61.1
+    devDependencies:
+      '@types/node':
+        specifier: latest
+        version: 26.6.5
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.15
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vite:
+        specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+
   packages/douyin-drama-automation:
     dependencies:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -537,6 +562,9 @@ importers:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -599,6 +627,9 @@ importers:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -670,6 +701,9 @@ importers:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -707,6 +741,9 @@ importers:
       '@dramabridge/axios':
         specifier: workspace:*
         version: link:../axios
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -741,6 +778,9 @@ importers:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -775,6 +815,9 @@ importers:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -821,6 +864,9 @@ importers:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -852,6 +898,9 @@ importers:
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -886,6 +935,9 @@ importers:
       '@dramabridge/axios':
         specifier: workspace:*
         version: link:../axios
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
@@ -920,6 +972,9 @@ importers:
       '@dramabridge/axios':
         specifier: workspace:*
         version: link:../axios
+      '@dramabridge/browser-window':
+        specifier: workspace:*
+        version: link:../browser-window
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils

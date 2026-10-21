@@ -1,9 +1,10 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import path from "node:path";
 import { writeJsonAtomic } from "@dramabridge/file-utils";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { mkdir } from "node:fs/promises";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { resolveFromRoot } from "../shared/config.js";
 import { minutesToMs } from "../shared/settings-value.js";
 import type { Config, TaskRunOptions } from "../shared/types.js";
@@ -15,7 +16,7 @@ export async function launchContext(playletConfig: Config): Promise<BrowserConte
   const userDataDir = resolveFromRoot(playletConfig.browser?.userDataDir ?? ".auth/weixin-video-channel");
   await mkdir(userDataDir, { recursive: true });
 
-  return chromium.launchPersistentContext(userDataDir, {
+  return launchPlatformBrowserContext(userDataDir, {
     headless: playletConfig.browser?.headless ?? false,
     slowMo: playletConfig.browser?.slowMo ?? 20,
     viewport: null,

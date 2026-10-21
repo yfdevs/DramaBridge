@@ -1,6 +1,7 @@
+import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import path from "node:path"
 import { mkdir } from "node:fs/promises"
-import { chromium, type BrowserContext, type Page } from "playwright"
+import { type BrowserContext, type Page } from "playwright"
 
 import { loginQrCodeSelector, playletUrl } from "../automation/constants.js"
 import {
@@ -127,7 +128,7 @@ export function startWechatMiniProgramDirectUploadRuntime(
       const userDataDir = path.resolve(options.userDataDir)
       await mkdir(userDataDir, { recursive: true })
       logger.info("正在启动百度资源直传浏览器", { userDataDir })
-      const launched = await chromium.launchPersistentContext(userDataDir, {
+      const launched = await launchPlatformBrowserContext(userDataDir, {
         headless: false,
         slowMo: 20,
         viewport: null,

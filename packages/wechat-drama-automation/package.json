@@ -19,6 +19,7 @@
   "dependencies": {
     "@dramabridge/axios": "workspace:*",
     "@dramabridge/automation-logging": "workspace:*",
+    "@dramabridge/browser-window": "workspace:*",
     "@dramabridge/file-utils": "workspace:*",
     "@dramabridge/media-assets": "workspace:*",
     "p-queue": "^9.3.3",
