@@ -74,12 +74,22 @@ async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: Taobao
       platform: "taobao-drama", error, page, logFilePath: options.logFilePath, stage,
       task: { accountTaskId: task.accountTaskId, title: task.originalTitle },
     });
+    errorLog(options, message, {
+      error,
+      failStage: stage,
+      taskId: task.accountTaskId,
+      title: task.originalTitle,
+      activeUrl: page.url(),
+      diagnosticDir: diagnostics?.directory,
+      diagnosticRecord: diagnostics?.recordFile,
+      screenshotFile: diagnostics?.screenshotFile,
+      diagnosticCaptureError: diagnostics?.screenshotError ?? (!diagnostics ? "失败诊断信息保存失败" : undefined),
+    });
     setLastTask({ accountTaskId: task.accountTaskId, originalTitle: task.originalTitle, status: "failed", errorMessage: message, updatedAt: new Date().toISOString() });
     await reportWithRetry(options, {
       taskId: task.accountTaskId, success: false, failStage: stage, errorMessage: message,
       resultJson: { activeUrl: page.url(), accountId: task.accountId, accountName: task.accountName },
     }).catch((reportError) => errorLog(options, `[taobao-drama] 失败任务回写异常：${errorMessage(reportError)}`));
-    errorLog(options, `[taobao-drama] 失败诊断目录：${diagnostics?.directory ?? "不可用"}`);
     return false;
   }
   return true;

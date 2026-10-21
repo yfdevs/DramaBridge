@@ -109,6 +109,33 @@ test("错误日志同时提供简短说明和可解析错误码", async () => {
   }
 });
 
+test("错误日志保留根因链并提取全部错误码", () => {
+  const entries: Array<Parameters<NonNullable<Parameters<typeof createAutomationLogger>[0]["onEntry"]>>[0]> = [];
+  const logger = createAutomationLogger({
+    platform: "taobao-drama",
+    scope: "runtime",
+    console: false,
+    onEntry: (entry) => entries.push(entry),
+  });
+  const cause = new Error(
+    "TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: 上传视频尺寸不符合平台要求",
+  );
+  const error = Object.assign(new Error("TAOBAO_DRAMA_PUBLISH_FAILED"), { cause });
+
+  logger.error("淘宝任务执行失败", { error, failStage: "UPLOAD_FILE" });
+
+  assert.deepEqual(entries[0]?.error?.codes, [
+    "TAOBAO_DRAMA_PUBLISH_FAILED",
+    "TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED",
+  ]);
+  assert.equal(entries[0]?.error?.stage, "UPLOAD_FILE");
+  assert.match(entries[0]?.error?.summary ?? "", /根因/u);
+  assert.equal(
+    (entries[0]?.details?.error as { cause?: { message?: string } })?.cause?.message,
+    cause.message,
+  );
+});
+
 test("通用冗长文案通过集中规则转换为短消息", () => {
   const entries: Array<{ message: string }> = [];
   const logger = createAutomationLogger({

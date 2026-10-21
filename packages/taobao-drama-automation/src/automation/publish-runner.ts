@@ -1,5 +1,9 @@
 import type { BrowserContext, Page } from "playwright";
 import { isNonRetryableBaiduNetdiskResourceError } from "@dramabridge/media-assets";
+import {
+  queryAllTaobaoCollections,
+  type TaobaoCollectionListItem,
+} from "../api/collection-list.js";
 import { taobaoMaterialRoot, validateTaobaoEpisodeVideos } from "../shared/local-materials.js";
 import { prepareTaobaoCollectionCover } from "../shared/cover.js";
 import { prepareTaobaoCostConfigImage } from "../shared/cost-material.js";
@@ -29,6 +33,53 @@ export function taobaoBaiduResourceRequest(
     requireAllDiscoveredAssets: true,
     requiredMetadataTextFiles: 0,
   };
+}
+
+function normalizedCollectionTitle(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function findReusableTaobaoCollection(
+  items: TaobaoCollectionListItem[],
+  title: string,
+) {
+  const expectedTitle = normalizedCollectionTitle(title);
+  return items.find((item) =>
+    normalizedCollectionTitle(item.collectionInfo.title) === expectedTitle
+    && item.collectionInfo.contentCount === 0
+  );
+}
+
+async function findExistingEmptyCollection(
+  context: BrowserContext,
+  title: string,
+  options: TaobaoDramaRuntimeOptions,
+) {
+  try {
+    const result = await queryAllTaobaoCollections(context, { keyword: title });
+    const reusable = findReusableTaobaoCollection(result.data, title);
+    if (reusable) {
+      log(options, "[taobao-drama] 发现同名空合集，跳过合集创建", {
+        title,
+        collectionId: String(reusable.collectionInfo.collectionId),
+        contentCount: reusable.collectionInfo.contentCount,
+      });
+      return reusable;
+    }
+    log(options, "[taobao-drama] 未找到同名空合集，将创建新合集", {
+      title,
+      matchedCount: result.data.filter((item) =>
+        normalizedCollectionTitle(item.collectionInfo.title) === normalizedCollectionTitle(title)
+      ).length,
+    });
+    return undefined;
+  } catch (error) {
+    log(options, "[taobao-drama] 查询现有合集失败，将按原流程创建合集", {
+      title,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
 }
 
 async function ensureResource(
@@ -78,25 +129,32 @@ export async function runTaobaoPublishTask(
   task: TaobaoBatchUploadTask,
   options: TaobaoDramaRuntimeOptions,
 ) {
-  log(options, `[taobao-drama] 开始创建合集并批量上传：${task.originalTitle}`);
+  log(options, `[taobao-drama] 开始检查合集并批量上传：${task.originalTitle}`);
   // Navigate immediately so a task never presents an about:blank window while a
   // lengthy Baidu download or local resource check is running.
   await waitForTaobaoPage(page, "batch", options);
   await saveTaobaoCredentialState(context, options);
+  const collectionTitle = task.title ?? task.originalTitle;
+  const reusableCollection = await findExistingEmptyCollection(context, collectionTitle, options);
   const baiduNetdiskResource = await ensureResource(task, options);
   await validateTaobaoEpisodeVideos(task, options);
   const metadata = await prepareTaobaoEpisodeMetadata(task, options);
-  const collectionMetadata = createTaobaoCollectionMetadata(task, metadata);
-  const coverFile = await prepareTaobaoCollectionCover(task, collectionMetadata, options);
-  const costConfigImage = await prepareTaobaoCostConfigImage(task, options);
+  if (!reusableCollection) {
+    const collectionMetadata = createTaobaoCollectionMetadata(task, metadata);
+    const coverFile = await prepareTaobaoCollectionCover(task, collectionMetadata, options);
+    const costConfigImage = await prepareTaobaoCostConfigImage(task, options);
 
-  await waitForTaobaoPage(page, "collection", options);
-  await saveTaobaoCredentialState(context, options);
-  await fillAndCreateTaobaoCollection(page, collectionMetadata, coverFile, costConfigImage, options);
+    await waitForTaobaoPage(page, "collection", options);
+    await saveTaobaoCredentialState(context, options);
+    await fillAndCreateTaobaoCollection(page, collectionMetadata, coverFile, costConfigImage, options);
+  }
 
   await waitForTaobaoPage(page, "batch", options);
   await saveTaobaoCredentialState(context, options);
   await uploadAndPublishTaobaoEpisodes(page, task, metadata, options);
-  log(options, `[taobao-drama] ${task.originalTitle} 合集创建及 ${task.episodeCount} 集批量发布完成`);
+  log(
+    options,
+    `[taobao-drama] ${task.originalTitle} ${reusableCollection ? "空合集复用" : "合集创建"}及 ${task.episodeCount} 集批量发布完成`,
+  );
   return baiduNetdiskResource;
 }

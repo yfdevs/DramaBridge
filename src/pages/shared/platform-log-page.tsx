@@ -157,7 +157,7 @@ function LogRow({
   return (
     <div
       className={cn(
-        "group/row border-b border-border/50 px-3.5 transition-colors last:border-b-0 hover:bg-muted/30",
+        "group/row border-b border-border/50 pl-3.5 pr-[38px] transition-colors last:border-b-0 hover:bg-muted/30",
         entry.level === "error" && "bg-red-500/[0.035] hover:bg-red-500/[0.06]",
       )}
     >
@@ -496,10 +496,11 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
         </Tooltip>
       </div>
 
-      <section className="min-h-0 flex-1 overflow-hidden rounded-lg border bg-card" aria-label="日志内容">
+      <section className="-mr-6 min-h-0 flex-1 overflow-hidden" aria-label="日志内容">
         {filteredEntries.length > 0 ? (
           <Virtuoso
             ref={virtuosoRef}
+            className="scroll-fade-y"
             data={filteredEntries}
             initialTopMostItemIndex={filteredEntries.length - 1}
             computeItemKey={(_index, entry) => entry.viewerId}
@@ -523,7 +524,7 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
             )}
           />
         ) : (
-          <div className="flex h-full min-h-64 flex-col items-center justify-center px-6 text-center">
+          <div className="flex h-full min-h-64 flex-col items-center justify-center pr-12 pl-6 text-center">
             <p className="text-sm font-medium">
               {entries.length > 0 ? "没有匹配的日志" : "暂无日志"}
             </p>

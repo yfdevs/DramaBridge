@@ -1065,7 +1065,15 @@ function redactFields(fields: AutomationLogFields): AutomationLogFields {
 
 function redactValue(value: unknown, depth: number): unknown {
   if (value instanceof Error) {
-    return { name: value.name, message: value.message, stack: value.stack };
+    const cause = "cause" in value ? value.cause : undefined;
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+      ...(cause !== undefined
+        ? { cause: depth >= 4 ? "[MAX_DEPTH]" : redactValue(cause, depth + 1) }
+        : {}),
+    };
   }
   if (typeof value === "string") return value.length > 4_000 ? `${value.slice(0, 4_000)}…` : value;
   if (typeof value === "bigint" || typeof value === "symbol" || typeof value === "function")

@@ -4,6 +4,13 @@ export type { DouyinDramaAccount } from "./api/account-config.js";
 export { createDouyinDramaHttpClient } from "./api/http-client.js";
 export type { DouyinDramaHttpClient } from "./api/http-client.js";
 export {
+  createDouyinBookListUrl,
+  douyinBookTitle,
+  findExistingDouyinBook,
+  queryDouyinBookByTitle,
+} from "./api/book-list.js";
+export type { DouyinBookListItem } from "./api/book-list.js";
+export {
   createMockDouyinCopyrightSeriesTask,
   createMockDouyinDramaTask,
   createMockDouyinNetdiskTestTask,

@@ -11,6 +11,7 @@ import {
   reportDouyinDramaTaskErrorApi,
   reportDouyinDramaTaskSuccessApi,
 } from "../api/task.js";
+import { queryDouyinBookByTitle } from "../api/book-list.js";
 import {
   douyinDramaLoginStateFromUrl,
   ensureDouyinDramaCreatePage,
@@ -252,6 +253,59 @@ async function runTask(
     updatedAt: new Date().toISOString(),
   });
   try {
+    const existingBook = await queryDouyinBookByTitle(
+      taskPage.context(),
+      task.playlet.title,
+    ).catch((error) => {
+      warn(
+        options,
+        "[douyin-drama] 已有剧目检查失败，继续执行原创建上传流程。",
+        { accountTaskId: task.accountTaskId, title: task.playlet.title, error },
+        "task",
+      );
+      return undefined;
+    });
+    if (existingBook?.book) {
+      await reportDouyinDramaTaskSuccessApi({
+        apiConfig: options.apiConfig,
+        runtimeOptions: options,
+        accountTaskId: task.accountTaskId,
+        resultJson: {
+          skipped: true,
+          reason: "DOUYIN_BOOK_ALREADY_EXISTS",
+          title: task.playlet.title,
+          bookId: existingBook.bookId,
+        },
+      });
+      setLastTask({
+        accountTaskId: task.accountTaskId,
+        originalTitle: task.originalTitle,
+        status: "succeeded",
+        updatedAt: new Date().toISOString(),
+      });
+      log(
+        options,
+        "[douyin-drama] 平台已有同名剧目，已跳过创建上传并上报成功。",
+        {
+          accountTaskId: task.accountTaskId,
+          title: task.playlet.title,
+          bookId: existingBook.bookId,
+          matchedCount: existingBook.matchedCount,
+        },
+        "task",
+      );
+      return true;
+    }
+    log(
+      options,
+      "[douyin-drama] 未找到同名剧目，继续创建上传。",
+      {
+        accountTaskId: task.accountTaskId,
+        title: task.playlet.title,
+        matchedCount: existingBook?.matchedCount,
+      },
+      "task",
+    );
     log(options, "[douyin-drama] 阶段开始：准备百度网盘资源。", {
       accountTaskId: task.accountTaskId,
     }, "task");
