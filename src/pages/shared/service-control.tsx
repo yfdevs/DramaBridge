@@ -1,9 +1,9 @@
 import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Chrome, CheckCircle, Cog, ChevronRight, ChevronDown } from "@mynaui/icons-react";
-import { NavLink, useLocation } from "react-router-dom";
-import { platformForPath, routePath } from "@/config/navigation";
+import { Chrome, CheckCircle, ChevronDown } from "@mynaui/icons-react";
+import { useLocation } from "react-router-dom";
+import { platformForPath } from "@/config/navigation";
 import { formatRuntimeDuration, useAppRuntime } from "@/platforms/app-runtime/context";
 import { toast } from "sonner";
 
@@ -235,17 +235,6 @@ export function ServiceControlButtonPage({
                 <span className="mx-2">·</span>
                 {runtime?.browserInstanceCount ?? 0} 个浏览器实例
               </p>
-            )}
-            {!running && (
-              <Button
-                className="mt-3 h-7 gap-1.5 px-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
-                variant="ghost"
-                render={<NavLink to={routePath(platform.configRoute)} />}
-              >
-                <Cog className="size-3.5" />
-                查看平台配置
-                <ChevronRight className="size-3" />
-              </Button>
             )}
           </div>
         </div>

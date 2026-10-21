@@ -30,14 +30,15 @@ const emptyConfig: GlobalAppConfig = {
 
 const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   {
-    title: "外观",
-    description: "保存后立即生效",
+    title: "外观与主题",
+    description: "保存后立即生效，可随系统自动切换浅色和深色。",
+    layout: "compact",
     fields: [
       {
         kind: "select",
         key: "theme",
-        label: "主题",
-        description: "可随系统自动切换浅色和深色。",
+        label: "外观与主题",
+        description: "保存后立即生效，可随系统自动切换浅色和深色。",
         options: [
           { value: "system", label: "跟随系统" },
           { value: "light", label: "浅色" },

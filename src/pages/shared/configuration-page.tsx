@@ -78,6 +78,7 @@ export type ConfigSectionDefinition<TConfig> = {
   title: string;
   description: string;
   fields: ConfigFieldDefinition<TConfig>[];
+  layout?: "default" | "compact";
 };
 
 export function usePlatformConfig<TConfig extends object, TResult extends ConfigResult<TConfig>>({
@@ -299,12 +300,16 @@ export function ConfigSection<TConfig extends object>({
   footer?: ReactNode;
   onChange?: (key: ConfigFieldKey<TConfig>, value: string) => void;
   onSelectDirectory?: (key: ConfigFieldKey<TConfig>) => void;
-  section: Pick<ConfigSectionDefinition<TConfig>, "description" | "title">;
+  section: Pick<ConfigSectionDefinition<TConfig>, "description" | "layout" | "title">;
 }) {
   const sectionFields = fields ?? [];
 
   return (
-    <ConfigPanelSection description={section.description} title={section.title}>
+    <ConfigPanelSection
+      description={section.description}
+      layout={section.layout}
+      title={section.title}
+    >
       {sectionFields.map((field, index) => (
         <div key={field.key}>
           {index > 0 ? <Separator /> : null}
@@ -329,18 +334,27 @@ export function ConfigSection<TConfig extends object>({
 export function ConfigPanelSection({
   children,
   description,
+  layout = "default",
   title,
 }: {
   children: ReactNode;
   description: string;
+  layout?: "default" | "compact";
   title: string;
 }) {
+  const compact = layout === "compact";
+
   return (
-    <section className="scroll-mt-28 space-y-3">
-      <div className="space-y-1">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
+    <section
+      aria-label={compact ? title : undefined}
+      className={compact ? "scroll-mt-28" : "scroll-mt-28 space-y-3"}
+    >
+      {!compact ? (
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+      ) : null}
       <Card className="rounded-none border-0 bg-transparent py-0 shadow-none ring-0">
         <CardContent className="px-0 py-0">
           <FieldGroup className="gap-0">{children}</FieldGroup>
