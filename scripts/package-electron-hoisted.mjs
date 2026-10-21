@@ -247,13 +247,48 @@ async function electronTarget() {
   return electronVersion.replace(/^[^\d]*/, "");
 }
 
-async function writeBuilderConfig() {
+function isBuildingForHostPlatform() {
+  const requestedPlatforms = new Set(
+    process.argv.slice(2).filter((argument) => ["--linux", "--mac", "--win", "--windows"].includes(argument)),
+  );
+  if (requestedPlatforms.size === 0) return true;
+  if (process.platform === "win32") return requestedPlatforms.has("--win") || requestedPlatforms.has("--windows");
+  if (process.platform === "darwin") return requestedPlatforms.has("--mac");
+  return requestedPlatforms.has("--linux");
+}
+
+async function resolveInstalledElectronDist(target) {
+  if (!isBuildingForHostPlatform()) return undefined;
+
+  const electronRoot = path.join(rootDir, "node_modules", "electron");
+  const installedPackage = await readJson(path.join(electronRoot, "package.json")).catch(() => undefined);
+  if (installedPackage?.version !== target) return undefined;
+
+  const electronDist = path.join(electronRoot, "dist");
+  const executable = process.platform === "win32"
+    ? path.join(electronDist, "electron.exe")
+    : process.platform === "darwin"
+      ? path.join(electronDist, "Electron.app", "Contents", "MacOS", "Electron")
+      : path.join(electronDist, "electron");
+  try {
+    await access(executable);
+  } catch {
+    return undefined;
+  }
+
+  console.log(`Using installed Electron ${target}: ${electronDist}`);
+  return electronDist;
+}
+
+async function writeBuilderConfig(target, electronDist) {
   const source = await readFile(path.join(rootDir, "electron-builder.json5"), "utf8");
-  const target = await electronTarget();
+  const localDistributionConfig = electronDist
+    ? `\n  electronDist: ${toJsonString(electronDist)},`
+    : "";
   const config = source
     .replace(
       "{",
-      `{\n  electronVersion: ${toJsonString(target)},`,
+      `{\n  electronVersion: ${toJsonString(target)},${localDistributionConfig}`,
     )
     .replace(
       /output:\s*"release\/\$\{version\}"/,
@@ -284,14 +319,15 @@ async function main() {
   // supported FFMPEG_BIN override, then copy that exact file into the new package.
   // This keeps the isolated hoisted install deterministic on restricted networks.
   const sourceFfmpeg = await cacheValidatedFfmpeg(await resolveValidatedFfmpegSource());
+  const target = await electronTarget();
+  const electronDist = await resolveInstalledElectronDist(target);
   await copyBuildInputs();
   await Promise.all([
     writePackageJson(),
-    writeBuilderConfig(),
+    writeBuilderConfig(target, electronDist),
     writeHoistedPnpmConfig(),
   ]);
 
-  const target = await electronTarget();
   await run("pnpm", [
     "install",
     "--prod",

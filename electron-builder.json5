@@ -48,13 +48,13 @@
     publish: [
       {
         provider: "generic",
-        url: "https://down.mxw.xx.kg/https://github.com/yfdevs/at/releases/latest/download",
+        url: "https://down.mxw.xx.kg/https://github.com/yfdevs/DramaBridge/releases/latest/download",
         channel: "latest",
       },
       {
         provider: "github",
         owner: "yfdevs",
-        repo: "at",
+        repo: "DramaBridge",
         releaseType: "release",
       },
     ],

@@ -87,7 +87,7 @@ function configurePublishProxyEnvironment() {
       .join(" ");
   }
 
-  return { httpProxy, httpsProxy, nativeProxyPreload };
+  return { httpProxy, httpsProxy, nativeProxyPreload, noProxy };
 }
 
 function displayProxy(value) {
@@ -102,9 +102,9 @@ function displayProxy(value) {
   }
 }
 
-async function run(command, args) {
+async function run(command, args, options = {}) {
   await execa(command, args, {
-    env: process.env,
+    env: options.env ?? process.env,
     preferLocal: true,
     stdio: "inherit",
     windowsHide: true,
@@ -129,7 +129,18 @@ try {
   if (proxy.httpsProxy) {
     console.log(`Publishing GitHub assets through proxy: ${displayProxy(proxy.httpsProxy)}`);
   }
-  await run("node", ["scripts/package-electron-hoisted.mjs", "--win", "--publish", "always"]);
+  await run("node", ["scripts/package-electron-hoisted.mjs", "--win", "--publish", "never"]);
+
+  const publishEnvironment = { ...process.env, NODE_USE_ENV_PROXY: "1" };
+  delete publishEnvironment.NODE_OPTIONS;
+  if (proxy.httpProxy) publishEnvironment.HTTP_PROXY = proxy.httpProxy;
+  if (proxy.httpsProxy) publishEnvironment.HTTPS_PROXY = proxy.httpsProxy;
+  if (proxy.noProxy) publishEnvironment.NO_PROXY = proxy.noProxy;
+  await run("node", [
+    "scripts/publish-github-release.mjs",
+    "--owner", "yfdevs",
+    "--repo", "DramaBridge",
+  ], { env: publishEnvironment });
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
