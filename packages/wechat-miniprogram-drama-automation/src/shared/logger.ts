@@ -30,7 +30,7 @@ const logContextStorage = new AsyncLocalStorage<LogContext>();
 function logFilePath() {
   const configured = getWechatMiniProgramRuntimeSettings().runDataDir || ".drama-runs/wechat-miniprogram-drama";
   const runDataDir = path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured);
-  return path.join(runDataDir, "logs", `app-${formatDateKey()}.log`);
+  return path.join(runDataDir, "logs", `app-${formatDateKey()}.json`);
 }
 
 function contextFields(context = logContextStorage.getStore() ?? {}) {

@@ -1,10 +1,18 @@
 import { AppUpdateControl } from "@/components/app-update-control";
 import { TaskStatisticsPage } from "@/pages/shared/task-statistics-page";
+import { PlatformLogPage } from "@/pages/shared/platform-log-page";
 import { WorkspacePageActivity } from "@/components/workspace-toolbar";
 import { useEffect, useState, type ComponentType } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
-import { defaultRoute, isAppRoute, routePath, type AppRoute } from "@/config/navigation";
+import {
+  defaultRoute,
+  isAppRoute,
+  platformNavigation,
+  routePath,
+  type AppRoute,
+  type PlatformId,
+} from "@/config/navigation";
 import { GlobalConfigurationPage } from "@/pages/app-config/configuration";
 import { KuaishouAnalyticsPage } from "@/pages/kuaishou-drama/analytics";
 import { KuaishouDramaConfigurationPage } from "@/pages/kuaishou-drama/configuration";
@@ -37,6 +45,13 @@ import { PinduoduoDramaServiceControlPage } from "@/pages/pinduoduo-drama/servic
 import { PinduoduoDramaUploadRecordsPage } from "@/pages/pinduoduo-drama/upload-records";
 import { TiktokDramaCenterConfigurationPage } from "@/pages/tiktok-drama/configuration";
 import { TiktokDramaCenterServiceControlPage } from "@/pages/tiktok-drama/service-control";
+
+const platformLogRouteComponents = Object.fromEntries(
+  platformNavigation.map(({ id }) => [
+    `${id}/logs`,
+    () => <PlatformLogPage platform={id} />,
+  ]),
+) as unknown as Record<`${PlatformId}/logs`, ComponentType>;
 
 const appRouteComponents: Record<AppRoute, ComponentType> = {
   "app/config": GlobalConfigurationPage,
@@ -86,6 +101,7 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "douyin-drama/statistics": () => <TaskStatisticsPage platform="douyin-drama" />,
   "tiktok-drama/statistics": () => <TaskStatisticsPage platform="tiktok-drama" />,
   "pinduoduo-drama/statistics": () => <TaskStatisticsPage platform="pinduoduo-drama" />,
+  ...platformLogRouteComponents,
 };
 
 export function AppRoutes() {

@@ -1,6 +1,6 @@
 import { platformIcons } from "@/assets/platform-icons";
 import type { Icon } from "@mynaui/icons-react";
-import { ChartBar, CloudUpload, FineTune, Terminal } from "@mynaui/icons-react";
+import { ChartBar, CloudUpload, FineTune, List, Terminal } from "@mynaui/icons-react";
 
 export type PlatformId =
   | "wechat-drama"
@@ -18,6 +18,7 @@ export type PlatformId =
 
 export type AppRoute =
   | `${PlatformId}/statistics`
+  | `${PlatformId}/logs`
   | "app/updates"
   | "app/config"
   | "wechat-drama/publish"
@@ -58,20 +59,25 @@ const appRoutes = [
   "wechat-drama/publish",
   "wechat-drama/config",
   "wechat-drama/statistics",
+  "wechat-drama/logs",
   "wechat-drama/accounts",
   "wechat-drama/service",
   "wechat-miniprogram-drama/service",
   "wechat-miniprogram-drama/config",
   "wechat-miniprogram-drama/statistics",
+  "wechat-miniprogram-drama/logs",
   "meituan-drama/service",
   "meituan-drama/config",
   "meituan-drama/statistics",
+  "meituan-drama/logs",
   "taobao-drama/service",
   "taobao-drama/config",
   "taobao-drama/statistics",
+  "taobao-drama/logs",
   "kuaishou-drama/service",
   "kuaishou-drama/config",
   "kuaishou-drama/statistics",
+  "kuaishou-drama/logs",
   "kuaishou-drama/projects",
   "kuaishou-drama/schedule",
   "kuaishou-drama/analytics",
@@ -79,25 +85,32 @@ const appRoutes = [
   "qq-drama/service",
   "qq-drama/config",
   "qq-drama/statistics",
+  "qq-drama/logs",
   "tencent-huolong-drama/service",
   "tencent-huolong-drama/config",
   "tencent-huolong-drama/statistics",
+  "tencent-huolong-drama/logs",
   "iqiyi-drama/service",
   "iqiyi-drama/config",
   "iqiyi-drama/statistics",
+  "iqiyi-drama/logs",
   "baidu-drama/service",
   "baidu-drama/config",
   "baidu-drama/statistics",
+  "baidu-drama/logs",
   "douyin-drama/service",
   "douyin-drama/config",
   "douyin-drama/statistics",
+  "douyin-drama/logs",
   "tiktok-drama/service",
   "tiktok-drama/config",
   "tiktok-drama/statistics",
+  "tiktok-drama/logs",
   "pinduoduo-drama/service",
   "pinduoduo-drama/records",
   "pinduoduo-drama/config",
   "pinduoduo-drama/statistics",
+  "pinduoduo-drama/logs",
 ] as const satisfies readonly AppRoute[];
 
 export type NavigationItem = {
@@ -243,7 +256,7 @@ export const platformNavigation: PlatformNavigationItem[] = [
   },
 ];
 
-export const navigationGroups: NavigationGroup[] = [
+const platformNavigationGroups: NavigationGroup[] = [
   {
     title: "微信视频号",
     items: [
@@ -490,6 +503,20 @@ export const navigationGroups: NavigationGroup[] = [
     ],
   },
 ];
+
+export const navigationGroups: NavigationGroup[] = platformNavigationGroups.map(
+  (group, index) => ({
+    ...group,
+    items: [
+      ...group.items,
+      {
+        title: "实时日志",
+        route: `${platformNavigation[index].id}/logs`,
+        icon: List,
+      },
+    ],
+  }),
+);
 
 export function isAppRoute(route: string): route is AppRoute {
   return appRoutes.includes(route as AppRoute);

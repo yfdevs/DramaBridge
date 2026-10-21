@@ -403,7 +403,7 @@ function findLatestVideoAccountLogFile(videoAccountId: string) {
   const latestLogFile = readdirSync(logsDir, { withFileTypes: true })
     .filter((entry) => (
       entry.isFile()
-      && /\.(jsonl|log)$/i.test(entry.name)
+      && /\.(json|jsonl|log)$/i.test(entry.name)
       && (
         entry.name.startsWith(legacyAccountLogPrefix)
         || entry.name.includes(accountLogSegment)
@@ -419,7 +419,7 @@ function findLatestVideoAccountLogFile(videoAccountId: string) {
   if (latestLogFile) return latestLogFile
 
   const latestPlatformLog = readdirSync(logsDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^app-\d{4}-\d{2}-\d{2}\.log$/i.test(entry.name))
+    .filter((entry) => entry.isFile() && /^app-\d{4}-\d{2}-\d{2}\.(?:json|log)$/i.test(entry.name))
     .map((entry) => path.join(logsDir, entry.name))
     .sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs)[0]
 

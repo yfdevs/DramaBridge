@@ -12,7 +12,7 @@ import {
 
 void test("writes package logs to the runtime path injected by the platform module", async () => {
   const testDir = await mkdtemp(path.join(tmpdir(), "baidu-netdisk-logging-"));
-  const logFilePath = path.join(testDir, "configured-run-root", "baidu-netdisk", "logs", "app-test.log");
+  const logFilePath = path.join(testDir, "configured-run-root", "baidu-netdisk", "logs", "app-test.json");
 
   try {
     configureBaiduNetdiskAutomationLogging({
@@ -22,9 +22,11 @@ void test("writes package logs to the runtime path injected by the platform modu
     log("日志目录注入测试", { source: "test" });
     await flushBaiduNetdiskAutomationLogs();
 
-    const content = await readFile(logFilePath, "utf8");
-    assert.match(content, /\[BAIDU_NETDISK:NETDISK\] 日志目录注入测试/);
-    assert.match(content, /source=test/);
+    const entry = JSON.parse((await readFile(logFilePath, "utf8")).trim());
+    assert.equal(entry.platform, "baidu-netdisk");
+    assert.equal(entry.scope, "netdisk");
+    assert.equal(entry.message, "日志目录注入测试");
+    assert.equal(entry.details.source, "test");
   } finally {
     await rm(testDir, { recursive: true, force: true });
   }

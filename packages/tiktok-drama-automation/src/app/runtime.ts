@@ -78,7 +78,7 @@ export async function startTiktokDramaCenterRuntime(
       userDataDir,
       headless: browser?.headless ?? runtimeSettings.headless ?? false,
       logFile:
-        runtimeSettings.logFile ?? path.join(runDataDir, "logs", `app-${formatDateKey()}.log`),
+        runtimeSettings.logFile ?? path.join(runDataDir, "logs", `app-${formatDateKey()}.json`),
       schemeFile: runtimeSettings.schemeFile ?? path.join(runDataDir, "scheme.local.json"),
       tempDir: runtimeSettings.tempDir ?? path.join(runDataDir, "tmp"),
       videoDir: runtimeSettings.videoDir ?? path.join(runDataDir, "videos"),

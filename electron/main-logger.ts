@@ -25,7 +25,7 @@ export function getMainLogDir() {
 export function getMainLogFilePath() {
   const logDir = getMainLogDir();
   mkdirSync(logDir, { recursive: true });
-  return path.join(logDir, `app-${formatDateKey()}.log`);
+  return path.join(logDir, `app-${formatDateKey()}.json`);
 }
 
 export async function openMainLogDir() {

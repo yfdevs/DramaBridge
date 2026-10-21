@@ -8,7 +8,7 @@ import {
 import { z } from 'zod';
 
 const configSchema = z.object({
-  logFile: z.string().min(1).default(path.resolve(`logs/app-${formatDateKey()}.log`)),
+  logFile: z.string().min(1).default(path.resolve(`logs/app-${formatDateKey()}.json`)),
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   loginUrl: z.string().url().default('https://www.tiktokdramacenter.com/login'),
   draftUrl: z.string().url().default('https://www.tiktokdramacenter.com/series/draft'),

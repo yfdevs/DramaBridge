@@ -331,7 +331,7 @@ function formatDateKey(date = new Date()) {
 }
 
 function kuaishouDramaLogFile(config = readConfig()) {
-  return path.join(kuaishouDramaLogDir(config), `app-${formatDateKey()}.log`);
+  return path.join(kuaishouDramaLogDir(config), `app-${formatDateKey()}.json`);
 }
 
 function storagePaths(

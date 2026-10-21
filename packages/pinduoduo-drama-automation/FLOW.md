@@ -77,8 +77,7 @@ Electron 侧传入的关键参数：
 - 登录态快照：`<accountDir>/storage-state.json`
 - 合同下载目录：`<accountDir>/upload-assets/contracts`
 - 日志目录：`<runDataDir>/logs`
-- 可读日志：`<runDataDir>/logs/app-YYYY-MM-DD.log`
-- 结构化日志：`<runDataDir>/logs/structured/app-YYYY-MM-DD.jsonl`
+- 统一日志：`<runDataDir>/logs/app-YYYY-MM-DD.json`（逐行 JSON，每行一个完整事件）
 - 数据库：由 Electron 传入 `automationDatabasePath()`，当前是应用级 `automation.sqlite`
 
 日志实现：

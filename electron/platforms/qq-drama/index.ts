@@ -424,7 +424,7 @@ function formatDateKey(date = new Date()) {
 }
 
 function qqDramaLogFile(config = readConfig()) {
-  return path.join(qqDramaLogDir(config), `app-${formatDateKey()}.log`);
+  return path.join(qqDramaLogDir(config), `app-${formatDateKey()}.json`);
 }
 
 function storagePaths(

@@ -90,6 +90,28 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // ...
 })
 
+contextBridge.exposeInMainWorld('platformLogs', {
+  subscribe(
+    platform: Parameters<typeof trpcClient.platformLogs.subscribe>[0]['platform'],
+    observer: {
+      onData: (event: unknown) => void
+      onError: (error: { message: string }) => void
+    },
+  ) {
+    const subscription = trpcClient.platformLogs.subscribe(
+      { platform },
+      {
+        onData: observer.onData,
+        onError: (error) => observer.onError({ message: error.message }),
+      },
+    )
+    return () => subscription.unsubscribe()
+  },
+  clear(platform: Parameters<typeof trpcClient.clearPlatformLog.mutate>[0]['platform']) {
+    return trpcClient.clearPlatformLog.mutate({ platform })
+  },
+})
+
 window.addEventListener('DOMContentLoaded', () => {
   document.documentElement.classList.add(rendererPlatformClass(process.platform))
 

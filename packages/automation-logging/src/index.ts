@@ -8,6 +8,8 @@ import {
   type transport as WinstonTransport,
 } from "winston";
 
+import { conciseLogMessageRules } from "./log-messages.js";
+
 export type AutomationLogLevel = "debug" | "info" | "warn" | "error";
 export type AutomationLogFields = Record<string, unknown>;
 
@@ -21,6 +23,18 @@ export type AutomationLogEntry = {
   message: string;
   context?: AutomationLogFields;
   details?: AutomationLogFields;
+  error?: AutomationLogError;
+};
+
+export type AutomationLogError = {
+  /** Stable code for grouping and automated handling. */
+  code?: string;
+  /** Full cause chain, ordered from the outer failure to its root cause. */
+  codes?: string[];
+  /** Short, actionable description intended for operators. */
+  summary: string;
+  /** Stable workflow area in which the failure occurred. */
+  stage: string;
 };
 
 export type AutomationLogInput = string | AutomationLogEntry;
@@ -543,8 +557,8 @@ export function createAutomationLogger(options: CreateAutomationLoggerOptions): 
       defaultFailureRetentionDays,
     );
   }
-  // Automation services run in the Electron main process. Keep their structured
-  // logs visible in an attached terminal by default; callers can still opt out
+  // Automation services run in the Electron main process. Keep their logs visible
+  // in an attached terminal by default; callers can still opt out
   // explicitly with `console: false`.
   const consoleEnabled = options.console ?? true;
   const sink = getWinstonSink({
@@ -561,19 +575,25 @@ export function createAutomationLogger(options: CreateAutomationLoggerOptions): 
   ) => {
     const { message: rawMessage, fields } = resolveLogArguments(first, second);
     const parsed = parseLegacyMessage(rawMessage, scope);
-    const message = normalizeMessage(parsed.message);
+    const message = normalizeLogMessage(parsed.message, parsed.scope);
     const safeContext = redactFields(context);
     const safeDetails = redactFields(fields);
+    const entryScope = inferScope(parsed.scope, message);
+    const error = buildStructuredLogError(level, entryScope, message, {
+      ...safeContext,
+      ...safeDetails,
+    });
     const entry: AutomationLogEntry = {
       version: 1,
       pid: process.pid,
       time: formatLocalDateTime(new Date()),
       level,
       platform: options.platform,
-      scope: inferScope(parsed.scope, message),
+      scope: entryScope,
       message,
       ...(Object.keys(safeContext).length ? { context: safeContext } : {}),
       ...(Object.keys(safeDetails).length ? { details: safeDetails } : {}),
+      ...(error ? { error } : {}),
     };
 
     try {
@@ -822,7 +842,7 @@ export function normalizeAutomationLogInput(
     level: levelFromLegacyMessage(input),
     platform: fallback.platform,
     scope: parsed.scope,
-    message: normalizeMessage(parsed.message),
+    message: normalizeLogMessage(parsed.message, parsed.scope),
   };
 }
 
@@ -976,6 +996,40 @@ function normalizeMessage(message: string) {
     .replace(/[.。]+$/, "");
 }
 
+function normalizeLogMessage(message: string, scope: string) {
+  const normalized = normalizeMessage(message);
+  for (const [pattern, replacement] of conciseLogMessageRules) {
+    if (pattern.test(normalized)) return replacement;
+  }
+  if (scope === "runtime") return normalized.replace(/^运行时停止$/u, "服务停止");
+  return normalized;
+}
+
+function buildStructuredLogError(
+  level: AutomationLogLevel,
+  scope: string,
+  message: string,
+  fields: AutomationLogFields,
+): AutomationLogError | undefined {
+  const errorValue = fields.error ?? fields.errorMessage ?? fields.reason;
+  if (level !== "error" && errorValue === undefined) return undefined;
+
+  const rawMessages = errorCauseMessages(errorValue ?? message);
+  const codes = unique(rawMessages.flatMap((item) => extractErrorCodes(item)));
+  const stageValue = fields.failStage ?? fields.stage ?? fields.step ?? scope;
+  const stage = primitiveErrorValue(stageValue).trim() || scope;
+  const summary = formatAutomationErrorReport(errorValue ?? message, {
+    fallbackMessage: message,
+    maxLength: 600,
+  });
+
+  return {
+    ...(codes[0] ? { code: codes[0], codes } : {}),
+    summary,
+    stage,
+  };
+}
+
 function inferScope(scope: string, message: string) {
   if (scope !== "runtime" && scope !== "system") return scope;
   if (/登录|账号已登录|扫码|login|credential/i.test(message)) return "auth";
@@ -1066,17 +1120,8 @@ function formatByteSize(value: number) {
   return `${(value / 1_024 / 1_024 / 1_024).toFixed(1)}GB`;
 }
 
-function readableLogFile(configuredPath: string) {
-  return configuredPath.replace(/\.(?:jsonl|log)$/i, ".log");
-}
-
-function structuredLogFile(configuredPath: string) {
-  const readablePath = readableLogFile(configuredPath);
-  return path.join(
-    path.dirname(readablePath),
-    "structured",
-    `${path.basename(readablePath, ".log")}.jsonl`,
-  );
+function jsonLogFile(configuredPath: string) {
+  return configuredPath.replace(/\.(?:json|jsonl|log)$/i, ".json");
 }
 
 type WinstonLogInfo = {
@@ -1096,7 +1141,9 @@ function getWinstonSink(options: {
   retentionDays: number;
 }) {
   if (!options.consoleEnabled && !options.logFilePath) return undefined;
-  const resolvedLogFilePath = options.logFilePath ? path.resolve(options.logFilePath) : undefined;
+  const resolvedLogFilePath = options.logFilePath
+    ? jsonLogFile(path.resolve(options.logFilePath))
+    : undefined;
   const cacheKey = JSON.stringify({
     console: options.consoleEnabled,
     file: resolvedLogFilePath,
@@ -1127,7 +1174,6 @@ function createWinstonSink(
   onClose: () => void,
 ): WinstonSink {
   const outputTransports: WinstonTransport[] = [];
-  const fileTransports: WinstonTransport[] = [];
 
   if (options.consoleEnabled) {
     outputTransports.push(
@@ -1139,24 +1185,16 @@ function createWinstonSink(
   }
 
   if (options.logFilePath) {
-    const readablePath = readableLogFile(options.logFilePath);
-    const structuredPath = structuredLogFile(options.logFilePath);
-    mkdirSync(path.dirname(readablePath), { recursive: true });
-    mkdirSync(path.dirname(structuredPath), { recursive: true });
-    void cleanupAutomationLogFiles(readablePath, options.retentionDays).catch(() => undefined);
+    const jsonPath = jsonLogFile(options.logFilePath);
+    mkdirSync(path.dirname(jsonPath), { recursive: true });
+    void cleanupAutomationLogFiles(jsonPath, options.retentionDays).catch(() => undefined);
 
-    const readableTransport = new winstonTransports.File({
-      filename: readablePath,
+    const jsonTransport = new winstonTransports.File({
+      filename: jsonPath,
       level: "debug",
-      format: readableWinstonFormat(),
+      format: jsonWinstonFormat(),
     });
-    const structuredTransport = new winstonTransports.File({
-      filename: structuredPath,
-      level: "debug",
-      format: structuredWinstonFormat(),
-    });
-    fileTransports.push(readableTransport, structuredTransport);
-    outputTransports.push(readableTransport, structuredTransport);
+    outputTransports.push(jsonTransport);
   }
 
   const logger = createWinstonLogger({
@@ -1197,13 +1235,6 @@ function createWinstonSink(
   };
 }
 
-function readableWinstonFormat() {
-  return winstonFormat.printf((info) => {
-    const entry = (info as unknown as WinstonLogInfo).automationEntry;
-    return formatReadableLogEntry(entry);
-  });
-}
-
 function consoleWinstonFormat() {
   return winstonFormat.printf((info) => {
     const entry = (info as unknown as WinstonLogInfo).automationEntry;
@@ -1211,7 +1242,7 @@ function consoleWinstonFormat() {
   });
 }
 
-function structuredWinstonFormat() {
+function jsonWinstonFormat() {
   return winstonFormat.printf((info) => {
     const entry = (info as unknown as WinstonLogInfo).automationEntry;
     return JSON.stringify(entry);
@@ -1219,20 +1250,24 @@ function structuredWinstonFormat() {
 }
 
 export async function cleanupAutomationLogFiles(configuredPath: string, retentionDays = 3) {
-  const logDir = path.dirname(readableLogFile(configuredPath));
+  const logDir = path.dirname(jsonLogFile(configuredPath));
   const key = `${logDir}:${formatDateKey()}`;
   if (cleanupKeys.has(key)) return;
   cleanupKeys.add(key);
   const cutoff = Date.now() - Math.max(1, retentionDays) * 24 * 60 * 60 * 1_000;
   await Promise.all(
-    [logDir, path.join(logDir, "structured")].map(async (dir) => {
-      await mkdir(dir, { recursive: true });
+    [logDir, path.join(logDir, "structured")].map(async (dir, index) => {
+      if (index === 0) await mkdir(dir, { recursive: true });
       for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-        if (!entry.isFile() || !/^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:jsonl|log)$/i.test(entry.name))
+        if (!entry.isFile() || !/^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:json|jsonl|log)$/i.test(entry.name))
           continue;
         const filePath = path.join(dir, entry.name);
         const fileStat = await stat(filePath).catch(() => undefined);
         if (fileStat && fileStat.mtimeMs < cutoff) await unlink(filePath).catch(() => undefined);
+      }
+      if (index > 0) {
+        const remaining = await readdir(dir).catch(() => ["unavailable"]);
+        if (remaining.length === 0) await rm(dir, { recursive: false }).catch(() => undefined);
       }
     }),
   );

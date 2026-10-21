@@ -334,7 +334,7 @@ function formatDateKey(date = new Date()) {
 }
 
 function pinduoduoDramaLogFile(config = readConfig()) {
-  return path.join(pinduoduoDramaLogDir(config), `app-${formatDateKey()}.log`);
+  return path.join(pinduoduoDramaLogDir(config), `app-${formatDateKey()}.json`);
 }
 
 function storagePaths(config = readConfig()): PinduoduoDramaStoragePaths {

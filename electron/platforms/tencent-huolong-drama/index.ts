@@ -171,7 +171,7 @@ function storagePaths(config = readConfig(), accountId = config.accountProfileNa
     credentialStatePath: path.join(accountDir, "storage-state.json"),
     assetDownloadDir: path.join(runDataDir(config), "assets", encoded),
     logDir,
-    logFilePath: path.join(logDir, `app-${new Date().toISOString().slice(0, 10)}.log`),
+    logFilePath: path.join(logDir, `app-${new Date().toISOString().slice(0, 10)}.json`),
   };
 }
 
@@ -180,7 +180,7 @@ function ensureDirectories(paths: StoragePaths) {
 }
 
 function latestLog(paths = storagePaths()) {
-  return findLatestFile(paths.logDir, (fileName) => /\.(?:log|jsonl)$/i.test(fileName));
+  return findLatestFile(paths.logDir, (fileName) => /\.(?:json|jsonl|log)$/i.test(fileName));
 }
 
 function platformLogger() {

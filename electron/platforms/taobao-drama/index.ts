@@ -113,14 +113,14 @@ function storagePaths(
   return {
     runDataDir: runDataDir(config), accountDir, userDataDir: path.join(accountDir, "chromium-profile"),
     credentialStatePath: path.join(accountDir, "storage-state.json"), assetDownloadDir: path.join(runDataDir(config), "assets", encoded),
-    logDir, logFilePath: path.join(logDir, `app-${new Date().toISOString().slice(0, 10)}.log`),
+    logDir, logFilePath: path.join(logDir, `app-${new Date().toISOString().slice(0, 10)}.json`),
   };
 }
 function ensureDirectories(paths: StoragePaths) {
   ensureDirectoryPaths([paths.runDataDir, paths.accountDir, paths.userDataDir, paths.assetDownloadDir, paths.logDir]);
 }
 function latestLog(paths = storagePaths()) {
-  return findLatestFile(paths.logDir, (fileName) => /\.(?:log|jsonl)$/i.test(fileName));
+  return findLatestFile(paths.logDir, (fileName) => /\.(?:json|jsonl|log)$/i.test(fileName));
 }
 async function runtimePackage() {
   return import("@dramabridge/taobao-drama-automation") as unknown as Promise<{

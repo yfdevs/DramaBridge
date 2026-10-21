@@ -303,6 +303,19 @@ export function openPlatformLogDir(platformId: PlatformId) {
   return getPlatformDefinition(platformId).openLogDir();
 }
 
+export function getPlatformLogDir(platformId: PlatformId) {
+  const summary = getPlatformDefinition(platformId).getRuntimeSummary();
+  if (
+    !summary ||
+    typeof summary !== "object" ||
+    !("logDir" in summary) ||
+    typeof summary.logDir !== "string"
+  ) {
+    throw new Error(`无法确定${getPlatformDefinition(platformId).label}日志目录。`);
+  }
+  return summary.logDir;
+}
+
 export function getGlobalBrowserInstanceCount() {
   return sumPlatformMetric(({ getBrowserInstanceCount }) => getBrowserInstanceCount());
 }

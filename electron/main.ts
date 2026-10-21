@@ -12,9 +12,11 @@ import {
 import { registerGlobalAppConfigHandlers } from "./global-app-config";
 import { initializeTrpcIpc } from "./ipc";
 import { getMainLogDir, logMain, registerMainProcessLogging } from "./main-logger";
+import { configurePlatformLogViewer } from "./platform-logs";
 import { ensureBaiduNetdiskCdpReadyOnStartup } from "./platforms/baidu-netdisk";
 import {
   getGlobalRunningPlatformStatus,
+  getPlatformLogDir,
   registerAllPlatformHandlers,
   stopAllPlatformServices,
 } from "./platforms/registry";
@@ -54,6 +56,7 @@ void app.whenReady().then(() => {
       getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,
     });
     registerAllPlatformHandlers();
+    configurePlatformLogViewer(getPlatformLogDir);
     startRuntimeAssetCleanupMonitor();
     registerAppUpdaterHandlers({
       getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,

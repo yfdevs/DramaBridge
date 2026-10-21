@@ -24,4 +24,16 @@ declare namespace NodeJS {
 // Used in Renderer process, expose in `preload.ts`
 interface Window {
   ipcRenderer: import('electron').IpcRenderer
+  platformLogs: {
+    subscribe: (
+      platform: import('./platform-logs').PlatformLogId,
+      observer: {
+        onData: (event: import('./platform-logs').PlatformLogEvent) => void
+        onError: (error: { message: string }) => void
+      },
+    ) => () => void
+    clear: (
+      platform: import('./platform-logs').PlatformLogId,
+    ) => Promise<{ cleared: boolean; filePath: string | null }>
+  }
 }

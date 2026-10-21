@@ -112,7 +112,7 @@
 
 - `closeFailedTaskPages=true`：下一次任务开启新标签时关闭之前的任务标签。
 - `closeFailedTaskPages=false`：保留所有任务标签，不区分任务成功或失败。
-- `runDataDir=.drama-runs/wechat-drama`：微信视频号运行数据目录，用于临时上传文件、远程素材缓存、上传报告、账号登录态和日志；需与本地剧集视频目录在同一磁盘分区。日志写入 `runDataDir/logs`，无视频号上下文的服务日志写入 `app-YYYY-MM-DD.log`；任务、领取、上传和保活刷新等带视频号上下文的日志按账号写入 `app-<视频号ID>-YYYY-MM-DD.log`。
+- `runDataDir=.drama-runs/wechat-drama`：微信视频号运行数据目录，用于临时上传文件、远程素材缓存、上传报告、账号登录态和日志；需与本地剧集视频目录在同一磁盘分区。日志以逐行 JSON 写入 `runDataDir/logs`，无视频号上下文的服务日志写入 `app-YYYY-MM-DD.json`；任务、领取、上传和保活刷新等带视频号上下文的日志按账号写入 `app-<视频号ID>-YYYY-MM-DD.json`。
 - `logRetentionDays=3`：日志保留天数，默认保留最近 3 天。
 - `workerEmptyClaimDelaySeconds=5`：没有领到任务时的短轮询间隔，默认 5 秒。
 - `workerSlowEmptyClaimThreshold=10`：连续空任务达到该次数后切到慢轮询，默认 10 次；也就是默认第 1-9 次空任务后等 5 秒，第 10 次开始等 30 秒。

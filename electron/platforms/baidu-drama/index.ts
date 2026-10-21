@@ -202,7 +202,7 @@ function storagePaths(
     credentialStatePath: path.join(accountDir, "storage-state.json"),
     assetDownloadDir: path.join(runDataDir, "assets", encodedProfileName),
     logDir,
-    logFilePath: path.join(logDir, `app-${dateKey}.log`),
+    logFilePath: path.join(logDir, `app-${dateKey}.json`),
   };
 }
 

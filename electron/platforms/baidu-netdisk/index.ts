@@ -189,7 +189,7 @@ function baiduNetdiskLogDir() {
 }
 
 function baiduNetdiskLogFilePath() {
-  return path.join(baiduNetdiskLogDir(), `app-${formatDateKey()}.log`);
+  return path.join(baiduNetdiskLogDir(), `app-${formatDateKey()}.json`);
 }
 
 function baiduNetdiskLogger(

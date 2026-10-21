@@ -236,7 +236,7 @@ function formatDateKey(date = new Date()) {
 }
 
 function meituanCreationLogFile(config = readConfig()) {
-  return path.join(meituanCreationLogDir(config), `app-${formatDateKey()}.log`);
+  return path.join(meituanCreationLogDir(config), `app-${formatDateKey()}.json`);
 }
 
 function meituanCreationAuthRoot() {

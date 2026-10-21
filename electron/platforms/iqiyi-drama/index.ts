@@ -267,7 +267,7 @@ function storagePaths(
     credentialStatePath: credentialStatePath(config, profile),
     assetDownloadDir: assetDownloadDir(config, profile),
     logDir: logDir(config),
-    logFilePath: path.join(logDir(config), `app-${dateKey()}.log`),
+    logFilePath: path.join(logDir(config), `app-${dateKey()}.json`),
   };
 }
 

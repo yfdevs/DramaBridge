@@ -16,7 +16,7 @@ export function createElectronPlatformLogger(options: {
     platform: options.platform,
     scope: options.scope ?? "runtime",
     context: options.context,
-    logFilePath: path.join(options.logDir, `app-${formatDateKey()}.log`),
+    logFilePath: path.join(options.logDir, `app-${formatDateKey()}.json`),
     retentionDays: options.retentionDays ?? 3,
   });
 }

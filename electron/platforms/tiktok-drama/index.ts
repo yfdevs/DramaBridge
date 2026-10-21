@@ -178,7 +178,7 @@ function tiktokDramaCenterLogDir() {
 }
 
 function tiktokDramaCenterLogFile() {
-  return path.join(tiktokDramaCenterLogDir(), `app-${formatDateKey()}.log`);
+  return path.join(tiktokDramaCenterLogDir(), `app-${formatDateKey()}.json`);
 }
 
 async function defaultStoppedStatus(): Promise<TiktokDramaCenterServiceStatus> {
