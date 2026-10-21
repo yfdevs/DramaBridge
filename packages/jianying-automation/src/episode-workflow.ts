@@ -1,13 +1,11 @@
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { access, cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
+import { execa } from "execa";
 
 import ffmpegPathImport from "ffmpeg-static";
 import sharp from "sharp";
 
-const execFileAsync = promisify(execFile);
 const ffmpegPath = ffmpegPathImport as unknown as string | null;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".m4v"]);
 const EPISODE_PATTERN = /第\s*(\d+)\s*集/i;
@@ -62,8 +60,7 @@ async function runMediaCommand(
   args: string[],
   timeout = 10 * 60_000,
 ) {
-  return execFileAsync(executable, args, {
-    encoding: "utf8",
+  return execa(executable, args, {
     timeout,
     windowsHide: true,
     maxBuffer: 64 * 1024 * 1024,

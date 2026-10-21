@@ -1,11 +1,9 @@
-import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { execa } from "execa";
 
-const execFileAsync = promisify(execFile);
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frameworkRoot = path.join(process.env.WINDIR || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319");
 const compilerPath = path.join(frameworkRoot, "csc.exe");
@@ -13,7 +11,7 @@ const outputDirectory = path.join(packageRoot, "native", "bin");
 const outputPath = path.join(outputDirectory, "JianyingUia.exe");
 
 await mkdir(outputDirectory, { recursive: true });
-await execFileAsync(compilerPath, [
+await execa(compilerPath, [
   "/nologo",
   "/target:exe",
   "/platform:x64",

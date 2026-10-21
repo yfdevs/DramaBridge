@@ -1,11 +1,8 @@
-import { execFile } from "node:child_process";
 import { pathExists, temporaryWriteTask } from "@dramabridge/file-utils";
+import { execa } from "execa";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
 
 export type JianyingDraftTrackResult = {
   success: true;
@@ -57,7 +54,7 @@ function parseWorkerOutput(stdout: string) {
   return null;
 }
 
-function decodeWorkerOutput(output: string | Buffer | undefined) {
+function decodeWorkerOutput(output: string | Uint8Array | undefined) {
   if (!output) return "";
   if (typeof output === "string") return output;
   try {
@@ -102,7 +99,7 @@ export async function writeJianyingDraftVideoTrack(input: {
   return temporaryWriteTask(workerInput, async (inputPath) => {
     let stdout: string;
     try {
-      const result = await execFileAsync(workerPath, [
+      const result = await execa(workerPath, [
         "write-track",
         "--draft",
         path.resolve(input.draftPath),
@@ -112,7 +109,7 @@ export async function writeJianyingDraftVideoTrack(input: {
         inputPath,
         ...(input.registerAsNewDraft ? ["--register-as-new-draft"] : []),
       ], {
-        encoding: null,
+        encoding: "buffer",
         timeout: 5 * 60_000,
         windowsHide: true,
         maxBuffer: 16 * 1024 * 1024,

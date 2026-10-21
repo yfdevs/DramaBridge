@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, open, rename, rm, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { execa } from "execa";
 import ffmpegPath from "ffmpeg-static";
 import PQueue from "p-queue";
 
@@ -159,88 +159,70 @@ function runFfmpeg(
     onStderr?: (text: string) => void;
   } = {},
 ): Promise<{ stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(resolveFfmpegExecutablePath(), args, {
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let stderr = "";
-    const abort = () => {
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
-    };
-    if (options.signal?.aborted) abort();
-    options.signal?.addEventListener("abort", abort, { once: true });
-
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk: string) => {
-      stderr += chunk;
-      options.onStderr?.(chunk);
-    });
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      options.signal?.removeEventListener("abort", abort);
-      if (options.signal?.aborted) {
-        reject(Object.assign(new Error("[video-transcode-cancelled] FFmpeg task was cancelled."), {
-          name: "AbortError",
-        }));
-        return;
-      }
-      if (options.acceptExitCode?.(code) || code === 0) {
-        resolve({ stderr });
-        return;
-      }
-      const tail = stderr.trim().split(/\r?\n/).slice(-8).join(" | ");
-      reject(new Error(
-        `[video-transcode-failed] FFmpeg exited with ${signal ? `signal ${signal}` : `code ${code}`}: ${tail}`,
-      ));
-    });
-  });
+  return runFfmpegProcess(args, options);
 }
 
-function runFfprobe(inputFile: string, signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(resolveFfprobeExecutablePath(), [
-      "-v", "error",
-      "-show_entries", "format=duration:stream=codec_type,duration,width,height,bit_rate",
-      "-of", "json",
-      inputFile,
-    ], {
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    const abort = () => {
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
-    };
-    if (signal?.aborted) abort();
-    signal?.addEventListener("abort", abort, { once: true });
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => { stdout += chunk; });
-    child.stderr.on("data", (chunk: string) => { stderr += chunk; });
-    child.on("error", reject);
-    child.on("exit", (code, exitSignal) => {
-      signal?.removeEventListener("abort", abort);
-      if (signal?.aborted) {
-        reject(Object.assign(new Error("[video-probe-cancelled] FFprobe task was cancelled."), {
-          name: "AbortError",
-        }));
-        return;
-      }
-      if (code === 0) {
-        resolve({ stdout, stderr });
-        return;
-      }
-      const details = stderr.trim().split(/\r?\n/).slice(-8).join(" | ") || "no diagnostic output";
-      reject(new Error(
-        `[video-probe-failed] FFprobe exited with ${exitSignal ? `signal ${exitSignal}` : `code ${code}`}: ${details}`,
-      ));
-    });
+async function runFfmpegProcess(
+  args: string[],
+  options: {
+    signal?: AbortSignal;
+    acceptExitCode?: (code: number | null) => boolean;
+    onStderr?: (text: string) => void;
+  },
+): Promise<{ stderr: string }> {
+  const subprocess = execa(resolveFfmpegExecutablePath(), args, {
+    cancelSignal: options.signal,
+    maxBuffer: 128 * 1024 * 1024,
+    reject: false,
+    stdin: "ignore",
+    windowsHide: true,
   });
+  subprocess.stderr?.on("data", (chunk: Buffer | string) => {
+    options.onStderr?.(chunk.toString());
+  });
+  const result = await subprocess;
+  if (result.isCanceled || options.signal?.aborted) {
+    throw Object.assign(new Error("[video-transcode-cancelled] FFmpeg task was cancelled."), {
+      name: "AbortError",
+    });
+  }
+  const exitCode = result.exitCode ?? null;
+  if (exitCode === 0 || options.acceptExitCode?.(exitCode)) return { stderr: result.stderr };
+  const tail = result.stderr.trim().split(/\r?\n/).slice(-8).join(" | ") || result.shortMessage;
+  throw Object.assign(
+    new Error(
+      `[video-transcode-failed] FFmpeg exited with ${result.signal ? `signal ${result.signal}` : `code ${exitCode}`}: ${tail}`,
+    ),
+    { cause: result },
+  );
+}
+
+async function runFfprobe(inputFile: string, signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
+  const result = await execa(resolveFfprobeExecutablePath(), [
+    "-v", "error",
+    "-show_entries", "format=duration:stream=codec_type,duration,width,height,bit_rate",
+    "-of", "json",
+    inputFile,
+  ], {
+    cancelSignal: signal,
+    maxBuffer: 16 * 1024 * 1024,
+    reject: false,
+    stdin: "ignore",
+    windowsHide: true,
+  });
+  if (result.isCanceled || signal?.aborted) {
+    throw Object.assign(new Error("[video-probe-cancelled] FFprobe task was cancelled."), {
+      name: "AbortError",
+    });
+  }
+  if (result.exitCode === 0) return { stdout: result.stdout, stderr: result.stderr };
+  const details = result.stderr.trim().split(/\r?\n/).slice(-8).join(" | ") || result.shortMessage;
+  throw Object.assign(
+    new Error(
+      `[video-probe-failed] FFprobe exited with ${result.signal ? `signal ${result.signal}` : `code ${result.exitCode ?? null}`}: ${details}`,
+    ),
+    { cause: result },
+  );
 }
 
 type FfprobeResult = {

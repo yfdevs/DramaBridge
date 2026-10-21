@@ -1,10 +1,9 @@
-import { spawn } from "node:child_process";
 import console from "node:console";
 import { access, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { clearTimeout, setTimeout } from "node:timers";
 import { fileURLToPath, URL } from "node:url";
+import { execa } from "execa";
 
 // The package contains a full Playwright Chromium runtime. Lower compression
 // avoids exhausting the Windows runner's commit memory while creating NSIS.
@@ -28,72 +27,27 @@ const runtimeDependencyNames = [
   "sharp",
 ];
 
-function runExecutable(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd ?? rootDir,
-      env: { ...process.env, ...options.env },
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    let output = "";
-    let settled = false;
-    const timeout = setTimeout(() => {
-      child.kill();
-      finish(new Error(`${command} validation timed out.`));
-    }, 15_000);
-
-    function finish(error) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (error) reject(error);
-      else resolve(output);
-    }
-
-    child.stdout.on("data", (chunk) => {
-      output += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      output += chunk.toString();
-    });
-    child.on("error", (error) => {
-      finish(new Error(`Cannot start ${command}: ${error.message}`, { cause: error }));
-    });
-    child.on("exit", (code, signal) => {
-      if (code === 0) {
-        finish();
-        return;
-      }
-      finish(new Error(
-        signal
-          ? `${command} validation was terminated by ${signal}.`
-          : `${command} validation exited with code ${code}: ${output.trim()}`,
-      ));
-    });
+async function runExecutable(command, args, options = {}) {
+  const result = await execa(command, args, {
+    all: true,
+    cwd: options.cwd ?? rootDir,
+    env: { ...process.env, ...options.env },
+    reject: false,
+    stdin: "ignore",
+    timeout: 15_000,
+    windowsHide: true,
   });
+  if (result.failed) throw new Error(result.shortMessage, { cause: result });
+  return result.all ?? result.stdout;
 }
 
-function run(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd ?? rootDir,
-      env: { ...process.env, ...options.env },
-      shell: true,
-      stdio: "inherit",
-      windowsHide: true,
-    });
-
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(signal ? `${command} ${args.join(" ")} was terminated by ${signal}` : `${command} ${args.join(" ")} exited with code ${code}`));
-    });
+async function run(command, args, options = {}) {
+  await execa(command, args, {
+    cwd: options.cwd ?? rootDir,
+    env: { ...process.env, ...options.env },
+    preferLocal: true,
+    stdio: "inherit",
+    windowsHide: true,
   });
 }
 

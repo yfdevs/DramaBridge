@@ -1,9 +1,8 @@
-import { execFile } from "node:child_process";
 import { pathExists, safeFileName } from "@dramabridge/file-utils";
+import { execa } from "execa";
 import { cp, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
 export {
   cropJianyingPreviewScreenshot,
@@ -21,8 +20,6 @@ export {
   writeJianyingDraftVideoTrack,
   type JianyingDraftTrackResult,
 } from "./draft-track.js";
-
-const execFileAsync = promisify(execFile);
 
 export type JianyingUiaElement = {
   name: string;
@@ -122,8 +119,7 @@ async function runHelper<T>(args: string[], timeout = 30_000) {
     );
   };
   try {
-    const { stdout } = await execFileAsync(helperPath, args, {
-      encoding: "utf8",
+    const { stdout } = await execa(helperPath, args, {
       timeout,
       windowsHide: true,
       maxBuffer: 4 * 1024 * 1024,

@@ -1,5 +1,6 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import console from "node:console";
+import { execa } from "execa";
 import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
@@ -101,29 +102,12 @@ function displayProxy(value) {
   }
 }
 
-function run(command, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      env: process.env,
-      shell: true,
-      stdio: "inherit",
-      windowsHide: true,
-    });
-
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      if (signal) {
-        reject(new Error(`${command} ${args.join(" ")} was terminated by ${signal}`));
-        return;
-      }
-
-      reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
-    });
+async function run(command, args) {
+  await execa(command, args, {
+    env: process.env,
+    preferLocal: true,
+    stdio: "inherit",
+    windowsHide: true,
   });
 }
 

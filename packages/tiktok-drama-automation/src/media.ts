@@ -1,12 +1,10 @@
-import { execFile } from 'node:child_process';
 import { safeFileName, walkFiles } from '@dramabridge/file-utils';
+import { execa } from 'execa';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, lstat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { config } from './config.js';
 
-const execFileAsync = promisify(execFile);
 const maxCoverBytes = 10 * 1024 * 1024;
 const coverDownloadTimeoutMs = 30_000;
 const imageExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -83,7 +81,10 @@ async function normalizeCover(file: string) {
   const normalizedCoverFile = path.resolve(config.tempDir, 'covers', `${path.basename(file, path.extname(file))}-180x240.jpg`);
   await mkdir(path.dirname(normalizedCoverFile), { recursive: true });
   try {
-    await execFileAsync('sips', ['-s', 'format', 'jpeg', '-z', '240', '180', file, '--out', normalizedCoverFile]);
+    await execa('sips', ['-s', 'format', 'jpeg', '-z', '240', '180', file, '--out', normalizedCoverFile], {
+      timeout: 30_000,
+      windowsHide: true,
+    });
     return normalizedCoverFile;
   } catch {
     // ponytail: no image library dependency; original file is used if macOS sips is unavailable.

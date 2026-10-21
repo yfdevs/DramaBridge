@@ -1,18 +1,16 @@
-import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { execa } from "execa";
 
-const execFileAsync = promisify(execFile);
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDirectory = path.join(packageRoot, "native", "bin");
 const python = process.env.JIANYING_DRAFT_PYTHON || "python";
 const temporaryRoot = path.join(process.env.TEMP || process.cwd(), "jianying-draft-worker-build");
 
 await mkdir(outputDirectory, { recursive: true });
-await execFileAsync(python, [
+await execa(python, [
   "-m",
   "PyInstaller",
   "--noconfirm",

@@ -1,9 +1,10 @@
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { pathExists } from "@dramabridge/file-utils";
 import { stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Effect } from "effect";
+import { execa } from "execa";
 
 import { debugHost, requestTimeoutMs } from "../domain/constants.js";
 import {
@@ -108,16 +109,11 @@ export async function isBaiduNetdiskCdpPort(port = DEFAULT_BAIDU_NETDISK_CDP_POR
 }
 
 async function execText(file: string, args: string[]) {
-  return new Promise<string>((resolve, reject) => {
-    execFile(file, args, { windowsHide: true }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(stderr.toString().trim() || error.message));
-        return;
-      }
-
-      resolve(stdout.toString());
-    });
+  const { stdout } = await execa(file, args, {
+    timeout: 15_000,
+    windowsHide: true,
   });
+  return stdout;
 }
 
 async function getRunningBaiduProcesses() {
