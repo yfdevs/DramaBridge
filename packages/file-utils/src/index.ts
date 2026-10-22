@@ -92,7 +92,9 @@ export type SafeFileNameOptions = {
 
 export function safeFileName(value: string, options: SafeFileNameOptions = {}): string {
   const fallback = options.fallback?.trim() || "file";
-  const normalized = value.normalize("NFKC").trim();
+  // Full-width punctuation is valid in file names. Folding it (for example
+  // ， to ,) makes download directories disagree with the original drama title.
+  const normalized = value.trim();
   if (!normalized) return fallback;
   return filenamify(normalized, {
     maxLength: options.maxLength ?? 120,

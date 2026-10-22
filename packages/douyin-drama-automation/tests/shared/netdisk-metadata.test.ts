@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { safeFileName } from "@dramabridge/file-utils";
 import { createMockDouyinNetdiskTestTask } from "../../src/api/mock-task.js";
 import {
   collectDouyinNetdiskMetadataInputs,
@@ -172,6 +173,64 @@ test("collects preserved original image names and TXT content", async () => {
     assert.equal(inputs.images[0]?.fileName, "女主-小雨.jpg");
     assert.equal(inputs.texts[0]?.content, "这是剧情简介和角色说明。");
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("reads downloaded synopsis using the original title with a full-width comma", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "douyin-title-punctuation-"));
+  const title = "我卖老宅供她开店，她让我睡美容床";
+  const downloadDir = path.join(root, safeFileName(title, { replacement: "_" }));
+  try {
+    const textDir = path.join(downloadDir, "海报封面", "剧情资料");
+    await mkdir(textDir, { recursive: true });
+    await writeFile(path.join(textDir, "简介.txt"), "四达美容院的剧情简介。", "utf8");
+    const inputs = await collectDouyinNetdiskMetadataInputs(path.join(root, title));
+    assert.equal(inputs.texts[0]?.content, "四达美容院的剧情简介。");
+  } finally {
+    assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(root).startsWith("douyin-title-punctuation-"));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("reports missing, short and unreadable synopsis sources accurately", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "douyin-synopsis-errors-"));
+  const task = createMockDouyinNetdiskTestTask();
+  const resourceDir = path.join(root, task.originalTitle);
+  try {
+    await mkdir(resourceDir, { recursive: true });
+    task.playlet.summary = "";
+    await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /百度网盘链接.*“短剧信息填写”中也未提供简介/u);
+      assert.doesNotMatch(error.message, /后端/u);
+      return true;
+    });
+    task.playlet.summary = "简短介绍";
+    await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), /简介不足 101 字（当前 4 字）/u);
+    await writeFile(path.join(resourceDir, "简介.docx"), "invalid docx");
+    await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), /DOUYIN_DRAMA_NETDISK_TEXT_UNREADABLE.*已找到百度网盘简介文件.*简介.docx/u);
+  } finally {
+    assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(root).startsWith("douyin-synopsis-errors-"));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("unreadable files do not exhaust the readable synopsis file limit", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "douyin-readable-synopsis-"));
+  try {
+    for (let index = 0; index < 11; index++) {
+      await writeFile(path.join(root, `简介-${index}.doc`), "legacy binary doc");
+    }
+    await writeFile(path.join(root, "简介-99.txt"), "有效剧情简介", "utf8");
+    const inputs = await collectDouyinNetdiskMetadataInputs(root);
+    assert.equal(inputs.texts[0]?.content, "有效剧情简介");
+    assert.equal(inputs.textReadFailures.length, 11);
+  } finally {
+    assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(root).startsWith("douyin-readable-synopsis-"));
     await rm(root, { recursive: true, force: true });
   }
 });

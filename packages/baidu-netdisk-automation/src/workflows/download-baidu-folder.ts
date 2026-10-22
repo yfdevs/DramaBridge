@@ -1040,6 +1040,25 @@ type SaveShareOptions = {
   isolatedRootUnique?: boolean;
 };
 
+/** Self-contained: serialized into the Baidu page, without Node imports. */
+export function sanitizeBaiduPageFileName(
+  value: string,
+  options: { fallback?: string; replacement?: string; maxLength?: number } = {},
+) {
+  const fallback = String(options.fallback || "file").trim() || "file";
+  const replacement = String(options.replacement || "-");
+  const maxLength = Number.isFinite(options.maxLength) ? options.maxLength! : 120;
+  const cleaned = Array.from(String(value || ""), (character) =>
+    character.charCodeAt(0) <= 0x1f || '<>:"/\\|?*'.includes(character)
+      ? replacement
+      : character,
+  ).join("")
+    .replace(/[. ]+$/g, "")
+    .trim();
+  const bounded = cleaned.slice(0, maxLength).replace(/[. ]+$/g, "");
+  return bounded || fallback;
+}
+
 async function saveShareToOwnNetdisk(
   target: CdpTarget,
   share: ShareInfo,
@@ -1083,18 +1102,7 @@ async function saveShareToOwnNetdisk(
   const planSyncItem = ${planBaiduNetdiskSyncItem.toString()};
   const strictlyIdenticalFile = ${areBaiduNetdiskFilesStrictlyIdentical.toString()};
   // This helper runs inside the Baidu page and therefore cannot import the Node file-utils package.
-  const safeFileName = (value, options = {}) => {
-    const fallback = String(options.fallback || "file").trim() || "file";
-    const replacement = String(options.replacement || "-");
-    const maxLength = Number.isFinite(options.maxLength) ? options.maxLength : 120;
-    const cleaned = String(value || "")
-      .normalize("NFKC")
-      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, replacement)
-      .replace(/[. ]+$/g, "")
-      .trim();
-    const bounded = cleaned.slice(0, maxLength).replace(/[. ]+$/g, "");
-    return bounded || fallback;
-  };
+  const safeFileName = ${sanitizeBaiduPageFileName.toString()};
 
   for (const item of document.querySelectorAll(
     ".dialog-close,#dialog1 .close,#moduleDownloadDialog .dialog-close,.nd-dialog-close",

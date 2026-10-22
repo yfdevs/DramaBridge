@@ -4,6 +4,7 @@ import { runInNewContext } from "node:vm";
 
 import {
   areBaiduNetdiskFilesStrictlyIdentical,
+  sanitizeBaiduPageFileName,
   baiduShareFailureText,
   classifyBaiduNetdiskOwnershipProofName,
   collapseIdenticalRemoteEpisodeAliases,
@@ -36,6 +37,13 @@ const cdpTarget = (id: string, url: string): CdpTarget => ({
   title: "百度网盘",
   url,
   webSocketDebuggerUrl: `ws://127.0.0.1:9337/devtools/page/${id}`,
+});
+
+test("serialized Baidu page name sanitization preserves full-width drama punctuation", () => {
+  const sanitize = runInNewContext(`(${sanitizeBaiduPageFileName.toString()})`) as typeof sanitizeBaiduPageFileName;
+  const title = "我卖老宅供她开店，她让我睡美容床";
+  assert.equal(sanitize(title, { replacement: "_" }), title);
+  assert.equal(sanitize("剧名:第一季?", { replacement: "_" }), "剧名_第一季_");
 });
 
 test("keeps tracking the same Baidu target after extraction removes the share id", () => {

@@ -62,6 +62,7 @@ type MetadataImage = {
 type MetadataInputs = {
   images: MetadataImage[];
   texts: Array<{ fileName: string; relativePath: string; content: string }>;
+  textReadFailures: Array<{ relativePath: string; reason: string }>;
 };
 
 function replacementCharacterCount(value: string) {
@@ -113,14 +114,15 @@ function decodeRtf(buffer: Buffer) {
 
 async function readMetadataText(file: string) {
   const info = await stat(file).catch(() => undefined);
-  if (!info?.isFile() || info.size <= 0 || info.size > MAX_TEXT_FILE_BYTES) return "";
+  if (!info?.isFile()) throw new Error("文件不存在或无法访问");
+  if (info.size <= 0) throw new Error("文件内容为空");
+  if (info.size > MAX_TEXT_FILE_BYTES) throw new Error("文件超过 8 MB 读取上限");
   const extension = path.extname(file).toLowerCase();
   if (extension === ".docx") {
     return (await mammoth.extractRawText({ path: file })).value.split("\u0000").join("").trim();
   }
   if (extension === ".doc") {
-    // Legacy binary DOC is discovered and downloaded, but cannot be decoded safely by Mammoth.
-    return "";
+    throw new Error("旧版 DOC 文件暂不支持读取，请另存为 DOCX 或 TXT");
   }
   const buffer = await readFile(file);
   return extension === ".rtf"
@@ -156,13 +158,22 @@ export async function collectDouyinNetdiskMetadataInputs(
   const textFiles = files
     .filter((file) => textExtensions.has(path.extname(file).toLowerCase()) && !path.basename(file).startsWith("~$"))
     .sort((left, right) => metadataTextPriority(left) - metadataTextPriority(right)
-      || left.localeCompare(right, "zh-CN", { numeric: true }))
-    .slice(0, MAX_TEXT_FILES);
+      || left.localeCompare(right, "zh-CN", { numeric: true }));
   const texts: MetadataInputs["texts"] = [];
+  const textReadFailures: MetadataInputs["textReadFailures"] = [];
   for (const file of textFiles) {
-    if (remainingCharacters <= 0) break;
-    const content = await readMetadataText(file).catch(() => "");
-    if (!content) continue;
+    if (remainingCharacters <= 0 || texts.length >= MAX_TEXT_FILES) break;
+    let content: string;
+    try {
+      content = await readMetadataText(file);
+      if (!content) throw new Error("未读取到有效文本内容");
+    } catch (error) {
+      textReadFailures.push({
+        relativePath: path.relative(resourceDir, file),
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
     const clipped = content.slice(0, remainingCharacters);
     remainingCharacters -= clipped.length;
     texts.push({
@@ -180,6 +191,7 @@ export async function collectDouyinNetdiskMetadataInputs(
       relativePath: path.relative(resourceDir, file),
     })),
     texts,
+    textReadFailures,
   };
 }
 
@@ -236,10 +248,10 @@ function buildPrompt(task: ClaimedDouyinDramaTask, inputs: MetadataInputs) {
     "JSON 格式：{\"summary\":\"...\",\"roles\":[{\"name\":\"...\",\"roleType\":\"主角|配角|参演\",\"intro\":\"...\",\"photoImageId\":\"image-1或null\"}]}。",
     "规则：summary 必须为 101-200 个中文字符，忠于资料，不虚构关键剧情；每个角色简介不超过100字。",
     "根据简介和角色资料返回至少2个、最多10个重要角色。图片候选中能明确匹配到单人头像时填写对应 photoImageId；没有匹配头像时填写 null，后续会为该角色生成头像。不要把封面、海报、横图或竖图当成角色头像。",
-    "后端已提供的简介和角色属于权威信息，应保留事实并补全缺项。所有角色和简介在这一次响应中同时完成。",
+    "短剧信息填写中已提供的简介和角色属于权威信息，应保留事实并补全缺项。所有角色和简介在这一次响应中同时完成。",
     `剧名：${task.playlet.title}`,
-    `后端简介：${task.playlet.summary || "（未提供）"}`,
-    `后端角色：${JSON.stringify(task.playlet.roles)}`,
+    `短剧信息填写中的简介：${task.playlet.summary || "（未提供）"}`,
+    `短剧信息填写中的角色：${JSON.stringify(task.playlet.roles)}`,
     `剧情资料：${JSON.stringify(inputs.texts.map((text) => ({
       fileName: text.fileName,
       relativePath: text.relativePath,
@@ -356,7 +368,16 @@ export async function enrichDouyinTaskFromNetdisk(
   const resourceDir = path.join(root, task.originalTitle.trim());
   const inputs = await collectDouyinNetdiskMetadataInputs(resourceDir);
   if (task.playlet.summary.trim().length <= 100 && inputs.texts.length === 0) {
-    throw new Error("DOUYIN_DRAMA_NETDISK_TEXT_REQUIRED: 后端未提供合格简介，网盘素材中也没有找到可读取的 TXT、MD、DOCX 或 RTF 文件");
+    if (inputs.textReadFailures.length > 0) {
+      const files = inputs.textReadFailures.slice(0, 3)
+        .map((failure) => `${failure.relativePath}（${failure.reason}）`).join("、");
+      throw new Error(`DOUYIN_DRAMA_NETDISK_TEXT_UNREADABLE: 已找到百度网盘简介文件，但读取失败：${files}。请检查文件内容，或在“短剧信息填写”中补充 101-200 字简介`);
+    }
+    const summaryLength = task.playlet.summary.trim().length;
+    const summaryStatus = summaryLength === 0
+      ? "“短剧信息填写”中也未提供简介"
+      : `“短剧信息填写”中的简介不足 101 字（当前 ${summaryLength} 字）`;
+    throw new Error(`DOUYIN_DRAMA_NETDISK_TEXT_REQUIRED: 百度网盘链接对应的素材中未找到 TXT、MD、DOCX 或 RTF 简介文件，${summaryStatus}。请在网盘中补充简介文件，或在“短剧信息填写”中填写 101-200 字简介`);
   }
   if (!options.aiClientFactory) {
     throw new Error("DOUYIN_DRAMA_AI_CLIENT_REQUIRED: 网盘简介和角色资料需要全局 AI 配置");

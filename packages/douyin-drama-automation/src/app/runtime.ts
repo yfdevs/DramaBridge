@@ -207,7 +207,7 @@ export async function ensureDouyinNetdiskResource(
   const missingRequiredText = task.playlet.summary.trim().length <= 100 && inputs.texts.length === 0;
   if (!missingRequiredText) return resource;
 
-  log(options, "[douyin-drama] 后端简介不足且本地没有剧情资料，补拉网盘简介目录。", {
+  log(options, "[douyin-drama] “短剧信息填写”中的简介不足 101 字，且本地未读取到剧情资料，重新下载百度网盘简介文件。", {
     accountTaskId: task.accountTaskId,
     missingRequiredText,
   }, "download");
