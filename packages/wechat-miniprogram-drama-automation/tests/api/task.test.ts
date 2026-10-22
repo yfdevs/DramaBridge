@@ -1,7 +1,11 @@
 // oxlint-disable typescript/no-floating-promises
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { before, after } from "node:test";
 import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { configureWechatMiniProgramRuntimeSettings } from "../../src/shared/runtime-settings.js";
 import { normalizeClaimedTaskConfig } from "../../src/shared/config.js";
 import { prepareWechatAiProductionProofMaterials } from "../../src/shared/ai-production-proof-materials.js";
 import {
@@ -18,6 +22,23 @@ const accounts: WechatMiniProgramAccount[] = [
   { id: "wxmp-mock-002", name: "微信小程序测试账号 02" },
   { id: "wxmp-task-factory-test", name: "微信小程序任务工厂测试账号" },
 ];
+
+let mockAssetRoot: string;
+before(async () => {
+  mockAssetRoot = await mkdtemp(path.join(os.tmpdir(), "wechat-miniprogram-mock-assets-"));
+  // Test fixtures must not depend on optional files in the developer's public/ directory.
+  const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a/YQAAAAASUVORK5CYII=", "base64");
+  for (const file of ["模拟版权授权书.jpg", "模拟短剧制作合同.jpg", "模拟制作成本证明.jpg", "模拟AI制作证明.png"]) {
+    await writeFile(path.join(mockAssetRoot, file), image);
+  }
+  configureWechatMiniProgramRuntimeSettings({ mockAssetRoot });
+});
+after(async () => {
+  configureWechatMiniProgramRuntimeSettings();
+  assert.equal(path.dirname(mockAssetRoot), path.resolve(os.tmpdir()));
+  assert.ok(path.basename(mockAssetRoot).startsWith("wechat-miniprogram-mock-assets-"));
+  await rm(mockAssetRoot, { recursive: true, force: true });
+});
 
 test("creates a complete realistic WeChat Mini Program mock task", () => {
   const response = createMockWechatMiniProgramClaimResponse(accounts[0]);

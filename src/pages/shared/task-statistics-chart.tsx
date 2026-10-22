@@ -118,7 +118,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
         borderWidth: 1,
         padding: [8, 12],
         textStyle: { color: ink, fontSize: 11, fontFamily },
-        extraCssText: "border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);",
+        extraCssText: "border-radius:var(--radius-lg);corner-shape:squircle;box-shadow:0 4px 12px rgba(0,0,0,0.12);",
       },
       grid: { left: 4, right: 4, top: 44, bottom: 8, containLabel: true },
       xAxis: {

@@ -124,7 +124,7 @@ body {
 .app-titlebar-platform-button {
   width: 26px;
   height: 26px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   pointer-events: auto;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -208,6 +208,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
+  corner-shape: round;
   background: color-mix(in oklch, var(--foreground) 20%, transparent);
   border: 2px solid transparent;
   border-radius: 999px;
@@ -228,7 +229,7 @@ body {
 .app-workspace {
   margin: 0 5px 5px 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-xl);
 }
 .app-page-scroll .min-h-svh {
   min-height: 100%;

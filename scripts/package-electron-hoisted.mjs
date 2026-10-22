@@ -152,6 +152,28 @@ async function validatePackagedFfmpeg(version) {
   await validateFfmpegExecutable(packagedFile, "packaged FFmpeg");
 }
 
+async function validatePackagedNativeModules(version) {
+  if (process.platform !== "win32") return;
+  const packagedDir = path.join(rootDir, "release", version, "win-unpacked");
+  const source = [
+    '(async () => {',
+    'const path = require("node:path")',
+    'const load = require("node:module").createRequire(path.join(process.argv[1], "package.json"))',
+    'const Database = load("better-sqlite3")',
+    'const database = new Database(":memory:")',
+    'database.prepare("SELECT 1").get()',
+    'database.close()',
+    'await load("sharp")({ create: { width: 2, height: 2, channels: 3, background: "white" } }).png().toBuffer()',
+    'load("@napi-rs/canvas").createCanvas(2, 2).toBuffer("image/png")',
+    'load("write-file-atomic")._getTmpname("runtime-check")',
+    '})().catch(error => { console.error(error); process.exitCode = 1 })',
+  ].join(";\n");
+  await runExecutable(path.join(packagedDir, "DramaBridge.exe"), [
+    "-e", source, path.join(packagedDir, "resources", "app.asar"),
+  ], { env: { ELECTRON_RUN_AS_NODE: "1" } });
+  console.log("Validated packaged SQLite, Sharp, canvas and atomic writes from ASAR.");
+}
+
 function toJsonString(value) {
   return JSON.stringify(value);
 }
@@ -171,7 +193,9 @@ async function writeHoistedPnpmConfig() {
     "packages: []",
     "",
     "allowBuilds:",
-    "  better-sqlite3: true",
+    // v13 includes N-API binaries. Avoid pnpm's implicit node-gyp rebuild;
+    // verify the shipped binary with the actual Electron runtime below.
+    "  better-sqlite3: false",
     "  electron: true",
     "  esbuild: true",
     "  ffmpeg-static: true",
@@ -349,6 +373,20 @@ async function main() {
     validatePackagedPlaywrightInputs(),
     stageValidatedFfmpeg(sourceFfmpeg),
   ]);
+  if (electronDist) {
+    const executable = process.platform === "win32"
+      ? path.join(electronDist, "electron.exe")
+      : process.platform === "darwin"
+        ? path.join(electronDist, "Electron.app", "Contents", "MacOS", "Electron")
+        : path.join(electronDist, "electron");
+    await runExecutable(executable, ["-e", [
+      'const Database = require("better-sqlite3")',
+      'const database = new Database(":memory:")',
+      'database.prepare("SELECT 1").get()',
+      'database.close()',
+    ].join(";")], { cwd: stagingDir, env: { ELECTRON_RUN_AS_NODE: "1" } });
+    console.log(`Validated staged SQLite with Electron ${target}.`);
+  }
   const builderArguments = process.argv.slice(2);
   if (!builderArguments.some(
     (argument) => argument === "--publish" || argument.startsWith("--publish="),
@@ -366,6 +404,7 @@ async function main() {
   ]);
   const packageJson = await readJson(packageJsonPath);
   await validatePackagedFfmpeg(packageJson.version);
+  await validatePackagedNativeModules(packageJson.version);
 }
 
 main().catch((error) => {

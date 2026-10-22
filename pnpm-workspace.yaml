@@ -2,7 +2,8 @@ packages:
   - packages/*
 
 allowBuilds:
-  better-sqlite3: true
+  # v13 ships portable N-API binaries; postinstall verifies them in Electron.
+  better-sqlite3: false
   canvas: false
   electron: true
   # Only needed for the unused Squirrel target; this app packages Windows with NSIS.
@@ -17,6 +18,7 @@ catalog:
   vite-plus: 0.2.6
 minimumReleaseAgeExclude:
   - thinking-orbs@0.1.1
+  - electron@44.9.3
 overrides:
   # ffmpeg-static 5.3.0 bundles an agent that fails Node 24's protocol check.
   ffmpeg-static>https-proxy-agent: 7.0.6
