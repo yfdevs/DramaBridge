@@ -58,7 +58,17 @@ type StoredGlobalAppConfig = {
 
 type GlobalAppConfigStore = {
   config: StoredGlobalAppConfig;
+  externalApi: { enabled: boolean; port: string };
 };
+
+export type ExternalApiConfig = { enabled: boolean; port: string };
+export type ExternalApiStatus = { running: boolean; baseUrl?: string; error?: string };
+const defaultExternalApi = { enabled: false, port: "18439" };
+
+export function readExternalApiConfig(): ExternalApiConfig {
+  const stored = getStore().get("externalApi") ?? defaultExternalApi;
+  return { enabled: stored.enabled === true, port: stored.port || "18439" };
+}
 
 const defaultStoredConfig: StoredGlobalAppConfig = {
   theme: "system",
@@ -80,7 +90,7 @@ let store: Store<GlobalAppConfigStore> | null = null;
 function getStore() {
   store ??= createValidatedStore<GlobalAppConfigStore>({
     name: "global-app-config",
-    defaults: { config: defaultStoredConfig },
+    defaults: { config: defaultStoredConfig, externalApi: defaultExternalApi },
   });
   return store;
 }
@@ -369,6 +379,8 @@ async function testAiConfig(config: Partial<GlobalAppConfig>) {
 export function registerGlobalAppConfigHandlers(
   options: {
     getRunningPlatformCount?: () => number;
+    configureExternalApi?: (config: ExternalApiConfig) => Promise<void>;
+    getExternalApiStatus?: () => ExternalApiStatus;
   } = {},
 ) {
   if (registered) return;
@@ -378,6 +390,28 @@ export function registerGlobalAppConfigHandlers(
   ipcMain.handle("app:theme:get", () => normalizeTheme(getStore().get("config").theme));
 
   ipcMain.handle("app:config:get", () => configResult());
+  const externalApiResult = () => ({ config: readExternalApiConfig(),
+    status: options.getExternalApiStatus?.() ?? { running: false } });
+  let externalApiSave: Promise<unknown> = Promise.resolve();
+  ipcMain.handle("app:config:external-api:get", externalApiResult);
+  ipcMain.handle("app:config:external-api:status", () => options.getExternalApiStatus?.() ?? { running: false });
+  ipcMain.handle("app:config:external-api:save", (_event, value: ExternalApiConfig) => {
+    const save = externalApiSave.catch(() => undefined).then(async () => {
+      if (!value || typeof value.enabled !== "boolean" || typeof value.port !== "string") {
+        throw new Error("本机接口配置格式错误");
+      }
+      const port = Number(value.port);
+      if (!/^\d+$/u.test(value.port) || !Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error("本机接口端口必须是 1～65535 的整数");
+      }
+      if (!options.configureExternalApi) throw new Error("本机接口服务尚未初始化");
+      await options.configureExternalApi({ enabled: value.enabled, port: String(port) });
+      getStore().set("externalApi", { enabled: value.enabled, port: String(port) });
+      return externalApiResult();
+    });
+    externalApiSave = save;
+    return save;
+  });
   ipcMain.handle("app:config:save", (_event, config: Partial<GlobalAppConfig>) => {
     const previous = readGlobalAppConfig();
     const saved = saveGlobalAppConfig(config);

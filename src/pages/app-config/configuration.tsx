@@ -12,6 +12,7 @@ import {
   usePlatformConfig,
 } from "@/pages/shared/configuration-page";
 import { globalAppConfigService, type GlobalAppConfig } from "@/platforms/app-config/service";
+import { ExternalApiConfiguration } from "./external-api";
 
 const emptyConfig: GlobalAppConfig = {
   theme: "system",
@@ -222,6 +223,7 @@ export function GlobalConfigurationPage() {
           onSelectDirectory={selectDirectory}
         />
       ))}
+      <ExternalApiConfiguration />
     </ConfigurationPageFrame>
   );
 }

@@ -147,7 +147,13 @@ function buildPrompt(
     `剧名：${task.originalTitle}`,
     `总集数：${task.episodeCount}`,
     `百度网盘链接：${task.baiduPanResourceLink}`,
-    `剧情资料：${synopsisText || "（未找到简介文件，请结合剧名生成连贯、简洁的分集概括）"}`,
+    ...(task.summary?.trim() ? [
+      `任务剧情简介（主要依据）：${task.summary.trim().slice(0, MAX_SYNOPSIS_CHARACTERS)}`,
+    ] : []),
+    ...(synopsisText ? [`${task.summary?.trim() ? "补充" : ""}剧情资料：${synopsisText}`] : []),
+    ...(!task.summary?.trim() && !synopsisText ? [
+      "剧情资料：（任务未提供简介，也未找到可读取的简介文件，请结合剧名生成连贯、简洁的分集概括）",
+    ] : []),
   ].join("\n");
 }
 
@@ -208,9 +214,11 @@ export async function prepareTaobaoEpisodeMetadata(
   if (!options.aiClientFactory) throw new Error("TAOBAO_DRAMA_AI_CLIENT_REQUIRED: 请先配置全局 AI 接口");
   const resourceDir = path.join(taobaoMaterialRoot(options), task.originalTitle);
   const synopsis = await collectTaobaoSynopsis(resourceDir);
-  log(options, synopsis.text
-    ? `[taobao-drama] 已读取简介资料：${synopsis.source}`
-    : "[taobao-drama] 未找到可读取的简介文件，将使用剧名和百度链接生成文案");
+  log(options, task.summary?.trim()
+    ? `[taobao-drama] 将使用任务提供的剧情简介生成文案${synopsis.text ? `，并补充本地简介资料：${synopsis.source}` : ""}`
+    : synopsis.text
+      ? `[taobao-drama] 已读取简介资料：${synopsis.source}`
+      : "[taobao-drama] 任务未提供简介，也未找到可读取的简介文件，将使用剧名和百度链接生成文案");
   const generated = await generateMetadata(options.aiClientFactory(), task, synopsis.text);
   const metadata: TaobaoEpisodeMetadata = {
     dramaTag: generated.dramaTag,

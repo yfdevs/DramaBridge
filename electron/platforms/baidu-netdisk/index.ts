@@ -137,8 +137,10 @@ type BaiduNetdiskShareDownloadRequest = {
 };
 
 export type { BaiduNetdiskDownloadRecord, BaiduNetdiskDownloadState };
+export const BAIDU_NETDISK_EXTERNAL_DIRECTORY = "__external_api_downloads__";
 
 export type BaiduNetdiskEnsureDownloadedRequest = {
+  timeoutMs?: number;
   requesterPlatform?: string;
   shareText: string;
   resourceName: string;
@@ -297,6 +299,7 @@ async function cleanupStalePlayletDirectories(rootPath: string, protectedPaths: 
 
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    if (entry.name === BAIDU_NETDISK_EXTERNAL_DIRECTORY) continue;
     const candidate = path.resolve(resolvedRoot, entry.name);
     if (path.dirname(candidate).toLowerCase() !== resolvedRoot.toLowerCase()) continue;
     const candidateKey = normalizedPathKey(candidate);
@@ -751,6 +754,7 @@ function normalizeEnsureDownloadRequest(
     requiredMetadataTextFiles: request.requiredMetadataTextFiles,
     mergeOwnershipMaterials: request.mergeOwnershipMaterials,
     requesterPlatform: request.requesterPlatform,
+    timeoutMs: request.timeoutMs,
     videoTranscode: request.videoTranscode,
     signal: request.signal,
     onStableEpisodeFiles: request.onStableEpisodeFiles,
@@ -892,7 +896,7 @@ async function importBaiduNetdiskDownloadRuntimePackage() {
         }>;
       }) => Promise<Array<{ path: string; index: number }>>;
     }) => Promise<Omit<BaiduNetdiskShareDownloadResult, "downloadDir">>;
-    getBaiduNetdiskDownloadTaskStatus: (options: { port: number; targetName: string }) => Promise<{
+    getBaiduNetdiskDownloadTaskStatus: (options: { port: number; targetName: string; expectedDownloadRoot?: string }) => Promise<{
       found: boolean;
       name?: string;
       localPath?: string;
@@ -1067,17 +1071,14 @@ export async function ensureBaiduNetdiskShareDownloaded(
     resourceName: normalizedRequest.resourceName,
   });
   const shareKey = shareKeyFromText(normalizedRequest.shareText);
-  const id = createRecordId(
-    shareKey,
-    normalizedRequest.episodeDownloadLimit
-      ? `${normalizedRequest.resourceName}\nlimit=${normalizedRequest.episodeDownloadLimit}`
-      : normalizedRequest.resourceName,
-  );
+  const id = ensureDownloadRecordId(normalizedRequest);
   const localPath = playletDir(
     normalizedRequest.localEpisodeVideoRoot,
     normalizedRequest.resourceName,
   );
-  monitoredEpisodeVideoRoots.add(path.resolve(normalizedRequest.localEpisodeVideoRoot));
+  if (normalizedRequest.requesterPlatform !== "external-api") {
+    monitoredEpisodeVideoRoots.add(path.resolve(normalizedRequest.localEpisodeVideoRoot));
+  }
   startDiskCleanupMonitor();
   const activeOperation = activeDownloadOperations.get(id);
 
@@ -1130,14 +1131,40 @@ export async function ensureBaiduNetdiskShareDownloaded(
   return promise;
 }
 
+function ensureDownloadRecordId(request: BaiduNetdiskEnsureDownloadedRequest) {
+  let name = request.episodeDownloadLimit ? `${request.resourceName}\nlimit=${request.episodeDownloadLimit}` : request.resourceName;
+  if (request.requesterPlatform === "external-api") name = `external-api\n${name}`;
+  return createRecordId(shareKeyFromText(request.shareText), name);
+}
+
+export function getExternalBaiduNetdiskDownloadRecord(request: { shareText: string; resourceName: string }) {
+  return getDownloadRecordsRepository().findById(ensureDownloadRecordId({ ...request,
+    requesterPlatform: "external-api", localEpisodeVideoRoot: "" }));
+}
+
+export const getBaiduNetdiskApiStatus = () => status();
+export const startBaiduNetdiskApiCdp = () => startCdp(false);
+
+export async function controlExternalBaiduNetdiskDownload(request: { shareText: string; resourceName: string }, action: "pause" | "resume") {
+  const record = getExternalBaiduNetdiskDownloadRecord(request);
+  if (!record) throw new Error("下载尚未开始，暂时无法控制");
+  const runtime = await importBaiduNetdiskDownloadRuntimePackage();
+  return runBaiduCdpOperationExclusive(`external-api:${action}`, () => runtime.controlBaiduNetdiskDownloadTask({
+    port: cdpPort(), targetName: record.resourceName, action, expectedDownloadRoot: record.downloadDir,
+  }));
+}
+
 async function ensureBaiduNetdiskShareDownloadedOnce(
   id: string,
   shareKey: string,
   request: BaiduNetdiskEnsureDownloadedRequest,
 ): Promise<BaiduNetdiskDownloadRecord> {
-  const uniqueDownloadDir = uniqueBaiduDownloadDir(request.resourceName, shareKey);
+  const baseDownloadDir = uniqueBaiduDownloadDir(request.resourceName, shareKey);
+  const uniqueDownloadDir = request.requesterPlatform === "external-api"
+    ? path.join(path.dirname(baseDownloadDir), BAIDU_NETDISK_EXTERNAL_DIRECTORY, path.basename(baseDownloadDir))
+    : baseDownloadDir;
   const config = readConfig();
-  const timeoutMs = getConfiguredBaiduNetdiskDownloadTimeoutMs();
+  const timeoutMs = request.timeoutMs ?? getConfiguredBaiduNetdiskDownloadTimeoutMs();
   const port = cdpPort(config);
   const existingRecord = readDownloadRecords().find((record) => record.id === id);
   if (existingRecord?.remoteCleanupPending) {
@@ -1268,6 +1295,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
         getBaiduNetdiskDownloadTaskStatus({
           port,
           targetName: statusRequest.targetName,
+          expectedDownloadRoot: request.requesterPlatform === "external-api" ? uniqueDownloadDir : undefined,
         }),
       cancelDownloadTask: (cancelRequest) =>
         controlBaiduNetdiskDownloadTask({

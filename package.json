@@ -1,6 +1,6 @@
 {
   "name": "dramabridge",
-  "version": "0.2.6",
+  "version": "0.2.9",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -66,6 +66,7 @@
     "electron-updater": "^6.8.9",
     "electron-window-state": "^5.0.3",
     "embla-carousel-react": "^8.6.0",
+    "express": "^5.2.1",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "3.1.0",
     "input-otp": "^1.4.2",
@@ -105,6 +106,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
     "@types/ffprobe-static": "2.0.3",
     "@types/node": "^26.0.0",
     "@types/react": "^18.2.64",

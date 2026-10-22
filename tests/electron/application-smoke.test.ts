@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { createServer } from "node:net";
 import { _electron } from "playwright";
 
 declare global {
@@ -50,7 +51,7 @@ test("built Electron app supports platform IPC, settings, database and smooth co
   const environment = Object.fromEntries(Object.entries(process.env).filter(
     (entry): entry is [string, string] => typeof entry[1] === "string" && entry[0] !== "ELECTRON_RUN_AS_NODE",
   ));
-  const electron = await _electron.launch({
+  let electron = await _electron.launch({
     executablePath: require("electron"), args: [bootstrap], env: environment,
     timeout: 30_000,
   });
@@ -80,6 +81,7 @@ test("built Electron app supports platform IPC, settings, database and smooth co
           location.hash = hash;
           await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
         }, `/${platform}/${route}`);
+        await page.waitForFunction(() => Boolean(document.querySelector(".app-workspace")?.textContent?.trim()));
         assert.ok(await page.locator(".app-workspace").innerText(), `${platform}/${route} renders`);
       }
     }
@@ -88,6 +90,7 @@ test("built Electron app supports platform IPC, settings, database and smooth co
         location.hash = hash;
         await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       }, `/${route}`);
+      await page.waitForFunction(() => Boolean(document.querySelector(".app-workspace")?.textContent?.trim()));
       assert.ok(await page.locator(".app-workspace").innerText(), `${route} renders`);
     }
     await page.evaluate(() => { location.hash = "/pinduoduo-drama/logs"; });
@@ -162,6 +165,69 @@ test("built Electron app supports platform IPC, settings, database and smooth co
     assert.deepEqual(integrity.rows, [{ value: "first" }, { value: "second" }]);
     assert.equal(integrity.check, "ok");
     assert.deepEqual(errors, []);
+
+    {
+      const probe = createServer();
+      await new Promise<void>(resolve => probe.listen(0, "127.0.0.1", resolve));
+      const apiPort = (probe.address() as { port: number }).port;
+      await new Promise<void>(resolve => probe.close(() => resolve()));
+      const initialApi = await page.evaluate(() => window.ipcRenderer.invoke("app:config:external-api:get"));
+      assert.equal(initialApi.config.enabled, false);
+      assert.equal(initialApi.status.running, false);
+      await page.evaluate(() => { location.hash = "/app/config"; });
+      const apiSwitch = page.getByRole("switch", { name: "开启接口服务" });
+      await apiSwitch.waitFor();
+      await page.locator("#port").fill(String(apiPort));
+      await apiSwitch.click();
+      await page.waitForFunction(() => document.body.innerText.includes("运行中 · http://127.0.0.1:"));
+      const api = await page.evaluate(() => window.ipcRenderer.invoke("app:config:external-api:get"));
+      assert.equal(api.config.enabled, true);
+      assert.equal(api.config.port, String(apiPort));
+      assert.deepEqual(Object.keys(api.config).sort(), ["enabled", "port"]);
+      assert.equal((await fetch(`http://127.0.0.1:${apiPort}/api/health`)).status, 200);
+      const persistedTaskId = await electron.evaluate(({ app }) => {
+        const Database = globalThis.require("better-sqlite3");
+        const path = globalThis.require("node:path");
+        const database = new Database(path.join(app.getPath("userData"), "automation.sqlite"));
+        const now = new Date().toISOString();
+        const task = { taskId: "smoke-external-persistence", attempt: 1,
+          request: { requestId: "smoke-persistence", shareText: "https://pan.baidu.com/s/test?pwd=1234",
+            resourceName: "回归测试", episodeCount: 1, timeoutSeconds: 60 },
+          fingerprint: "smoke", status: "queued", createdAt: now, updatedAt: now,
+          deadlineAt: new Date(Date.now() + 60_000).toISOString() };
+        try {
+          database.prepare("INSERT INTO baidu_netdisk_external_tasks VALUES (?, ?, ?, ?)")
+            .run(task.taskId, task.request.requestId, now, JSON.stringify(task));
+          return task.taskId;
+        } finally { database.close(); }
+      });
+      assert.equal((await (await fetch(`http://127.0.0.1:${apiPort}/api/baidu-netdisk/downloads/${persistedTaskId}`)).json()).data.status, "queued");
+      await page.getByRole("button", { name: "复制接口地址" }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(cache, "electron-local-api-settings.png") });
+
+      // Saving ordinary global settings must preserve the independently saved API settings.
+      await page.evaluate(async () => {
+        const current = await window.ipcRenderer.invoke("app:config:get");
+        await window.ipcRenderer.invoke("app:config:save", { ...current.config, theme: "light" });
+      });
+      assert.equal((await page.evaluate(() => window.ipcRenderer.invoke("app:config:external-api:get"))).config.enabled, true);
+      assert.deepEqual(errors, []);
+      await electron.close();
+      await assert.rejects(fetch(`http://127.0.0.1:${apiPort}/api/health`));
+      electron = await _electron.launch({ executablePath: require("electron"), args: [bootstrap], env: environment, timeout: 30_000 });
+      const restartedPage = await electron.firstWindow();
+      await restartedPage.waitForSelector(".app-workspace");
+      const restoredApi = await restartedPage.evaluate(() => window.ipcRenderer.invoke("app:config:external-api:get"));
+      assert.equal(restoredApi.config.enabled, true);
+      assert.equal(restoredApi.status.running, true);
+      assert.equal((await fetch(`http://127.0.0.1:${apiPort}/api/health`)).status, 200);
+      const recoveredTask = await (await fetch(`http://127.0.0.1:${apiPort}/api/baidu-netdisk/downloads/${persistedTaskId}`)).json();
+      assert.equal(recoveredTask.data.status, "interrupted");
+      const stoppedApi = await restartedPage.evaluate(async config => window.ipcRenderer.invoke(
+        "app:config:external-api:save", { ...config, enabled: false }), restoredApi.config);
+      assert.equal(stoppedApi.status.running, false);
+      await assert.rejects(fetch(`http://127.0.0.1:${apiPort}/api/health`));
+    }
   } finally {
     await electron.close();
     assert.equal(path.dirname(directory), cache);

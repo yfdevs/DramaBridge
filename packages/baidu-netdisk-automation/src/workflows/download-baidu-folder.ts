@@ -2892,6 +2892,7 @@ function parseTaskNumber(value: string | undefined) {
 export async function getBaiduNetdiskDownloadTaskStatus(options: {
   port?: number;
   targetName: string;
+  expectedDownloadRoot?: string;
 }): Promise<BaiduNetdiskDownloadTaskStatus> {
   const port = options.port ?? 9337;
   const targetName = options.targetName.trim();
@@ -2901,7 +2902,7 @@ export async function getBaiduNetdiskDownloadTaskStatus(options: {
   }
 
   await ensureBaiduCdpPort(port);
-  const nativeTask = await getNativeDownloadTask(port, targetName);
+  const nativeTask = await getNativeDownloadTask(port, targetName, "", options.expectedDownloadRoot);
   const matched = nativeTask?.matched;
   const size = parseTaskNumber(matched?.size);
   const finishSize = parseTaskNumber(matched?.finishSize);

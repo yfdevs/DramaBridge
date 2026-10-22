@@ -11,6 +11,7 @@ import {
 } from "./core/main-window";
 import { registerGlobalAppConfigHandlers } from "./global-app-config";
 import { initializeTrpcIpc } from "./ipc";
+import { configureLocalApi, getLocalApiStatus, initializeLocalApi, stopLocalApi } from "./local-api";
 import { getMainLogDir, logMain, registerMainProcessLogging } from "./main-logger";
 import { configurePlatformLogViewer } from "./platform-logs";
 import { ensureBaiduNetdiskCdpReadyOnStartup } from "./platforms/baidu-netdisk";
@@ -35,7 +36,10 @@ logMain("info", "Application startup initiated", {
 });
 
 initializeMainWindowIntegration();
-registerGracefulShutdown(stopAllPlatformServices);
+registerGracefulShutdown(async () => {
+  await stopLocalApi();
+  await stopAllPlatformServices();
+});
 
 app.on("window-all-closed", () => {
   logMain("info", "All windows closed");
@@ -54,8 +58,11 @@ void app.whenReady().then(() => {
     registerAppRuntimeHandlers();
     registerGlobalAppConfigHandlers({
       getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,
+      configureExternalApi: configureLocalApi,
+      getExternalApiStatus: getLocalApiStatus,
     });
     registerAllPlatformHandlers();
+    void initializeLocalApi();
     configurePlatformLogViewer(getPlatformLogDir);
     startRuntimeAssetCleanupMonitor();
     registerAppUpdaterHandlers({

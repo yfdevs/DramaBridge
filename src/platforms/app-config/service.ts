@@ -1,4 +1,7 @@
 export type AppTheme = "system" | "light" | "dark";
+export type ExternalApiConfig = { enabled: boolean; port: string };
+export type ExternalApiStatus = { running: boolean; baseUrl?: string; error?: string };
+export type ExternalApiConfigResult = { config: ExternalApiConfig; status: ExternalApiStatus };
 
 export type GlobalAppConfig = {
   theme: AppTheme;
@@ -73,6 +76,9 @@ export function onAppThemeChanged(listener: (theme: AppTheme) => void) {
 }
 
 export const globalAppConfigService = {
+  getExternalApiConfig: () => invokeGlobalAppConfig<ExternalApiConfigResult>("app:config:external-api:get"),
+  getExternalApiStatus: () => invokeGlobalAppConfig<ExternalApiStatus>("app:config:external-api:status"),
+  saveExternalApiConfig: (config: ExternalApiConfig) => invokeGlobalAppConfig<ExternalApiConfigResult>("app:config:external-api:save", config),
   getTheme: () => invokeGlobalAppConfig<AppTheme>("app:theme:get"),
   getConfig: () => invokeGlobalAppConfig<GlobalAppConfigResult>("app:config:get"),
   saveConfig: (config: GlobalAppConfig) =>

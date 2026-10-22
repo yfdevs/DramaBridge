@@ -166,6 +166,42 @@ test("generates metadata in 100-episode ranges for a long Taobao drama", async (
   }
 });
 
+test("uses the backend summary for AI metadata even without a local synopsis file", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "taobao-task-summary-"));
+  const summary = "程满经营进货群五年，遭恶少讹诈后与兄弟齐心整顿市场乱象。";
+  const logs: string[] = [];
+  const prompts: string[] = [];
+  const client = {
+    async generateText(request: Parameters<DramaAiClient["generateText"]>[0]) {
+      prompts.push(request.prompt);
+      return { model: "test-model", finishReason: "stop", text: JSON.stringify({
+        tag: "逆袭", episodes: [{ episode: 1, summary: "兄弟齐心反击恶少" }],
+      }) };
+    },
+  } as DramaAiClient;
+  try {
+    await mkdir(path.join(root, "兄弟齐心"));
+    const task = { id: "task-summary", originalTitle: "兄弟齐心",
+      baiduPanResourceLink: "https://pan.baidu.com/s/example", episodeCount: 1,
+      productionCostProofFiles: [], summary };
+    const options = { localMaterialRoot: root, aiClientFactory: () => client,
+      onLog: (message: string) => logs.push(message) };
+    await prepareTaobaoEpisodeMetadata(task, options);
+    assert.ok(prompts[0]?.includes(`任务剧情简介（主要依据）：${summary}`));
+    assert.ok(logs.some(message => message.includes("使用任务提供的剧情简介")));
+    assert.ok(!logs.some(message => message.includes("将使用剧名和百度链接")));
+    assert.ok(!prompts[0]?.includes("请结合剧名生成"));
+
+    await writeFile(path.join(root, "兄弟齐心", "简介.txt"), "兄弟们先后现身，揭穿恶少骗局。", "utf8");
+    await prepareTaobaoEpisodeMetadata(task, options);
+    assert.ok(prompts[1]?.includes(summary));
+    assert.ok(prompts[1]?.includes("补充剧情资料："));
+    assert.ok(prompts[1]?.includes("兄弟们先后现身"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("formats Taobao description and hashtag text", () => {
   assert.equal(formatTaobaoVideoDescription(3, "第三集：女主揭开豪门秘密。"), "第3集|女主揭开豪门秘密");
   assert.deepEqual(taobaoContentTags("顺手牵羊的代价", "现代"), [
