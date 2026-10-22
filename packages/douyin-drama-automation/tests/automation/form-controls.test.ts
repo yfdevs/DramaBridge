@@ -466,6 +466,51 @@ test("normalizes and fills the publish time returned by the task API", async () 
       await page.locator("#complete_promise_time input").inputValue(),
       "2026-09-22 17:00",
     );
+
+    // Reproduce task 119: the upward-opening panel is underneath the site's
+    // fixed header in a 2/3-height browser window. Normal clicks must still
+    // select the date/time, without forcing clicks or bypassing UI events.
+    await page.setViewportSize({ width: 1440, height: 583 });
+    await page.addStyleTag({ content: `
+      header { position: fixed; inset: 0 0 auto; height: 218px; z-index: 10; background: white; }
+      #hong_guo_app_publish_time { position: fixed; top: 480px; }
+      #complete_promise_time { position: fixed; top: 520px; }
+      #publish-time-popup { position: fixed; top: 110px; left: 300px; width: 300px; height: 330px; z-index: 1; background: white; }
+      .arco-timepicker-list { display: inline-block; }
+    ` });
+    await page.evaluate(() => {
+      document.body.prepend(document.createElement("header"));
+      document.querySelector("#publish-time-popup")!.addEventListener("click", (event) => {
+        if (!event.isTrusted) document.body.dataset.untrustedPickerClick = "true";
+      });
+    });
+    await page.locator("#hong_guo_app_publish_time input").click();
+    await assert.rejects(
+      page.locator(".arco-picker-date").click({ timeout: 300 }),
+      /intercepts pointer events/u,
+    );
+    await page.locator("#publish-time-popup").evaluate((element) => {
+      element.style.display = "none";
+    });
+    assert.equal(
+      await fillDouyinPublishDateTime(page, "2026-09-22 18:30:04", beforeScheduledTime),
+      "2026-09-22 18:30:04",
+    );
+    assert.equal(await page.locator("#hong_guo_app_publish_time input").inputValue(), "2026-09-22 18:30");
+    assert.equal(await fillNearestDouyinCompletionPromiseDateTime(page), "2026-09-22 17:00:00");
+    assert.equal(await page.locator("#publish-time-popup").evaluate((element) => element.style.translate), "");
+    await page.setViewportSize({ width: 960, height: 400 });
+    await page.addStyleTag({ content: `
+      #hong_guo_app_publish_time { top: 300px; }
+      #complete_promise_time { top: 350px; }
+    ` });
+    assert.equal(
+      await fillDouyinPublishDateTime(page, "2026-09-22 18:30:04", beforeScheduledTime),
+      "2026-09-22 18:30:04",
+    );
+    assert.equal(await fillNearestDouyinCompletionPromiseDateTime(page), "2026-09-22 17:00:00");
+    assert.equal(await page.locator("#publish-time-popup").evaluate((element) => element.style.translate), "");
+    assert.equal(await page.locator("body").getAttribute("data-untrusted-picker-click"), null);
   } finally {
     await browser.close();
   }

@@ -263,6 +263,59 @@ function arcoDatePickerPopup(page: Page) {
     .last();
 }
 
+async function clickArcoPickerControl(popup: Locator, control: Locator) {
+  await control.scrollIntoViewIfNeeded();
+  const bounds = await control.boundingBox();
+  const panelHandle = await popup.elementHandle();
+  if (!panelHandle) throw new Error("DOUYIN_DRAMA_DATE_PICKER_NOT_FOUND");
+  try {
+    const adjustment = bounds && await panelHandle.evaluate((element, target) => {
+      const x = target.x + target.width / 2;
+      const y = target.y + target.height / 2;
+      const blocker = document.elementFromPoint(x, y);
+      const header = blocker?.closest("header");
+      if (!header || element.contains(blocker) || header.contains(element)) return null;
+
+      // In short browser windows Arco opens upward underneath the fixed site
+      // header. Move only the open panel so real pointer clicks reach its cells.
+      const panel = element.getBoundingClientRect();
+      const top = header.getBoundingClientRect().bottom + 8;
+      if (top + target.height > window.innerHeight - 8) {
+        throw new Error("DOUYIN_DRAMA_DATE_PICKER_OCCLUDED: 日期面板被页头遮挡，当前窗口高度不足，请增大窗口后重试");
+      }
+      // Prefer fitting the entire panel; on very short screens at least keep
+      // the control being clicked below the header and inside the viewport.
+      const offset = Math.max(
+        top - target.y,
+        Math.min(top - panel.top, window.innerHeight - 8 - panel.bottom),
+      );
+      const original = {
+        value: element.style.getPropertyValue("translate"),
+        priority: element.style.getPropertyPriority("translate"),
+      };
+      // Preserve any existing translation instead of replacing platform styles.
+      const translated = getComputedStyle(element).translate;
+      const parts = translated === "none" ? ["0px", "0px"] : translated.split(/\s+/u);
+      element.style.setProperty("translate", `${parts[0]} calc(${parts[1] ?? "0px"} + ${offset}px)`, "important");
+      return original;
+    }, bounds);
+    try {
+      await control.click({ timeout: 5_000 });
+    } finally {
+      if (adjustment) {
+        // Confirming can hide the popup, so restore through the retained handle
+        // rather than resolving the :visible locator again.
+        await panelHandle.evaluate((element, original) => {
+          if (original.value) element.style.setProperty("translate", original.value, original.priority);
+          else element.style.removeProperty("translate");
+        }, adjustment);
+      }
+    }
+  } finally {
+    await panelHandle.dispose();
+  }
+}
+
 async function readArcoPickerYearMonth(popup: Locator) {
   const labels = (await popup.locator(".arco-picker-header-label").allTextContents())
     .map((text) => text.replace(/\s+/g, "").trim());
@@ -282,7 +335,7 @@ async function selectArcoPublishDate(
   target: ReturnType<typeof douyinPublishDateTimeParts>,
 ) {
   const selectDateButton = popup.locator(".arco-picker-btn-select-date:visible").first();
-  if (await selectDateButton.count()) await selectDateButton.click();
+  if (await selectDateButton.count()) await clickArcoPickerControl(popup, selectDateButton);
 
   for (let navigationCount = 0; navigationCount < 120; navigationCount += 1) {
     const current = await readArcoPickerYearMonth(popup);
@@ -293,7 +346,7 @@ async function selectArcoPublishDate(
       throw new Error("DOUYIN_DRAMA_SCHEDULED_PUBLISH_CALENDAR_NAVIGATION_NOT_FOUND");
     }
     // Arco header order: previous year, previous month, next month, next year.
-    await headerIcons.nth(monthDelta > 0 ? 2 : 1).click();
+    await clickArcoPickerControl(popup, headerIcons.nth(monthDelta > 0 ? 2 : 1));
     await page.waitForTimeout(80);
   }
 
@@ -325,7 +378,7 @@ async function selectArcoPublishDate(
         + `${target.year}-${String(target.month).padStart(2, "0")}-${String(target.day).padStart(2, "0")}`,
     );
   }
-  await dateCell.locator(".arco-picker-date").click();
+  await clickArcoPickerControl(popup, dateCell.locator(".arco-picker-date"));
 }
 
 async function selectArcoPublishTime(
@@ -334,7 +387,7 @@ async function selectArcoPublishTime(
 ) {
   const selectTimeButton = popup.locator(".arco-picker-btn-select-time:visible").first();
   await selectTimeButton.waitFor({ state: "visible", timeout: 5_000 });
-  await selectTimeButton.click();
+  await clickArcoPickerControl(popup, selectTimeButton);
 
   const lists = popup.locator(".arco-timepicker-list:visible");
   const listCount = await lists.count();
@@ -362,7 +415,7 @@ async function selectArcoPublishTime(
         `DOUYIN_DRAMA_SCHEDULED_PUBLISH_TIME_DISABLED: column=${index}; value=${values[index]}`,
       );
     }
-    await cell.click();
+    await clickArcoPickerControl(popup, cell);
   }
 }
 
@@ -390,7 +443,7 @@ async function fillDouyinDateTimePicker(
   if (!await confirm.isEnabled().catch(() => false)) {
     throw new Error(`DOUYIN_DRAMA_${fieldCode}_CONFIRM_DISABLED`);
   }
-  await confirm.click();
+  await clickArcoPickerControl(popup, confirm);
   await popup.waitFor({ state: "hidden", timeout: 5_000 });
 
   const deadline = Date.now() + 10_000;
@@ -433,11 +486,11 @@ export async function fillNearestDouyinCompletionPromiseDateTime(page: Page) {
     .locator(".arco-picker-cell-in-view:visible:not(.arco-picker-cell-disabled)")
     .first();
   await nearestDate.waitFor({ state: "visible", timeout: 5_000 });
-  await nearestDate.locator(".arco-picker-date").click();
+  await clickArcoPickerControl(popup, nearestDate.locator(".arco-picker-date"));
 
   const selectTimeButton = popup.locator(".arco-picker-btn-select-time:visible").first();
   await selectTimeButton.waitFor({ state: "visible", timeout: 5_000 });
-  await selectTimeButton.click();
+  await clickArcoPickerControl(popup, selectTimeButton);
   const lists = popup.locator(".arco-timepicker-list:visible");
   const listCount = await lists.count();
   if (listCount < 2) {
@@ -449,7 +502,7 @@ export async function fillNearestDouyinCompletionPromiseDateTime(page: Page) {
       .locator(".arco-timepicker-cell:visible:not(.arco-timepicker-cell-disabled)")
       .first();
     await nearestValue.waitFor({ state: "visible", timeout: 5_000 });
-    await nearestValue.click();
+    await clickArcoPickerControl(popup, nearestValue);
   }
 
   const confirm = popup.locator(".arco-picker-btn-confirm:visible").first();
@@ -461,7 +514,7 @@ export async function fillNearestDouyinCompletionPromiseDateTime(page: Page) {
   if (!await confirm.isEnabled().catch(() => false)) {
     throw new Error("DOUYIN_DRAMA_COMPLETION_PROMISE_CONFIRM_DISABLED");
   }
-  await confirm.click();
+  await clickArcoPickerControl(popup, confirm);
   await popup.waitFor({ state: "hidden", timeout: 5_000 });
 
   const deadline = Date.now() + 10_000;
