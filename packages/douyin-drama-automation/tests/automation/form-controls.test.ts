@@ -968,7 +968,7 @@ test("selects only the required contract id and reports missing or disabled cont
   const browser = await launchTestBrowser();
   const recorder = createDouyinDramaDropdownRecorder({});
   const placeholder = "请选择（温馨提示：合同绑定错误会影响结算）";
-  const render = async (options: string) => {
+  const render = async (options: string, ignoreEscape = false) => {
     const page = await browser.newPage();
     await page.setContent(`
       <div id="contract" role="combobox" class="arco-select" style="width:320px;height:32px">
@@ -987,7 +987,7 @@ test("selects only the required contract id and reports missing or disabled cont
           });
         });
         document.addEventListener('keydown', (event) => {
-          if (event.key === 'Escape') popup.style.display = 'none';
+          if (event.key === 'Escape' && !${ignoreEscape}) popup.style.display = 'none';
         });
       </script>
     `);
@@ -1066,6 +1066,32 @@ test("selects only the required contract id and reports missing or disabled cont
       },
     );
     await disabledPage.close();
+
+    // A popup that ignores Escape must not mask confirmed business failures.
+    for (const disabled of [false, true]) {
+      const stuckPage = await render(disabled
+        ? '<div role="option" aria-disabled="true">CT20260521191189 禁用合同</div>'
+        : '<div role="option">CT00000000000000 其他合同</div>', true);
+      await assert.rejects(
+        selectRequiredDropdownByStableId(
+          stuckPage, placeholder, "contract", "CT20260521191189", recorder,
+          { attempts: 2, delayMs: 0, loadTimeoutMs: 100 },
+        ),
+        disabled ? /DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED/u
+          : /DOUYIN_DRAMA_REQUIRED_CONTRACT_NOT_FOUND/u,
+      );
+      await stuckPage.close();
+    }
+    const selectableStuckPage = await render(
+      '<div role="option">CT20260521191189 可用合同</div>', true,
+    );
+    await assert.rejects(
+      selectRequiredDropdownByStableId(
+        selectableStuckPage, placeholder, "contract", "CT20260521191189", recorder,
+      ),
+      /DOUYIN_DRAMA_DROPDOWN_NOT_CLOSED: contract/u,
+    );
+    await selectableStuckPage.close();
   } finally {
     await browser.close();
   }

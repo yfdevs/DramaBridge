@@ -301,15 +301,23 @@ function translateErrorMessage(message: string): string {
 }
 
 function translateActionableError(code: string, detail: string): string | undefined {
+  if (code === "DOUYIN_DRAMA_DROPDOWN_NOT_CLOSED") {
+    const field = detail.trim();
+    return `抖音${field === "contract" ? "绑定合同" : ""}下拉列表未能关闭，自动操作已停止。`
+      + (field === "contract" ? "此错误无法判断合同是否被禁用或不存在。" : "")
+      + "请检查抖音任务页面后重试；如仍失败，请上报错误并提供任务编号及页面截图";
+  }
+
   if (code === "DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED") {
     const contractId = detail.match(/\bcontractId=([^;\s]+)/u)?.[1];
+    const contractName = detail.match(/\bcontractName=([^;]+)/u)?.[1]?.trim();
     const requestedJson = detail.match(/\brequested=("(?:\\.|[^"])*")/u)?.[1];
     const availableJson = detail.match(/\bavailable=(\[[^\]]*\])/u)?.[1];
     const requested = requestedJson
       ? (() => {
           try { return String(JSON.parse(requestedJson)); } catch { return contractId; }
         })()
-      : contractId;
+      : contractId ?? contractName;
     const available = availableJson
       ? (() => {
           try {
@@ -321,15 +329,18 @@ function translateActionableError(code: string, detail: string): string | undefi
         })()
       : [];
     return `任务配置的绑定合同${requested ? `“${requested}”` : ""}当前在抖音页面中为灰色不可选，`
-      + "系统已等待并重新检查，未点击该合同，以免绑定错误影响结算。"
-      + (available.length > 0 ? `当前页面可选合同：${available.join("；")}。` : "当前页面没有可用合同。")
-      + "请在任务后台改为适用于当前作品类型的可选合同，或先在抖音合同管理中恢复该合同后再重试";
+      + "未点击该合同，以免绑定错误影响结算。"
+      + (available.length > 0 ? `当前页面可选合同：${available.join("；")}。`
+        : availableJson ? "当前页面没有可用合同。" : "")
+      + "请在任务后台改为适用于当前作品类型的可选合同，或先在抖音合同管理中恢复该合同后再重试；如需协助，请上报错误并提供任务编号及合同信息";
   }
 
   if (code === "DOUYIN_DRAMA_REQUIRED_CONTRACT_NOT_FOUND") {
     const contractId = detail.match(/\bcontractId=([^;\s]+)/u)?.[1];
-    return `任务配置的绑定合同${contractId ? `“${contractId}”` : ""}未出现在当前抖音账号的合同列表中。`
-      + "请核对任务所属账号及合同编号，或在任务后台重新选择该账号可用的合同后重试";
+    const contractName = detail.match(/\bcontractName=([^;]+)/u)?.[1]?.trim();
+    const requested = contractId ?? contractName;
+    return `任务配置的绑定合同${requested ? `“${requested}”` : ""}未出现在当前抖音账号的合同列表中。`
+      + "请核对任务所属账号及合同信息，或在任务后台重新选择该账号可用的合同后重试；如需协助，请上报错误并提供任务编号及合同信息";
   }
 
   if (code === "DOUYIN_DRAMA_EPISODE_VIDEO_INVALID") {

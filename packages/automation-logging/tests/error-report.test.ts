@@ -101,10 +101,36 @@ test("explains that a configured Douyin contract is disabled and lists selectabl
   );
 
   assert.match(report, /当前在抖音页面中为灰色不可选/u);
-  assert.match(report, /系统已等待并重新检查，未点击该合同/u);
+  assert.match(report, /未点击该合同/u);
   assert.match(report, /当前页面可选合同：CT20260928151015/u);
   assert.match(report, /任务后台改为适用于当前作品类型的可选合同/u);
   assert.match(report, /错误码：DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED/u);
+  assert.match(report, /请上报错误并提供任务编号及合同信息/u);
+});
+
+test("distinguishes a stuck Douyin contract dropdown from an unavailable contract", () => {
+  const report = formatAutomationErrorReport("DOUYIN_DRAMA_DROPDOWN_NOT_CLOSED: contract");
+  assert.match(report, /绑定合同下拉列表未能关闭/u);
+  assert.match(report, /无法判断合同是否被禁用或不存在/u);
+  assert.match(report, /请上报错误/u);
+  assert.doesNotMatch(report, /技术信息：/u);
+  assert.match(report, /错误码：DOUYIN_DRAMA_DROPDOWN_NOT_CLOSED/u);
+  assert.equal(formatAutomationErrorReport(report), report);
+});
+
+test("includes configured Douyin contract identity in missing and disabled reports", () => {
+  for (const identity of ["contractId=CT123", "contractName=测试合同"]) {
+    const report = formatAutomationErrorReport(
+      `DOUYIN_DRAMA_REQUIRED_CONTRACT_NOT_FOUND: ${identity}; observed=[]`,
+    );
+    assert.match(report, /“(?:CT123|测试合同)”未出现在当前抖音账号的合同列表中/u);
+    assert.match(report, /请上报错误并提供任务编号及合同信息/u);
+  }
+  const report = formatAutomationErrorReport(
+    'DOUYIN_DRAMA_REQUIRED_CONTRACT_DISABLED: contractName=测试合同; observed=["测试合同"]',
+  );
+  assert.match(report, /“测试合同”当前在抖音页面中为灰色不可选/u);
+  assert.doesNotMatch(report, /当前页面没有可用合同/u);
 });
 
 test("explains that a short Douyin episode is not retried", () => {

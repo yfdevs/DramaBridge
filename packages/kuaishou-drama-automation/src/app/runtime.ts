@@ -15,6 +15,7 @@ import type {
   KuaishouDramaRuntimeStatus,
   KuaishouDramaPublishVariant,
   KuaishouDramaTaskConfig,
+  KuaishouDramaTaskFailStage,
 } from "../shared/types.js";
 import {
   cleanupOldLogFiles,
@@ -29,6 +30,7 @@ import {
 } from "../shared/local-episode-videos.js";
 import { prepareKuaishouDramaTaskMaterials } from "../shared/poster-materials.js";
 import { isKuaishouDailyUploadLimitError } from "../automation/warning-guard.js";
+import { KuaishouDramaVariantFailures } from "../automation/variant-results.js";
 
 const baiduNetdiskRetryDelayMs = 5_000;
 
@@ -39,7 +41,11 @@ function millisecondsUntilNextLocalDay(now = new Date()) {
   return nextDay.getTime() - now.getTime();
 }
 
-function classifyFailStage(error: unknown) {
+function classifyFailStage(error: unknown): KuaishouDramaTaskFailStage {
+  if (error instanceof KuaishouDramaVariantFailures) {
+    const stages = new Set(error.failures.map((failure) => classifyFailStage(failure.error)));
+    return stages.size === 1 ? [...stages][0]! : "OTHER";
+  }
   const message = errorMessage(error);
   if (/login|登录/i.test(message)) return "LOGIN" as const;
   if (/upload|file|视频|封面|海报|版权|授权|素材/i.test(message)) return "UPLOAD_FILE" as const;
@@ -302,6 +308,7 @@ export async function startKuaishouDramaRuntime(
       } catch (error) {
         const message = formatAutomationErrorReport(error, {
           fallbackMessage: "快手任务提交失败，未获取到具体错误原因",
+          maxLength: 10_000,
         });
         const failedTask = currentClaimedTask();
         const stage = classifyFailStage(error);

@@ -981,7 +981,8 @@ export async function selectRequiredDropdownByStableId(
     lastObserved = await observedOptions(options);
     await recorder.record(field, lastObserved);
     if (!found) {
-      await closeVisibleDropdowns(page, field);
+      // Cleanup must not replace the confirmed contract failure.
+      await closeVisibleDropdowns(page, field).catch(() => undefined);
       throw new Error(
         `DOUYIN_DRAMA_REQUIRED_CONTRACT_NOT_FOUND: contractId=${stableId}; ` +
           `observed=${JSON.stringify(lastObserved)}`,
@@ -1007,7 +1008,9 @@ export async function selectRequiredDropdownByStableId(
       ))
       .map((element) => (element.textContent ?? "").replace(/\s+/g, " ").trim())
       .filter(Boolean));
-    await closeVisibleDropdowns(page, field);
+    const closed = await closeVisibleDropdowns(page, field)
+      .then(() => true, () => false);
+    if (!closed) break;
     if (attempt < attempts && delayMs > 0) await page.waitForTimeout(delayMs);
   }
 

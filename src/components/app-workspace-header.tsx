@@ -27,7 +27,7 @@ export function AppWorkspaceHeader() {
               className={({ isActive }) =>
                 cn(
                   "inline-flex h-7 items-center rounded-lg px-2.5 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring",
-                  isActive && "bg-muted/70 text-foreground",
+                  isActive && "bg-foreground/5 text-foreground hover:bg-foreground/5",
                 )
               }
             >

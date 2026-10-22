@@ -15,7 +15,7 @@ export async function launchPlatformBrowserContext(
   if (options.headless !== false) return context;
 
   try {
-    const page = context.pages()[0] ?? await context.newPage();
+    const page = context.pages()[0] ?? (await context.newPage());
     const bounds = await page.evaluate(() => {
       // Chromium exposes monitor offsets in CSS pixels, matching CDP bounds
       // even on scaled displays or monitors to the left of the primary one.
@@ -23,8 +23,8 @@ export async function launchPlatformBrowserContext(
       return {
         left: screen.availLeft,
         top: screen.availTop,
-        width: Math.round(screen.availWidth * 2 / 3),
-        height: Math.round(screen.availHeight * 2 / 3),
+        width: Math.round((screen.availWidth * 2) / 3),
+        height: Math.round((screen.availHeight * 3) / 4),
       };
     });
     const windows = new Map<number, Promise<void>>();
@@ -39,7 +39,8 @@ export async function launchPlatformBrowserContext(
             // A profile may restore a maximized/minimized window. Chromium
             // requires restoring it before setting position and dimensions.
             await session.send("Browser.setWindowBounds", {
-              windowId, bounds: { windowState: "normal" },
+              windowId,
+              bounds: { windowState: "normal" },
             });
             await session.send("Browser.setWindowBounds", { windowId, bounds });
           })();
@@ -55,7 +56,8 @@ export async function launchPlatformBrowserContext(
     // share its windowId and do not need another resize.
     context.on("page", (target) => {
       void applyBounds(target).catch((error: unknown) => {
-        if (!target.isClosed()) console.warn("[browser-window] 无法设置浏览器窗口大小和位置", error);
+        if (!target.isClosed())
+          console.warn("[browser-window] 无法设置浏览器窗口大小和位置", error);
       });
     });
     await Promise.all(context.pages().map(applyBounds));

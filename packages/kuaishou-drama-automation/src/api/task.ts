@@ -353,9 +353,13 @@ export async function reportKuaishouDramaTaskErrorApi(
     errorMessage: string;
   },
 ) {
-  if (isBrowserClosedError(options.errorMessage)) return;
+  if (
+    !options.errorMessage.includes("KUAISHOU_DRAMA_PUBLISH_VARIANTS_FAILED")
+    && isBrowserClosedError(options.errorMessage)
+  ) return;
   const errorMessage = formatAutomationErrorReport(options.errorMessage, {
     fallbackMessage: "快手任务提交失败，未获取到具体错误原因",
+    maxLength: 10_000,
   });
   await report({
     ...options,
