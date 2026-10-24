@@ -1,13 +1,13 @@
 import path from "node:path";
-import type { CDPSession, Frame, Locator, Page } from "playwright";
+import type { Frame, Locator, Page, Request } from "playwright";
 import {
   TAOBAO_DRAMA_EPISODE_UPLOAD_RETRY_ATTEMPTS,
   TAOBAO_DRAMA_MAX_VIDEOS_PER_BATCH,
   TAOBAO_DRAMA_MIN_SETTLE_MS,
-  taobaoEpisodeBatchPagePlan,
 } from "../shared/constants.js";
 import {
   cleanupEpisodeUploadFiles,
+  convertTaobaoEpisodeForResolutionFailure,
   findTaobaoEpisodeVideos,
   prepareTaobaoEpisodeVideos,
 } from "../shared/local-materials.js";
@@ -21,12 +21,16 @@ import {
 import {
   isTaobaoBatchPublishSuccessUrl,
   isTaobaoCreatorSuccessNavigation,
+  taobaoTaskPages,
   waitForTaobaoPage,
 } from "./browser-session.js";
 import {
   runWithTaobaoVerificationRetry,
   waitForTaobaoHumanVerification,
 } from "./human-verification.js";
+import { applyTaobaoConfirmedSubmissions, planTaobaoEpisodeUploadBatches } from "../shared/collection-resume.js";
+import { refreshTaobaoCollectionUploadPlan } from "./collection-progress.js";
+import { pasteTaobaoTagWithClipboard } from "./tag-clipboard.js";
 
 export { isTaobaoVerificationChallenge } from "./human-verification.js";
 
@@ -69,7 +73,7 @@ function ownerPage(scope: TaobaoDomScope): Page {
     : scope as Page;
 }
 
-async function paceTaobaoForm(page: Page, minimumMs = 500, maximumMs = 900) {
+async function paceTaobaoForm(page: Page, minimumMs = 80, maximumMs = 160) {
   const duration = minimumMs + Math.floor(Math.random() * (maximumMs - minimumMs + 1));
   await page.waitForTimeout(duration);
 }
@@ -192,6 +196,11 @@ export function taobaoFatalUploadDialogReason(texts: string[]) {
     );
 }
 
+export function isTaobaoVideoResolutionFailure(reason: string) {
+  return /分辨率|宽高|宽度|高度/.test(reason) &&
+    /不符合|不满足|低于|小于|至少|大于|不得小于/.test(reason);
+}
+
 async function throwIfTaobaoUploadRejected(scopes: TaobaoDomScope[]) {
   for (const scope of scopes) {
     const dialogs = scope.locator([
@@ -240,9 +249,7 @@ async function findLiveTaobaoBatchScope(
 ): Promise<TaobaoDomScope> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const scopes = page.context().pages()
-      .filter((candidate) => !candidate.isClosed())
-      .flatMap((candidate) => candidate.frames());
+    const scopes = await liveTaobaoScopes(page);
     await throwIfTaobaoUploadRejected(scopes);
     for (const scope of scopes) {
       const matchingItems = scope
@@ -299,9 +306,7 @@ async function waitForUploadComplete(
   let uploadScope: TaobaoDomScope = page;
   while (Date.now() < deadline) {
     deadline += await waitForTaobaoHumanVerification(page, options);
-    const scopes = page.context().pages()
-      .filter((candidate) => !candidate.isClosed())
-      .flatMap((candidate) => candidate.frames());
+    const scopes = await liveTaobaoScopes(page);
     await throwIfTaobaoUploadRejected(scopes);
     const pageStates = await Promise.all(scopes.map(async (scope) => ({
       scope,
@@ -408,25 +413,63 @@ async function deleteFailedTaobaoEpisode(
   });
 }
 
-async function retryFailedTaobaoEpisodes(
+async function readTaobaoEpisodeUploadFailure(scope: TaobaoDomScope, fileName: string) {
+  const item = scope.locator("#publish-container .batchItemWrap").filter({
+    has: scope.getByText(fileName, { exact: true }),
+  }).first();
+  const reasonLink = item.getByText("查看原因", { exact: true });
+  if (!(await reasonLink.isVisible())) return "";
+  await reasonLink.click({ timeout: 5_000 });
+  const dialog = scope.locator(".next-dialog:visible, [role='dialog']:visible")
+    .filter({ hasText: "上传失败" }).last();
+  await dialog.waitFor({ state: "visible", timeout: 5_000 });
+  const reason = await dialog.innerText();
+  await dialog.getByRole("button", { name: "我知道了" }).click({ timeout: 5_000 });
+  await dialog.waitFor({ state: "hidden", timeout: 5_000 });
+  return reason;
+}
+
+export async function retryFailedTaobaoEpisodes(
   page: Page,
   files: string[],
   failedFileNames: string[],
   options: TaobaoDramaRuntimeOptions,
+  convertResolutionFailure: (file: string) => Promise<string>,
 ) {
   const sourceByName = new Map(files.map((file) => [path.basename(file), file]));
   for (const fileName of failedFileNames) {
-    const sourceFile = sourceByName.get(fileName);
+    let sourceFile = sourceByName.get(fileName);
     if (!sourceFile) {
       throw new Error(`TAOBAO_DRAMA_EPISODE_REUPLOAD_SOURCE_NOT_FOUND: file=${fileName}`);
     }
 
     let succeeded = false;
+    let currentFileName = fileName;
+    let converted = false;
     for (let attempt = 1; attempt <= TAOBAO_DRAMA_EPISODE_UPLOAD_RETRY_ATTEMPTS; attempt += 1) {
-      const scope = await findLiveTaobaoBatchScope(page, fileName);
-      await deleteFailedTaobaoEpisode(scope, fileName);
-      const input = await videoInput(scope);
+      const scope = await findLiveTaobaoBatchScope(page, currentFileName);
+      const reason = await readTaobaoEpisodeUploadFailure(scope, currentFileName);
+      if (isTaobaoVideoResolutionFailure(reason)) {
+        if (converted) {
+          throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: 视频“${currentFileName}”转换后仍被淘宝拒绝：${reason}`);
+        }
+        log(options, `[taobao-drama] 淘宝明确提示分辨率不符，仅转换当前失败视频：${currentFileName}`, { reason });
+        const replacement = await convertResolutionFailure(sourceFile);
+        const fileIndex = files.indexOf(sourceFile);
+        if (fileIndex < 0) throw new Error(`TAOBAO_DRAMA_EPISODE_REUPLOAD_SOURCE_NOT_FOUND: ${sourceFile}`);
+        files[fileIndex] = replacement;
+        sourceFile = replacement;
+        converted = true;
+      } else if (taobaoFatalUploadDialogReason([reason])) {
+        throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: 视频“${currentFileName}”上传失败：${reason}`);
+      }
+      // Conversion can take time. Reacquire the live iframe, then remove only
+      // the failed item; successfully uploaded episodes keep their queue slots.
+      const liveScope = await findLiveTaobaoBatchScope(page, currentFileName);
+      await deleteFailedTaobaoEpisode(liveScope, currentFileName);
+      const input = await videoInput(liveScope);
       await input.setInputFiles([sourceFile], { timeout: 120_000 });
+      currentFileName = path.basename(sourceFile);
       log(
         options,
         `[taobao-drama] 正在逐集重传 ${fileName}：` +
@@ -448,21 +491,20 @@ async function retryFailedTaobaoEpisodes(
   }
 }
 
-function liveTaobaoScopes(page: Page) {
-  return page.context().pages()
-    .filter((candidate) => !candidate.isClosed())
+async function liveTaobaoScopes(page: Page) {
+  return (await taobaoTaskPages(page))
     .flatMap((candidate) => candidate.frames());
 }
 
-async function publishSucceeded(page: Page, urlBeforeSubmit: string) {
-  if (page.context().pages().some(
+export async function publishSucceeded(page: Page, urlBeforeSubmit: string) {
+  if ((await taobaoTaskPages(page)).some(
     (candidate) => !candidate.isClosed() && isTaobaoBatchPublishSuccessUrl(candidate.url()),
   )) return true;
   if (
     page.url() !== urlBeforeSubmit &&
     isTaobaoCreatorSuccessNavigation(page.url(), "batch")
   ) return true;
-  for (const scope of liveTaobaoScopes(page)) {
+  for (const scope of await liveTaobaoScopes(page)) {
     if (await scope
       .getByText(/批量发布成功|发布成功|提交成功|全部发布完成/)
       .filter({ visible: true })
@@ -476,7 +518,7 @@ async function publishSucceeded(page: Page, urlBeforeSubmit: string) {
 async function visiblePublishConfirm(page: Page, timeoutMs = 0) {
   const deadline = Date.now() + timeoutMs;
   do {
-    for (const scope of liveTaobaoScopes(page)) {
+    for (const scope of await liveTaobaoScopes(page)) {
       const dialog = scope
         .locator(".next-dialog:visible, .ant-modal:visible, .semi-modal:visible, [role='dialog']:visible")
         .filter({ hasText: /发布/ })
@@ -489,7 +531,7 @@ async function visiblePublishConfirm(page: Page, timeoutMs = 0) {
 }
 
 async function visiblePublishFailure(page: Page) {
-  for (const scope of liveTaobaoScopes(page)) {
+  for (const scope of await liveTaobaoScopes(page)) {
     const failure = await scope
       .getByText(/发布失败|提交失败/)
       .filter({ visible: true })
@@ -514,10 +556,11 @@ async function clickTaobaoPublishControl(
   await waitForTaobaoHumanVerification(page, options);
   await control.hover({ timeout: 10_000 }).catch(() => undefined);
   await paceTaobaoForm(page, 800, 1_400);
+  await options.onSubmitCheckpoint?.({ kind: "batch", state: "submitting" });
   try {
     await control.click({ timeout: 30_000, delay: 150 });
   } catch (error) {
-    if (page.context().pages().some(
+    if ((await taobaoTaskPages(page)).some(
       (candidate) => !candidate.isClosed() && isTaobaoBatchPublishSuccessUrl(candidate.url()),
     )) {
       log(options, `[taobao-drama] ${label}触发工作台跳转，按发布成功继续处理`);
@@ -643,48 +686,35 @@ function normalizeTaobaoTagText(value: string) {
   return value.replace(/^\s*#\s*/, "").replace(/\s+/g, "").toLocaleLowerCase("zh-CN");
 }
 
-export function taobaoContentTagKeyEvents(text: string) {
-  return [...text].flatMap((character) => [
-    {
-      type: "keyDown" as const,
-      key: character,
-      text: character,
-      unmodifiedText: character,
-    },
-    {
-      type: "keyUp" as const,
-      key: character,
-    },
-  ]);
-}
-
-async function typeTaobaoContentTagQuery(page: Page, tag: string) {
-  let session: CDPSession | undefined;
-  try {
-    session = await page.context().newCDPSession(page);
-    for (const event of taobaoContentTagKeyEvents(tag)) {
-      await session.send("Input.dispatchKeyEvent", event);
-      if (event.type === "keyUp") await page.waitForTimeout(80);
+async function pasteTaobaoContentTagQuery(page: Page, editor: Locator, tag: string) {
+  await editor.evaluate((element) => {
+    const documentKey = element.querySelector("[data-cangjie-editable='true']")?.getAttribute("data-cangjie-key");
+    if (documentKey) {
+      const input = element.ownerDocument.querySelector<HTMLTextAreaElement>(
+        `textarea[data-cangjie-dockey="${CSS.escape(documentKey)}"]`,
+      );
+      if (!input) throw new Error("TAOBAO_DRAMA_CONTENT_TAG_INPUT_NOT_FOUND: 未找到淘宝内容标签编辑器的实际输入框，请检查页面是否已加载完成。");
+      input.focus();
     }
-  } finally {
-    await session?.detach().catch(() => undefined);
-  }
+  });
+  await pasteTaobaoTagWithClipboard(page, tag);
 }
 
 async function readTaobaoSelectedTags(editor: Locator) {
-  const pluginTags = (await editor.locator(".richText-plugin-theme").allInnerTexts())
+  return (await editor.locator("[data-cangjie-void='true']").allInnerTexts())
     .map(normalizeTaobaoTagText)
     .filter(Boolean);
-  // The Cangjie editor can hide the search panel before React has replaced the
-  // typed query with .richText-plugin-theme. Its visible text is already the
-  // selected value during that short transition, so use it as a fallback.
-  const editorText = await editor.innerText().catch(() => "");
-  const textTags = editorText
-    .split("#")
-    .slice(1)
-    .map(normalizeTaobaoTagText)
-    .filter(Boolean);
-  return [...new Set([...pluginTags, ...textTags])];
+}
+
+async function confirmTaobaoContentTagSelected(page: Page, panel: Locator, editor: Locator, label: string) {
+  await panel.waitFor({ state: "hidden", timeout: 10_000 });
+  const expected = normalizeTaobaoTagText(label);
+  const deadline = Date.now() + 3_000;
+  while (Date.now() < deadline) {
+    if ((await readTaobaoSelectedTags(editor)).includes(expected)) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`TAOBAO_DRAMA_CONTENT_TAG_SELECTION_NOT_CONFIRMED: 点击内容标签“${label}”后，未确认它已添加到视频，请检查淘宝发布页的内容标签。`);
 }
 
 export function scoreTaobaoContentTagMatch(candidate: string, requested: string) {
@@ -717,11 +747,61 @@ export function scoreTaobaoContentTagMatch(candidate: string, requested: string)
   return Math.min(0.89, characterScore * 0.8 + prefixBonus);
 }
 
-async function selectTaobaoContentTag(
+function taobaoContentTagCandidateLabel(value: string) {
+  return value.trim()
+    .replace(/^(?:创建|新建)(?:新)?(?:话题|标签)\s*[:：]?\s*/, "")
+    .replace(/^[“「『"]([\s\S]*)[”」』"]$/, "$1");
+}
+
+async function waitForTaobaoTagSearchPanel(page: Page, panel: Locator) {
+  const deadline = Date.now() + 10_000;
+  while (!(await panel.isVisible()) && Date.now() < deadline) {
+    await page.waitForTimeout(250);
+  }
+  return panel.isVisible();
+}
+
+async function openTaobaoTagSearchPanel(page: Page, panel: Locator) {
+  const pending = new Set<Request>();
+  let lastActivity = Date.now();
+  const requested = (request: Request) => {
+    const api = new URL(request.url()).searchParams.get("api")?.toLowerCase() ?? "";
+    if (!api.includes(".hashtag.") && api !== "mtop.taobao.media.guang.publish.comprehension") return;
+    pending.add(request);
+    lastActivity = Date.now();
+  };
+  const finished = (request: Request) => {
+    if (pending.delete(request)) lastActivity = Date.now();
+  };
+  page.on("request", requested);
+  page.on("requestfinished", finished);
+  page.on("requestfailed", finished);
+  try {
+    await page.keyboard.type("#");
+    if (!(await waitForTaobaoTagSearchPanel(page, panel))) return false;
+    // Opening the panel starts tab loading and two debounced recommendation
+    // requests. A late default response overwrites search results even when
+    // the search API returned the exact tag. Drain initialization before paste.
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      const loading = await panel.locator(".next-loading-tip:visible, .next-loading-indicator:visible").count();
+      if (pending.size === 0 && Date.now() - lastActivity >= 400 && loading === 0) return true;
+      await page.waitForTimeout(100);
+    }
+    throw new Error("TAOBAO_DRAMA_CONTENT_TAG_SEARCH_NOT_READY: 淘宝内容标签面板仍在加载推荐标签，尚不能开始搜索。已保留当前输入，请等待页面加载完成后重试任务。");
+  } finally {
+    page.off("request", requested);
+    page.off("requestfinished", finished);
+    page.off("requestfailed", finished);
+  }
+}
+
+export async function selectTaobaoContentTag(
   scope: TaobaoDomScope,
   editor: Locator,
   tag: string,
-  append: boolean,
+  _append: boolean,
+  tagKind: "topic" | "genre" | "title" = "topic",
 ) {
   const page = ownerPage(scope);
   const expected = normalizeTaobaoTagText(tag);
@@ -740,46 +820,67 @@ async function selectTaobaoContentTag(
   await editor.click();
   await page.keyboard.press("Control+End");
   await page.keyboard.press("ArrowRight");
-  if (append) await page.keyboard.type(" ");
-  await page.keyboard.type("#");
-  await panel.waitFor({ state: "visible", timeout: 10_000 });
-  // Taobao's Cangjie editor drives hashtag search from real per-key events.
-  // Playwright's keyboard.type() falls back to Input.insertText for characters
-  // outside the US keyboard layout (including Chinese), which updates the DOM
-  // without refreshing the hashtag suggestions. CDP key events preserve the
-  // per-key event sequence while still inserting the Unicode text.
-  await typeTaobaoContentTagQuery(page, tag);
-
-  const deadline = Date.now() + 15_000;
-  const approximateMatchAt = Date.now() + 1_200;
-  let suggestions: string[] = [];
-  while (Date.now() < deadline) {
-    const cards = panel.locator(".hashTag-card");
-    const count = await cards.count();
-    suggestions = [];
-    let approximate: { card: Locator; label: string; score: number } | undefined;
-    for (let index = 0; index < count; index += 1) {
-      const card = cards.nth(index);
-      const label = await card.locator(".hashTag-card-desc").innerText().catch(() => "");
-      suggestions.push(label.trim());
-      const score = scoreTaobaoContentTagMatch(label, tag);
-      if (!approximate || score > approximate.score) approximate = { card, label, score };
-      if (score !== 1) continue;
-      await card.click();
-      await panel.waitFor({ state: "hidden", timeout: 10_000 });
-      return label.trim();
+  // The fixed first tag needs the same initialized, native-paste search as
+  // later tags. Character events can leave even AI短剧 on default suggestions.
+  let panelOpened = await openTaobaoTagSearchPanel(page, panel);
+  await pasteTaobaoContentTagQuery(page, editor, tag);
+  panelOpened = await waitForTaobaoTagSearchPanel(page, panel);
+  const suggestions = new Set<string>();
+  if (panelOpened) {
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      const cards = panel.locator(".hashTag-card");
+      const count = await cards.count();
+      for (let index = 0; index < count; index += 1) {
+        const card = cards.nth(index);
+        const description = card.locator(".hashTag-card-desc");
+        const rawLabel = await description.count() > 0
+          ? await description.innerText().catch(() => "")
+          : await card.innerText().catch(() => "");
+        const label = taobaoContentTagCandidateLabel(rawLabel);
+        if (label.trim()) suggestions.add(label.trim());
+        if (normalizeTaobaoTagText(label) !== expected) continue;
+        await card.click();
+        await confirmTaobaoContentTagSelected(page, panel, editor, label);
+        return label.trim();
+      }
+      await page.waitForTimeout(250);
     }
-    if (Date.now() >= approximateMatchAt && approximate && approximate.score >= 0.45) {
-      await approximate.card.click();
-      await panel.waitFor({ state: "hidden", timeout: 10_000 });
-      return approximate.label.trim();
-    }
-    await page.waitForTimeout(250);
   }
-  await page.keyboard.press("Escape").catch(() => undefined);
+  const inputDescription = tagKind === "title" ? "完整剧名已粘贴" : "完整内容标签已粘贴";
+  const reason = suggestions.size > 0
+    ? `淘宝标签搜索列表未显示完全匹配的已有或新建标签，可能仍停留在默认推荐。当前候选标签：${[...suggestions].slice(0, 8).join("、")}。`
+    : !panelOpened
+      ? `${inputDescription}，但标签搜索面板未打开。`
+      : `${inputDescription}，但未读到可选标签或新建标签记录，可能是页面搜索未响应或结果未加载。`;
   throw new Error(
-    `TAOBAO_DRAMA_CONTENT_TAG_NOT_FOUND: tag=${tag} suggestions=${suggestions.slice(0, 8).join("|")}`,
+    `TAOBAO_DRAMA_CONTENT_TAG_NOT_FOUND: 填写视频内容标签失败：目标标签“#${tag}”。` +
+      `${reason}已保留标签输入，请检查淘宝发布页的搜索或新建标签记录后重试任务。`,
   );
+}
+
+export async function fillTaobaoEpisodeContentTags(
+  scope: TaobaoDomScope,
+  title: string,
+  dramaTag: string,
+  options: TaobaoDramaRuntimeOptions = {},
+) {
+  const page = ownerPage(scope);
+  const contentTags = taobaoContentTags(title, dramaTag);
+  await runWithTaobaoVerificationRetry(page, options, () => prepareCurrentEpisodeTags(scope), "准备内容标签");
+  for (const [tagIndex, tag] of contentTags.entries()) {
+    await runWithTaobaoVerificationRetry(page, options, async () => {
+      const editor = scope
+        .locator("#root-container .richText-container [data-cangjie-content='true']:visible")
+        .first();
+      log(options, `[taobao-drama] 正在填写内容标签：#${tag}`);
+      const selected = await selectTaobaoContentTag(scope, editor, tag, tagIndex > 0,
+        tagIndex === 0 ? "topic" : tag === title.trim().replace(/^#+/, "") ? "title" : "genre");
+      log(options, `[taobao-drama] 内容标签已选择：${selected}`);
+      await paceTaobaoForm(page);
+    }, `填写内容标签#${tag}`);
+  }
+  return contentTags.length;
 }
 
 async function selectAiCreatorDeclaration(scope: TaobaoDomScope) {
@@ -1045,7 +1146,6 @@ async function fillEpisodeMetadata(
   task: TaobaoBatchUploadTask,
   options: TaobaoDramaRuntimeOptions,
 ) {
-  const contentTags = taobaoContentTags(task.title ?? task.originalTitle, metadata.dramaTag);
   for (const [position, episode] of episodes.entries()) {
     const fileName = path.basename(episode.file);
     await runWithLiveTaobaoBatchScope(page, fileName, options, async (scope) => {
@@ -1076,24 +1176,8 @@ async function fillEpisodeMetadata(
       log(options, `[taobao-drama] 第 ${episode.index} 集检查点：视频描述已完成`);
 
       if (position === 0) {
-        await runWithTaobaoVerificationRetry(
-          page,
-          options,
-          () => prepareCurrentEpisodeTags(scope),
-          "准备内容标签",
-        );
-        for (const [tagIndex, tag] of contentTags.entries()) {
-          await runWithTaobaoVerificationRetry(page, options, async () => {
-            const editor = scope
-              .locator("#root-container .richText-container [data-cangjie-content='true']:visible")
-              .first();
-            log(options, `[taobao-drama] 正在填写内容标签：#${tag}`);
-            const selected = await selectTaobaoContentTag(scope, editor, tag, tagIndex > 0);
-            log(options, `[taobao-drama] 内容标签已选择：#${selected}`);
-            await paceTaobaoForm(page);
-          }, `填写内容标签#${tag}`);
-        }
-        log(options, `[taobao-drama] 第 ${episode.index} 集检查点：${contentTags.length}个内容标签已完成`);
+        const tagCount = await fillTaobaoEpisodeContentTags(scope, task.title ?? task.originalTitle, metadata.dramaTag, options);
+        log(options, `[taobao-drama] 第 ${episode.index} 集检查点：${tagCount}个内容标签已完成`);
 
         await runWithTaobaoVerificationRetry(
           page,
@@ -1138,53 +1222,34 @@ export async function uploadAndPublishTaobaoEpisodes(
 ) {
   const { episodes, prepared } = await prepareTaobaoEpisodeVideos(task, options);
   try {
-    const ranges = taobaoEpisodeBatchPagePlan(episodes.length);
+    const plan = options.collectionUploadPlan;
+    let currentPlan = plan ? await refreshTaobaoCollectionUploadPlan(page.context(), plan, options) : undefined;
+    const batches = planTaobaoEpisodeUploadBatches(episodes, currentPlan?.missingEpisodeNumbers);
+    const selectedCount = batches.reduce((count, batch) => count + batch.length, 0);
     log(
       options,
-      `[taobao-drama] 准备上传 ${episodes.length} 个剧集视频，共 ${ranges.length} 个发布批次`,
+      `[taobao-drama] 本地共 ${episodes.length} 集，本次仅上传 ${selectedCount} 集，共 ${batches.length} 个发布批次`,
     );
 
-    let batchPage = page;
-    for (const [batchIndex, range] of ranges.entries()) {
-      let previousBatchPage: Page | undefined;
-      if (range.openNewPage) {
-        previousBatchPage = batchPage;
-        batchPage = await page.context().newPage();
-        await waitForTaobaoPage(batchPage, "batch", options);
-        log(
-          options,
-          `[taobao-drama] 已打开新标签页，准备上传第${range.start}-${range.end}集`,
-        );
+    const batchPage = page;
+    for (const [batchIndex, batchEpisodes] of batches.entries()) {
+      // Follow the pre-upload plan; delayed counters must not block later batches.
+      const episodeNumbers = batchEpisodes.map((episode) => episode.index);
+      const range = { start: episodeNumbers[0]!, end: episodeNumbers[episodeNumbers.length - 1]! };
+      if (batchIndex > 0) {
+        // The previous batch already passed success verification and its
+        // 10-second settle period. Reuse the same task tab for the next batch.
+        await waitForTaobaoPage(batchPage, "batch", options, { fresh: true });
       }
       await waitForTaobaoHumanVerification(batchPage, options);
-      const batchEpisodes = episodes.filter(
-        (episode) => episode.index >= range.start && episode.index <= range.end,
-      );
-      const expectedBatchCount = range.end - range.start + 1;
-      if (batchEpisodes.length !== expectedBatchCount) {
-        throw new Error(
-          `TAOBAO_DRAMA_EPISODE_BATCH_INCOMPLETE: range=${range.start}-${range.end} actual=${batchEpisodes.length}`,
-        );
-      }
       const batch = batchEpisodes.map((episode) => episode.file);
       const input = await videoInput(batchPage);
       await input.setInputFiles(batch, { timeout: 120_000 });
       log(
         options,
-        `[taobao-drama] 已选择发布批次 ${batchIndex + 1}/${ranges.length}：` +
+        `[taobao-drama] 已选择发布批次 ${batchIndex + 1}/${batches.length}：` +
           `第${range.start}-${range.end}集，共 ${batch.length} 个视频`,
       );
-      if (
-        range.closePreviousPageAfterSelection &&
-        previousBatchPage &&
-        !previousBatchPage.isClosed()
-      ) {
-        await previousBatchPage.close();
-        log(
-          options,
-          `[taobao-drama] 后续批次已开始上传，已关闭上一批次标签页`,
-        );
-      }
       await waitForTaobaoHumanVerification(batchPage, options);
       await batchPage.waitForTimeout(500);
       // Taobao internally queues up to 100 selected videos. Selecting them in small
@@ -1196,22 +1261,35 @@ export async function uploadAndPublishTaobaoEpisodes(
           batch,
           uploadResult.failedFileNames,
           options,
+          async (file) => {
+            const episode = batchEpisodes.find((entry) => entry.file === file);
+            if (!episode) throw new Error(`TAOBAO_DRAMA_EPISODE_REUPLOAD_SOURCE_NOT_FOUND: ${file}`);
+            episode.file = await convertTaobaoEpisodeForResolutionFailure(file, prepared, options);
+            return episode.file;
+          },
         );
         await waitForUploadComplete(batchPage, batch, options);
       }
       await fillEpisodeMetadata(batchPage, batchEpisodes, metadata, task, options);
       const batchItemFileName = path.basename(batch[batch.length - 1] ?? batch[0] ?? "");
+      const batchOptions = { ...options, onSubmitCheckpoint: (checkpoint: import("../shared/task-execution.js").TaobaoSubmitCheckpoint) =>
+        options.onSubmitCheckpoint?.({ ...checkpoint, startEpisode: range.start, endEpisode: range.end, episodeNumbers, collectionId: plan?.collectionId }) };
       await runWithTaobaoVerificationRetry(
         batchPage,
         options,
-        () => clickBatchPublish(batchPage, batchItemFileName, options),
+        () => clickBatchPublish(batchPage, batchItemFileName, batchOptions),
         "批量发布",
         false,
       );
+      await batchOptions.onSubmitCheckpoint({ kind: "batch", state: "confirmed" });
+      if (currentPlan) currentPlan = applyTaobaoConfirmedSubmissions(currentPlan, episodeNumbers);
       log(
         options,
-        `[taobao-drama] 发布批次 ${batchIndex + 1}/${ranges.length} 已完成：第${range.start}-${range.end}集`,
+        `[taobao-drama] 发布批次 ${batchIndex + 1}/${batches.length} 已完成：第${range.start}-${range.end}集`,
       );
+    }
+    if (currentPlan?.missingEpisodeNumbers.length) {
+      throw new Error(`TAOBAO_DRAMA_EPISODE_SUBMISSIONS_INCOMPLETE: 仍有 ${currentPlan.missingEpisodeNumbers.length} 集未确认提交，请核实发布结果。`);
     }
   } finally {
     await cleanupEpisodeUploadFiles(prepared);

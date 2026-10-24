@@ -13,6 +13,10 @@ export type TaobaoDramaConfig = {
   logRetentionDays: string
 }
 export type TaobaoDramaConfigResult = { config: TaobaoDramaConfig; path: string; restartRequired: boolean }
+export type TaobaoExecutionAttention = {
+  id: string; accountId: string; taskId: number; workerId: string; attemptCount?: number;
+  originalTitle?: string; phase: string; errorMessage?: string; updatedAt: string
+}
 export type TaobaoDramaServiceStatus = {
   platform: "taobao-drama"
   running: boolean
@@ -22,8 +26,10 @@ export type TaobaoDramaServiceStatus = {
   accounts: Array<{
     accountId: string; accountName: string; loginAccount?: string | null; launched: boolean
     running: boolean; loginState: TaobaoDramaLoginState; activeUrl?: string; userDataDir: string
-    lastTask?: { accountTaskId: number; originalTitle?: string; status: "running" | "succeeded" | "failed"; errorMessage?: string; updatedAt: string }
+    workerId?: string; claimPausedReason?: string
+    lastTask?: { accountTaskId: number; originalTitle?: string; status: "running" | "succeeded" | "failed" | "report-pending" | "review-required"; errorMessage?: string; updatedAt: string }
   }>
+  executions: TaobaoExecutionAttention[]
   pid: number | null
 }
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
@@ -42,4 +48,5 @@ export const taobaoDramaService = {
   status: () => invoke<TaobaoDramaServiceStatus>("taobao-drama:service:status"),
   start: () => invoke<TaobaoDramaServiceStatus>("taobao-drama:service:start"),
   stop: () => invoke<TaobaoDramaServiceStatus>("taobao-drama:service:stop"),
+  recheckExecution: (id: string) => invoke<TaobaoDramaServiceStatus>("taobao-drama:execution:recheck", id),
 }

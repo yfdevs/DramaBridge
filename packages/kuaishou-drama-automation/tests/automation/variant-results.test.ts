@@ -6,6 +6,7 @@ import {
   KuaishouDramaVariantFailures,
 } from "../../src/automation/variant-results.js";
 import type { KuaishouDramaPublishVariant } from "../../src/shared/types.js";
+import { KuaishouBrowserUnavailableError } from "../../src/automation/task-pages.js";
 
 const variants: KuaishouDramaPublishVariant[] = Array.from({ length: 8 }, (_, index) => ({
   kind: index === 0 ? "ad-unlock" : `ad-unlock-${index + 1}`,
@@ -54,6 +55,21 @@ test("returns every expected version on full success", async () => {
     await executeKuaishouDramaVariants(variants, async () => {}),
     variants.map((v) => v.kind),
   );
+});
+
+test("a browser disconnection preserves completed versions and marks later versions unexecuted", async () => {
+  const attempted: string[] = [];
+  await assert.rejects(executeKuaishouDramaVariants(variants, async (variant, index) => {
+    attempted.push(variant.kind);
+    if (index === 1) throw new KuaishouBrowserUnavailableError();
+  }), (error: unknown) => {
+    assert.ok(error instanceof KuaishouDramaVariantFailures);
+    assert.deepEqual(error.succeeded, ["ad-unlock"]);
+    assert.equal(error.failures.length, 7);
+    assert.ok(error.failures.slice(1).every(item => String(item.error).includes("未执行")));
+    return true;
+  });
+  assert.deepEqual(attempted, ["ad-unlock", "ad-unlock-2"]);
 });
 
 test("a retry checks all versions, skips previous successes, and succeeds after the missing version is uploaded", async () => {

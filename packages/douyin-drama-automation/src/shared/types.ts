@@ -1,3 +1,4 @@
+import type { OwnershipProjectProofKind } from "@dramabridge/media-assets";
 import { z } from "zod";
 import {
   DOUYIN_DRAMA_AIGC_TOOL,
@@ -234,6 +235,7 @@ export type DouyinDramaRuntimeStatus = {
 };
 
 export type DouyinDramaRuntimeOptions = {
+  classifyOwnershipLocally?: (file: string) => Promise<OwnershipProjectProofKind>;
   accountProfileName?: string;
   douyinAccountId?: string;
   douyinAccountName?: string;

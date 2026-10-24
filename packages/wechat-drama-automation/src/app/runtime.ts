@@ -50,6 +50,7 @@ export type WechatVideoRuntimeOptions = {
   settings?: Partial<WechatVideoRuntimeSettings>;
   ensureBaiduNetdiskResource?: EnsureBaiduNetdiskResource;
   cleanupBaiduNetdiskResourceAfterTaskSuccess?: CleanupBaiduNetdiskResource;
+  classifyOwnershipLocally?: Parameters<typeof findOwnershipProjectProofFiles>[0]["classifyLocally"];
   ownershipAiClient?: NonNullable<Parameters<typeof findOwnershipProjectProofFiles>[0]["aiClient"]>;
 }
 
@@ -73,6 +74,7 @@ export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions
     options.ensureBaiduNetdiskResource,
     options.ownershipAiClient,
     options.cleanupBaiduNetdiskResourceAfterTaskSuccess,
+    options.classifyOwnershipLocally,
   );
   const idlePageRefreshService = new IdlePageRefreshService(serviceConfig, browserContexts, taskService);
   const videoAccountSyncService = new VideoAccountSyncService(

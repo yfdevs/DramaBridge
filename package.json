@@ -1,6 +1,6 @@
 {
   "name": "dramabridge",
-  "version": "0.2.9",
+  "version": "0.2.14",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",

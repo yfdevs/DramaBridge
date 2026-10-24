@@ -1,0 +1,7 @@
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 40 900;
+  font-display: swap;
+  src: url("./HarmonyOS_Sans_SC.ttf") format("truetype");
+}

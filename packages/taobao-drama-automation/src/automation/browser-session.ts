@@ -5,12 +5,18 @@ import { chromium, type BrowserContext, type Page } from "playwright";
 import {
   TAOBAO_DRAMA_BATCH_PUBLISH_URL,
   TAOBAO_DRAMA_COLLECTION_CREATE_URL,
-  TAOBAO_DRAMA_PAGE_READY_RELOAD_MS,
+  TAOBAO_DRAMA_HOME_URL,
+  TAOBAO_DRAMA_MAX_PAGE_NAVIGATIONS,
+  TAOBAO_DRAMA_NAVIGATION_SETTLE_MS,
+  TAOBAO_DRAMA_PAGE_READY_TIMEOUT_MS,
 } from "../shared/constants.js";
 import { log } from "../shared/logger.js";
 import type { TaobaoDramaLoginState, TaobaoDramaRuntimeOptions } from "../shared/types.js";
 
 const loginHosts = ["login.taobao.com", "passport.taobao.com", "aq.taobao.com", "sec.taobao.com"];
+// Taobao may redirect the same creator workflow between these two hosts.
+const creatorHosts = new Set(["creator.guanghe.taobao.com", "creator.tiancheng.taobao.com"]);
+type TaobaoPageTarget = "home" | "collection" | "batch";
 
 export function hideTaobaoWebDriver() {
   const navigatorPrototype = Object.getPrototypeOf(navigator) as Record<string, unknown> | null;
@@ -63,7 +69,7 @@ export function taobaoLoginStateFromUrl(url?: string): TaobaoDramaLoginState {
   if (!url) return "unknown";
   try {
     const parsed = new URL(url);
-    if (parsed.hostname === "creator.guanghe.taobao.com") return "logged-in";
+    if (creatorHosts.has(parsed.hostname)) return "logged-in";
     if (parsed.hostname === "login.taobao.com" || parsed.hostname === "passport.taobao.com") {
       return "login-required";
     }
@@ -88,10 +94,14 @@ export function taobaoLoginStateFromPage(
   return taobaoLoginStateFromUrl(url);
 }
 
-export function isTaobaoTargetUrl(url: string, target: "collection" | "batch") {
+export function isTaobaoTargetUrl(url: string, target: TaobaoPageTarget) {
   try {
     const parsed = new URL(url);
-    if (parsed.hostname !== "creator.guanghe.taobao.com") return false;
+    if (!creatorHosts.has(parsed.hostname)) return false;
+    if (target === "home") {
+      return parsed.pathname.startsWith("/page/") &&
+        !/(?:^|\/)(?:error|login|verify|exception)(?:\/|$)/i.test(parsed.pathname);
+    }
     return target === "collection"
       ? parsed.pathname === "/page/unify/collect-create"
       : parsed.pathname === "/page/unify/creation-tool/batch-publish";
@@ -106,7 +116,7 @@ export function isTaobaoCreatorSuccessNavigation(
 ) {
   try {
     const parsed = new URL(url);
-    return parsed.hostname === "creator.guanghe.taobao.com" &&
+    return creatorHosts.has(parsed.hostname) &&
       !/(?:^|\/)(?:error|login|verify|exception)(?:\/|$)/i.test(parsed.pathname) &&
       !isTaobaoTargetUrl(url, target);
   } catch {
@@ -117,14 +127,17 @@ export function isTaobaoCreatorSuccessNavigation(
 export function isTaobaoBatchPublishSuccessUrl(url: string) {
   try {
     const parsed = new URL(url);
-    return parsed.hostname === "creator.guanghe.taobao.com" &&
+    return creatorHosts.has(parsed.hostname) &&
       parsed.pathname.replace(/\/+$/, "") === "/page/workspace/tb";
   } catch {
     return false;
   }
 }
 
-async function targetReady(page: Page, target: "collection" | "batch") {
+async function targetReady(page: Page, target: TaobaoPageTarget) {
+  if (target === "home") {
+    return Boolean((await page.locator("body").innerText({ timeout: 2_000 }).catch(() => "")).trim());
+  }
   const marker = page
     .getByText(target === "collection" ? /合集类型|短剧类型/ : /上传视频|上传文件|添加视频/)
     .filter({ visible: true })
@@ -215,20 +228,26 @@ export async function saveTaobaoCredentialState(
 
 export async function waitForTaobaoPage(
   page: Page,
-  target: "collection" | "batch",
+  target: TaobaoPageTarget,
   options: TaobaoDramaRuntimeOptions,
+  navigation: { fresh?: boolean } = {},
 ) {
-  const targetUrl = target === "collection"
+  const targetUrl = target === "home" ? TAOBAO_DRAMA_HOME_URL : target === "collection"
     ? TAOBAO_DRAMA_COLLECTION_CREATE_URL
     : TAOBAO_DRAMA_BATCH_PUBLISH_URL;
-  if (!isTaobaoTargetUrl(page.url(), target)) {
-    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  }
-
+  const label = target === "home" ? "淘宝主页" : target === "collection" ? "创建合集页" : "批量发布页";
+  let freshNavigationNeeded = navigation.fresh === true;
+  let navigationCount = 0;
+  let readyDeadline = Date.now() + TAOBAO_DRAMA_PAGE_READY_TIMEOUT_MS;
+  let observedUrl = page.url();
+  let urlStableSince = Date.now();
   let loginLogged = false;
   let verificationNotified = false;
-  let lastReadyReloadAt = Date.now();
   while (!page.isClosed()) {
+    if (page.url() !== observedUrl) {
+      observedUrl = page.url();
+      urlStableSince = Date.now();
+    }
     const state = await currentLoginState(page);
     if (state === "login-required" || state === "verification-required") {
       if (!loginLogged) {
@@ -244,34 +263,61 @@ export async function waitForTaobaoPage(
         verificationNotified = true;
         await page.bringToFront().catch(() => undefined);
         await options.onHumanVerificationRequired?.({ pages: [page.url()] });
-        await page.bringToFront().catch(() => undefined);
       }
+      // Login and manual verification must never be interrupted by navigation
+      // or consume the form-readiness timeout.
+      readyDeadline = Date.now() + TAOBAO_DRAMA_PAGE_READY_TIMEOUT_MS;
+      urlStableSince = Date.now();
       await page.waitForTimeout(1_000);
       continue;
     }
 
     verificationNotified = false;
 
-    if (!isTaobaoTargetUrl(page.url(), target)) {
-      await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
-      loginLogged = false;
-      lastReadyReloadAt = Date.now();
-      continue;
-    }
-    if (await targetReady(page, target)) {
-      log(options, `[taobao-drama] ${target === "collection" ? "创建合集" : "批量发布"}页面已就绪`);
+    if (!freshNavigationNeeded && isTaobaoTargetUrl(page.url(), target) && await targetReady(page, target)) {
+      log(options, `[taobao-drama] ${label}已就绪`);
       return;
     }
-    if (Date.now() - lastReadyReloadAt >= TAOBAO_DRAMA_PAGE_READY_RELOAD_MS) {
-      log(
-        options,
-        `[taobao-drama] ${target === "collection" ? "创建合集" : "批量发布"}页面长时间未出现操作控件，刷新后重试`,
-      );
-      await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 }).catch(() => undefined);
-      lastReadyReloadAt = Date.now();
-      continue;
+    if (Date.now() >= readyDeadline) {
+      throw new Error(`TAOBAO_DRAMA_PAGE_READY_TIMEOUT: ${label}未就绪，已停止自动跳转，请检查登录、页面权限或网络。url=${page.url()}`);
+    }
+    if (freshNavigationNeeded || !isTaobaoTargetUrl(page.url(), target)) {
+      // Give platform redirects time to settle. Reissuing goto on every poll
+      // cancels login redirects and can itself cause net::ERR_ABORTED.
+      if (navigationCount === 0 || Date.now() - urlStableSince >= TAOBAO_DRAMA_NAVIGATION_SETTLE_MS) {
+        if (navigationCount >= TAOBAO_DRAMA_MAX_PAGE_NAVIGATIONS) {
+          throw new Error(`TAOBAO_DRAMA_PAGE_REDIRECT_LIMIT: ${label}反复跳转，已停止自动跳转，请检查登录或页面权限。url=${page.url()}`);
+        }
+        navigationCount += 1;
+        const urlBeforeNavigation = page.url();
+        try {
+          await page.goto(targetUrl, { waitUntil: "commit", timeout: 60_000 });
+          freshNavigationNeeded = false;
+        } catch (error) {
+          if (page.isClosed()) throw Object.assign(new Error("TAOBAO_DRAMA_BROWSER_PAGE_CLOSED"), { cause: error });
+          const message = error instanceof Error ? error.message : String(error);
+          if (!/net::ERR_ABORTED|navigation.*interrupted by another navigation/i.test(message)) throw error;
+          if (page.url() !== urlBeforeNavigation) freshNavigationNeeded = false;
+          // An interrupted navigation is not success. Continue checking the
+          // resulting URL, login state and controls within the bounded wait.
+          log(options, `[taobao-drama] ${label}导航被中断，等待页面跳转完成`, { activeUrl: page.url() });
+        }
+        observedUrl = page.url();
+        urlStableSince = Date.now();
+        continue;
+      }
     }
     await page.waitForTimeout(1_000);
   }
   throw new Error("TAOBAO_DRAMA_BROWSER_PAGE_CLOSED");
+}
+
+/** Only the current task and its popups may supply controls or success signals. */
+export async function taobaoTaskPages(page: Page) {
+  const related: Page[] = page.isClosed() ? [] : [page];
+  for (const candidate of page.context().pages()) {
+    if (candidate === page || candidate.isClosed()) continue;
+    if (await candidate.opener().catch(() => null) === page) related.push(candidate);
+  }
+  return related;
 }

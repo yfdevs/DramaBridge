@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { memoryExecutionStore } from "../helpers/execution-store.js";
 import type { TaobaoDramaHttpClient } from "../../src/api/http-client.js";
 import {
   claimNextTaobaoDramaTaskApi,
@@ -9,6 +10,7 @@ import {
 
 test("normalizes a claimed backend task for collection creation and video upload", () => {
   const task = normalizeClaimedTaobaoDramaTask({
+    workerId: "worker-test", attemptCount: 3,
     accountTaskId: 88,
     accountId: "tb-1",
     originalTitle: "原始剧名",
@@ -38,7 +40,7 @@ test("normalizes a claimed backend task for collection creation and video upload
     id: 1,
     accountId: "tb-1",
     accountName: "淘宝账号",
-  });
+  }, "execution-test");
   assert.equal(task.accountTaskId, 88);
   assert.equal(task.title, "淘宝剧名");
   assert.equal(task.episodeCount, 12);
@@ -63,6 +65,7 @@ test("lists and claims the next READY Taobao task through Taobao-prefixed endpoi
       }
       if (path.endsWith("/rpa/claim")) {
         return { code: 0, msg: "操作成功", data: {
+          workerId: "worker-test", attemptCount: 3,
           accountTaskId: 88,
           accountId: "tb-1",
           rpaProfileKey: "profile-tb-1",
@@ -79,6 +82,7 @@ test("lists and claims the next READY Taobao task through Taobao-prefixed endpoi
   };
 
   const task = await claimNextTaobaoDramaTaskApi({
+    workerId: "worker-test", executionStore: memoryExecutionStore(),
     apiBaseUrl: "http://backend.test",
     account: { id: 1, accountId: "tb-1", accountName: "淘宝账号" },
     client,
@@ -89,7 +93,7 @@ test("lists and claims the next READY Taobao task through Taobao-prefixed endpoi
     "/dramaAiRpa/taobao/accountTask/page",
     "/dramaAiRpa/taobao/rpa/claim",
   ]);
-  assert.deepEqual(calls[1]?.payload, { accountTaskId: 88 });
+  assert.deepEqual(calls[1]?.payload, { accountTaskId: 88, workerId: "worker-test" });
 });
 
 test("reports all supported Taobao result fields", async () => {
@@ -105,7 +109,7 @@ test("reports all supported Taobao result fields", async () => {
     apiBaseUrl: "http://backend.test",
     client,
     report: {
-      taskId: 88,
+      taskId: 88, workerId: "worker-test", attemptCount: 3,
       success: true,
       externalId: "collection-1",
       platformDramaId: "drama-1",
@@ -134,6 +138,7 @@ test("reports an invalid claimed Taobao task and safely leaves it out of the que
       }
       if (path.endsWith("/rpa/claim")) {
         return { code: 0, msg: "操作成功", data: {
+          workerId: "worker-test", attemptCount: 4,
           accountTaskId: 91,
           accountId: "tb-1",
           originalTitle: "字段缺失任务",
@@ -144,16 +149,18 @@ test("reports an invalid claimed Taobao task and safely leaves it out of the que
     },
   };
 
-  const task = await claimNextTaobaoDramaTaskApi({
+  const store = memoryExecutionStore();
+  await assert.rejects(claimNextTaobaoDramaTaskApi({
+    workerId: "worker-test", executionStore: store,
     apiBaseUrl: "http://backend.test",
-    account: { id: 1, accountId: "tb-1", accountName: "淘宝账号" },
-    client,
-  });
-
-  assert.equal(task, null);
-  const report = calls.find((call) => call.path.endsWith("/rpa/report"));
-  assert.equal(report?.payload.taskId, 91);
-  assert.equal(report?.payload.success, false);
-  assert.match(String(report?.payload.errorMessage), /TAOBAO_DRAMA_CLAIMED_TASK_INVALID/u);
-  assert.deepEqual(report?.payload.resultJson, { accountId: "tb-1", accountName: "淘宝账号" });
+    account: { id: 1, accountId: "tb-1", accountName: "淘宝账号" }, client,
+  }), /TAOBAO_DRAMA_CLAIMED_TASK_INVALID/);
+  assert.equal(calls.some((call) => call.path.endsWith("/rpa/report")), false);
+  const record = store.list("http://backend.test")[0]!;
+  assert.equal(record.phase, "report-pending");
+  assert.equal(record.report?.taskId, 91);
+  assert.equal(record.report?.workerId, "worker-test");
+  assert.equal(record.report?.attemptCount, 4);
+  assert.equal(record.report?.success, false);
+  assert.match(String(record.report?.errorMessage), /TAOBAO_DRAMA_CLAIMED_TASK_INVALID/u);
 });

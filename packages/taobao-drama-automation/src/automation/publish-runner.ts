@@ -16,6 +16,9 @@ import {
   prepareTaobaoEpisodeMetadata,
 } from "../shared/episode-metadata.js";
 import { fillAndCreateTaobaoCollection } from "./collection.js";
+import { queryTaobaoCollectionDetail } from "../api/collection-detail.js";
+import { createTaobaoCollectionUploadPlan } from "../shared/collection-resume.js";
+import { restoreTaobaoConfirmedSubmissions } from "./collection-progress.js";
 
 export function taobaoBaiduResourceRequest(
   task: TaobaoBatchUploadTask,
@@ -44,42 +47,39 @@ export function findReusableTaobaoCollection(
   title: string,
 ) {
   const expectedTitle = normalizedCollectionTitle(title);
-  return items.find((item) =>
-    normalizedCollectionTitle(item.collectionInfo.title) === expectedTitle
-    && item.collectionInfo.contentCount === 0
+  const matched = items.filter((item) => normalizedCollectionTitle(item.collectionInfo.title) === expectedTitle);
+  if (matched.length > 1) throw new Error(
+    `TAOBAO_DRAMA_COLLECTION_AMBIGUOUS: 找到 ${matched.length} 个同名合集“${title}”，无法确定补传目标，已停止上传，请先处理同名合集。`,
   );
+  return matched[0];
 }
 
-async function findExistingEmptyCollection(
+export async function findExistingTaobaoCollectionPlan(
   context: BrowserContext,
   title: string,
+  episodeCount: number,
   options: TaobaoDramaRuntimeOptions,
 ) {
-  try {
-    const result = await queryAllTaobaoCollections(context, { keyword: title });
-    const reusable = findReusableTaobaoCollection(result.data, title);
-    if (reusable) {
-      log(options, "[taobao-drama] 发现同名空合集，跳过合集创建", {
-        title,
-        collectionId: String(reusable.collectionInfo.collectionId),
-        contentCount: reusable.collectionInfo.contentCount,
-      });
-      return reusable;
-    }
-    log(options, "[taobao-drama] 未找到同名空合集，将创建新合集", {
-      title,
-      matchedCount: result.data.filter((item) =>
-        normalizedCollectionTitle(item.collectionInfo.title) === normalizedCollectionTitle(title)
-      ).length,
-    });
-    return undefined;
-  } catch (error) {
-    log(options, "[taobao-drama] 查询现有合集失败，将按原流程创建合集", {
-      title,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return undefined;
+  // A failed query is not evidence that a collection does not exist.
+  const result = await queryAllTaobaoCollections(context, { keyword: title }).catch((error: unknown) => {
+    throw new Error(`TAOBAO_DRAMA_COLLECTION_QUERY_FAILED: 查询已有合集失败，无法确认是否已上传，已停止创建和上传，请检查淘宝登录或网络后重试。原因：${error instanceof Error ? error.message : String(error)}`);
+  });
+  const reusable = findReusableTaobaoCollection(result.data, title);
+  if (!reusable) {
+    log(options, "[taobao-drama] 未找到同名合集，将创建新合集", { title });
+    return;
   }
+  const detail = await queryTaobaoCollectionDetail(context, String(reusable.collectionInfo.collectionId)).catch((error: unknown) => {
+    throw new Error(`TAOBAO_DRAMA_COLLECTION_DETAIL_QUERY_FAILED: 已找到合集“${title}”，但未能完整读取已上传集数，已停止补传，请检查淘宝合集详情或网络后重试。原因：${error instanceof Error ? error.message : String(error)}`);
+  });
+  const plan = restoreTaobaoConfirmedSubmissions(createTaobaoCollectionUploadPlan(detail, title, episodeCount), options);
+  log(options, plan.missingEpisodeNumbers.length === 0 ? "[taobao-drama] 各集已上传或已确认提交，跳过重复上传" :
+    plan.uploadedEpisodeNumbers.length ? "[taobao-drama] 发现未传完整的合集，将只补传缺失集数" : "[taobao-drama] 发现同名空合集，跳过合集创建", {
+    title, collectionId: plan.collectionId, episodeCount, uploadedEpisodeNumbers: plan.uploadedEpisodeNumbers,
+    submittedEpisodeNumbers: plan.submittedEpisodeNumbers,
+    missingEpisodeNumbers: plan.missingEpisodeNumbers,
+  });
+  return plan;
 }
 
 async function ensureResource(
@@ -130,16 +130,18 @@ export async function runTaobaoPublishTask(
   options: TaobaoDramaRuntimeOptions,
 ) {
   log(options, `[taobao-drama] 开始检查合集并批量上传：${task.originalTitle}`);
-  // Navigate immediately so a task never presents an about:blank window while a
-  // lengthy Baidu download or local resource check is running.
-  await waitForTaobaoPage(page, "batch", options);
-  await saveTaobaoCredentialState(context, options);
   const collectionTitle = task.title ?? task.originalTitle;
-  const reusableCollection = await findExistingEmptyCollection(context, collectionTitle, options);
+  let uploadPlan = await findExistingTaobaoCollectionPlan(context, collectionTitle, task.episodeCount, options);
+  const reused = !!uploadPlan;
+  if (uploadPlan?.missingEpisodeNumbers.length === 0) return;
+  // Open only the page this task actually needs, before lengthy downloads.
+  // Collection creation and every upload batch share this task's single tab.
+  await waitForTaobaoPage(page, uploadPlan ? "batch" : "collection", options);
+  await saveTaobaoCredentialState(context, options);
   const baiduNetdiskResource = await ensureResource(task, options);
   await validateTaobaoEpisodeVideos(task, options);
   const metadata = await prepareTaobaoEpisodeMetadata(task, options);
-  if (!reusableCollection) {
+  if (!uploadPlan) {
     const collectionMetadata = createTaobaoCollectionMetadata(task, metadata);
     const coverFile = await prepareTaobaoCollectionCover(task, collectionMetadata, options);
     const costConfigImage = await prepareTaobaoCostConfigImage(task, options);
@@ -147,14 +149,20 @@ export async function runTaobaoPublishTask(
     await waitForTaobaoPage(page, "collection", options);
     await saveTaobaoCredentialState(context, options);
     await fillAndCreateTaobaoCollection(page, collectionMetadata, coverFile, costConfigImage, options);
+    // Resolve the actual collection ID after creation, before selecting videos.
+    for (let attempt = 0; attempt < 5 && !uploadPlan; attempt++) {
+      uploadPlan = await findExistingTaobaoCollectionPlan(context, collectionTitle, task.episodeCount, options);
+      if (!uploadPlan && attempt < 4) await page.waitForTimeout(1_000);
+    }
+    if (!uploadPlan) throw new Error("TAOBAO_DRAMA_COLLECTION_CREATED_NOT_FOUND: 合集创建后未能读到合集信息，已停止上传，请检查淘宝合集列表后重试。");
   }
 
   await waitForTaobaoPage(page, "batch", options);
   await saveTaobaoCredentialState(context, options);
-  await uploadAndPublishTaobaoEpisodes(page, task, metadata, options);
+  await uploadAndPublishTaobaoEpisodes(page, task, metadata, { ...options, collectionUploadPlan: uploadPlan });
   log(
     options,
-    `[taobao-drama] ${task.originalTitle} ${reusableCollection ? "空合集复用" : "合集创建"}及 ${task.episodeCount} 集批量发布完成`,
+    `[taobao-drama] ${task.originalTitle} ${reused ? "合集复用或补传" : "合集创建"}完成，各集已上传或已确认提交；作品列表可能延迟显示`,
   );
   return baiduNetdiskResource;
 }

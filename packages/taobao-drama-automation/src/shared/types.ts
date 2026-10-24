@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { DramaAiClient } from "@dramabridge/ai";
 import { TAOBAO_DRAMA_MAX_EPISODES_PER_TASK } from "./constants.js";
+import type { TaobaoClaimIdentity, TaobaoExecutionStore, TaobaoSubmitCheckpoint } from "./task-execution.js";
+import type { TaobaoCollectionUploadPlan } from "./collection-resume.js";
 
 const requiredText = z.string().trim().min(1);
 
@@ -40,7 +42,7 @@ export const taobaoDramaTaskFailStageValues = [
 ] as const;
 
 export type TaobaoBatchUploadTask = z.infer<typeof taobaoBatchUploadTaskSchema>;
-export type ClaimedTaobaoDramaTask = TaobaoBatchUploadTask & { accountTaskId: number };
+export type ClaimedTaobaoDramaTask = TaobaoBatchUploadTask & TaobaoClaimIdentity & { executionId: string };
 export type TaobaoDramaAccount = {
   id: number;
   accountId: string;
@@ -63,6 +65,10 @@ export type TaobaoCollectionMetadata = {
 };
 
 export type TaobaoDramaRuntimeOptions = {
+  collectionUploadPlan?: TaobaoCollectionUploadPlan;
+  workerId?: string;
+  executionStore?: TaobaoExecutionStore;
+  onSubmitCheckpoint?: (checkpoint: TaobaoSubmitCheckpoint) => Promise<void> | void;
   accountProfileName?: string;
   accountDir?: string;
   userDataDir?: string;
@@ -109,10 +115,12 @@ export type TaobaoDramaRuntimeStatus = {
   loginUrl: string;
   userDataDir: string;
   accountProfileName?: string;
+  workerId?: string;
+  claimPausedReason?: string;
   lastTask?: {
     accountTaskId: number;
     originalTitle?: string;
-    status: "running" | "succeeded" | "failed";
+    status: "running" | "succeeded" | "failed" | "report-pending" | "review-required";
     errorMessage?: string;
     updatedAt: string;
   };

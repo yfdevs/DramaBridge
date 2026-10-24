@@ -18,7 +18,7 @@ export function createTaobaoDramaHttpClient(config: TaobaoDramaApiConfig): Taoba
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error(`TAOBAO_DRAMA_API_REQUEST_FAILED: path=${requestPath} status=${response.status}`);
+        if (!response.ok) throw Object.assign(new Error(`TAOBAO_DRAMA_API_REQUEST_FAILED: path=${requestPath} status=${response.status}`), { status: response.status });
         return await response.json() as T;
       } finally {
         clearTimeout(timeout);

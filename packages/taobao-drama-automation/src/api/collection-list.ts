@@ -111,7 +111,7 @@ async function readMtopToken(context: BrowserContext) {
   return token;
 }
 
-async function requestMtop(
+export async function requestTaobaoMtop(
   context: BrowserContext,
   api: string,
   version: string,
@@ -156,7 +156,7 @@ export async function queryTaobaoCollectionList(
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 10) {
     throw new Error("TAOBAO_COLLECTION_PAGE_SIZE_INVALID");
   }
-  const data = await requestMtop(context, collectionListApi, collectionListVersion, {
+  const data = await requestTaobaoMtop(context, collectionListApi, collectionListVersion, {
     bizCondition: JSON.stringify({
       typeList: query.typeList ?? [1, 3],
       keyword: query.keyword?.trim() ?? "",

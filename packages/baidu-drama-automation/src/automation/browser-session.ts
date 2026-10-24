@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { BrowserContext, Page } from "playwright";
 import { BAIDU_DRAMA_CREATE_URL, BAIDU_DRAMA_LOGIN_URL } from "../shared/constants.js";
-import { log } from "../shared/logger.js";
+import { log, warn } from "../shared/logger.js";
 import type { BaiduDramaLoginState, BaiduDramaRuntimeOptions } from "../shared/types.js";
 
 type BaiduDramaTitleWindow = Window & {
@@ -127,9 +127,9 @@ function compactPageText(text: string) {
   return text.replace(/\s+/g, " ").trim().slice(0, 300);
 }
 
-export async function waitForBaiduDramaCreatePageReady(
+async function waitForBaiduDramaCreatePageReadyOnce(
   page: Page,
-  timeoutMs = 60_000,
+  timeoutMs: number,
 ) {
   const readyTexts = ["选择短剧类型", "非真人短剧", "下一步"];
   const deadline = Date.now() + timeoutMs;
@@ -153,12 +153,32 @@ export async function waitForBaiduDramaCreatePageReady(
   );
 }
 
+export async function waitForBaiduDramaCreatePageReady(
+  page: Page,
+  timeoutMs = 60_000,
+  options: BaiduDramaRuntimeOptions = {},
+) {
+  try {
+    await waitForBaiduDramaCreatePageReadyOnce(page, timeoutMs);
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !error.message.startsWith("BAIDU_DRAMA_CREATE_PAGE_NOT_READY:") ||
+      page.isClosed()
+    ) throw error;
+
+    warn(options, "[baidu-drama] 创建页未准备完成，刷新页面后重试一次。", { error }, "browser");
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
+    await waitForBaiduDramaCreatePageReadyOnce(page, timeoutMs);
+  }
+}
+
 export async function ensureBaiduDramaCreatePage(
   page: Page,
   options: BaiduDramaRuntimeOptions,
 ) {
   await openBaiduDramaCreatePage(page);
-  await waitForBaiduDramaCreatePageReady(page);
+  await waitForBaiduDramaCreatePageReady(page, undefined, options);
   log(options, "[baidu-drama] 百度短剧创建页已就绪，开始领取任务。", undefined, "browser");
 }
 

@@ -4,6 +4,8 @@ import { after, test } from "node:test";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { TAOBAO_DRAMA_FIXED_FIELDS } from "../../src/shared/constants.js";
+import { taobaoEpisodeBatchPagePlan } from "../../src/shared/constants.js";
+import { waitForTaobaoPage } from "../../src/automation/browser-session.js";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "../../../../");
 process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(workspaceRoot, ".cache/playwright-browsers");
@@ -32,12 +34,112 @@ after(async () => {
   await browser.close();
 });
 
+test("keeps one homepage and one task tab through creation and all 235-episode batches", async () => {
+  const context = await browser.newContext();
+  const documentPaths: string[] = [];
+  try {
+    await context.route("https://creator.guanghe.taobao.com/**", async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      documentPaths.push(pathname);
+      await route.fulfill({ contentType: "text/html; charset=utf-8", body: pathname.endsWith("collect-create")
+        ? '<p>合集类型</p><button>创建合集</button>'
+        : pathname.endsWith("batch-publish")
+          ? '<p>上传视频</p><input type="file" accept="video/mp4"><textarea id="queue"></textarea>'
+          : '<p>淘宝光合平台 合集管理</p>',
+      });
+    });
+    const home = await context.newPage();
+    await waitForTaobaoPage(home, "home", {});
+    const homeUrl = home.url();
+    const task = await context.newPage();
+    await waitForTaobaoPage(task, "collection", {});
+    await waitForTaobaoPage(task, "batch", {});
+    for (const range of taobaoEpisodeBatchPagePlan(235)) {
+      if (range.navigateToBatchPage) await waitForTaobaoPage(task, "batch", {}, { fresh: true });
+      assert.equal(await task.locator("#queue").inputValue(), "", "previous upload queue must be cleared");
+      await task.locator("#queue").fill(`${range.start}-${range.end}`);
+      assert.equal(context.pages().length, 2);
+      assert.equal(home.url(), homeUrl);
+    }
+    assert.deepEqual(documentPaths, [
+      "/page/unify/collection", "/page/unify/collect-create",
+      "/page/unify/creation-tool/batch-publish",
+      "/page/unify/creation-tool/batch-publish",
+      "/page/unify/creation-tool/batch-publish",
+    ]);
+  } finally { await context.close(); }
+});
+
+test("lets a client login redirect finish without repeated navigation", async () => {
+  const context = await browser.newContext();
+  let createRequests = 0;
+  let loginRequests = 0;
+  try {
+    await context.route("https://creator.guanghe.taobao.com/**", async (route) => {
+      createRequests += 1;
+      await route.fulfill({ contentType: "text/html; charset=utf-8", body: createRequests === 1
+        ? '<script>location.replace("https://login.taobao.com/login.htm")</script>'
+        : '<p>合集类型</p><button>创建合集</button>',
+      });
+    });
+    await context.route("https://login.taobao.com/**", async (route) => {
+      loginRequests += 1;
+      await route.fulfill({ contentType: "text/html; charset=utf-8", body: '<p>手机扫码登录</p>' });
+    });
+    const page = await context.newPage();
+    const waiting = waitForTaobaoPage(page, "collection", {});
+    const completed = assert.doesNotReject(waiting);
+    await page.getByText("手机扫码登录").waitFor();
+    assert.equal(loginRequests, 1);
+    await page.goto("https://creator.guanghe.taobao.com/page/unify/collect-create");
+    await completed;
+    assert.equal(createRequests, 2);
+    assert.equal(loginRequests, 1);
+    assert.equal(context.pages().length, 1);
+  } finally { await context.close(); }
+});
+
+test("accepts creator-domain redirects for home, collection and batch pages", { timeout: 20_000 }, async () => {
+  const context = await browser.newContext();
+  const redirectedPaths: string[] = [];
+  try {
+    await context.route("**/*", (route) => route.abort());
+    await context.route("https://creator.guanghe.taobao.com/**", async (route) => {
+      const url = new URL(route.request().url());
+      redirectedPaths.push(url.pathname);
+      url.hostname = "creator.tiancheng.taobao.com";
+      await route.fulfill({ contentType: "text/html; charset=utf-8", body:
+        `<script>location.replace(${JSON.stringify(url.href)})</script>`,
+      });
+    });
+    await context.route("https://creator.tiancheng.taobao.com/**", async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      await route.fulfill({ contentType: "text/html; charset=utf-8", body: pathname.endsWith("collect-create")
+        ? '<p>合集类型</p><button>创建合集</button>'
+        : pathname.endsWith("batch-publish")
+          ? '<p>上传视频</p><input type="file" accept="video/mp4">'
+          : '<p>淘宝工作台</p>',
+      });
+    });
+    const page = await context.newPage();
+    for (const target of ["home", "collection", "batch"] as const) {
+      await waitForTaobaoPage(page, target, {});
+      assert.equal(new URL(page.url()).hostname, "creator.tiancheng.taobao.com");
+    }
+    await waitForTaobaoPage(page, "batch", {}, { fresh: true });
+    assert.deepEqual(redirectedPaths, [
+      "/page/unify/collection", "/page/unify/collect-create",
+      "/page/unify/creation-tool/batch-publish", "/page/unify/creation-tool/batch-publish",
+    ]);
+  } finally { await context.close(); }
+});
+
 test("uses Yang Aiping for Taobao collection people fields", () => {
   assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.producerName, "杨爱平");
   assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.directorName, "杨爱平");
   assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.scriptwriterName, "杨爱平");
   assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.mainActors, "杨爱平");
-  assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.productionCompany, "明星说");
+  assert.equal(TAOBAO_DRAMA_FIXED_FIELDS.productionCompany, "明星说（北京）科技有限公司");
 });
 
 test("recognizes a missing collection-create button after the settle period", () => {

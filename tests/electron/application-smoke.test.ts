@@ -110,6 +110,18 @@ test("built Electron app supports platform IPC, settings, database and smooth co
       assert.equal(key, "electron-upgrade-smoke-key");
     }
 
+    await page.evaluate(() => { location.hash = "/app/config"; });
+    const localOcrSwitch = page.getByRole("switch", { name: "优先使用本机识别" });
+    await localOcrSwitch.waitFor();
+    assert.equal((await page.evaluate(() => window.ipcRenderer.invoke("app:config:get"))).config.ownershipLocalOcrEnabled, false);
+    await page.getByRole("button", { name: "测试是否可用" }).click();
+    await page.waitForFunction(() => /本机识别可用|本机识别暂不可用|这台电脑不支持本机识别/.test(document.body.innerText));
+    await page.getByRole("button", { name: "测试是否可用" }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(cache, "electron-local-ocr-settings.png") });
+    await localOcrSwitch.click();
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await page.waitForFunction(async () => (await window.ipcRenderer.invoke("app:config:get")).config.ownershipLocalOcrEnabled === true);
+
     const savedTheme = await page.evaluate(async () => {
       const current = await window.ipcRenderer.invoke("app:config:get");
       await window.ipcRenderer.invoke("app:config:save", { ...current.config, theme: "dark" });
@@ -217,6 +229,7 @@ test("built Electron app supports platform IPC, settings, database and smooth co
       electron = await _electron.launch({ executablePath: require("electron"), args: [bootstrap], env: environment, timeout: 30_000 });
       const restartedPage = await electron.firstWindow();
       await restartedPage.waitForSelector(".app-workspace");
+      assert.equal((await restartedPage.evaluate(() => window.ipcRenderer.invoke("app:config:get"))).config.ownershipLocalOcrEnabled, true);
       const restoredApi = await restartedPage.evaluate(() => window.ipcRenderer.invoke("app:config:external-api:get"));
       assert.equal(restoredApi.config.enabled, true);
       assert.equal(restoredApi.status.running, true);

@@ -110,7 +110,8 @@ export async function queryExistingKuaishouDrama(
     .evaluate(
       async ({ endpoint, title, saleType: requestedSaleType }) => {
         const items: unknown[] = [];
-        const pageSize = 100;
+        // Kuaishou's content list rejects requests exceeding 50 records per page.
+        const pageSize = 50;
         for (let pageNum = 1; pageNum <= 100; pageNum += 1) {
           const response = await fetch(endpoint, {
             method: "POST",

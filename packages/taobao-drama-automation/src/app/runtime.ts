@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import { captureAutomationFailureDiagnostics, formatAutomationErrorReport } from "@dramabridge/automation-logging";
-import { claimNextTaobaoDramaTaskApi, reportTaobaoAccountTaskApi } from "../api/task.js";
+import { claimNextTaobaoDramaTaskApi, TaobaoApiBusinessError } from "../api/task.js";
 import {
   TAOBAO_DRAMA_BATCH_PUBLISH_URL,
   TAOBAO_DRAMA_COLLECTION_CREATE_URL,
@@ -22,14 +22,16 @@ import {
   taobaoLoginStateFromUrl,
   waitForTaobaoPage,
 } from "../automation/browser-session.js";
+import { executeTaobaoClaimedTask, flushPendingTaobaoReports, recoverTaobaoExecutions } from "./task-execution.js";
 import { runTaobaoPublishTask } from "../automation/publish-runner.js";
 
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
 
 export function classifyTaobaoDramaFailStage(error: unknown): TaobaoDramaTaskFailStage {
   const message = errorMessage(error);
+  if (/TAOBAO_DRAMA_CONTENT_TAG_/.test(message)) return "FILL_FORM";
   if (/LOGIN|登录|校验/i.test(message)) return "LOGIN";
-  if (/FIELD|TEXTBOX|SELECT|COLLECTION_FORM|字段|表单/i.test(message)) return "FILL_FORM";
+  if (/FIELD|TEXTBOX|SELECT|COLLECTION_FORM|CONTENT_TAG|字段|表单|内容标签/i.test(message)) return "FILL_FORM";
   // The task API has no DOWNLOAD stage. Treat source downloads as file preparation/upload failures.
   if (/网盘|下载|DOWNLOAD/i.test(message)) return "UPLOAD_FILE";
   if (/UPLOAD|FILE|VIDEO|COVER|素材|封面|视频/i.test(message)) return "UPLOAD_FILE";
@@ -38,80 +40,72 @@ export function classifyTaobaoDramaFailStage(error: unknown): TaobaoDramaTaskFai
   return "OTHER";
 }
 
-async function reportWithRetry(options: TaobaoDramaRuntimeOptions, report: Parameters<typeof reportTaobaoAccountTaskApi>[0]["report"]) {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      await reportTaobaoAccountTaskApi({ apiBaseUrl: options.apiConfig!.baseUrl, report });
-      return;
-    } catch (error) {
-      lastError = error;
-      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 5_000));
-    }
-  }
-  throw lastError;
-}
-
 async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: TaobaoDramaRuntimeOptions, setLastTask: (task: TaobaoDramaRuntimeStatus["lastTask"]) => void) {
   setLastTask({ accountTaskId: task.accountTaskId, originalTitle: task.originalTitle, status: "running", updatedAt: new Date().toISOString() });
-  try {
-    const baiduNetdiskResource = await runWithLogContext(
+  const store = options.executionStore!;
+  const result = await executeTaobaoClaimedTask({
+    store, task,
+    publish: (checkpoint) => runWithLogContext(
       { taskId: String(task.accountTaskId), title: task.originalTitle },
-      () => runTaobaoPublishTask(page, page.context(), task, options),
-    );
-    await reportWithRetry(options, {
-      taskId: task.accountTaskId, success: true,
-      resultJson: { activeUrl: page.url(), accountId: task.accountId, accountName: task.accountName },
-    });
-    await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch((error) =>
-      errorLog(options, `[taobao-drama] 任务成功，但百度网盘剧目目录清理失败：${errorMessage(error)}`),
-    );
-    setLastTask({ accountTaskId: task.accountTaskId, originalTitle: task.originalTitle, status: "succeeded", updatedAt: new Date().toISOString() });
-  } catch (error) {
-    const message = formatAutomationErrorReport(error, { fallbackMessage: "淘宝短剧任务提交失败，未获取到具体错误原因" });
-    const stage = classifyTaobaoDramaFailStage(error);
-    const diagnostics = await captureAutomationFailureDiagnostics({
-      platform: "taobao-drama", error, page, logFilePath: options.logFilePath, stage,
-      task: { accountTaskId: task.accountTaskId, title: task.originalTitle },
-    });
-    errorLog(options, message, {
-      error,
-      failStage: stage,
-      taskId: task.accountTaskId,
-      title: task.originalTitle,
-      activeUrl: page.url(),
-      diagnosticDir: diagnostics?.directory,
-      diagnosticRecord: diagnostics?.recordFile,
-      screenshotFile: diagnostics?.screenshotFile,
-      diagnosticCaptureError: diagnostics?.screenshotError ?? (!diagnostics ? "失败诊断信息保存失败" : undefined),
-    });
-    setLastTask({ accountTaskId: task.accountTaskId, originalTitle: task.originalTitle, status: "failed", errorMessage: message, updatedAt: new Date().toISOString() });
-    await reportWithRetry(options, {
-      taskId: task.accountTaskId, success: false, failStage: stage, errorMessage: message,
-      resultJson: { activeUrl: page.url(), accountId: task.accountId, accountName: task.accountName },
-    }).catch((reportError) => errorLog(options, `[taobao-drama] 失败任务回写异常：${errorMessage(reportError)}`));
-    return false;
+      () => runTaobaoPublishTask(page, page.context(), task, { ...options, onSubmitCheckpoint: checkpoint }),
+    ),
+    resultJson: () => ({ activeUrl: page.url(), accountId: task.accountId, accountName: task.accountName }),
+    async failure(error) {
+      const message = formatAutomationErrorReport(error, { fallbackMessage: "淘宝短剧任务提交失败，未获取到具体错误原因" });
+      const stage = classifyTaobaoDramaFailStage(error);
+      const diagnostics = await captureAutomationFailureDiagnostics({
+        platform: "taobao-drama", error, page, logFilePath: options.logFilePath, stage,
+        task: { accountTaskId: task.accountTaskId, title: task.originalTitle },
+      });
+      errorLog(options, message, { error, failStage: stage, taskId: task.accountTaskId, title: task.originalTitle,
+        activeUrl: page.url(), diagnosticDir: diagnostics?.directory, diagnosticRecord: diagnostics?.recordFile,
+        screenshotFile: diagnostics?.screenshotFile });
+      return { stage, message };
+    },
+  });
+  await flushPendingTaobaoReports({ store, apiBaseUrl: options.apiConfig!.baseUrl, accountId: options.accountId!,
+    onError: (message) => errorLog(options, `[taobao-drama] ${message}`) });
+  const record = store.get(result.record.id)!;
+  const review = record.phase === "review-required" || record.phase === "report-blocked";
+  const succeeded = record.report?.success === true;
+  setLastTask({ accountTaskId: task.accountTaskId, originalTitle: task.originalTitle,
+    status: review ? "review-required" : record.phase === "report-pending" ? "report-pending" : succeeded ? "succeeded" : "failed",
+    errorMessage: record.errorMessage, updatedAt: record.updatedAt });
+  if (review) errorLog(options, `[taobao-drama] ${record.errorMessage}`);
+  if (succeeded && record.phase === "reported") {
+    await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(result.value).catch((error) =>
+      errorLog(options, `[taobao-drama] 任务成功，但百度网盘剧目目录清理失败：${errorMessage(error)}`));
   }
-  return true;
+  return review ? "retain" : succeeded ? "success" : "failure";
 }
 
 export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions = {}): Promise<TaobaoDramaRuntime> {
   if (!options.userDataDir) throw new Error("TAOBAO_DRAMA_USER_DATA_DIR_REQUIRED");
   if (!options.apiConfig?.baseUrl.trim()) throw new Error("TAOBAO_DRAMA_API_BASE_URL_REQUIRED");
   if (!options.accountId?.trim()) throw new Error("TAOBAO_DRAMA_ACCOUNT_ID_REQUIRED");
+  if (!options.workerId?.trim()) throw new Error("TAOBAO_DRAMA_WORKER_ID_REQUIRED");
+  if (!options.executionStore) throw new Error("TAOBAO_DRAMA_EXECUTION_STORE_REQUIRED");
+  const executionStore = options.executionStore;
+  recoverTaobaoExecutions(executionStore, options.apiConfig.baseUrl, options.accountId);
   await cleanupOldLogFiles(options);
   const account: TaobaoDramaAccount = {
     id: 0, accountId: options.accountId, accountName: options.accountName?.trim() || options.accountId,
   };
   let running = true;
+  let claimPausedReason: string | undefined;
   let lastTask: TaobaoDramaRuntimeStatus["lastTask"];
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let wake: (() => void) | null = null;
   const context = await launchTaobaoBrowserContext(options.userDataDir, options);
   const homePage = context.pages()[0] ?? await context.newPage();
   context.on("close", () => { running = false; wake?.(); });
-  await waitForTaobaoPage(homePage, "collection", options);
-  await saveTaobaoCredentialState(context, options).catch(() => undefined);
+  try {
+    await waitForTaobaoPage(homePage, "home", options);
+    await saveTaobaoCredentialState(context, options).catch(() => undefined);
+  } catch (error) {
+    await context.close().catch(() => undefined);
+    throw error;
+  }
 
   const waitPoll = () => new Promise<void>((resolve) => {
     wake = resolve;
@@ -125,11 +119,16 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
   const loop = (async () => {
     while (running && !homePage.isClosed()) {
       try {
-        const task = await claimNextTaobaoDramaTaskApi({ apiBaseUrl: options.apiConfig!.baseUrl, account, runtimeOptions: options });
+        await flushPendingTaobaoReports({ store: executionStore, apiBaseUrl: options.apiConfig!.baseUrl, accountId: account.accountId,
+          onError: (message) => errorLog(options, `[taobao-drama] ${message}`) });
+        if (claimPausedReason) { await waitPoll(); continue; }
+        const task = await claimNextTaobaoDramaTaskApi({ apiBaseUrl: options.apiConfig!.baseUrl, account,
+          workerId: options.workerId!, executionStore, runtimeOptions: options });
         if (task) {
           const taskPage = await context.newPage();
-          const succeeded = await runTask(taskPage, task, options, (value) => { lastTask = value; });
-          if (!taskPage.isClosed() && (succeeded || options.closeFailedTaskPages === true)) {
+          log(options, "[taobao-drama] 已领取任务，在独立任务标签页执行", { accountTaskId: task.accountTaskId });
+          const outcome = await runTask(taskPage, task, options, (value) => { lastTask = value; });
+          if (!taskPage.isClosed() && (outcome === "success" || (outcome === "failure" && options.closeFailedTaskPages === true))) {
             await taskPage.close().catch(() => undefined);
           } else if (!taskPage.isClosed()) {
             log(options, "[taobao-drama] 已保留失败任务页面供排查", { accountTaskId: task.accountTaskId, activeUrl: taskPage.url() });
@@ -138,7 +137,10 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
           log(options, "[taobao-drama] 暂无可领取任务");
         }
       } catch (error) {
-        errorLog(options, `[taobao-drama] 任务轮询失败：${errorMessage(error)}`);
+        if (error instanceof TaobaoApiBusinessError) {
+          claimPausedReason = `后台拒绝领取，已暂停领取，请处理后重启服务：${error.businessMessage}`;
+        }
+        errorLog(options, `[taobao-drama] ${claimPausedReason || `任务轮询失败：${errorMessage(error)}`}`);
       }
       if (running && !homePage.isClosed()) await waitPoll();
     }
@@ -153,7 +155,7 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
         platform: TAOBAO_DRAMA_PLATFORM, running, loginState: taobaoLoginStateFromUrl(activePage.url()),
         activeUrl: activePage.url(), collectionCreateUrl: TAOBAO_DRAMA_COLLECTION_CREATE_URL,
         batchPublishUrl: TAOBAO_DRAMA_BATCH_PUBLISH_URL, loginUrl: TAOBAO_DRAMA_LOGIN_URL,
-        userDataDir: options.userDataDir!, accountProfileName: options.accountProfileName, lastTask,
+        userDataDir: options.userDataDir!, accountProfileName: options.accountProfileName, workerId: options.workerId, claimPausedReason, lastTask,
       };
     },
     async stop() {
@@ -163,6 +165,7 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
       wake?.();
       await saveTaobaoCredentialState(context, options).catch(() => undefined);
       await context.close(); await loop.catch(() => undefined);
+      recoverTaobaoExecutions(executionStore, options.apiConfig!.baseUrl, account.accountId);
       log(options, "[taobao-drama] 运行时已停止");
     },
   };

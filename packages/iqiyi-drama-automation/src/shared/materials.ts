@@ -248,6 +248,7 @@ async function prepareCopyrightProofFiles(
         root,
         resourceName,
         aiClient: options.aiClient,
+        classifyLocally: options.classifyOwnershipLocally,
         onClassificationProgress: (progress) => log(
           options,
           progress.fallback

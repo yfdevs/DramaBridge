@@ -1,3 +1,4 @@
+import type { OwnershipProjectProofKind } from "@dramabridge/media-assets";
 import type { DramaAiClient } from "@dramabridge/ai";
 import { z } from "zod";
 
@@ -190,6 +191,7 @@ export type IqiyiDramaRuntimeStatus = {
 };
 
 export type IqiyiDramaRuntimeOptions = {
+  classifyOwnershipLocally?: (file: string) => Promise<OwnershipProjectProofKind>;
   accountProfileName?: string;
   accountDir?: string;
   userDataDir?: string;

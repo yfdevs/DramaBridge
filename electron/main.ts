@@ -9,7 +9,7 @@ import {
   createMainWindow,
   initializeMainWindowIntegration,
 } from "./core/main-window";
-import { registerGlobalAppConfigHandlers } from "./global-app-config";
+import { registerGlobalAppConfigHandlers, stopLocalOwnershipOcr } from "./global-app-config";
 import { initializeTrpcIpc } from "./ipc";
 import { configureLocalApi, getLocalApiStatus, initializeLocalApi, stopLocalApi } from "./local-api";
 import { getMainLogDir, logMain, registerMainProcessLogging } from "./main-logger";
@@ -37,6 +37,7 @@ logMain("info", "Application startup initiated", {
 
 initializeMainWindowIntegration();
 registerGracefulShutdown(async () => {
+  stopLocalOwnershipOcr();
   await stopLocalApi();
   await stopAllPlatformServices();
 });

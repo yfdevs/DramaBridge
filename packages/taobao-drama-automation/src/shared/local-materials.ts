@@ -63,37 +63,28 @@ export async function prepareTaobaoEpisodeVideos(
   await mkdir(uploadRootDir, { recursive: true });
   const uploadDir = await mkdtemp(path.join(uploadRootDir, "episode-upload-"));
   const prepared = { uploadDir, files: [] as string[] };
-  try {
-    const episodes = [];
-    for (const sourceEpisode of sourceEpisodes) {
-      const convertedFile = path.join(
-        uploadDir,
-        `${path.basename(sourceEpisode.file, path.extname(sourceEpisode.file))}.taobao.mp4`,
-      );
-      const result = await ensureVideoMinimumDimensions({
-        inputFile: sourceEpisode.file,
-        outputFile: convertedFile,
-        minimumWidth: TAOBAO_DRAMA_MIN_VIDEO_DIMENSION,
-        minimumHeight: TAOBAO_DRAMA_MIN_VIDEO_DIMENSION,
-        onLog: (message) => log(options, `[taobao-drama] ${message}`),
-      });
-      prepared.files.push(result.file);
-      episodes.push({
-        ...sourceEpisode,
-        sourceFile: sourceEpisode.file,
-        file: result.file,
-      });
-    }
-    log(
-      options,
-      `[taobao-drama] 上传前视频校验完成：${episodes.length} 集，` +
-        `宽高均至少 ${TAOBAO_DRAMA_MIN_VIDEO_DIMENSION}px`,
-    );
-    return { episodes, prepared };
-  } catch (error) {
-    await cleanupEpisodeUploadFiles(prepared);
-    throw error;
+  const episodes = sourceEpisodes.map((episode) => ({ ...episode, sourceFile: episode.file }));
+  log(options, `[taobao-drama] 视频文件校验完成：${episodes.length} 集，先上传原文件，仅在淘宝明确提示分辨率不符合要求时转换对应剧集`);
+  return { episodes, prepared };
+}
+
+export async function convertTaobaoEpisodeForResolutionFailure(
+  inputFile: string,
+  prepared: { uploadDir: string; files: string[] },
+  options: TaobaoDramaRuntimeOptions,
+) {
+  const outputFile = path.join(prepared.uploadDir, `${path.basename(inputFile, path.extname(inputFile))}.mp4`);
+  const result = await ensureVideoMinimumDimensions({
+    inputFile, outputFile,
+    minimumWidth: TAOBAO_DRAMA_MIN_VIDEO_DIMENSION,
+    minimumHeight: TAOBAO_DRAMA_MIN_VIDEO_DIMENSION,
+    onLog: (message) => log(options, `[taobao-drama] ${message}`),
+  });
+  if (!result.transcoded) {
+    throw new Error(`TAOBAO_DRAMA_VIDEO_RESOLUTION_REPAIR_NOT_POSSIBLE: 淘宝报告视频分辨率不符，但当前文件已达到转换目标，请检查平台要求。文件：${path.basename(inputFile)}，分辨率：${result.source.width}x${result.source.height}`);
   }
+  prepared.files.push(result.file);
+  return result.file;
 }
 
 export { cleanupEpisodeUploadFiles };

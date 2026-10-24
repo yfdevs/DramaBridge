@@ -8,6 +8,7 @@ import path from "node:path";
 import {
   assertGlobalDirectoriesConfigured,
   createConfiguredAiClient,
+  classifyConfiguredOwnershipLocally,
   getConfiguredAiCoverGenerationRetryAttempts,
   getConfiguredAiImageModel,
   resolveGlobalPlatformDirectories,
@@ -371,6 +372,7 @@ async function startRuntime() {
         ) * 1000,
         closeFailedTaskPages: config.closeFailedTaskPages === "true",
         aiClient,
+        classifyOwnershipLocally: classifyConfiguredOwnershipLocally,
         aiImageModel,
         aiCoverGenerationRetryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
         ensureBaiduNetdiskResource: (request: Parameters<typeof ensureBaiduNetdiskShareDownloaded>[0]) => ensureBaiduNetdiskShareDownloaded({

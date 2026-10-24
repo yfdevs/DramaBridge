@@ -22,6 +22,7 @@ import { registerRuntimeAssetCleanupRoot } from '../../runtime-asset-cleanup'
 import {
   assertGlobalDirectoriesConfigured,
   createConfiguredAiClient,
+  classifyConfiguredOwnershipLocally,
   resolveGlobalPlatformDirectories,
 } from '../../global-app-config'
 
@@ -512,6 +513,7 @@ async function startRuntime() {
   return startWechatVideoRuntime({
     settings: readConfig(),
     ownershipAiClient: createConfiguredAiClient(),
+    classifyOwnershipLocally: classifyConfiguredOwnershipLocally,
     ensureBaiduNetdiskResource: (request) => ensureBaiduNetdiskShareDownloaded({
       ...request,
       requesterPlatform: "wechat-drama",

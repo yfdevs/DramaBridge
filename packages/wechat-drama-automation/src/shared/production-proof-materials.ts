@@ -46,14 +46,19 @@ export async function loadWechatOwnershipMaterials(
 
 export async function prepareWechatProductionProofMaterials(
   config: Config,
-  aiClient: OwnershipAiClient,
+  aiClient?: OwnershipAiClient,
+  onClassificationProgress?: Parameters<typeof findOwnershipProjectProofFiles>[0]["onClassificationProgress"],
+  classifyLocally?: Parameters<typeof findOwnershipProjectProofFiles>[0]["classifyLocally"],
 ) {
   const localEpisodeVideoRoot = getWechatVideoRuntimeSettings().localEpisodeVideoRoot.trim();
   const ownership = await findOwnershipProjectProofFiles({
     root: localEpisodeVideoRoot,
     resourceName: config.originalTitle,
     aiClient,
+    classifyLocally,
     filesPerKind: getWechatOwnershipProofCounts(),
+    preferNamedKinds: true,
+    onClassificationProgress,
   });
   config.playlet.copyright ??= {};
   config.playlet.copyright.productionProofFiles = ownership.files;

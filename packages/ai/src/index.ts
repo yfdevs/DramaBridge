@@ -5,6 +5,7 @@ export {
 } from "./doubao-client.js";
 export {
   createOpenAiCompatibleClient,
+  DEFAULT_AI_REQUEST_TIMEOUT_MS,
   DEFAULT_OPENAI_COMPATIBLE_BASE_URL,
   OpenAiCompatibleClient,
 } from "./openai-compatible-client.js";

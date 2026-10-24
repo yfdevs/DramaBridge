@@ -18,6 +18,7 @@ import type {
 } from "./types.js";
 
 export const DEFAULT_OPENAI_COMPATIBLE_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_AI_REQUEST_TIMEOUT_MS = 5 * 60_000;
 
 function requiredValue(value: string, errorCode: string): string {
   const normalized = value.trim();
@@ -74,7 +75,7 @@ export class OpenAiCompatibleClient implements DramaAiClient {
       options.baseURL ?? DEFAULT_OPENAI_COMPATIBLE_BASE_URL,
       "DRAMA_AI_BASE_URL_REQUIRED",
     ).replace(/\/+$/, "");
-    this.timeoutMs = options.timeoutMs ?? 60_000;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_AI_REQUEST_TIMEOUT_MS;
 
     this.sdk = new OpenAI({
       apiKey,

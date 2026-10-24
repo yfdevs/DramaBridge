@@ -480,7 +480,7 @@ export async function runBaiduDramaPublishTask(
   try {
     await runAction(`打开百度短剧创建页=${BAIDU_DRAMA_CREATE_URL}`, async () => {
       await page.goto(BAIDU_DRAMA_CREATE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
-      await waitForBaiduDramaCreatePageReady(page);
+      await waitForBaiduDramaCreatePageReady(page, undefined, options);
     });
     await chooseDramaType(page, task, runAction);
     await fillDramaInformation(page, task, runAction, options);

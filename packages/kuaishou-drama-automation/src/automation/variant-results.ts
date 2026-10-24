@@ -1,5 +1,6 @@
 import { formatAutomationErrorReport } from "@dramabridge/automation-logging";
 import type { KuaishouDramaPublishVariant } from "../shared/types.js";
+import { KuaishouBrowserUnavailableError } from "./task-pages.js";
 
 export type KuaishouDramaVariantFailure = {
   variant: KuaishouDramaPublishVariant;
@@ -45,6 +46,12 @@ export async function executeKuaishouDramaVariants(
       succeeded.push(variant.kind);
     } catch (error) {
       failures.push({ variant, error });
+      if (error instanceof KuaishouBrowserUnavailableError) {
+        for (const pending of variants.slice(index + 1)) {
+          failures.push({ variant: pending, error: new Error("自动化浏览器连接已断开，该版本未执行；请重新启动快手服务后重试") });
+        }
+        break;
+      }
     }
   }
   if (failures.length) throw new KuaishouDramaVariantFailures(succeeded, failures);

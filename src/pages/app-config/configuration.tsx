@@ -22,6 +22,7 @@ const emptyConfig: GlobalAppConfig = {
   aiImageModel: "doubao-seedream-4-0-250828",
   aiCoverGenerationRetryAttempts: "3",
   aiPosterFallbackEnabled: true,
+  ownershipLocalOcrEnabled: false,
   baiduNetdiskDownloadTimeoutMinutes: "60",
   baiduNetdiskCleanupPlayletAfterTaskSuccess: false,
   runDataRoot: "",
@@ -88,6 +89,18 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
     ],
   },
   {
+    title: "本机图片识别",
+    description: "用于区分剪映和 AI 剧创工程截图",
+    fields: [{
+      kind: "switch",
+      key: "ownershipLocalOcrEnabled",
+      label: "优先使用本机识别",
+      description: "需要识别截图内容时先在电脑上处理，无法确认时自动使用 AI。",
+      activeLabel: "已开启",
+      inactiveLabel: "已关闭",
+    }],
+  },
+  {
     title: "AI 服务",
     description: "所有平台共用的图片识别与封面生成服务",
     fields: [
@@ -138,6 +151,18 @@ export function GlobalConfigurationPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [testing, setTesting] = useState(false);
+  const [testingOcr, setTestingOcr] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState("");
+  const testLocalOcr = async () => {
+    setTestingOcr(true);
+    setOcrMessage("");
+    try {
+      const result = await globalAppConfigService.testLocalOcr();
+      setOcrMessage(result.message);
+    } catch {
+      setOcrMessage("测试未完成，请稍后重试。任务会自动使用 AI。");
+    } finally { setTestingOcr(false); }
+  };
   const returnRoute = returnRouteFromLocationState(location.state);
   const configState = usePlatformConfig({
     emptyConfig,
@@ -214,6 +239,14 @@ export function GlobalConfigurationPage() {
                   variant="outline"
                 >
                   {testing ? "连接中…" : "测试连接"}
+                </Button>
+              </div>
+            ) : section.title === "本机图片识别" ? (
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <p role="status" className="text-sm text-muted-foreground">{ocrMessage}</p>
+                <Button size="sm" variant="outline" disabled={configState.loading || testingOcr}
+                  onClick={() => { void testLocalOcr(); }}>
+                  {testingOcr ? "测试中…" : "测试是否可用"}
                 </Button>
               </div>
             ) : undefined

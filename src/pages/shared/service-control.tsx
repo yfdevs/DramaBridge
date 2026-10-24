@@ -128,6 +128,7 @@ export function ServiceControlButtonPage({
   startLabel = "启动服务",
   stopLabel = "关闭服务",
   additionalAction,
+  children,
   analyticsPlatform,
   onToggle,
 }: {
@@ -137,6 +138,7 @@ export function ServiceControlButtonPage({
   startLabel?: string;
   stopLabel?: string;
   additionalAction?: ReactNode;
+  children?: ReactNode;
   analyticsPlatform?: TaskAnalyticsPlatform;
   onToggle: () => void;
 }) {
@@ -270,6 +272,7 @@ export function ServiceControlButtonPage({
             </p>
           )}
         </section>
+        {children}
       </div>
     </main>
   );

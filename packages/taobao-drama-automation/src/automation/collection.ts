@@ -402,6 +402,7 @@ export async function fillAndCreateTaobaoCollection(
     .locator(".next-dialog:visible, .ant-modal:visible, .semi-modal:visible, [role='dialog']:visible")
     .filter({ hasText: /创建/ }).last();
   const clickCreate = async () => {
+    await options.onSubmitCheckpoint?.({ kind: "collection", state: "submitting" });
     await createButton.click({ timeout: 30_000 });
     let submittedAt = Date.now();
     if (await confirmDialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
@@ -441,5 +442,6 @@ export async function fillAndCreateTaobaoCollection(
   if (!success) throw new Error("TAOBAO_DRAMA_COLLECTION_CREATE_RESULT_NOT_RECOGNIZED");
   const remaining = TAOBAO_DRAMA_MIN_SETTLE_MS - (Date.now() - clickedAt);
   if (remaining > 0) await page.waitForTimeout(remaining);
+  await options.onSubmitCheckpoint?.({ kind: "collection", state: "confirmed" });
   log(options, "[taobao-drama] 合集创建成功且10秒结算期完成");
 }

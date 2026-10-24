@@ -14,6 +14,8 @@ import Store from "electron-store";
 import path from "node:path";
 import sharp from "sharp";
 
+import { WindowsOwnershipOcr } from "./local-ownership-ocr";
+
 import { createValidatedStore } from "./core/config-store";
 import { emitIpcEvent, trpcIpc as ipcMain } from "./ipc";
 import { directoryDefaultPath, selectDirectory } from "./platforms/shared";
@@ -36,6 +38,7 @@ export type GlobalAppConfig = {
   aiImageModel: string;
   aiCoverGenerationRetryAttempts: string;
   aiPosterFallbackEnabled: boolean;
+  ownershipLocalOcrEnabled: boolean;
   baiduNetdiskDownloadTimeoutMinutes: string;
   baiduNetdiskCleanupPlayletAfterTaskSuccess: boolean;
   runDataRoot: string;
@@ -50,6 +53,7 @@ type StoredGlobalAppConfig = {
   aiImageModel: string;
   aiCoverGenerationRetryAttempts?: string;
   aiPosterFallbackEnabled?: boolean;
+  ownershipLocalOcrEnabled?: boolean;
   baiduNetdiskDownloadTimeoutMinutes?: string;
   baiduNetdiskCleanupPlayletAfterTaskSuccess?: boolean;
   runDataRoot?: string;
@@ -78,6 +82,7 @@ const defaultStoredConfig: StoredGlobalAppConfig = {
   aiImageModel: RECOMMENDED_AI_IMAGE_MODEL,
   aiCoverGenerationRetryAttempts: DEFAULT_AI_COVER_GENERATION_RETRY_ATTEMPTS,
   aiPosterFallbackEnabled: true,
+  ownershipLocalOcrEnabled: false,
   baiduNetdiskDownloadTimeoutMinutes: DEFAULT_BAIDU_NETDISK_DOWNLOAD_TIMEOUT_MINUTES,
   baiduNetdiskCleanupPlayletAfterTaskSuccess: false,
   runDataRoot: "",
@@ -179,6 +184,7 @@ function normalizeGlobalAppConfig(config: Partial<GlobalAppConfig>): GlobalAppCo
       config.aiCoverGenerationRetryAttempts,
     ),
     aiPosterFallbackEnabled: normalizeBoolean(config.aiPosterFallbackEnabled, true),
+    ownershipLocalOcrEnabled: normalizeBoolean(config.ownershipLocalOcrEnabled, false),
     baiduNetdiskDownloadTimeoutMinutes: normalizePositiveNumberText(
       config.baiduNetdiskDownloadTimeoutMinutes,
       DEFAULT_BAIDU_NETDISK_DOWNLOAD_TIMEOUT_MINUTES,
@@ -213,6 +219,7 @@ export function readGlobalAppConfig(): GlobalAppConfig {
       config.aiCoverGenerationRetryAttempts,
     ),
     aiPosterFallbackEnabled: normalizeBoolean(config.aiPosterFallbackEnabled, true),
+    ownershipLocalOcrEnabled: normalizeBoolean(config.ownershipLocalOcrEnabled, false),
     baiduNetdiskDownloadTimeoutMinutes: normalizePositiveNumberText(
       config.baiduNetdiskDownloadTimeoutMinutes,
       DEFAULT_BAIDU_NETDISK_DOWNLOAD_TIMEOUT_MINUTES,
@@ -233,6 +240,15 @@ export function getConfiguredBaiduNetdiskDownloadTimeoutMs() {
   );
   return Number.parseFloat(value) * 60 * 1000;
 }
+
+const ownershipOcr = new WindowsOwnershipOcr();
+
+export const classifyConfiguredOwnershipLocally = (file: string) =>
+  getStore().get("config").ownershipLocalOcrEnabled === true
+    ? ownershipOcr.classify(file)
+    : Promise.resolve("unknown" as const);
+
+export const stopLocalOwnershipOcr = () => ownershipOcr.stop();
 
 export function isAiPosterFallbackEnabled() {
   return normalizeBoolean(getStore().get("config").aiPosterFallbackEnabled, true);
@@ -256,6 +272,7 @@ function saveGlobalAppConfig(config: Partial<GlobalAppConfig>) {
     aiImageModel: normalized.aiImageModel,
     aiCoverGenerationRetryAttempts: normalized.aiCoverGenerationRetryAttempts,
     aiPosterFallbackEnabled: normalized.aiPosterFallbackEnabled,
+    ownershipLocalOcrEnabled: normalized.ownershipLocalOcrEnabled,
     baiduNetdiskDownloadTimeoutMinutes: normalized.baiduNetdiskDownloadTimeoutMinutes,
     baiduNetdiskCleanupPlayletAfterTaskSuccess:
       normalized.baiduNetdiskCleanupPlayletAfterTaskSuccess,
@@ -390,6 +407,7 @@ export function registerGlobalAppConfigHandlers(
   ipcMain.handle("app:theme:get", () => normalizeTheme(getStore().get("config").theme));
 
   ipcMain.handle("app:config:get", () => configResult());
+  ipcMain.handle("app:config:local-ocr:test", () => ownershipOcr.test());
   const externalApiResult = () => ({ config: readExternalApiConfig(),
     status: options.getExternalApiStatus?.() ?? { running: false } });
   let externalApiSave: Promise<unknown> = Promise.resolve();

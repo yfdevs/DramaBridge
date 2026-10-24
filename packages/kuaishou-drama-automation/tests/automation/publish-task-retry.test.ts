@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 import type { BrowserContext, Page } from "playwright";
 import { runPublishTask } from "../../src/automation/publish-runner.js";
@@ -19,21 +20,24 @@ const taskConfig = kuaishouDramaTaskSchema.parse({
 });
 
 function pageWithoutUpload() {
-  return {
+  return Object.assign(new EventEmitter(), {
+    isClosed: () => false,
+    close: async () => {},
     locator: () => ({}),
     addLocatorHandler: async () => {},
     goto: async () => {},
     getByText: () => ({ waitFor: async () => {} }),
     waitForLoadState: async () => {},
     evaluate: async (callback: (arg: unknown) => unknown, arg: unknown) => callback(arg),
-  } as unknown as Page;
+  }) as unknown as Page;
 }
 
-const contextWithoutUpload = {
+const contextWithoutUpload = Object.assign(new EventEmitter(), {
+  browser: () => null,
   newPage: async () => {
     assert.fail("no upload tab should be opened");
   },
-} as unknown as BrowserContext;
+}) as unknown as BrowserContext;
 
 test("an entirely submitted task succeeds on retry without downloading or preparing materials", async (t) => {
   const queried: string[] = [];
@@ -68,6 +72,35 @@ test("an entirely submitted task succeeds on retry without downloading or prepar
   );
   assert.deepEqual(queried, ["测试短剧", "测试剧二", "测试剧三"]);
   assert.deepEqual(result, ["ad-unlock", "ad-unlock-2", "ad-unlock-3"]);
+});
+
+test("recovers a stale query tab and checks every version while the browser remains open", async (t) => {
+  const initial = pageWithoutUpload();
+  initial.evaluate = async () => { throw new Error("Target page, context or browser has been closed"); };
+  const replacement = pageWithoutUpload();
+  let opened = 0;
+  let closed = 0;
+  replacement.close = async () => { closed++; };
+  const context = Object.assign(new EventEmitter(), {
+    browser: () => ({ isConnected: () => true }),
+    newPage: async () => { opened++; return replacement; },
+  }) as unknown as BrowserContext;
+  const queried: string[] = [];
+  t.mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => {
+    const request = JSON.parse(String(init.body));
+    queried.push(request.miniSeriesTitle);
+    return new Response(JSON.stringify({ result: 1, successful: true, data: { data: [{
+      miniSeriesId: queried.length, courseName: request.miniSeriesTitle,
+      auditStatus: 2, seriesPackageSaleType: [1],
+    }] } }));
+  });
+  const result = await runPublishTask(context, initial, {}, { taskConfig, resourceName: "任务页恢复测试" }, async () => {
+    assert.fail("submitted versions must not upload again");
+  });
+  assert.deepEqual(result, ["ad-unlock", "ad-unlock-2", "ad-unlock-3"]);
+  assert.deepEqual(queried, ["测试短剧", "测试剧二", "测试剧三"]);
+  assert.equal(opened, 1);
+  assert.equal(closed, 1);
 });
 
 test("material preparation failure affects missing versions while submitted versions still count as success", async (t) => {

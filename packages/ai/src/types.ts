@@ -23,6 +23,7 @@ export interface OpenAiCompatibleClientOptions {
   model: string;
   baseURL?: string;
   maxRetries?: number;
+  /** Timeout per AI request; defaults to five minutes. */
   timeoutMs?: number;
 }
 

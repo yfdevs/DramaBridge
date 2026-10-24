@@ -138,6 +138,9 @@ void test("queries all statuses and searches later pages before declaring a vers
   t.mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => {
     const request = JSON.parse(String(init.body));
     requests.push(request);
+    if (request.pageSize > 50) {
+      return new Response(JSON.stringify({ result: 0, successful: false, error_msg: "单页查询数量不能超过50条" }));
+    }
     return new Response(
       JSON.stringify({
         result: 1,
@@ -145,10 +148,10 @@ void test("queries all statuses and searches later pages before declaring a vers
         data: {
           totalCount: 101,
           data:
-            request.pageNum === 1
-              ? Array.from({ length: 100 }, (_, index) => ({
-                  miniSeriesId: index + 1,
-                  courseName: `其他剧${index}`,
+            request.pageNum <= 2
+              ? Array.from({ length: 50 }, (_, index) => ({
+                  miniSeriesId: (request.pageNum - 1) * 50 + index + 1,
+                  courseName: `其他剧${(request.pageNum - 1) * 50 + index}`,
                   auditStatus: 1,
                   seriesPackageSaleType: [1],
                 }))
@@ -172,9 +175,33 @@ void test("queries all statuses and searches later pages before declaring a vers
   assert.equal(result?.miniSeriesId, 101);
   assert.deepEqual(
     requests.map((request) => request.pageNum),
-    [1, 2],
+    [1, 2, 3],
   );
+  assert.ok(requests.every((request) => request.pageSize === 50));
   assert.ok(requests.every((request) => request.auditStatus === 0 && request.saleType === 1));
+});
+
+void test("continues past a full 50-record page when totalCount is omitted", async (t) => {
+  const requests: Array<Record<string, unknown>> = [];
+  t.mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => {
+    const request = JSON.parse(String(init.body));
+    requests.push(request);
+    assert.equal(request.pageSize, 50);
+    return new Response(JSON.stringify({
+      result: 1,
+      successful: true,
+      data: {
+        data: request.pageNum === 1 ? Array.from({ length: 50 }, (_, index) => ({
+          miniSeriesId: index + 1, courseName: `其他剧${index}`, auditStatus: 1, seriesPackageSaleType: [1],
+        })) : [],
+      },
+    }));
+  });
+  const page = {
+    evaluate: async (callback: (arg: unknown) => unknown, arg: unknown) => callback(arg),
+  } as unknown as Page;
+  assert.equal(await queryExistingKuaishouDrama(page, variant("ad-unlock"), {}), null);
+  assert.deepEqual(requests.map((request) => request.pageNum), [1, 2]);
 });
 
 void test("fails closed when Kuaishou query fails or is ambiguous", () => {

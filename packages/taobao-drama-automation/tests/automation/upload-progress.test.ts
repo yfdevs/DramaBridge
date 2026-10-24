@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Page } from "playwright";
 import {
   taobaoEpisodeBatchPagePlan,
   taobaoEpisodeBatchRanges,
@@ -11,12 +12,12 @@ import {
   isTaobaoUploadReady,
   isTaobaoVerificationChallenge,
   isTaobaoVideoInputCandidate,
+  publishSucceeded,
   normalizeTaobaoDropdownText,
   taobaoDropdownOptionIndex,
   scoreTaobaoContentTagMatch,
   summarizeTaobaoBatchItems,
   summarizeTaobaoUploadText,
-  taobaoContentTagKeyEvents,
   taobaoFatalUploadDialogReason,
   TAOBAO_DROPDOWN_END_SETTLE_MS,
   TAOBAO_DROPDOWN_SEARCH_TIMEOUT_MS,
@@ -41,26 +42,44 @@ test("uses one tab for up to 100 episodes", () => {
   assert.deepEqual(taobaoEpisodeBatchPagePlan(100), [{
     start: 1,
     end: 100,
-    openNewPage: false,
-    closePreviousPageAfterSelection: false,
+    navigateToBatchPage: false,
   }]);
 });
 
-test("opens a new tab for episodes after 100 and closes the previous tab after selection", () => {
+test("reuses the same task tab for episodes after 100", () => {
   assert.deepEqual(taobaoEpisodeBatchPagePlan(101), [
     {
       start: 1,
       end: 100,
-      openNewPage: false,
-      closePreviousPageAfterSelection: false,
+      navigateToBatchPage: false,
     },
     {
       start: 101,
       end: 101,
-      openNewPage: true,
-      closePreviousPageAfterSelection: true,
+      navigateToBatchPage: true,
     },
   ]);
+});
+
+test("an unrelated workspace or old success message cannot complete the current task", async () => {
+  const before = "https://creator.guanghe.taobao.com/page/unify/creation-tool/batch-publish";
+  const task = { isClosed: () => false, url: () => before, frames: () => [] } as unknown as Page;
+  const home = {
+    isClosed: () => false, opener: async () => null,
+    url: () => "https://creator.guanghe.taobao.com/page/workspace/tb",
+    frames: () => { throw new Error("must not inspect unrelated page controls"); },
+  } as unknown as Page;
+  Object.assign(task, { context: () => ({ pages: () => [home, task] }) });
+  assert.equal(await publishSucceeded(task, before), false);
+});
+
+test("the current task's own workspace redirect is a publish success", async () => {
+  const task = {
+    isClosed: () => false,
+    url: () => "https://creator.guanghe.taobao.com/page/workspace/tb",
+  } as unknown as Page;
+  Object.assign(task, { context: () => ({ pages: () => [task] }) });
+  assert.equal(await publishSucceeded(task, "https://creator.guanghe.taobao.com/page/unify/creation-tool/batch-publish"), true);
 });
 
 test("never treats a partial 20-item Taobao queue as a complete larger task", () => {
@@ -154,15 +173,6 @@ test("matches Taobao content tags case-insensitively with an approximate fallbac
   assert.ok(scoreTaobaoContentTagMatch("# 都市情感AI仿真人短剧", "都市") >= 0.45);
   assert.ok(scoreTaobaoContentTagMatch("# AI仿真人短剧", "AI短剧") >= 0.45);
   assert.ok(scoreTaobaoContentTagMatch("# 农村美食", "AI短剧") < 0.45);
-});
-
-test("types Taobao content-tag queries as real Unicode key events", () => {
-  assert.deepEqual(taobaoContentTagKeyEvents("都市"), [
-    { type: "keyDown", key: "都", text: "都", unmodifiedText: "都" },
-    { type: "keyUp", key: "都" },
-    { type: "keyDown", key: "市", text: "市", unmodifiedText: "市" },
-    { type: "keyUp", key: "市" },
-  ]);
 });
 
 test("recognizes detached Taobao upload frames for safe reacquisition", () => {

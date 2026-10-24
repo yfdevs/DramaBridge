@@ -100,6 +100,7 @@ export class TaskWorkerPool {
     private readonly ensureBaiduNetdiskResource?: EnsureBaiduNetdiskResource,
     private readonly ownershipAiClient?: NonNullable<Parameters<typeof findOwnershipProjectProofFiles>[0]["aiClient"]>,
     private readonly cleanupBaiduNetdiskResourceAfterTaskSuccess?: CleanupBaiduNetdiskResource,
+    private readonly classifyOwnershipLocally?: Parameters<typeof findOwnershipProjectProofFiles>[0]["classifyLocally"],
   ) {
     const settings = getWechatVideoRuntimeSettings();
     this.materialPreparationQueue = new PQueue({
@@ -342,12 +343,15 @@ export class TaskWorkerPool {
           playletConfig,
           ownershipMaterials,
         );
-        if (!this.ownershipAiClient) {
-          throw new Error("[ownership-project-proof-ai-failed] 微信视频号权属截图识别需要配置云 AI。");
-        }
         const productionProofFiles = await prepareWechatProductionProofMaterials(
           playletConfig,
           this.ownershipAiClient,
+          (progress) => logger.info("ownership screenshot classified", {
+            accountTaskId: claimedAccountTask.accountTaskId,
+            videoAccountId,
+            ...progress,
+          }),
+          this.classifyOwnershipLocally,
         );
         await prepareWechatImageUploadMaterials({
           config: playletConfig,

@@ -1,7 +1,11 @@
 export * from "./app/runtime.js";
+export { flushPendingTaobaoReports } from "./app/task-execution.js";
 export * from "./api/account-config.js";
 export * from "./api/collection-list.js";
+export * from "./api/collection-detail.js";
+export * from "./shared/collection-resume.js";
 export * from "./api/task.js";
 export * from "./automation/browser-session.js";
 export * from "./shared/constants.js";
 export * from "./shared/types.js";
+export * from "./shared/task-execution.js";

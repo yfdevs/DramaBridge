@@ -131,6 +131,7 @@ export async function startKuaishouDramaRuntime(
   const configuredTask = parseTaskConfig(options);
   const userDataDir = options.userDataDir;
   let running = true;
+  let stopRequested = false;
   let page: Page | null = null;
   let context: BrowserContext | null = null;
   const taskState: { claimed?: ClaimedKuaishouDramaTask } = {};
@@ -154,6 +155,9 @@ export async function startKuaishouDramaRuntime(
   });
   context.on("close", () => {
     running = false;
+    log(options, `[kuaishou-drama] automation browser context closed: ` +
+      `reason=${stopRequested ? "service-stop" : "unexpected-disconnect"} ` +
+      `accountTaskId=${currentClaimedTask()?.accountTaskId ?? "none"}`);
     wakePoll?.();
   });
 
@@ -257,6 +261,9 @@ export async function startKuaishouDramaRuntime(
           log(options, "[kuaishou-drama] no claimable task; idle page left unchanged");
         } else {
           taskPage = await context!.newPage();
+          const taskId = resolvedTask.claimedTask?.accountTaskId ?? "configured";
+          taskPage.on("crash", () => log(options, `[kuaishou-drama] dedicated task tab crashed: accountTaskId=${taskId}`));
+          taskPage.on("close", () => log(options, `[kuaishou-drama] dedicated task tab close event: accountTaskId=${taskId}`));
           log(
             options,
             `[kuaishou-drama] opened dedicated task tab: ` +
@@ -395,6 +402,7 @@ export async function startKuaishouDramaRuntime(
       };
     },
     async stop() {
+      stopRequested = true;
       if (context) {
         await saveCredentialState(context, options).catch(() => undefined);
       }

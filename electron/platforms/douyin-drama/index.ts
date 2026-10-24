@@ -20,6 +20,7 @@ import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDown
 import {
   assertGlobalDirectoriesConfigured,
   createConfiguredAiClient,
+  classifyConfiguredOwnershipLocally,
   getConfiguredAiImageModel,
   resolveGlobalPlatformDirectories,
 } from "../../global-app-config";
@@ -315,6 +316,7 @@ async function startRuntime() {
         paidEpisodeStart: Number.parseInt(config.paidEpisodeStart, 10),
         taskPollIntervalMs: Number.parseFloat(config.taskPollIntervalSeconds) * 1_000,
         aiClientFactory: createConfiguredAiClient,
+        classifyOwnershipLocally: classifyConfiguredOwnershipLocally,
         aiImageModelFactory: getConfiguredAiImageModel,
         ensureBaiduNetdiskResource: (request: Parameters<typeof ensureBaiduNetdiskShareDownloaded>[0]) => ensureBaiduNetdiskShareDownloaded({
           ...request,

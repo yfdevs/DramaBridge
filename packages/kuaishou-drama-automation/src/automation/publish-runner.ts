@@ -43,6 +43,7 @@ import {
 } from "./existing-drama.js";
 import { uploadKuaishouDramaEpisodeVideos } from "./video-upload.js";
 import { executeKuaishouDramaVariants } from "./variant-results.js";
+import { KuaishouBrowserUnavailableError, KuaishouTaskPages } from "./task-pages.js";
 import {
   installWarningMessageGuard,
   throwIfKuaishouWarningCaptured,
@@ -1481,94 +1482,105 @@ export async function runPublishTask(
   prepareTask?: (needsFormMaterials: boolean) => Promise<void>,
 ) {
   log(options, "[kuaishou-drama] opening edit page in dedicated task tab");
-  await openKuaishouDramaEditPage(context, page, options, true);
-  const { taskConfig, resourceName } = resolvedTask;
+  const pages = new KuaishouTaskPages(context, page,
+    target => openKuaishouDramaEditPage(context, target, options, true),
+    message => log(options, `[kuaishou-drama] ${message}`));
+  try {
+    await pages.read(target => openKuaishouDramaEditPage(context, target, options, true));
+    const { taskConfig, resourceName } = resolvedTask;
 
-  const variants = createKuaishouDramaPublishVariants(taskConfig);
-  log(
-    options,
-    `[kuaishou-drama] publish variants selected: ${variants.map((item) => item.kind).join(",")}`,
-  );
-  const existingDramas = new Map<
-    KuaishouDramaPublishVariant["kind"],
-    Awaited<ReturnType<typeof queryExistingKuaishouDrama>>
-  >();
-  const queryFailures = new Map<KuaishouDramaPublishVariant["kind"], unknown>();
-  for (const variant of variants) {
-    try {
-      existingDramas.set(variant.kind, await queryExistingKuaishouDrama(page, variant, options));
-    } catch (error) {
-      queryFailures.set(variant.kind, error);
-    }
-  }
-  const needsUpload = variants.filter((variant) => !queryFailures.has(variant.kind)
-    && (!existingDramas.get(variant.kind) || existingDramas.get(variant.kind)?.state === "draft"));
-  let preparationFailure: { error: unknown } | undefined;
-  if (needsUpload.length) {
-    try {
-      await prepareTask?.(needsUpload.some((variant) => !existingDramas.get(variant.kind)));
-    } catch (error) {
-      preparationFailure = { error };
-    }
-  }
-
-  const runVariant = async (
-    targetPage: Page,
-    variant: KuaishouDramaPublishVariant,
-  ) => {
-    log(options, `[kuaishou-drama] tab started: ${variant.kind}`);
-    try {
-      await targetPage.bringToFront();
-      const existing = existingDramas.get(variant.kind);
-      if (existing) {
-        await openExistingKuaishouDramaVideoStep(targetPage, existing.miniSeriesId, options);
-        await uploadKuaishouDramaEpisodeVideos(
-          targetPage,
-          taskConfig,
-          variant,
-          resourceName,
-          options,
-        );
-      } else {
-        await fillKuaishouDramaEditForm(targetPage, taskConfig, variant, resourceName, options);
+    const variants = createKuaishouDramaPublishVariants(taskConfig);
+    log(
+      options,
+      `[kuaishou-drama] publish variants selected: ${variants.map((item) => item.kind).join(",")}`,
+    );
+    const existingDramas = new Map<
+      KuaishouDramaPublishVariant["kind"],
+      Awaited<ReturnType<typeof queryExistingKuaishouDrama>>
+    >();
+    const queryFailures = new Map<KuaishouDramaPublishVariant["kind"], unknown>();
+    for (const variant of variants) {
+      try {
+        existingDramas.set(variant.kind, await pages.read(target => queryExistingKuaishouDrama(target, variant, options)));
+      } catch (error) {
+        if (error instanceof KuaishouBrowserUnavailableError) throw error;
+        queryFailures.set(variant.kind, error);
       }
-      await throwIfKuaishouWarningCaptured(targetPage, options);
-      log(options, `[kuaishou-drama] tab completed: ${variant.kind}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      log(options, `[kuaishou-drama] tab failed: ${variant.kind}: ${message}`);
-      // Capture the failing version before its dedicated tab is closed.
-      await captureAutomationFailureDiagnostics({
-        platform: "kuaishou-drama", error, page: targetPage,
-        logFilePath: options.logFilePath,
-        task: {
-          accountTaskId: resolvedTask.claimedTask?.accountTaskId,
-          title: variant.title,
-        },
-      }).catch(() => undefined);
-      throw error;
     }
-  };
+    const needsUpload = variants.filter((variant) => !queryFailures.has(variant.kind)
+      && (!existingDramas.get(variant.kind) || existingDramas.get(variant.kind)?.state === "draft"));
+    let preparationFailure: { error: unknown } | undefined;
+    if (needsUpload.length) {
+      try {
+        await prepareTask?.(needsUpload.some((variant) => !existingDramas.get(variant.kind)));
+      } catch (error) {
+        preparationFailure = { error };
+      }
+    }
 
-  return executeKuaishouDramaVariants(variants, async (variant, index) => {
-    if (preparationFailure) throw preparationFailure.error;
-    log(options, `[kuaishou-drama] opening next publish variant: ${variant.kind}`);
-    const variantPage = index === 0 ? page : await context.newPage();
-    try {
-      if (index > 0) await openKuaishouDramaEditPage(context, variantPage, options, false);
-      await runVariant(variantPage, variant);
-    } finally {
-      if (variantPage !== page) await variantPage.close().catch(() => undefined);
-    }
-  }, async (variant) => {
-    if (queryFailures.has(variant.kind)) throw queryFailures.get(variant.kind);
-    const existing = existingDramas.get(variant.kind);
-    if (existing?.state === "rejected") {
-      throw new Error(`快手${variant.title}审核未通过，请处理后重试：${existing.rejectionReason}`);
-    }
-    if (existing?.state !== "submitted") return false;
-    log(options, `[kuaishou-drama] version already submitted; skipping upload: ${variant.kind} `
-      + `title=${variant.title} miniSeriesId=${existing.miniSeriesId} auditStatus=${existing.auditStatus}`);
-    return true;
-  });
+    const runVariant = async (
+      targetPage: Page,
+      variant: KuaishouDramaPublishVariant,
+    ) => {
+      log(options, `[kuaishou-drama] tab started: ${variant.kind}`);
+      try {
+        await targetPage.bringToFront();
+        const existing = existingDramas.get(variant.kind);
+        if (existing) {
+          await openExistingKuaishouDramaVideoStep(targetPage, existing.miniSeriesId, options);
+          await uploadKuaishouDramaEpisodeVideos(
+            targetPage,
+            taskConfig,
+            variant,
+            resourceName,
+            options,
+          );
+        } else {
+          await fillKuaishouDramaEditForm(targetPage, taskConfig, variant, resourceName, options);
+        }
+        await throwIfKuaishouWarningCaptured(targetPage, options);
+        log(options, `[kuaishou-drama] tab completed: ${variant.kind}`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        log(options, `[kuaishou-drama] tab failed: ${variant.kind}: ${message}`);
+        // Capture the failing version before its dedicated tab is closed.
+        await captureAutomationFailureDiagnostics({
+          platform: "kuaishou-drama", error, page: targetPage,
+          logFilePath: options.logFilePath,
+          task: {
+            accountTaskId: resolvedTask.claimedTask?.accountTaskId,
+            title: variant.title,
+          },
+        }).catch(() => undefined);
+        throw pages.failure(error);
+      }
+    };
+
+    pages.assertConnected();
+    return await executeKuaishouDramaVariants(variants, async (variant, index) => {
+      if (preparationFailure) throw preparationFailure.error;
+      log(options, `[kuaishou-drama] opening next publish variant: ${variant.kind}`);
+      const variantPage = index === 0 ? await pages.readyQueryPage() : await pages.newUploadPage();
+      try {
+        if (index > 0) await openKuaishouDramaEditPage(context, variantPage, options, false);
+        await runVariant(variantPage, variant);
+      } catch (error) {
+        throw pages.failure(error);
+      } finally {
+        if (variantPage !== page) await variantPage.close().catch(() => undefined);
+      }
+    }, async (variant) => {
+      if (queryFailures.has(variant.kind)) throw queryFailures.get(variant.kind);
+      const existing = existingDramas.get(variant.kind);
+      if (existing?.state === "rejected") {
+        throw new Error(`快手${variant.title}审核未通过，请处理后重试：${existing.rejectionReason}`);
+      }
+      if (existing?.state !== "submitted") return false;
+      log(options, `[kuaishou-drama] version already submitted; skipping upload: ${variant.kind} `
+        + `title=${variant.title} miniSeriesId=${existing.miniSeriesId} auditStatus=${existing.auditStatus}`);
+      return true;
+    });
+  } finally {
+    await pages.dispose();
+  }
 }

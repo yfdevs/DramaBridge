@@ -15,6 +15,8 @@
 服务启动时为每个启用账号创建独立浏览器。浏览器登录态优先使用账号配置的
 `rpaProfileKey` 隔离；未配置时使用 `accountId`。
 
+启动服务和执行任务时，创建页若在 60 秒内未就绪，会刷新当前页面并重新等待 60 秒；仅刷新重试一次，仍未就绪则报 `BAIDU_DRAMA_CREATE_PAGE_NOT_READY`。
+
 领取响应中的 `payloadJson.baiduPlaylet` 保存百度表单字段，通用信息从 `payloadJson`
 读取。四份合同由 `payloadJson.baiduContractFiles` 提供：
 

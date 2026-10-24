@@ -511,3 +511,54 @@ test("reports unrecognized images instead of treating them as 剧创", () => {
     /剪映=1\/2，剧创=1\/2，未识别=1.*权属工程文件3\.png/u,
   );
 });
+
+
+test("local classification precedes AI cache and falls back on unknown or native errors", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "proof-local-fallback-"));
+  const file = path.join(root, "工程.png");
+  let aiCalls = 0;
+  const originalAi = cloudAiClassifier("juchuang");
+  const aiClient: DramaAiClient = { ...originalAi, analyzeImages: async request => {
+    aiCalls++;
+    return originalAi.analyzeImages(request);
+  } };
+  try {
+    await sharp({ create: { width: 400, height: 240, channels: 3, background: "#345678" } }).png().toFile(file);
+    // Disabled: original cloud path. Unknown/errors: same cloud fallback (cached here).
+    assert.equal(await classifyOwnershipProjectProof(file, undefined, aiClient), "juchuang");
+    assert.equal(aiCalls, 1);
+    assert.equal(await classifyOwnershipProjectProof(file, undefined, aiClient, async () => "unknown"), "juchuang");
+    assert.equal(await classifyOwnershipProjectProof(file, undefined, aiClient, async () => { throw new Error("native unavailable"); }), "juchuang");
+    assert.equal(await classifyOwnershipProjectProof(file, undefined, aiClient, () => { throw new Error("synchronous native failure"); }), "juchuang");
+    // Enabling native recognition must take precedence even after an earlier AI result.
+    assert.equal(await classifyOwnershipProjectProof(file, undefined, aiClient, async () => "jianying"), "jianying");
+    assert.equal(await classifyOwnershipProjectProof(file, undefined, undefined, async () => "jianying"), "jianying");
+    assert.equal(aiCalls, 1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("batch classifies locally first, uses AI only for unresolved images and records each source", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "proof-local-batch-"));
+  const resourceName = "本机识别测试";
+  const directory = path.join(root, resourceName, "权属文件");
+  await mkdir(directory, { recursive: true });
+  let aiCalls = 0;
+  const originalAi = cloudAiClassifier("juchuang");
+  const aiClient: DramaAiClient = { ...originalAi, analyzeImages: async request => {
+    aiCalls++;
+    return originalAi.analyzeImages(request);
+  } };
+  try {
+    for (let index = 1; index <= 4; index++) {
+      await sharp({ create: { width: 400, height: 240, channels: 3, background: { r: index * 30, g: 10, b: 20 } } }).png().toFile(path.join(directory, `工程${index}.png`));
+    }
+    const sources: string[] = [];
+    const result = await findOwnershipProjectProofFiles({ root, resourceName, aiClient,
+      classifyLocally: async file => /[12]\.png$/u.test(file) ? "jianying" : "unknown",
+      onClassificationProgress: progress => sources.push(progress.source!),
+    });
+    assert.equal(result.files.length, 4);
+    assert.equal(aiCalls, 2);
+    assert.deepEqual(sources, ["local", "local", "ai", "ai"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

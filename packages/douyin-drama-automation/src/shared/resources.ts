@@ -326,6 +326,7 @@ export async function prepareDouyinDramaResources(
           material.file,
           material.name,
           aiClient as Parameters<typeof classifyOwnershipProjectProof>[2],
+          options.classifyOwnershipLocally,
         )
       : undefined,
   );

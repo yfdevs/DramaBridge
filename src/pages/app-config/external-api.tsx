@@ -10,7 +10,7 @@ import {
 
 const section: ConfigSectionDefinition<ExternalApiConfig> = {
   title: "本机接口服务",
-  description: "允许同一台电脑上的 Python、Java 等程序调用百度网盘下载，无需密钥或登录鉴权。",
+  description: "让电脑上的其他程序使用百度网盘下载功能。",
   fields: [
     {
       kind: "switch",
@@ -26,7 +26,6 @@ const section: ConfigSectionDefinition<ExternalApiConfig> = {
       type: "number",
       min: 1,
       max: 65535,
-      description: "仅监听 127.0.0.1，接口路径统一使用 /api 前缀。",
     },
   ],
 };

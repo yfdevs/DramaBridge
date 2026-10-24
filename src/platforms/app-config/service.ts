@@ -11,6 +11,7 @@ export type GlobalAppConfig = {
   aiImageModel: string;
   aiCoverGenerationRetryAttempts: string;
   aiPosterFallbackEnabled: boolean;
+  ownershipLocalOcrEnabled: boolean;
   baiduNetdiskDownloadTimeoutMinutes: string;
   baiduNetdiskCleanupPlayletAfterTaskSuccess: boolean;
   runDataRoot: string;
@@ -79,6 +80,7 @@ export const globalAppConfigService = {
   getExternalApiConfig: () => invokeGlobalAppConfig<ExternalApiConfigResult>("app:config:external-api:get"),
   getExternalApiStatus: () => invokeGlobalAppConfig<ExternalApiStatus>("app:config:external-api:status"),
   saveExternalApiConfig: (config: ExternalApiConfig) => invokeGlobalAppConfig<ExternalApiConfigResult>("app:config:external-api:save", config),
+  testLocalOcr: () => invokeGlobalAppConfig<{ available: boolean; message: string; latencyMs?: number }>("app:config:local-ocr:test"),
   getTheme: () => invokeGlobalAppConfig<AppTheme>("app:theme:get"),
   getConfig: () => invokeGlobalAppConfig<GlobalAppConfigResult>("app:config:get"),
   saveConfig: (config: GlobalAppConfig) =>

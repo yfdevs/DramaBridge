@@ -3,14 +3,11 @@ import { writeJsonAtomic } from "@dramabridge/file-utils";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { analyzeImagesAsJson } from "@dramabridge/ai";
 import {
-  evaluateCommercialPosterTextValidation,
   prepareContainedImageVariant,
   readImageDimensions,
   type LocalPosterImageFile,
 } from "@dramabridge/media-assets";
-import { z } from "zod";
 
 import { log } from "../automation/browser-session.js";
 import type {
@@ -58,40 +55,19 @@ function isTextlessVariantKind(value: string | undefined): value is KuaishouText
 }
 
 const promptVersion = "kuaishou-cover-counterpart-v4-commercial-copy";
+const textlessPromptVersion = "kuaishou-textless-v2-repair-isolated-review";
 const normalizationVersion = "kuaishou-cover-contain-v1";
 const maximumFileBytes = 9_500_000;
 const activeGenerations = new Map<string, Promise<string>>();
 
-export const kuaishouGeneratedCoverValidationSchema = z.object({
-  mainSubjectsComplete: z.boolean(),
-  facesIntact: z.boolean(),
-  titlePresent: z.boolean(),
-  titleReadable: z.boolean(),
-  titleSeverelyIncorrect: z.boolean(),
-  titleInsideSafeArea: z.boolean(),
-  hasProhibitedOverlay: z.boolean(),
-  hasClearlyUnrelatedOrGibberishText: z.boolean(),
-  noMirroringOrTiling: z.boolean(),
-  referenceSimilarityConfidence: z.coerce.number().finite().min(0).max(1),
-  detectedTexts: z.array(z.string().trim().max(100)).max(30).default([]),
-  blockingIssues: z.array(z.string().trim().max(300)).max(20).default([]),
-  warnings: z.array(z.string().trim().max(300)).max(20).default([]),
-});
-
-export type KuaishouGeneratedCoverValidation = z.infer<
-  typeof kuaishouGeneratedCoverValidationSchema
->;
-
 const coverDetails = {
   drama: {
     label: "短剧横版封面",
-    ratioLabel: "414:258（约 1.605:1）横版",
     outputName: "kuaishou-drama-cover-2208x1376.jpg",
     target: KUAISHOU_DRAMA_COVER_SIZE,
   },
   episode: {
     label: "单集竖版封面",
-    ratioLabel: "224:300（约 3:4）竖版",
     outputName: "kuaishou-episode-cover-1792x2400.jpg",
     target: KUAISHOU_EPISODE_COVER_SIZE,
   },
@@ -164,128 +140,15 @@ export function buildKuaishouTextlessVariantCoverPrompt(options: {
   ];
   const direction = directions[(options.variant - 2) % directions.length]!;
   return [
-    `参考原剧封面及剧情简介，创作第 ${options.variant} 个广告版本的${coverDetails[options.kind].label}。`,
-    `剧情简介：${options.summary}`,
+    `创作一张无字影视剧照，${options.kind === "drama" ? "横向" : "竖向"}构图，画面只有人物与场景。`,
+    "参考图仅用于人物外貌、服饰和时代风格；不参考原图的文字、标题或海报排版。",
+    `故事背景（仅用于理解情节，不要把这些内容写在图上）：${options.summary.slice(0, 600)}`,
     direction,
     "保留原剧主要人物的外貌、服饰、时代和作品辨识度；重新设计画面，不要简单裁切、拼接、镜像或复制原封面。",
     "这是一张纯画面封面。彻底去掉参考图中所有剧名、标题、文字、字母、数字、标志、水印、二维码、字幕、按钮和排版元素；不要绘制任何新文字。",
+    "招牌、屏幕、书本、衣服和道具表面使用自然的纯色或无字纹理，不出现可辨认的字符。",
     "人物面部与关键道具完整自然，主体处于安全区域，四周留出裁切余量。直接输出可发布的成品图。",
   ].join("\n");
-}
-
-function buildValidationRetryGuidance(
-  title: string,
-  validation: KuaishouGeneratedCoverValidation,
-  textless = false,
-) {
-  const guidance = new Set<string>();
-  if (!validation.mainSubjectsComplete) {
-    guidance.add("完整呈现所有主要人物和关键道具，不要让其被边缘裁断。");
-  }
-  if (!validation.facesIntact) {
-    guidance.add("保持参考人物的面部特征，确保人脸自然、完整、无遮挡。");
-  }
-  const textValidation = textless ? { failures: [] as string[] } : evaluateCommercialPosterTextValidation(title, validation);
-  if (textValidation.failures.some((failure) => /剧名/.test(failure))) {
-    guidance.add("完整清晰地展示准确剧名，逐字核对，不得改字或漏字。");
-  }
-  if (!textless && !validation.titleInsideSafeArea) {
-    guidance.add("把剧名移入中央区域，与画面边缘留出明显背景空间。");
-  }
-  if (validation.hasProhibitedOverlay || validation.hasClearlyUnrelatedOrGibberishText) {
-    guidance.add("删除所有额外文字、其他作品名、乱码、广告引流、二维码、水印、画幅比例、尺寸、分辨率、像素值或技术界面文字。");
-  }
-  if (textless && (validation.titlePresent || validation.detectedTexts.length > 0)) {
-    guidance.add("删除画面中所有可见文字、数字、标志和水印，包括参考封面原有的剧名。");
-  }
-  if (!validation.noMirroringOrTiling) {
-    guidance.add("自然延展场景，不要镜像、重复或拼贴背景。");
-  }
-  if (validation.referenceSimilarityConfidence < 0.75) {
-    guidance.add("提高与参考图的人物、服饰、场景和整体气质一致性。");
-  }
-  return [...guidance].join("\n");
-}
-
-function validationFailure(title: string, validation: KuaishouGeneratedCoverValidation, textless = false) {
-  const textValidation = textless
-    ? { failures: [
-        ...(validation.titlePresent || validation.detectedTexts.length > 0 ? ["text-present"] : []),
-        ...(validation.hasProhibitedOverlay || validation.hasClearlyUnrelatedOrGibberishText ? ["overlay-or-gibberish"] : []),
-      ] }
-    : evaluateCommercialPosterTextValidation(title, validation);
-  const failedChecks = [
-    ["main-subjects-incomplete", validation.mainSubjectsComplete],
-    ["faces-damaged", validation.facesIntact],
-    ["title-outside-safe-area", textless || validation.titleInsideSafeArea],
-    ["mirroring-or-tiling", validation.noMirroringOrTiling],
-    ["reference-similarity-low", validation.referenceSimilarityConfidence >= 0.75],
-  ].filter(([, passed]) => !passed).map(([name]) => name);
-  return [...failedChecks, ...textValidation.failures].join("; ");
-}
-
-async function validateGeneratedCover(options: {
-  sourceFile: string;
-  generatedFile: string;
-  kind: KuaishouCoverKind;
-  title: string;
-  textless?: boolean;
-  runtime: KuaishouDramaRuntimeOptions;
-}) {
-  const detail = coverDetails[options.kind];
-  const completion = await analyzeImagesAsJson(options.runtime.aiClient!, {
-    images: [
-      { type: "file", path: options.sourceFile, detail: "high" },
-      { type: "file", path: options.generatedFile, detail: "high" },
-    ],
-    prompt: [
-      "你是快手短剧封面质检员。第 1 张是参考原图，第 2 张是待验收的生成图。",
-      `待验收图用于${detail.label}，目标比例为${detail.ratioLabel}。`,
-      options.textless
-        ? "这是无字封面。仔细检查生成图上所有可见的汉字、字母、数字、标志、字幕、水印或乱码；任何可见文字都必须填入 detectedTexts，titlePresent 表示是否残留任何标题文字。"
-        : `准确剧名是：${options.title}。`,
-      options.textless
-        ? "只接受完全没有可见文字或标志的纯画面；主要人物、面部和关键道具必须完整。"
-        : "请逐项判断：主要人物是否完整；人脸是否无畸变和遮挡；剧名是否完整可读且与四周边界至少保持约 5% 安全距离。剧名允许分行、竖排、标点调整和局部重复。",
-      options.textless
-        ? "参考图允许有文字，但只评估第 2 张生成图的文字。"
-        : "除完整准确的剧名外，任何额外文字都必须判定为阻断问题。",
-      options.textless
-        ? "任何残留文字、二维码、平台水印或伪界面元素都属于阻断问题。"
-        : "只把其他作品名、随机乱码、联系方式、账号、广告引流、二维码、平台水印、坐标、尺寸、时间戳、相机参数、取景框或伪界面元素判为文字阻断问题。不确定的小字放入 warnings。",
-      "检查背景是否有明显镜像、重复拼接或边框，以及生成图与参考图的人物和作品辨识度是否一致。",
-      "只返回 JSON 对象，不要 Markdown 或解释。布尔字段必须严格填 true/false。",
-      "格式：" + JSON.stringify({
-        mainSubjectsComplete: true,
-        facesIntact: true,
-        titlePresent: !options.textless,
-        titleReadable: true,
-        titleSeverelyIncorrect: false,
-        titleInsideSafeArea: true,
-        hasProhibitedOverlay: false,
-        hasClearlyUnrelatedOrGibberishText: false,
-        noMirroringOrTiling: true,
-        referenceSimilarityConfidence: 0.95,
-        detectedTexts: options.textless ? [] : [options.title],
-        blockingIssues: [],
-        warnings: [],
-      }),
-    ].join("\n"),
-    systemPrompt: "你只输出符合用户指定结构的 JSON 对象。",
-    maxTokens: 900,
-    temperature: 0,
-  });
-  const validation = kuaishouGeneratedCoverValidationSchema.parse(completion.data);
-  const textValidation = options.textless
-    ? { warnings: [] as string[] }
-    : evaluateCommercialPosterTextValidation(options.title, validation);
-  return {
-    validation,
-    failure: validationFailure(options.title, validation, options.textless),
-    warnings: textValidation.warnings,
-    model: completion.model,
-    requestId: completion.requestId,
-  };
 }
 
 async function normalizedCoverCacheKey(sourceFile: string, kind: KuaishouCoverKind) {
@@ -333,13 +196,15 @@ async function generatedCoverCacheKey(options: {
   title: string;
   model: string;
   prompt: string;
+  textlessVariant?: number;
 }) {
   return createHash("sha256")
     .update(await readFile(options.sourceFile))
     .update(options.kind)
     .update(options.title)
     .update(options.model)
-    .update(promptVersion)
+    .update(options.textlessVariant ? textlessPromptVersion : promptVersion)
+    .update(options.textlessVariant ? String(options.textlessVariant) : "")
     .update(options.prompt)
     .digest("hex")
     .slice(0, 24);
@@ -355,10 +220,13 @@ async function isUsableGeneratedCover(options: {
   const metadata = await readFile(options.metadataFile, "utf8")
     .then((content) => JSON.parse(content) as {
       cacheKey?: unknown;
+      generationComplete?: unknown;
       validation?: { passed?: unknown };
     })
     .catch(() => undefined);
-  return metadata?.cacheKey === options.cacheKey && metadata.validation?.passed === true;
+  // Accept both new generation-only metadata and previously accepted covers.
+  return metadata?.cacheKey === options.cacheKey &&
+    (metadata.generationComplete === true || metadata.validation?.passed === true);
 }
 
 async function generateMissingCover(options: {
@@ -392,6 +260,7 @@ async function generateMissingCover(options: {
     title: options.title,
     model,
     prompt,
+    textlessVariant: options.textlessVariant,
   });
   const cacheDir = path.join(outputRoot, "ai-cover", cacheKey);
   const output = path.join(cacheDir, coverDetails[options.kind].outputName);
@@ -414,9 +283,7 @@ async function generateMissingCover(options: {
       Math.min(11, Math.floor(options.runtime.aiCoverGenerationRetryAttempts ?? 3) + 1),
     );
     let lastError: unknown;
-    let previousFailure: string | undefined;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      let retryGuidance: string | undefined;
       const temporarySource = path.join(
         cacheDir,
         `.generated-${options.kind}-${process.pid}-${Date.now()}-${attempt}.image`,
@@ -425,14 +292,12 @@ async function generateMissingCover(options: {
         log(
           options.runtime,
           `[kuaishou-drama] generating AI ${options.kind} cover: ` +
-            `source=${options.sourceKind} attempt=${attempt}/${attempts} model=${model}`,
+            `variant=${options.textlessVariant ?? "original"} source=${options.sourceKind} ` +
+            `attempt=${attempt}/${attempts} model=${model}`,
         );
-        const requestPrompt = previousFailure
-          ? `${prompt}\n\n上一张生成图未通过自动验收，原因：${previousFailure.slice(0, 600)}。请重新生成并逐项修正。`
-          : prompt;
         const result = await options.runtime.aiClient!.generateImage({
           model,
-          prompt: requestPrompt,
+          prompt,
           referenceImages: [{ type: "file", path: options.sourceFile }],
           size: `${target.width}x${target.height}`,
           watermark: false,
@@ -448,28 +313,12 @@ async function generateMissingCover(options: {
           maxFileBytes: maximumFileBytes,
           onLog: (message) => log(options.runtime, message),
         });
-        const validated = await validateGeneratedCover({
-          sourceFile: options.sourceFile,
-          generatedFile: output,
-          kind: options.kind,
-          title: options.title,
-          textless: Boolean(options.textlessVariant),
-          runtime: options.runtime,
-        });
-        if (validated.failure) {
-          retryGuidance = buildValidationRetryGuidance(options.title, validated.validation, Boolean(options.textlessVariant));
-          throw new Error(`KUAISHOU_DRAMA_AI_COVER_VALIDATION_FAILED: ${validated.failure}`);
-        }
-        if (validated.warnings.length > 0) {
-          log(
-            options.runtime,
-            `[kuaishou-drama] AI ${options.kind} cover validation warnings (non-blocking): ` +
-              validated.warnings.join("; "),
-          );
+        if (!await isPreparedCover(output, options.kind)) {
+          throw new Error("生成的封面图片无法读取，或尺寸、文件大小不符合上传要求");
         }
         await writeJsonAtomic(metadataFile, {
           cacheKey,
-          promptVersion,
+          promptVersion: options.textlessVariant ? textlessPromptVersion : promptVersion,
           sourceFile: options.sourceFile,
           sourceKind: options.sourceKind,
           kind: options.kind,
@@ -478,20 +327,14 @@ async function generateMissingCover(options: {
           model: result.model,
           requestId: result.requestId,
           target,
-          prompt: requestPrompt,
-          validation: {
-            passed: true,
-            ...validated.validation,
-            model: validated.model,
-            requestId: validated.requestId,
-          },
+          prompt,
+          generationComplete: true,
           createdAt: new Date().toISOString(),
         });
         log(options.runtime, `[kuaishou-drama] AI ${options.kind} cover ready: ${output}`);
         return output;
       } catch (error) {
         lastError = error;
-        previousFailure = retryGuidance ?? "重新生成一张干净、完整并与参考图一致的成品封面。";
         await rm(output, { force: true }).catch(() => undefined);
         log(
           options.runtime,
@@ -504,7 +347,8 @@ async function generateMissingCover(options: {
     }
     throw Object.assign(
       new Error(
-        `KUAISHOU_DRAMA_AI_COVER_GENERATION_FAILED: ${options.kind}: ` +
+        `KUAISHOU_DRAMA_AI_COVER_GENERATION_FAILED: ` +
+          `${options.textlessVariant ? `广告第 ${options.textlessVariant} 版` : "原版"}${coverDetails[options.kind].label}：` +
           errorMessage(lastError),
       ),
       { cause: lastError },

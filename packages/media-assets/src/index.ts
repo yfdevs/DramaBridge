@@ -576,8 +576,19 @@ export function classifyOwnershipProjectProofName(
 
 async function classifyOwnershipProjectProofContent(
   file: string,
-  aiClient: DramaAiClient,
+  aiClient?: DramaAiClient,
+  classifyLocally?: (file: string) => Promise<OwnershipProjectProofKind>,
+  onSource?: (source: "local" | "ai") => void,
 ) {
+  if (classifyLocally) {
+    const localKind = await Promise.resolve().then(() => classifyLocally(file)).catch(() => "unknown" as const);
+    if (localKind === "jianying" || localKind === "juchuang") {
+      onSource?.("local");
+      return localKind;
+    }
+  }
+  if (!aiClient) throw new Error("OWNERSHIP_PROJECT_PROOF_AI_CLIENT_REQUIRED");
+  onSource?.("ai");
   const fileStat = await stat(file);
   const cacheKey = `${path.resolve(file).toLowerCase()}#${fileStat.size}#${fileStat.mtimeMs}#${ownershipProjectProofAiClassificationVersion}`;
   const cached = ownershipProjectProofClassificationCache.get(cacheKey);
@@ -596,6 +607,7 @@ export async function classifyOwnershipProjectProof(
   file: string,
   nameHint = path.basename(file),
   aiClient?: DramaAiClient,
+  classifyLocally?: (file: string) => Promise<OwnershipProjectProofKind>,
 ): Promise<OwnershipProjectProofKind> {
   // Keep all source directory labels in the hint. Baidu resources often split
   // proof images into nested folders such as 权属文件/剪映工程图/截图/1.png,
@@ -603,8 +615,7 @@ export async function classifyOwnershipProjectProof(
   const namedKind = classifyOwnershipProjectProofName(`${file}/${nameHint}`);
   if (namedKind) return namedKind;
 
-  if (!aiClient) throw new Error("OWNERSHIP_PROJECT_PROOF_AI_CLIENT_REQUIRED");
-  return classifyOwnershipProjectProofContent(file, aiClient);
+  return classifyOwnershipProjectProofContent(file, aiClient, classifyLocally);
 }
 
 function ownershipProjectProofOrder(
@@ -647,7 +658,7 @@ export function selectOwnershipProjectProofFiles(
         + `剪映=${jianying.length}/${jianyingCount}，剧创=${juchuang.length}/${juchuangCount}，`
         + `未识别=${unknown.length}。`
         + `请提供至少 ${jianyingCount} 张剪映工程截图和 ${juchuangCount} 张 AI 剧创工程截图。`
-        + "截图可位于不同目录，目录名不限；系统按图片内容识别。"
+        + "截图可位于不同目录，目录名不限；请核对文件名标注及截图内容。"
         + unknownSummary,
     );
   }
@@ -678,11 +689,15 @@ export async function findOwnershipProjectProofFiles(options: {
   resourceName: string;
   aiClient?: DramaAiClient;
   filesPerKind?: number | { jianying: number; juchuang: number };
+  classifyLocally?: (file: string) => Promise<OwnershipProjectProofKind>;
+  /** Use explicit source labels before cloud vision; other callers retain content-first behavior. */
+  preferNamedKinds?: boolean;
   onClassificationProgress?: (progress: {
     completed: number;
     fallback?: boolean;
     file: string;
     kind: OwnershipProjectProofKind;
+    source?: "name" | "local" | "ai";
     total: number;
   }) => void;
 }): Promise<OwnershipProjectProofSelection> {
@@ -709,6 +724,7 @@ export async function findOwnershipProjectProofFiles(options: {
   const filesPerKind = ownershipProjectProofCounts(options.filesPerKind ?? 2);
   const classified: ClassifiedOwnershipProjectProof[] = [];
   const deadline = Date.now() + ownershipProjectProofClassificationTimeoutMs;
+  let classificationSource: "name" | "local" | "ai" = "name";
   const classifyBeforeDeadline = async (material: LocalOwnershipMaterialFile) => {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) {
@@ -725,8 +741,8 @@ export async function findOwnershipProjectProofFiles(options: {
       )), remainingMs);
     });
     return Promise.race([
-      options.aiClient
-        ? classifyOwnershipProjectProofContent(material.file, options.aiClient!)
+      options.aiClient || options.classifyLocally
+        ? classifyOwnershipProjectProofContent(material.file, options.aiClient, options.classifyLocally, source => { classificationSource = source; })
         : classifyOwnershipProjectProof(material.file, material.name),
       timeoutPromise,
     ]).finally(() => {
@@ -734,7 +750,15 @@ export async function findOwnershipProjectProofFiles(options: {
     });
   };
   for (const material of candidates) {
-    const kind = await classifyBeforeDeadline(material);
+    // Prefer the individual filename over an inherited folder label, and avoid
+    // unrelated platform words on ancestor paths outside the resource directory.
+    const namedKind = options.preferNamedKinds
+      ? classifyOwnershipProjectProofName(material.name) ?? classifyOwnershipProjectProofName(
+        path.relative(playletDir(options.root, options.resourceName), material.file),
+      )
+      : undefined;
+    classificationSource = "name";
+    const kind = namedKind ?? await classifyBeforeDeadline(material);
     classified.push({
       material,
       kind,
@@ -744,6 +768,7 @@ export async function findOwnershipProjectProofFiles(options: {
       file: material.file,
       kind,
       total: candidates.length,
+      source: classificationSource,
     });
     if (
       classified.filter((item) => item.kind === "jianying").length >= filesPerKind.jianying

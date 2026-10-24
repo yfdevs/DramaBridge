@@ -1,4 +1,6 @@
 export const TAOBAO_DRAMA_PLATFORM = "taobao-drama";
+export const TAOBAO_DRAMA_HOME_URL =
+  "https://creator.guanghe.taobao.com/page/unify/collection";
 
 export const TAOBAO_DRAMA_COLLECTION_CREATE_URL =
   "https://creator.guanghe.taobao.com/page/unify/collect-create" +
@@ -19,7 +21,7 @@ export const TAOBAO_DRAMA_FIXED_FIELDS = {
   completionStatus: "已完结",
   filingType: "备案号申请",
   producerName: "杨爱平",
-  productionCompany: "明星说",
+  productionCompany: "明星说（北京）科技有限公司",
   directorName: "杨爱平",
   scriptwriterName: "杨爱平",
   mainActors: "杨爱平",
@@ -27,7 +29,9 @@ export const TAOBAO_DRAMA_FIXED_FIELDS = {
 } as const;
 
 export const TAOBAO_DRAMA_MIN_SETTLE_MS = 10_000;
-export const TAOBAO_DRAMA_PAGE_READY_RELOAD_MS = 30_000;
+export const TAOBAO_DRAMA_PAGE_READY_TIMEOUT_MS = 90_000;
+export const TAOBAO_DRAMA_NAVIGATION_SETTLE_MS = 5_000;
+export const TAOBAO_DRAMA_MAX_PAGE_NAVIGATIONS = 2;
 export const TAOBAO_DRAMA_MAX_VIDEOS_PER_BATCH = 100;
 export const TAOBAO_DRAMA_EPISODE_UPLOAD_RETRY_ATTEMPTS = 5;
 export const TAOBAO_DRAMA_MIN_VIDEO_DIMENSION = 1_088;
@@ -64,7 +68,6 @@ export function taobaoEpisodeBatchPagePlan(
 ) {
   return taobaoEpisodeBatchRanges(episodeCount, batchSize).map((range, index) => ({
     ...range,
-    openNewPage: index > 0,
-    closePreviousPageAfterSelection: index > 0,
+    navigateToBatchPage: index > 0,
   }));
 }
