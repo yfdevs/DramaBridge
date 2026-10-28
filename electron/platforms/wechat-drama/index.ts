@@ -96,7 +96,7 @@ type WechatVideoStore = {
 
 const defaultWechatVideoConfig: WechatVideoConfig = {
   apiBaseUrl: 'http://180.184.76.232:19090',
-  videoAccountContractSubjects: 'MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU,YOUDIANNIU,ZHENCUIYIHAO,RUIXIAODOU',
+  videoAccountContractSubjects: 'MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU,YOUDIANNIU,ZHENCUIYIHAO,RUIXIAODOU,YUANMAN,YUNQIMANYING,MENGDONG,CHONGBAO,DOURAN',
   localEpisodeVideoRoot: '',
   closeFailedTaskPages: 'false',
   runDataDir: '.drama-runs/wechat-drama',
@@ -132,8 +132,13 @@ const contractSubjectOptions = [
   { label: '幻走', value: 'HUANZOU' },
   { label: '小石榴', value: 'XIAOSHILIU' },
   { label: '有点牛', value: 'YOUDIANNIU' },
-  { label: '珍萃', value: 'ZHENCUIYIHAO' },
+  { label: '珍萃一号', value: 'ZHENCUIYIHAO' },
   { label: '瑞小豆', value: 'RUIXIAODOU' },
+  { label: '广州元漫科技有限公司', value: 'YUANMAN' },
+  { label: '北京云起漫影科技有限公司', value: 'YUNQIMANYING' },
+  { label: '广州梦动科技有限公司', value: 'MENGDONG' },
+  { label: '广州冲宝科技有限公司', value: 'CHONGBAO' },
+  { label: '广州豆燃科技有限公司', value: 'DOURAN' },
 ]
 
 const contractSubjectAliases: Record<string, string> = {
@@ -144,7 +149,13 @@ const contractSubjectAliases: Record<string, string> = {
   小石榴: 'XIAOSHILIU',
   有点牛: 'YOUDIANNIU',
   珍萃: 'ZHENCUIYIHAO',
+  珍萃一号: 'ZHENCUIYIHAO',
   瑞小豆: 'RUIXIAODOU',
+  广州元漫科技有限公司: 'YUANMAN',
+  北京云起漫影科技有限公司: 'YUNQIMANYING',
+  广州梦动科技有限公司: 'MENGDONG',
+  广州冲宝科技有限公司: 'CHONGBAO',
+  广州豆燃科技有限公司: 'DOURAN',
 }
 
 const legacyDefaultContractSubjectSets = [

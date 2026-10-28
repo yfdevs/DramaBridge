@@ -6,11 +6,11 @@
 
 页面当前看到的图片材料要求通常是 `jpg/jpeg/bmp/png`，单个文件不超过 10MB；其他材料支持 `pdf/jpg/jpeg/bmp/png`。剧目海报建议 `816*1086px`，推广海报建议 `762*318px`。
 
-当前自动填写的剧目基础信息字段包括：剧目名称、剧目简介、推荐语、总集数、变现类型、试看集数、剧目类型、AI内容声明、AI制作证明、剧目海报、推广海报、提审身份、制作方名称、剧目制作证明材料、版权采买&播出授权证明材料、剧目资质、剧目制作成本、剧目制作成本证明文件和其他材料。任务配置来自领取接口返回的 `payloadJson`，不再读取项目 `data/` 目录。
+当前自动填写的剧目基础信息字段包括：剧目名称、剧目简介、推荐语、总集数、变现类型、试看集数、剧目类型、AI内容声明、AI制作证明、剧目海报、推广海报、提审身份、制作方名称、剧目制作证明材料、剧目资质、剧目制作成本和剧目制作成本证明文件。版权授权、资质证明及其他附件均不校验、不下载、不上传。任务配置来自领取接口返回的 `payloadJson`，不再读取项目 `data/` 目录。
 
 ## 任务配置字段
 
-空数组表示不上传该类材料；非必填字符串为空或删除该字段时，脚本会跳过填写。
+制作成本证明必须由后端返回非空文件地址数组，缺失或格式错误会在任务准备前失败，文件不存在或不可用也会报错。制作证明继续使用本地权属工程截图；开启 AI 声明时必须上传 AI 制作证明。非必填字符串为空或删除该字段时，脚本会跳过填写。
 
 | JSON 字段 | 中文名称 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -34,13 +34,13 @@
 | `playlet.submissionIdentity` | 提审身份 | `版权方/授权播出方` | 可选 `剧目制作方`、`版权方/授权播出方`。 |
 | `playlet.producerName` | 制作方名称 | 示例公司名 | 必填。 |
 | `playlet.copyright.productionProofFiles` | 合同材料 | 忽略 | 微信视频号不校验、下载或上传该字段；剧目制作证明材料只上传本地识别出的权属工程截图。 |
-| `playlet.copyright.licenseProofFiles` | 版权采买&播出授权证明材料 | 示例文件数组 | 可上传多个文件；远程文件保存在名称以 `-contract` 结尾的临时素材目录中。桌面端使用 `node-cron` 按 `Asia/Shanghai` 时区每天凌晨 1 点删除最后修改时间早于当天 00:00 的临时目录。 |
+| `playlet.copyright.licenseProofFiles` | 版权采买&播出授权证明材料 | 忽略 | 非必传附件，不校验、下载或上传。历史 `-contract` 临时目录仍按原计划清理。 |
 | `playlet.qualification.type` | 剧目资质 | `其他微短剧` | 可选 `重点/普通微短剧`、`其他微短剧`。 |
-| `playlet.qualification.proofFiles` | 剧目资质证明材料 | 示例文件数组 | 可上传多个文件。 |
+| `playlet.qualification.proofFiles` | 剧目资质证明材料 | 忽略 | 非必传附件，不校验、下载或上传。 |
 | `playlet.qualification.licenseOrRecordNumber` | 发行许可证号或备案号 | 无 | 仅页面需要时填写；非必填。 |
 | `playlet.productionCost.amountWan` | 剧目制作成本 | `30` | 单位：万元。 |
-| `playlet.productionCost.proofFiles` | 剧目制作成本证明文件 | 示例文件数组 | 对应页面里的选择文件上传。 |
-| `playlet.otherMaterials` | 其他材料 | `[]` | 可上传多个文件。 |
+| `playlet.productionCost.proofFiles` | 剧目制作成本证明文件 | 无 | 必须由后端返回至少一个非空文件地址，校验通过后上传；文件不存在或不可用时任务失败。 |
+| `playlet.otherMaterials` | 其他材料 | 忽略 | 非必传附件，不校验、下载或上传。 |
 剧集视频不从任务数据的 `episodes` 字段读取。设置 `localEpisodeVideoRoot` 后，程序使用领取接口返回的 `originalTitle`，扫描 `根目录/originalTitle` 以及 `根目录/originalTitle/成片`、`根目录/originalTitle/成品`、`根目录/originalTitle/视频`、`根目录/originalTitle/正片` 下的 `.mp4` 或 `.mov` 文件（后缀不区分大小写）。源文件名支持 `originalTitle-第N集.<后缀>`、`originalTitle - 第N集.<后缀>`、`originalTitle 第N集.<后缀>`、`originalTitleNN.<后缀>`、`originalTitle NN.<后缀>`、`originalTitle-NN.<后缀>`、`originalTitle - NN.<后缀>` 和 `N.<后缀>`；`-` 前后空格可有可无，不再支持下划线分隔。上传前会在运行数据目录创建硬链接，把上传文件名设为 `payloadJson.name-第N集.<原后缀>`；源视频和 `runDataDir` 需在同一磁盘分区。集数必须从 1 连续到 `playlet.episodeCount`，否则当前任务直接报错退出。
 
 微信会递归扫描 `根目录/originalTitle` 下名称包含“权属”或“工程”的目录，收集目录及其子目录中的 `png/jpg/jpeg/bmp/webp` 图片；能够读取出宽高且高度大于宽度的竖图会被排除，不作为权属文件。图片按内容去重后，优先按明确的文件名及剧目内目录名识别剪映、剧创/即梦来源（文件名优先）；名称无法确定或同时包含两类标记时识别图片内容。全局配置中的“优先使用本机识别”默认关闭；开启并保存后立即优先使用 Windows OCR，系统不支持、识别超时或没有明确标识时自动交给云 AI。点击“测试是否可用”会实际识别一张测试图，不会修改开关；开关重启后保留。默认选择 4 张剪映工程截图和 4 张剧创/即梦工程截图，逐张原图上传到“剧目制作证明材料”，不拼接且不上传合同。两类图片分别不足配置数量时任务失败；数量可在微信平台配置页调整。任务包含百度网盘链接时，程序会将视频目录和完整权属目录分别下载，等待权属目录下载完成后再整理到本地标准目录。

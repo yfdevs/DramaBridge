@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, test, type TestContext } from "node:test";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isTaobaoVideoResolutionFailure, retryFailedTaobaoEpisodes } from "../../src/automation/episodes.js";
+import { isTaobaoVideoResolutionFailure, retryFailedTaobaoEpisodes, waitForUploadComplete } from "../../src/automation/episodes.js";
 import { prepareTaobaoEpisodeVideos } from "../../src/shared/local-materials.js";
 
 const cacheRoot = path.resolve(import.meta.dirname, "../../../../.cache");
@@ -47,7 +47,7 @@ test("initial video preparation retains original files without probing or conver
   assert.deepEqual(await readdir(result.prepared.uploadDir), []);
 });
 
-async function uploadFixture(t: TestContext, reason: string, rejectReplacement = false) {
+async function uploadFixture(t: TestContext, reason: string, rejectReplacement = false, automaticRejection = false, deletionDelayMs = 0) {
   const directory = await temporaryDirectory(t);
   const originals = ["accepted-1.mp4", "low-resolution.mp4", "accepted-3.mp4"];
   const files = originals.map((name) => path.join(directory, name));
@@ -61,6 +61,8 @@ async function uploadFixture(t: TestContext, reason: string, rejectReplacement =
     <script>
       const reason = ${JSON.stringify(reason)};
       const rejectReplacement = ${JSON.stringify(rejectReplacement)};
+      const automaticRejection = ${JSON.stringify(automaticRejection)};
+      const deletionDelayMs = ${JSON.stringify(deletionDelayMs)};
       const root = document.querySelector('#publish-container');
       const dialog = document.querySelector('.next-dialog');
       document.querySelector('#reason').textContent = reason;
@@ -73,7 +75,19 @@ async function uploadFixture(t: TestContext, reason: string, rejectReplacement =
         item.innerHTML = '<div class="batchItemTop"><span class="batchItemTitle"></span><i class="next-icon" style="display:inline-block;padding:10px">删除</i></div><div class="batchItemStatus"></div>';
         item.querySelector('.batchItemTitle').textContent = name;
         item.querySelector('.batchItemStatus').textContent = failed ? '上传失败' : '已上传';
-        item.querySelector('i').onclick = () => { window.deleted.push(name); item.remove(); };
+        item.querySelector('i').onclick = () => {
+          const remove = () => { window.deleted.push(name); item.remove(); };
+          if (!deletionDelayMs) return remove();
+          setTimeout(() => {
+            const confirmation = document.createElement('div');
+            confirmation.className = 'next-dialog';
+            confirmation.setAttribute('role', 'dialog');
+            confirmation.innerHTML = '<p>是否确认删除视频</p><button>确认</button>';
+            confirmation.querySelector('button').onclick = () => { remove(); confirmation.remove(); };
+            // The uploader may be in an iframe; the confirmation lives outside it.
+            document.body.append(confirmation);
+          }, deletionDelayMs);
+        };
         if (failed) {
           const link = document.createElement('button');
           link.textContent = '查看原因';
@@ -81,6 +95,7 @@ async function uploadFixture(t: TestContext, reason: string, rejectReplacement =
           item.append(link);
         }
         root.append(item);
+        if (failed && automaticRejection) dialog.style.display = 'block';
       }
       ${JSON.stringify(originals)}.forEach((name, index) => addItem(name, index === 1));
       document.querySelector('input').onchange = event => {
@@ -110,6 +125,66 @@ test("repairs and reuploads only the resolution-rejected item, preserving succes
   })), { deleted: ["low-resolution.mp4"], uploaded: ["repaired.mp4"], statuses: ["已上传", "已上传", "已上传"] });
 });
 
+test("an automatic resolution dialog reaches per-item repair instead of terminating the batch", async (t) => {
+  const { page, files, replacement } = await uploadFixture(t, "上传视频的宽高是1280x720不符合要求，视频宽高均要大于1080");
+  await page.getByText("查看原因", { exact: true }).click();
+  const result = await waitForUploadComplete(page, files, {}, true);
+  assert.deepEqual(result.failedFileNames, ["low-resolution.mp4"]);
+  assert.equal(await page.getByRole("dialog").isVisible(), false);
+  let converted = 0;
+  await retryFailedTaobaoEpisodes(page, files, result.failedFileNames, {}, async () => {
+    converted += 1;
+    return replacement;
+  });
+  assert.equal(converted, 1);
+  assert.deepEqual((await waitForUploadComplete(page, files, {})).failedFileNames, []);
+  assert.deepEqual(await page.evaluate(() => (window as any).deleted), ["low-resolution.mp4"]);
+});
+
+test("per-item repair handles a resolution dialog already open when locating the failed item", async (t) => {
+  const { page, files, replacement } = await uploadFixture(t, "上传视频的宽高是1280x720不符合要求，视频宽高均要大于1080");
+  await page.getByText("查看原因", { exact: true }).click();
+  await retryFailedTaobaoEpisodes(page, files, ["low-resolution.mp4"], {}, async () => replacement);
+  assert.deepEqual(await page.evaluate(() => (window as any).uploaded), ["repaired.mp4"]);
+});
+
+test("per-item repair reads a failure dialog rendered outside the upload iframe", async (t) => {
+  const { page, files, replacement } = await uploadFixture(t, "上传视频的宽高是1280x720不符合要求，视频宽高均要大于1080");
+  // Keep the failure modal in the parent page while moving the uploader into a frame.
+  await page.evaluate(async () => {
+    const frame = document.createElement("iframe");
+    const loaded = new Promise<void>((resolve) => { frame.onload = () => resolve(); });
+    document.body.append(frame);
+    await loaded;
+    const frameDocument = frame.contentDocument!;
+    frameDocument.body.append(document.querySelector("#publish-container")!, document.querySelector("input")!);
+  });
+  await retryFailedTaobaoEpisodes(page, files, ["low-resolution.mp4"], {}, async () => replacement);
+  assert.deepEqual(await page.evaluate(() => (window as any).deleted), ["low-resolution.mp4"]);
+  assert.deepEqual(await page.evaluate(() => (window as any).uploaded), ["repaired.mp4"]);
+});
+
+test("automatic non-resolution rejections remain fatal without deleting or reuploading videos", async (t) => {
+  const { page, files } = await uploadFixture(t, "视频格式不符合要求");
+  await page.getByText("查看原因", { exact: true }).click();
+  await assert.rejects(waitForUploadComplete(page, files, {}, true), /VIDEO_UPLOAD_REJECTED/);
+  assert.equal(await page.getByRole("dialog").isVisible(), true);
+  assert.deepEqual(await page.evaluate(() => ({ deleted: (window as any).deleted, uploaded: (window as any).uploaded })), { deleted: [], uploaded: [] });
+});
+
+test("waits for the delayed delete confirmation before uploading the replacement", async (t) => {
+  const { page, files, replacement } = await uploadFixture(t, "视频分辨率低于平台要求", false, false, 750);
+  await retryFailedTaobaoEpisodes(page, files, ["low-resolution.mp4"], {}, async () => replacement);
+  assert.deepEqual(await page.evaluate(() => (window as any).deleted), ["low-resolution.mp4"]);
+  assert.deepEqual(await page.evaluate(() => (window as any).uploaded), ["repaired.mp4"]);
+});
+
+test("resolution rejection outside the repairable upload phase remains fatal", async (t) => {
+  const { page, files } = await uploadFixture(t, "视频分辨率低于平台要求");
+  await page.getByText("查看原因", { exact: true }).click();
+  await assert.rejects(waitForUploadComplete(page, files, {}), /VIDEO_UPLOAD_REJECTED/);
+});
+
 test("a format rejection cannot trigger conversion or delete an uploaded item", async (t) => {
   const { page, files, replacement } = await uploadFixture(t, "视频格式不符合要求");
   let converted = 0;
@@ -130,4 +205,30 @@ test("a repeated resolution rejection stops instead of converting the same episo
   }), /转换后仍被淘宝拒绝/);
   assert.equal(converted, 1);
   assert.deepEqual(await page.evaluate(() => (window as any).deleted), ["low-resolution.mp4"]);
+});
+
+test("an automatic rejection after conversion still reports that repair was already attempted", async (t) => {
+  const { page, files, replacement } = await uploadFixture(t, "视频分辨率低于平台要求", true, true);
+  let converted = 0;
+  await assert.rejects(retryFailedTaobaoEpisodes(page, files, ["low-resolution.mp4"], {}, async () => {
+    converted += 1;
+    return replacement;
+  }), /转换后仍被淘宝拒绝/);
+  assert.equal(converted, 1);
+  assert.deepEqual(await page.evaluate(() => (window as any).uploaded), ["repaired.mp4"]);
+  assert.deepEqual(await page.evaluate(() => (window as any).deleted), ["low-resolution.mp4"]);
+});
+
+test("a failed item cannot bypass repair through an enabled publish button while another item is pending", async (t) => {
+  const { page, files } = await uploadFixture(t, "视频分辨率低于平台要求");
+  await page.evaluate(() => {
+    // This wording is not covered by the generic page-text pending matcher.
+    document.querySelectorAll('.batchItemStatus')[2].textContent = '等待上传';
+    const button = document.createElement('button');
+    button.textContent = '批量发布';
+    document.body.append(button);
+    setTimeout(() => { document.querySelectorAll('.batchItemStatus')[2].textContent = '已上传'; }, 1_500);
+  });
+  const result = await waitForUploadComplete(page, files, {}, true);
+  assert.deepEqual(result.failedFileNames, ["low-resolution.mp4"]);
 });

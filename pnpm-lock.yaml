@@ -432,6 +432,9 @@ importers:
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:../file-utils
+      '@electron/asar':
+        specifier: 3.4.1
+        version: 3.4.1
       effect:
         specifier: 3.22.1
         version: 3.22.1

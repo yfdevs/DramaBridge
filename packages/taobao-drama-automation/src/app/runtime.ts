@@ -27,6 +27,13 @@ import { runTaobaoPublishTask } from "../automation/publish-runner.js";
 
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
 
+export function taobaoDownloadInfrastructurePauseReason(error: unknown): string | undefined {
+  const message = errorMessage(error);
+  if (/BAIDU_NETDISK_CLIENT_RESTART_REQUIRED|不是可用百度网盘 CDP|百度网盘 CDP 核心页面不可用|Error parsing .*@electron[\\/]remote[\\/]package\.json/i.test(message)) {
+    return "百度网盘客户端下载组件或 CDP 连接不可用，已暂停领取新任务。请重启百度网盘为 CDP 模式，再重启淘宝服务。";
+  }
+}
+
 export function classifyTaobaoDramaFailStage(error: unknown): TaobaoDramaTaskFailStage {
   const message = errorMessage(error);
   if (/TAOBAO_DRAMA_CONTENT_TAG_/.test(message)) return "FILL_FORM";
@@ -40,7 +47,7 @@ export function classifyTaobaoDramaFailStage(error: unknown): TaobaoDramaTaskFai
   return "OTHER";
 }
 
-async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: TaobaoDramaRuntimeOptions, setLastTask: (task: TaobaoDramaRuntimeStatus["lastTask"]) => void) {
+async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: TaobaoDramaRuntimeOptions, setLastTask: (task: TaobaoDramaRuntimeStatus["lastTask"]) => void, pauseClaims: (reason: string) => void) {
   setLastTask({ accountTaskId: task.accountTaskId, originalTitle: task.originalTitle, status: "running", updatedAt: new Date().toISOString() });
   const store = options.executionStore!;
   const result = await executeTaobaoClaimedTask({
@@ -51,6 +58,8 @@ async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: Taobao
     ),
     resultJson: () => ({ activeUrl: page.url(), accountId: task.accountId, accountName: task.accountName }),
     async failure(error) {
+      const pauseReason = taobaoDownloadInfrastructurePauseReason(error);
+      if (pauseReason) pauseClaims(pauseReason);
       const message = formatAutomationErrorReport(error, { fallbackMessage: "淘宝短剧任务提交失败，未获取到具体错误原因" });
       const stage = classifyTaobaoDramaFailStage(error);
       const diagnostics = await captureAutomationFailureDiagnostics({
@@ -127,7 +136,10 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
         if (task) {
           const taskPage = await context.newPage();
           log(options, "[taobao-drama] 已领取任务，在独立任务标签页执行", { accountTaskId: task.accountTaskId });
-          const outcome = await runTask(taskPage, task, options, (value) => { lastTask = value; });
+          const outcome = await runTask(taskPage, task, options, (value) => { lastTask = value; }, (reason) => {
+            claimPausedReason = reason;
+            errorLog(options, `[taobao-drama] ${reason}`);
+          });
           if (!taskPage.isClosed() && (outcome === "success" || (outcome === "failure" && options.closeFailedTaskPages === true))) {
             await taskPage.close().catch(() => undefined);
           } else if (!taskPage.isClosed()) {

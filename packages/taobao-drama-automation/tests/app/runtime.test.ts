@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { classifyTaobaoDramaFailStage } from "../../src/app/runtime.js";
+import { classifyTaobaoDramaFailStage, taobaoDownloadInfrastructurePauseReason } from "../../src/app/runtime.js";
+
+test("pauses new tasks for a broken Baidu client but not for an individual invalid resource", () => {
+  for (const message of [
+    "[BAIDU_NETDISK_CLIENT_RESTART_REQUIRED] 百度网盘客户端下载组件不可用",
+    "端口 9337 不是可用百度网盘 CDP",
+    "Error parsing C:\\client\\app.asar\\node_modules\\@electron\\remote\\package.json: Unexpected token 'e'",
+  ]) {
+    assert.match(taobaoDownloadInfrastructurePauseReason(new Error(message))!, /已暂停领取新任务/);
+  }
+  assert.equal(taobaoDownloadInfrastructurePauseReason(new Error("百度网盘剧集视频数量不正确")), undefined);
+  assert.equal(taobaoDownloadInfrastructurePauseReason(new Error("网络或服务响应超时")), undefined);
+});
 
 test("reports Baidu download failures as an API-supported upload stage", () => {
   assert.equal(

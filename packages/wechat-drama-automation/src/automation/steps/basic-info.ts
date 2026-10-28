@@ -1,5 +1,5 @@
 import type { Locator, Page } from "playwright";
-import { resolveFromRoot } from "../../shared/config.js";
+import { resolveFromRoot, validateWechatProductionCostProofFiles } from "../../shared/config.js";
 import { ErrorType } from "../../shared/errors.js";
 import type { Config } from "../../shared/types.js";
 import {
@@ -280,40 +280,6 @@ async function checkRadioByLabel<Value extends string>(
   );
 }
 
-async function uploadMaterial(
-  page: Page,
-  labelPrefixes: string | string[],
-  filePaths: Array<string | undefined>,
-  label = Array.isArray(labelPrefixes) ? labelPrefixes[0] : labelPrefixes,
-  remoteDirectoryName?: string,
-): Promise<void> {
-  const prefixes = Array.isArray(labelPrefixes) ? labelPrefixes : [labelPrefixes];
-  formLogger.info("素材上传计划已生成", { field: label, fileCount: filePaths.filter(Boolean).length });
-  if (!filePaths.some(Boolean)) return;
-  await uploadByAnyLabelPrefix(page, prefixes, filePaths, label, remoteDirectoryName);
-}
-
-async function uploadByAnyLabelPrefix(
-  page: Page,
-  labelPrefixes: string[],
-  filePaths: Array<string | undefined>,
-  label: string,
-  remoteDirectoryName?: string,
-): Promise<void> {
-  if (!filePaths.some(Boolean)) return;
-
-  for (const labelPrefix of labelPrefixes) {
-    const uploadGroup = await findVisibleLabeledGroup(page, labelPrefix, 'input[type="file"]');
-    if (!uploadGroup) continue;
-    await uploadInGroup(uploadGroup, filePaths, label, resolveFromRoot, remoteDirectoryName);
-    return;
-  }
-
-  throw new Error(
-    `[upload-failed] ${label}: control group not found: ${labelPrefixes.join(" / ")}`,
-  );
-}
-
 // 根据表单左侧的中文标签找到对应的表单组，再直接给该组中的 input[type=file] 设置文件
 async function uploadByLabeledGroupFileInput(
   page: Page,
@@ -322,8 +288,12 @@ async function uploadByLabeledGroupFileInput(
   label = Array.isArray(labelPrefixes) ? labelPrefixes[0] : labelPrefixes,
   remoteDirectoryName?: string,
   uiTimeout = 60000,
+  required = false,
 ): Promise<void> {
   const files = await prepareUploadFiles(filePaths, resolveFromRoot, remoteDirectoryName);
+  if (required && (files.length === 0 || files.length !== filePaths.length)) {
+    throw new Error(`[upload-file-invalid] ${label}: 必传文件不存在或不可用，请检查后端返回的文件地址。`);
+  }
   if (!files.length) {
     formLogger.warn("没有可用文件，已跳过", { field: label });
     return;
@@ -488,10 +458,10 @@ async function assertNoBasicInfoValidationErrors(page: Page): Promise<void> {
 
 export async function fillBasicInfoStep(page: Page, playletConfig: Config): Promise<void> {
   const { playlet } = playletConfig;
+  const costProofFiles = validateWechatProductionCostProofFiles(playlet.productionCost);
   const dramaName = validateDramaName(playlet.name);
   const dramaSummary = sanitizeDramaText(playlet.summary, "summary");
   const remoteAssetDirectoryName = dramaName;
-  const contractRemoteAssetDirectoryName = `${dramaName}-contract`;
 
   await page.goto(postUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
@@ -539,6 +509,8 @@ export async function fillBasicInfoStep(page: Page, playletConfig: Config): Prom
       playlet.aiProductionProofFiles ?? [],
       "AI制作证明",
       remoteAssetDirectoryName,
+      60000,
+      true,
     );
   }
 
@@ -575,16 +547,11 @@ export async function fillBasicInfoStep(page: Page, playletConfig: Config): Prom
     ["剧目制作证明材料"], // 表单标签名称，支持一个名称或多个兼容名称
     playlet.copyright.productionProofFiles ?? [],
     "剧目制作证明材料", // 用于日志和错误提示，不参与页面元素匹配
+    undefined,
+    60000,
+    true,
   );
-  await uploadByLabeledGroupFileInput(
-    page,
-    ["版权采买&播出授权证明材料", "版权采买及播出授权证明材料", "版权授权证明材料"],
-    playlet.copyright.licenseProofFiles ?? [],
-    "版权采买&播出授权证明材料",
-    contractRemoteAssetDirectoryName,
-  );
-
-  const qualificationType = playlet.qualification.type ?? "其他微短剧";
+  const qualificationType = playlet.qualification?.type ?? "其他微短剧";
   if (!(await clickExactText(page, qualificationType, "剧目资质"))) {
     await checkRadioByLabel(
       page,
@@ -595,7 +562,7 @@ export async function fillBasicInfoStep(page: Page, playletConfig: Config): Prom
     );
   }
 
-  if (playlet.qualification.licenseOrRecordNumber) {
+  if (playlet.qualification?.licenseOrRecordNumber) {
     const filled = await fillInGroupByPlaceholder(
       page,
       "剧目资质",
@@ -618,18 +585,11 @@ export async function fillBasicInfoStep(page: Page, playletConfig: Config): Prom
     }
   }
 
-  await uploadMaterial(
-    page,
-    ["剧目资质证明材料", "剧目资质", "资质证明材料"],
-    playlet.qualification.proofFiles ?? [],
-    "剧目资质证明材料",
-    remoteAssetDirectoryName,
-  );
   if (playlet.productionCost) {
     await fillProductionCost(page, playlet.productionCost.amountWan);
     formLogger.info(
       "准备上传剧目制作成本证明",
-      { fileCount: (playlet.productionCost.proofFiles ?? []).filter(Boolean).length },
+      { fileCount: costProofFiles.length },
     );
     await uploadByLabeledGroupFileInput(
       page,
@@ -641,18 +601,13 @@ export async function fillBasicInfoStep(page: Page, playletConfig: Config): Prom
         "剧目制作成本（单位：万元）",
         "剧目制作成本",
       ],
-      playlet.productionCost.proofFiles ?? [],
+      costProofFiles,
       "剧目制作成本证明材料",
       remoteAssetDirectoryName,
+      60000,
+      true,
     );
   }
-  await uploadMaterial(
-    page,
-    "其他材料",
-    playlet.otherMaterials ?? [],
-    "其他材料",
-    remoteAssetDirectoryName,
-  );
 
   await selectCheckboxOrRadio(page, selectors.agreement, "服务须知同意");
   await page.waitForTimeout(2000);

@@ -63,8 +63,13 @@ const contractSubjectLabels: Record<string, string> = {
   HUANZOU: "幻走",
   XIAOSHILIU: "小石榴",
   YOUDIANNIU: "有点牛",
-  ZHENCUIYIHAO: "珍萃",
+  ZHENCUIYIHAO: "珍萃一号",
   RUIXIAODOU: "瑞小豆",
+  YUANMAN: "广州元漫科技有限公司",
+  YUNQIMANYING: "北京云起漫影科技有限公司",
+  MENGDONG: "广州梦动科技有限公司",
+  CHONGBAO: "广州冲宝科技有限公司",
+  DOURAN: "广州豆燃科技有限公司",
 }
 
 async function invokeWechatVideo<T>(channel: string, ...args: unknown[]): Promise<T> {

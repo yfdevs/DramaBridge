@@ -4,10 +4,22 @@ Multi-platform desktop automation app built with Electron, React, TypeScript, an
 
 ## Scripts
 
-- `pnpm dev` starts the WeChat Video automation package build and Vite+ dev server.
-- `pnpm build` builds the automation package, installs shared Playwright browsers, builds the renderer with Vite+, and packages Electron.
+- `pnpm dev` starts the Vite+ dev server and Electron.
+- `pnpm build:app` builds workspace packages, checks types, verifies the shared Playwright browser, and builds the renderer and Electron with Vite+ task caching.
+- `pnpm build` runs `build:app` and packages Electron. Installer packaging and its runtime checks run each time.
 - `pnpm lint` runs Vite+ linting through Oxlint.
 - `vp check --no-fmt` runs Vite+ linting and type checks without rewriting existing formatting.
+
+## Build cache
+
+Use `pnpm build:app` for routine builds. Vite+ stores task results in `node_modules/.vite/task-cache` and restores unchanged packages, `dist`, and `dist-electron` on a cache hit. Direct `pnpm exec vp build` and package `build` scripts bypass the configured task cache.
+
+Package cache inputs include each package's sources, build configuration, and transitive workspace dependencies. Changes under a package's `tests` directory do not invalidate its build task. App inputs also include renderer assets, public files, Electron sources, environment files, and Vite configuration. The build entry still clears app outputs before restoring or building them, so old hashed chunks cannot leak into a packaged app. Playwright installation is checked on every run and skips downloading when the expected browser is already present.
+
+- Build only Taobao and its configured dependencies: `pnpm exec vp run pkg:taobao:build`.
+- Inspect the last run's cache hits and misses: `pnpm exec vp run --last-details`.
+- Rebuild without task caching: `pnpm exec vp run --no-cache app:build`.
+- Remove all task cache entries: `pnpm exec vp cache clean`.
 
 ## 通用任务材料字段约定
 

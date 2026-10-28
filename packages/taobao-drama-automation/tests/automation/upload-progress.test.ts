@@ -158,7 +158,7 @@ test("waits for every Taobao item to settle before handling failed uploads", () 
   ]).settled, true);
 });
 
-test("treats Taobao upload failure dialogs as fatal instead of retryable item failures", () => {
+test("extracts the rejection reason from Taobao upload failure dialogs", () => {
   assert.match(
     taobaoFatalUploadDialogReason([
       "上传失败 上传视频的宽高是720x1280不符合要求，视频宽高均要大于1080 我知道了",

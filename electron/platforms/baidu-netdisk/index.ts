@@ -844,6 +844,7 @@ async function importBaiduNetdiskRuntimePackage() {
       port: number;
       executablePath?: string;
       restart?: boolean;
+      launcherCacheDir?: string;
     }) => Promise<BaiduNetdiskLaunchResult>;
   };
   runtime.configureBaiduNetdiskAutomationLogging({
@@ -959,6 +960,7 @@ async function startCdp(restart: boolean) {
     port: cdpPort(config),
     executablePath: config.executablePath || undefined,
     restart,
+    launcherCacheDir: path.join(baiduNetdiskRunDataDir(), "cdp-launchers"),
   });
 }
 

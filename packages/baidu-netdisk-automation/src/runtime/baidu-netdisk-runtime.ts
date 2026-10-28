@@ -5,6 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { Effect } from "effect";
 import { execa } from "execa";
+import { prepareBaiduCdpLauncher } from "./cdp-launcher.js";
+import { assertBaiduNativeDownloaderReady } from "../infrastructure/native-downloader.js";
+import { log } from "../infrastructure/logging.js";
 
 import { debugHost, requestTimeoutMs } from "../domain/constants.js";
 import {
@@ -22,6 +25,12 @@ export * from "../domain/errors.js";
 export const DEFAULT_BAIDU_NETDISK_CDP_PORT = 9337;
 
 const baiduProcessNames = ["BaiduNetdisk", "BaiduNetdiskUnite"];
+export const baiduProcessQueryCommand = [
+  "$names = @('BaiduNetdisk','BaiduNetdiskUnite');",
+  // Querying multiple names directly returns exit code 1 when only one exists.
+  "Get-Process | Where-Object { $names -contains $_.ProcessName } |",
+  "Select-Object -ExpandProperty ProcessName -Unique",
+].join(" ");
 
 export type BaiduNetdiskCdpTarget = {
   id: string;
@@ -48,6 +57,7 @@ export type BaiduNetdiskLaunchResult = {
   status: BaiduNetdiskCdpStatus;
   executablePath: string;
   restarted: boolean;
+  launchMode?: "direct" | "managed";
 };
 
 export type BaiduNetdiskCdpOptions = {
@@ -58,6 +68,7 @@ export type BaiduNetdiskCdpOptions = {
 export type StartBaiduNetdiskCdpOptions = BaiduNetdiskCdpOptions & {
   restart?: boolean;
   waitMs?: number;
+  launcherCacheDir?: string;
 };
 
 async function pathKind(filePath: string) {
@@ -119,15 +130,7 @@ async function execText(file: string, args: string[]) {
 async function getRunningBaiduProcesses() {
   if (process.platform !== "win32") return [];
 
-  const command = [
-    "$names = @('BaiduNetdisk','BaiduNetdiskUnite');",
-    "Get-Process -Name $names -ErrorAction SilentlyContinue |",
-    "Select-Object -ExpandProperty ProcessName -Unique",
-  ].join(" ");
-
-  const output = await execText("powershell.exe", ["-NoProfile", "-Command", command]).catch(
-    () => "",
-  );
+  const output = await execText("powershell.exe", ["-NoProfile", "-Command", baiduProcessQueryCommand]);
 
   return output
     .split(/\r?\n/)
@@ -193,7 +196,11 @@ async function stopBaiduNetdiskProcesses() {
   if (runningProcesses.length === 0) return;
 
   for (const name of baiduProcessNames) {
-    await execText("taskkill.exe", ["/IM", `${name}.exe`, "/T", "/F"]).catch(() => "");
+    if (!runningProcesses.some((runningName) => runningName.toLowerCase() === name.toLowerCase())) continue;
+    await execText("taskkill.exe", ["/IM", `${name}.exe`, "/T", "/F"]);
+  }
+  if ((await getRunningBaiduProcesses()).length > 0) {
+    throw new Error("百度网盘旧进程未能退出，重启失败。请先退出百度网盘后再启动 CDP 模式。");
   }
 }
 
@@ -240,7 +247,14 @@ async function checkBaiduNetdiskCdpStatusPromise(
   const targets = await getBaiduNetdiskCdpTargets(port).catch(() => []);
   const cdpRunning = targets.length > 0 && (await isBaiduNetdiskCdpPort(port));
   const appRunning = cdpRunning || processes.length > 0;
-  const ready = appRunning && cdpRunning;
+  const coreTarget = targets.find(target => target.webSocketDebuggerUrl && target.url.includes("core.asar")
+    && !/#\/(bubble_menu|sestonMenu|workspace)/.test(target.url));
+  let componentError = "";
+  if (cdpRunning && coreTarget) {
+    try { await assertBaiduNativeDownloaderReady(coreTarget); }
+    catch (error) { componentError = error instanceof Error ? error.message : String(error); }
+  }
+  const ready = appRunning && cdpRunning && !!coreTarget && !componentError;
 
   return {
     platform: "baidu-netdisk",
@@ -254,9 +268,9 @@ async function checkBaiduNetdiskCdpStatusPromise(
     checkedAt,
     message: ready
       ? `百度网盘 CDP 已连接，端口 ${port}。`
-      : appRunning
+      : componentError || (appRunning
         ? `百度网盘已启动，但端口 ${port} 未开启 CDP。`
-        : "百度网盘未启动。",
+        : "百度网盘未启动。"),
   };
 }
 
@@ -303,15 +317,30 @@ async function startBaiduNetdiskCdpPromise(
     await new Promise((resolve) => setTimeout(resolve, 800));
   }
 
-  const child = spawn(executablePath, [`--remote-debugging-port=${port}`], {
-    cwd: path.dirname(executablePath),
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  child.unref();
-
-  const status = await waitForCdpStatus({ port, executablePath }, waitMs);
+  const launch = async (executable: string) => {
+    const child = spawn(executable, [`--remote-debugging-port=${port}`, `--remote-debugging-address=${debugHost}`], {
+      cwd: path.dirname(executablePath), detached: true, stdio: "ignore", windowsHide: true,
+    });
+    await new Promise<void>((resolve, reject) => {
+      child.once("spawn", resolve);
+      child.once("error", reject);
+    });
+    child.unref();
+  };
+  await launch(executablePath);
+  let status = await waitForCdpStatus({ port, executablePath }, waitMs);
+  let launchMode: "direct" | "managed" = "direct";
+  if (!status.ready && !status.cdpRunning) {
+    // Older clients accept the switch directly. Newer clients may remove it
+    // during bootstrap; adapt in our own cache without changing their files.
+    log("百度网盘未保留调试端口，准备独立启动适配", { executablePath });
+    const launcher = await prepareBaiduCdpLauncher(executablePath,
+      options.launcherCacheDir ?? path.join(os.tmpdir(), "dramabridge-baidu-cdp-launchers"));
+    await stopBaiduNetdiskProcesses();
+    await launch(launcher);
+    status = await waitForCdpStatus({ port, executablePath }, waitMs);
+    launchMode = "managed";
+  }
 
   if (!status.ready) {
     throw new Error(status.message);
@@ -321,6 +350,7 @@ async function startBaiduNetdiskCdpPromise(
     status,
     executablePath,
     restarted: shouldRestart,
+    launchMode,
   };
 }
 

@@ -57,11 +57,8 @@ export async function prepareWechatImageUploadMaterials(options: {
   if (playlet.posters.promotion) playlet.posters.promotion = await prepareFile(playlet.posters.promotion);
   playlet.aiProductionProofFiles = await prepareFiles(playlet.aiProductionProofFiles);
   playlet.copyright.productionProofFiles = await prepareFiles(playlet.copyright.productionProofFiles);
-  playlet.copyright.licenseProofFiles = await prepareFiles(playlet.copyright.licenseProofFiles);
-  playlet.qualification.proofFiles = await prepareFiles(playlet.qualification.proofFiles);
   if (playlet.productionCost) {
     playlet.productionCost.proofFiles = await prepareFiles(playlet.productionCost.proofFiles);
   }
-  playlet.otherMaterials = await prepareFiles(playlet.otherMaterials);
   return options.config;
 }

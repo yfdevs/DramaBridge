@@ -63,6 +63,7 @@ test("normalization discards aiProductionProofFiles without inspecting its shape
       aiContent: true,
       aiProductionProofFiles: { invalid: [null, 123] },
       copyright: { productionProofFiles: ["contract.jpg"] },
+      productionCost: { amountWan: 30, proofFiles: ["https://example.com/cost.pdf"] },
     },
   } satisfies ClaimedAccountTask;
 
@@ -82,6 +83,7 @@ test("accepts a claimed task without contract materials", () => {
       summary: "测试简介",
       episodeCount: 1,
       copyright: {},
+      productionCost: { amountWan: 30, proofFiles: ["https://example.com/cost.pdf"] },
     },
   } satisfies ClaimedAccountTask;
 
@@ -100,6 +102,7 @@ test("normalization preserves only a boolean AI declaration switch", () => {
       episodeCount: 1,
       aiContent: false,
       copyright: { productionProofFiles: ["contract.jpg"] },
+      productionCost: { amountWan: 30, proofFiles: ["https://example.com/cost.pdf"] },
     },
   } satisfies ClaimedAccountTask;
 

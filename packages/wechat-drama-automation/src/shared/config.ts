@@ -26,7 +26,13 @@ const contractSubjectAliases: Record<string, string> = {
   "小石榴": "XIAOSHILIU",
   "有点牛": "YOUDIANNIU",
   "珍萃": "ZHENCUIYIHAO",
+  "珍萃一号": "ZHENCUIYIHAO",
   "瑞小豆": "RUIXIAODOU",
+  "广州元漫科技有限公司": "YUANMAN",
+  "北京云起漫影科技有限公司": "YUNQIMANYING",
+  "广州梦动科技有限公司": "MENGDONG",
+  "广州冲宝科技有限公司": "CHONGBAO",
+  "广州豆燃科技有限公司": "DOURAN",
 };
 // 兼容后端历史数据：contractSubject=0 表示未写入有效主体枚举，精确匹配不到时兜底使用。
 const legacyUnscopedContractSubjects = new Set(["0"]);
@@ -173,11 +179,24 @@ export async function loadServiceConfig(): Promise<ServiceConfig> {
   };
 }
 
+export function validateWechatProductionCostProofFiles(productionCost: Config["playlet"]["productionCost"]): string[] {
+  const costProofFiles = productionCost?.proofFiles;
+  if (
+    !Array.isArray(costProofFiles)
+    || costProofFiles.length === 0
+    || costProofFiles.some((file) => typeof file !== "string" || !file.trim())
+  ) {
+    throw new Error("[production-cost-proof-invalid] 后端返回的剧目制作成本证明文件 productionCost.proofFiles 必须是非空文件地址数组。");
+  }
+  return costProofFiles;
+}
+
 function validatePlayletConfig(playletConfig: Config): Config {
   if (!playletConfig.originalTitle) throw new Error("data.originalTitle is required");
   if (!playletConfig.playlet?.name) throw new Error("data.playlet.name is required");
   if (!playletConfig.playlet.summary) throw new Error("data.playlet.summary is required");
   if (!playletConfig.playlet.episodeCount) throw new Error("data.playlet.episodeCount is required");
+  validateWechatProductionCostProofFiles(playletConfig.playlet.productionCost);
   return playletConfig;
 }
 

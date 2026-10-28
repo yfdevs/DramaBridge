@@ -3,7 +3,7 @@ import { Effect } from "effect";
 
 import { debugHost } from "../domain/constants.js";
 import { CdpConnectionError, CdpTimeoutError, cdpConnectionError } from "../domain/errors.js";
-import { pollUntil, scopedResource } from "../runtime/effect-runtime.js";
+import { pollUntil, runPromisePreservingFailure, scopedResource } from "../runtime/effect-runtime.js";
 import type { CdpMessage, CdpTarget } from "../domain/types.js";
 import { getJson, websocketDataToString } from "./utils.js";
 
@@ -74,6 +74,9 @@ export class CdpPage {
     this.socket.on("close", () => {
       this.closed = true;
     });
+    // Keep transport errors from becoming unhandled EventEmitter errors after
+    // open() removes its temporary listener. Pending calls fail on close.
+    this.socket.on("error", () => undefined);
   }
 
   onConsole(listener: (message: string) => void) {
@@ -139,7 +142,11 @@ export class CdpPage {
       };
       const timeout = setTimeout(() => {
         cleanup();
-        reject(new Error(`${method} 超时。`));
+        reject(new CdpTimeoutError({
+          message: `${method} 超时（${timeoutMs / 1000} 秒），网盘客户端未及时响应。`,
+          operation: method,
+          timeoutMs,
+        }));
       }, timeoutMs);
 
       this.socket.on("message", onMessage);
@@ -154,7 +161,7 @@ export class CdpPage {
     });
   }
 
-  async evaluate<T>(expression: string, timeoutMs = 15000) {
+  async evaluate<T>(expression: string, timeoutMs = 60000, stage = "执行网盘脚本") {
     const response = await this.send<{
       result?: { value?: T; description?: string };
       exceptionDetails?: {
@@ -169,13 +176,23 @@ export class CdpPage {
         awaitPromise: true,
       },
       timeoutMs,
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof CdpTimeoutError) {
+        throw new CdpTimeoutError({
+          message: `${stage}：${error.message} 请检查网盘客户端是否卡顿或等待登录；操作结果可能尚未返回，请先核对后重试。`,
+          operation: stage,
+          timeoutMs,
+          cause: error,
+        });
+      }
+      throw error;
+    });
     if (response.exceptionDetails) {
       throw new Error(
-        response.exceptionDetails.exception?.description ??
+        `${stage}：${response.exceptionDetails.exception?.description ??
           response.exceptionDetails.exception?.value ??
           response.exceptionDetails.text ??
-          "CDP 执行脚本异常。",
+          "CDP 执行脚本异常。"}`,
       );
     }
     if (!response.result) throw new Error("CDP 执行脚本失败。");
@@ -302,7 +319,7 @@ export function withPageEffect<A, E, R, T extends CdpPageResource = CdpPage>(
 }
 
 export function withPage<T>(target: CdpTarget, run: (page: CdpPage) => Promise<T>) {
-  return Effect.runPromise(
+  return runPromisePreservingFailure(
     withPageEffect(target, (page) =>
       Effect.tryPromise({
         try: () => run(page),

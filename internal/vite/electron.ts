@@ -10,6 +10,8 @@ export const electronRequireBanner = [
 ].join("\n");
 
 const electronMainExternalPatterns = [
+  // Electron provides this built-in; ASAR readers need its unpatched file I/O.
+  /^original-fs$/,
   /^better-sqlite3(?:\/.*)?$/,
   /^ffmpeg-static(?:\/.*)?$/,
   /^playwright(?:\/.*)?$/,

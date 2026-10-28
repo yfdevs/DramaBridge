@@ -25,6 +25,17 @@ test("expired and deleted Baidu shares do not retry on platform runtimes", () =>
   );
 });
 
+test("a broken Baidu client or unavailable CDP requires repair instead of repeated resource retries", () => {
+  for (const message of [
+    "[BAIDU_NETDISK_CLIENT_RESTART_REQUIRED] 百度网盘客户端下载组件不可用",
+    "端口 9337 不是可用百度网盘 CDP",
+    "百度网盘 CDP 核心页面不可用",
+  ]) {
+    assert.equal(isNonRetryableBaiduNetdiskResourceError(new Error(message)), true);
+  }
+  assert.equal(isNonRetryableBaiduNetdiskResourceError(new Error("temporary HTTP 503")), false);
+});
+
 test("optional remotely discovered ownership does not block a poster-only platform", () => {
   assert.deepEqual(
     resolveBaiduNetdiskAssetCompletionRequirements({

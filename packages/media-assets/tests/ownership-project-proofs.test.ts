@@ -27,7 +27,7 @@ function cloudAiClassifier(kind: "jianying" | "juchuang" | "unknown"): DramaAiCl
       assert.ok(options.images.length === 3 || options.images.length === 4);
       assert.match(options.prompt, /Guagu Studio/u);
       if (options.images.length === 4) {
-        assert.match(options.prompt, /只回答两个独立的布尔判断/u);
+        assert.match(options.prompt, /只回答三个独立的布尔判断/u);
         assert.match(options.prompt, /单张海报、人物头像/u);
       }
       for (const image of options.images) {

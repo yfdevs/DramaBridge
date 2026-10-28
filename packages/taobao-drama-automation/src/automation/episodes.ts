@@ -201,18 +201,34 @@ export function isTaobaoVideoResolutionFailure(reason: string) {
     /不符合|不满足|低于|小于|至少|大于|不得小于/.test(reason);
 }
 
-async function throwIfTaobaoUploadRejected(scopes: TaobaoDomScope[]) {
+function taobaoUploadDialogs(scope: TaobaoDomScope) {
+  return scope.locator([
+    ".next-dialog:visible",
+    ".ant-modal:visible",
+    ".semi-modal:visible",
+    "[role='dialog']:visible",
+  ].join(", "));
+}
+
+async function checkTaobaoUploadDialogs(
+  scopes: TaobaoDomScope[],
+  allowResolutionRepair = false,
+) {
   for (const scope of scopes) {
-    const dialogs = scope.locator([
-      ".next-dialog:visible",
-      ".ant-modal:visible",
-      ".semi-modal:visible",
-      "[role='dialog']:visible",
-    ].join(", "));
-    const texts = await dialogs.allInnerTexts().catch(() => [] as string[]);
-    const reason = taobaoFatalUploadDialogReason(texts);
-    if (reason) {
-      throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: ${reason}`);
+    // Work backwards: dismissing a modal changes the :visible list indexes.
+    const dialogs = await taobaoUploadDialogs(scope).all();
+    for (const dialog of dialogs.reverse()) {
+      const reason = taobaoFatalUploadDialogReason([await dialog.innerText()]);
+      if (!reason) continue;
+      if (allowResolutionRepair && isTaobaoVideoResolutionFailure(reason)) {
+        // An automatic modal must not prevent the batch from settling. Read
+        // each failed item's own reason later so another episode is never
+        // converted based on an unassociated global error message.
+        await dialog.getByRole("button", { name: "我知道了", exact: true }).click({ timeout: 5_000 });
+        await dialog.waitFor({ state: "hidden", timeout: 5_000 });
+      } else {
+        throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: ${reason}`);
+      }
     }
   }
 }
@@ -246,11 +262,12 @@ async function findLiveTaobaoBatchScope(
   page: Page,
   fileName: string,
   timeoutMs = 60_000,
+  allowResolutionRepair = false,
 ): Promise<TaobaoDomScope> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const scopes = await liveTaobaoScopes(page);
-    await throwIfTaobaoUploadRejected(scopes);
+    await checkTaobaoUploadDialogs(scopes, allowResolutionRepair);
     for (const scope of scopes) {
       const matchingItems = scope
         .locator("#publish-container .batchItemWrap")
@@ -292,7 +309,7 @@ async function runWithLiveTaobaoBatchScope<T>(
   throw new Error(`TAOBAO_DRAMA_BATCH_SCOPE_RETRY_EXHAUSTED: ${fileName}`);
 }
 
-async function waitForUploadComplete(
+export async function waitForUploadComplete(
   page: Page,
   files: string[],
   options: TaobaoDramaRuntimeOptions,
@@ -307,7 +324,7 @@ async function waitForUploadComplete(
   while (Date.now() < deadline) {
     deadline += await waitForTaobaoHumanVerification(page, options);
     const scopes = await liveTaobaoScopes(page);
-    await throwIfTaobaoUploadRejected(scopes);
+    await checkTaobaoUploadDialogs(scopes, allowFailedTerminalState);
     const pageStates = await Promise.all(scopes.map(async (scope) => ({
       scope,
       url: scope.url(),
@@ -374,7 +391,7 @@ async function waitForUploadComplete(
       matchedFileCount,
       expectedFileCount: files.length,
     });
-    if (ready) {
+    if (ready && !itemSummary.failed && !summary.failed) {
       log(options, `[taobao-drama] ${files.length} 个剧集视频已全部上传完成`);
       return { scope: uploadScope, failedFileNames: [] as string[] };
     }
@@ -397,20 +414,27 @@ async function deleteFailedTaobaoEpisode(
   });
   await deleteControl.click({ timeout: 10_000 });
 
-  const dialog = scope
-    .locator(".next-dialog:visible, [role='dialog']:visible")
-    .filter({ hasText: /删除|移除/ })
-    .last();
-  if (await dialog.isVisible({ timeout: 500 }).catch(() => false)) {
-    await dialog
-      .getByRole("button", { name: /确定|确认|删除|移除/ })
-      .filter({ visible: true })
-      .last()
-      .click({ timeout: 10_000 });
-  }
-  await item.waitFor({ state: "detached", timeout: 10_000 }).catch(() => {
-    throw new Error(`TAOBAO_DRAMA_EPISODE_DELETE_NOT_CONFIRMED: file=${fileName}`);
-  });
+  const deadline = Date.now() + 10_000;
+  do {
+    if (await item.count() === 0) return;
+    // isVisible() does not wait for a delayed confirmation modal. Poll both
+    // the removal and the modal, including portals outside the upload iframe.
+    for (const liveScope of await liveTaobaoScopes(ownerPage(scope))) {
+      const dialog = taobaoUploadDialogs(liveScope).filter({ hasText: /删除|移除/ }).last();
+      if (!(await dialog.isVisible())) continue;
+      await dialog
+        .getByRole("button", { name: /确定|确认|删除|移除/ })
+        .filter({ visible: true })
+        .last()
+        .click({ timeout: 10_000 });
+      await item.waitFor({ state: "detached", timeout: 10_000 }).catch(() => {
+        throw new Error(`TAOBAO_DRAMA_EPISODE_DELETE_NOT_CONFIRMED: file=${fileName}`);
+      });
+      return;
+    }
+    await ownerPage(scope).waitForTimeout(100);
+  } while (Date.now() < deadline);
+  throw new Error(`TAOBAO_DRAMA_EPISODE_DELETE_NOT_CONFIRMED: file=${fileName}`);
 }
 
 async function readTaobaoEpisodeUploadFailure(scope: TaobaoDomScope, fileName: string) {
@@ -420,13 +444,21 @@ async function readTaobaoEpisodeUploadFailure(scope: TaobaoDomScope, fileName: s
   const reasonLink = item.getByText("查看原因", { exact: true });
   if (!(await reasonLink.isVisible())) return "";
   await reasonLink.click({ timeout: 5_000 });
-  const dialog = scope.locator(".next-dialog:visible, [role='dialog']:visible")
-    .filter({ hasText: "上传失败" }).last();
-  await dialog.waitFor({ state: "visible", timeout: 5_000 });
-  const reason = await dialog.innerText();
-  await dialog.getByRole("button", { name: "我知道了" }).click({ timeout: 5_000 });
-  await dialog.waitFor({ state: "hidden", timeout: 5_000 });
-  return reason;
+  const page = ownerPage(scope);
+  const deadline = Date.now() + 5_000;
+  do {
+    // Taobao can render the modal in the task page outside the upload iframe.
+    for (const liveScope of await liveTaobaoScopes(page)) {
+      const dialog = taobaoUploadDialogs(liveScope).filter({ hasText: "上传失败" }).last();
+      if (!(await dialog.isVisible())) continue;
+      const reason = await dialog.innerText();
+      await dialog.getByRole("button", { name: "我知道了", exact: true }).click({ timeout: 5_000 });
+      await dialog.waitFor({ state: "hidden", timeout: 5_000 });
+      return reason;
+    }
+    await page.waitForTimeout(100);
+  } while (Date.now() < deadline);
+  throw new Error(`TAOBAO_DRAMA_EPISODE_UPLOAD_FAILURE_REASON_NOT_FOUND: file=${fileName}`);
 }
 
 export async function retryFailedTaobaoEpisodes(
@@ -447,7 +479,7 @@ export async function retryFailedTaobaoEpisodes(
     let currentFileName = fileName;
     let converted = false;
     for (let attempt = 1; attempt <= TAOBAO_DRAMA_EPISODE_UPLOAD_RETRY_ATTEMPTS; attempt += 1) {
-      const scope = await findLiveTaobaoBatchScope(page, currentFileName);
+      const scope = await findLiveTaobaoBatchScope(page, currentFileName, 60_000, true);
       const reason = await readTaobaoEpisodeUploadFailure(scope, currentFileName);
       if (isTaobaoVideoResolutionFailure(reason)) {
         if (converted) {
@@ -465,7 +497,7 @@ export async function retryFailedTaobaoEpisodes(
       }
       // Conversion can take time. Reacquire the live iframe, then remove only
       // the failed item; successfully uploaded episodes keep their queue slots.
-      const liveScope = await findLiveTaobaoBatchScope(page, currentFileName);
+      const liveScope = await findLiveTaobaoBatchScope(page, currentFileName, 60_000, true);
       await deleteFailedTaobaoEpisode(liveScope, currentFileName);
       const input = await videoInput(liveScope);
       await input.setInputFiles([sourceFile], { timeout: 120_000 });

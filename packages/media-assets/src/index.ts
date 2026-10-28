@@ -167,6 +167,9 @@ export type EpisodeDirectorySummary = {
 };
 
 const nonRetryableBaiduNetdiskResourceErrorPatterns = [
+  "BAIDU_NETDISK_CLIENT_RESTART_REQUIRED",
+  "不是可用百度网盘 CDP",
+  "百度网盘 CDP 核心页面不可用",
   "分享文本中没有找到百度网盘链接",
   "分享链接没有解析出",
   "分享提取码校验失败",
@@ -560,7 +563,7 @@ export async function listLocalOwnershipMaterials(options: {
 const ownershipProjectProofClassificationTimeoutMs = 5 * 60_000;
 
 const ownershipProjectProofClassificationCache = new Map<string, OwnershipProjectProofKind>();
-const ownershipProjectProofAiClassificationVersion = "content-v6-engineering-binary-judgement";
+const ownershipProjectProofAiClassificationVersion = "content-v7-cropped-jianying-workspace";
 
 export function classifyOwnershipProjectProofName(
   name: string,
