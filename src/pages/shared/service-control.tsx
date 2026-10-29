@@ -128,6 +128,8 @@ export function ServiceControlButtonPage({
   startLabel = "启动服务",
   stopLabel = "关闭服务",
   additionalAction,
+  startDisabled = false,
+  beforeBrowserInstances,
   children,
   analyticsPlatform,
   onToggle,
@@ -138,6 +140,8 @@ export function ServiceControlButtonPage({
   startLabel?: string;
   stopLabel?: string;
   additionalAction?: ReactNode;
+  startDisabled?: boolean;
+  beforeBrowserInstances?: ReactNode;
   children?: ReactNode;
   analyticsPlatform?: TaskAnalyticsPlatform;
   onToggle: () => void;
@@ -166,7 +170,7 @@ export function ServiceControlButtonPage({
           aria-pressed={running}
           className="h-7 min-w-20 gap-1.5 px-3 text-xs"
           size="sm"
-          disabled={loading || !connected}
+          disabled={loading || !connected || (!running && startDisabled)}
           variant={running ? "secondary" : "default"}
           onClick={onToggle}
         >
@@ -240,6 +244,7 @@ export function ServiceControlButtonPage({
             )}
           </div>
         </div>
+        {beforeBrowserInstances}
         <section aria-label="浏览器连接" className="mt-10">
           <div className="mb-5 flex items-center gap-3 text-[13px] font-medium">
             <Chrome className="size-4 text-muted-foreground" />

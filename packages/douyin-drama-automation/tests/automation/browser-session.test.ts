@@ -72,3 +72,14 @@ test("reports logged in only after the create page content is ready", async () =
 
   assert.equal(await waitForDouyinDramaEntryPageState(page, 1_000), "logged-in");
 });
+
+test("recognizes the new clue association step as a ready create page", async () => {
+  const page = createPageProbe([
+    { url: DOUYIN_DRAMA_CREATE_URL, bodyText: "页面加载中" },
+    {
+      url: DOUYIN_DRAMA_CREATE_URL,
+      bodyText: "关联线索 填写基本信息 上传视频 填写发布配置 提交完成 是否关联线索 是 否 下一步",
+    },
+  ]);
+  assert.equal(await waitForDouyinDramaEntryPageState(page, 1_000), "logged-in");
+});

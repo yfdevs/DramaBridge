@@ -138,7 +138,8 @@ function compactPageText(text: string) {
 function isDouyinDramaCreatePageReady(url: string, bodyText: string) {
   return (
     isDouyinDramaCreatePageUrl(url) &&
-    DOUYIN_DRAMA_CREATE_PAGE_READY_TEXTS.every((text) => bodyText.includes(text))
+    (DOUYIN_DRAMA_CREATE_PAGE_READY_TEXTS.every((text) => bodyText.includes(text)) ||
+      ["是否关联线索", "填写基本信息", "下一步"].every((text) => bodyText.includes(text)))
   );
 }
 

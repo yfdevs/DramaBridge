@@ -124,6 +124,20 @@ function createActionRunner(page: Page, options: DouyinDramaRuntimeOptions): Dou
   };
 }
 
+export async function enterDouyinBasicInformation(
+  page: Page,
+  runAction: DouyinAutomationAction = async (_name, action) => action(),
+) {
+  // Wait for a real form control: all step titles are present even on the first step.
+  await page.locator("#has_associate_clue:visible, #book_name_input:visible")
+    .first().waitFor({ state: "visible", timeout: 30_000 });
+  if (await page.locator("#has_associate_clue").isVisible()) {
+    await runAction("选择是否关联线索=否", () => selectRadio(page, "是否关联线索", "否"));
+    await runAction("关联线索点击下一步", () => clickDouyinNext(page));
+  }
+  await page.locator("#book_name_input").waitFor({ state: "visible", timeout: 30_000 });
+}
+
 async function fillBasicInformation(
   page: Page,
   task: ClaimedDouyinDramaTask,
@@ -559,6 +573,7 @@ export async function runDouyinDramaPublishTask(
         "automation",
       );
     });
+    await enterDouyinBasicInformation(page, runAction);
     await fillBasicInformation(page, task, options, runAction, recorder);
     await uploadEpisodes(page, task, options, runAction);
     await fillPublishConfiguration(page, task, runAction, recorder);

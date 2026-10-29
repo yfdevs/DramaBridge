@@ -37,3 +37,22 @@ test("loads every Taobao account page and preserves the RPA profile key", async 
   assert.deepEqual(requestBodies.map((body) => body.page), [1, 2]);
   assert.equal(requestBodies[0]?.status, "ON");
 });
+
+test("can list disabled accounts for selection without changing the default runtime filter", async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  const fetcher: typeof fetch = async (_url, init) => {
+    requests.push(JSON.parse(String(init?.body)));
+    return new Response(JSON.stringify({ code: 0, data: { total: 2, data: [
+      { id: 1, accountId: "enabled", status: "ON" },
+      { id: 2, accountId: "disabled", status: "OFF" },
+    ] } }));
+  };
+  const all = await fetchTaobaoDramaAccounts("http://backend.test", fetcher, { includeDisabled: true });
+  assert.deepEqual(all.map(({ accountId, status }) => ({ accountId, status })), [
+    { accountId: "enabled", status: "ON" }, { accountId: "disabled", status: "OFF" },
+  ]);
+  assert.equal(requests[0]?.status, null);
+  const enabled = await fetchTaobaoDramaAccounts("http://backend.test", fetcher);
+  assert.deepEqual(enabled.map((account) => account.accountId), ["enabled"]);
+  assert.equal(requests[1]?.status, "ON");
+});

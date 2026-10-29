@@ -35,6 +35,7 @@ import {
   uploadFormFiles,
 } from "../../src/automation/form-controls.js";
 import {
+  enterDouyinBasicInformation,
   enterSalesConfiguration,
   locateDouyinEpisodeUploadControls,
   waitForDouyinSubmitSuccess,
@@ -48,6 +49,54 @@ function launchTestBrowser() {
   ));
   return chromium.launch({ executablePath, headless: true });
 }
+
+test("chooses no clue association before entering basic information", async () => {
+  const browser = await launchTestBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(`
+      <div class="upload-steps-header-steps">关联线索 填写基本信息 上传视频 填写发布配置 提交完成</div>
+      <div class="arco-form-item" id="clue-step">
+        <label for="has_associate_clue_input"><div class="label-tooltip-container">是否关联线索<svg></svg></div></label>
+        <div id="has_associate_clue"><div role="radiogroup">
+          <label class="arco-radio"><input type="radio" name="clue" value="true" checked><span>是</span></label>
+          <label class="arco-radio"><input type="radio" name="clue" value=""><span>否</span></label>
+        </div></div>
+        <button>下一步</button>
+      </div>
+      <input id="book_name_input" style="display:none">
+      <script>
+        document.querySelector('button').onclick = () => {
+          if (!document.querySelector('input[value=""]').checked) throw new Error('必须选择否');
+          setTimeout(() => {
+            document.querySelector('#clue-step').style.display = 'none';
+            document.querySelector('#book_name_input').style.display = '';
+          }, 1000);
+        };
+      </script>
+    `);
+    await enterDouyinBasicInformation(page);
+    assert.equal(await page.locator('input[value=""]').isChecked(), true);
+    assert.equal(await page.locator('input[value="true"]').isChecked(), false);
+    assert.equal(await page.locator('#book_name_input').isVisible(), true);
+    // A second call on the basic-information page must not advance another step.
+    await enterDouyinBasicInformation(page);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("enters the legacy basic-information page without clicking next", async () => {
+  const browser = await launchTestBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent('<input id="book_name_input"><button onclick="this.remove()">下一步</button>');
+    await enterDouyinBasicInformation(page);
+    assert.equal(await page.getByRole('button', { name: '下一步' }).count(), 1);
+  } finally {
+    await browser.close();
+  }
+});
 
 test("cleans unsupported punctuation from Douyin descriptions", () => {
   const source = "母亲终于明白：做母亲是她的身份, 但不是她的全部…（完）";

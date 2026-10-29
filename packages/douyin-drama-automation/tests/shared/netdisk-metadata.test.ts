@@ -141,6 +141,60 @@ test("generates a role portrait when fewer than two netdisk role images can be m
   }
 });
 
+for (const intro of [undefined, null, "", "   "]) {
+  test(`fills an absent AI role introduction (${JSON.stringify(intro)}) and preserves supplied prose`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "douyin-missing-role-intro-"));
+    try {
+      const task = createMockDouyinNetdiskTestTask();
+      const resourceDir = path.join(root, task.originalTitle);
+      const imageDir = path.join(resourceDir, "海报封面", "原始图片");
+      await mkdir(imageDir, { recursive: true });
+      await writeFile(path.join(resourceDir, "简介.txt"), "刘晓是货车司机，货主长期要求他免费拉货。");
+      await writeFile(path.join(imageDir, "刘晓.png"), "fake-image");
+      await writeFile(path.join(imageDir, "货主.png"), "fake-image");
+      const generated = {
+        summary: "刘晓是货车司机，货主长期要求他免费拉货，他决定收回车辆并维护自己的权益。".repeat(4),
+        roles: [
+          { name: "刘晓", roleType: "主角", intro: "  货车司机。  " },
+          { name: "货主", roleType: "配角", intro },
+        ],
+      };
+      let calls = 0;
+      const options = {
+        localEpisodeVideoRoot: root,
+        aiClientFactory: () => fakeAiClient(JSON.stringify(generated), () => { calls += 1; }),
+      };
+      const enriched = await enrichDouyinTaskFromNetdisk(task, options);
+      assert.equal(enriched.playlet.roles[0]?.intro, "货车司机。");
+      assert.equal(enriched.playlet.roles[1]?.intro, "货主是本剧重要角色。");
+      assert.equal(enriched.playlet.roles[1]?.photoFile, path.join(imageDir, "货主.png"));
+      assert.equal(calls, 1);
+
+      const suppliedTask = createMockDouyinNetdiskTestTask();
+      suppliedTask.playlet.roles = [
+        { name: "刘晓", roleType: "主角", intro: "后台填写的司机介绍。" },
+        { name: "货主", roleType: "配角", intro: "后台填写的货主介绍。" },
+      ];
+      const supplied = await enrichDouyinTaskFromNetdisk(suppliedTask, options);
+      assert.equal(supplied.playlet.roles[0]?.intro, "后台填写的司机介绍。");
+      assert.equal(supplied.playlet.roles[1]?.intro, "后台填写的货主介绍。");
+
+      const invalidResponse = JSON.stringify({
+        ...generated,
+        roles: [generated.roles[0], { ...generated.roles[1], intro: 123 }],
+      });
+      await assert.rejects(enrichDouyinTaskFromNetdisk(createMockDouyinNetdiskTestTask(), {
+        ...options,
+        aiClientFactory: () => fakeAiClient(invalidResponse, () => undefined),
+      }), /expected string/);
+    } finally {
+      assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
+      assert.ok(path.basename(root).startsWith("douyin-missing-role-intro-"));
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
 test("requires a netdisk text file when the backend synopsis is absent", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "douyin-netdisk-no-text-"));
   const task = createMockDouyinNetdiskTestTask();

@@ -8,6 +8,10 @@ import { createServer } from "node:http";
 import test from "node:test";
 import { _electron } from "playwright";
 
+declare global {
+  interface Window { ipcRenderer: import("electron").IpcRenderer }
+}
+
 const require = createRequire(import.meta.url);
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const mainEntry = path.join(root, "dist-electron/main.js");
@@ -16,6 +20,7 @@ test("built Taobao service renders persistent attention records, verifies manual
   skip: !existsSync(mainEntry), timeout: 90_000,
 }, async () => {
   let remoteState = "UPLOADING";
+  let accountData: Array<{ id: number; accountId: string; accountName: string; status: string }> = [];
   const reports: unknown[] = [];
   const paths: string[] = [];
   const server = createServer(async (request, response) => {
@@ -25,7 +30,10 @@ test("built Taobao service renders persistent attention records, verifies manual
     const url = request.url!;
     paths.push(url);
     let result: unknown;
-    if (url.endsWith("/accountConfig/page")) result = { code: 0, data: { total: 0, data: [] } };
+    if (url.endsWith("/accountConfig/page")) {
+      const data = body.status ? accountData.filter((account) => account.status === body.status) : accountData;
+      result = { code: 0, data: { total: data.length, data } };
+    }
     else if (url.endsWith("/accountTask/page")) result = { code: 0, data: { total: 1, data: [{ id: 88, accountId: "tb-test", status: remoteState }] } };
     else if (url.endsWith("/rpa/report")) { reports.push(body); result = { code: 0, data: true }; }
     else { response.writeHead(404); response.end(); return; }
@@ -101,6 +109,49 @@ test("built Taobao service renders persistent attention records, verifies manual
     assert.deepEqual(reports, [{ taskId: 89, workerId: "old-process", attemptCount: 3, success: true, resultJson: { original: "saved" } }]);
     assert.equal(paths.some((url) => url.endsWith("/claim")), false);
     assert.deepEqual((await page.evaluate(() => window.ipcRenderer.invoke("taobao-drama:service:status"))).executions, []);
+    accountData = [
+      { id: 1, accountId: "tb-one", accountName: "淘宝一号", status: "ON" },
+      { id: 2, accountId: "tb-two", accountName: "淘宝二号", status: "ON" },
+      { id: 3, accountId: "tb-off", accountName: "停用账号", status: "OFF" },
+    ];
+    const selection = page.getByRole("region", { name: "淘宝账号选择" });
+    await selection.getByRole("button", { name: "刷新账号" }).click();
+    const firstAccount = selection.getByRole("checkbox", { name: /淘宝一号/ });
+    await firstAccount.waitFor();
+    assert.equal(await selection.getByRole("checkbox").count(), 3);
+    assert.equal(await selection.getByRole("checkbox", { name: /停用账号/ }).isDisabled(), true);
+    const start = page.getByRole("button", { name: "启动服务", exact: true });
+    assert.equal(await start.isDisabled(), true);
+    await firstAccount.check();
+    assert.equal(await start.isEnabled(), true);
+    assert.equal(await selection.getByRole("checkbox", { name: /淘宝二号/ }).isChecked(), false);
+    await selection.getByText("已选择", { exact: true }).waitFor();
+    await page.screenshot({ path: path.join(cache, "taobao-account-selection.png") });
+    await selection.getByRole("button", { name: "全选", exact: true }).click();
+    assert.equal(await selection.getByRole("checkbox", { name: /淘宝二号/ }).isChecked(), true);
+    await selection.getByRole("button", { name: "清空", exact: true }).click();
+    assert.equal(await start.isDisabled(), true);
+    const emptySelectionError = await page.evaluate(async () => {
+      try { await window.ipcRenderer.invoke("taobao-drama:service:start", []); return ""; }
+      catch (error) { return String(error); }
+    });
+    assert.match(emptySelectionError, /至少选择/);
+    // An invalid executable stops before any real browser/login can open.
+    // Starting only the second account must never even prepare the first profile.
+    await selection.getByRole("checkbox", { name: /淘宝二号/ }).check();
+    const runDataDir = await page.evaluate(async (missingBrowser) => {
+      const result = await window.ipcRenderer.invoke("taobao-drama:config:get");
+      await window.ipcRenderer.invoke("taobao-drama:config:save", {
+        ...result.config, browserExecutablePath: missingBrowser, headless: "true",
+      });
+      return result.config.runDataDir as string;
+    }, path.join(directory, "missing-browser.exe"));
+    await start.click();
+    await page.getByText("无法启动配置的浏览器", { exact: false }).waitFor();
+    const refreshed = await page.evaluate(() => window.ipcRenderer.invoke("taobao-drama:accounts:list"));
+    assert.deepEqual(refreshed.selectedAccountIds, ["tb-two"]);
+    assert.equal(existsSync(path.join(runDataDir, "auth/accounts/tb-two")), true);
+    assert.equal(existsSync(path.join(runDataDir, "auth/accounts/tb-one")), false);
     assert.deepEqual(errors, []);
   } finally {
     await electron.close();

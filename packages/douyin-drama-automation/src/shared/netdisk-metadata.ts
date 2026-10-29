@@ -43,7 +43,9 @@ function parseAiJsonObject(text: string): Record<string, unknown> {
 const aiRoleSchema = z.object({
   name: z.string().trim().min(1).max(30),
   roleType: z.enum(["主角", "配角", "参演"]),
-  intro: z.string().trim().min(1).max(100),
+  // Providers occasionally omit optional prose. Normalize it so mergeRoles can
+  // preserve a supplied introduction or apply the existing neutral fallback.
+  intro: z.string().trim().max(100).nullish().transform((value) => value || undefined),
   photoImageId: z.string().trim().nullish(),
 });
 
@@ -246,7 +248,7 @@ function buildPrompt(task: ClaimedDouyinDramaTask, inputs: MetadataInputs) {
   return [
     "请一次性整理抖音漫剧提报所需的简介和角色资料，只输出 JSON 对象，不要 Markdown。",
     "JSON 格式：{\"summary\":\"...\",\"roles\":[{\"name\":\"...\",\"roleType\":\"主角|配角|参演\",\"intro\":\"...\",\"photoImageId\":\"image-1或null\"}]}。",
-    "规则：summary 必须为 101-200 个中文字符，忠于资料，不虚构关键剧情；每个角色简介不超过100字。",
+    "规则：summary 必须为 101-200 个中文字符，忠于资料，不虚构关键剧情；每个角色必须包含非空的 intro 字符串，角色简介不超过100字。",
     "根据简介和角色资料返回至少2个、最多10个重要角色。图片候选中能明确匹配到单人头像时填写对应 photoImageId；没有匹配头像时填写 null，后续会为该角色生成头像。不要把封面、海报、横图或竖图当成角色头像。",
     "短剧信息填写中已提供的简介和角色属于权威信息，应保留事实并补全缺项。所有角色和简介在这一次响应中同时完成。",
     `剧名：${task.playlet.title}`,

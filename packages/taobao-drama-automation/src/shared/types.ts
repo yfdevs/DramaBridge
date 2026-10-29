@@ -49,6 +49,7 @@ export type TaobaoDramaAccount = {
   accountName: string;
   loginAccount?: string | null;
   rpaProfileKey?: string | null;
+  status?: string;
 };
 export type TaobaoDramaApiConfig = { baseUrl: string; timeoutMs?: number };
 export type TaobaoDramaTaskFailStage = (typeof taobaoDramaTaskFailStageValues)[number];

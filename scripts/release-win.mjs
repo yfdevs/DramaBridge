@@ -3,6 +3,7 @@ import console from "node:console";
 import { execa } from "execa";
 import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
+import { withReleaseVersion } from "./release-version.mjs";
 
 const nativeProxyPreload = fileURLToPath(
   new URL("./node-native-proxy.cjs", import.meta.url),
@@ -125,22 +126,24 @@ try {
     process.exit(0);
   }
 
-  await run("pnpm", ["build:app"]);
-  if (proxy.httpsProxy) {
-    console.log(`Publishing GitHub assets through proxy: ${displayProxy(proxy.httpsProxy)}`);
-  }
-  await run("node", ["scripts/package-electron-hoisted.mjs", "--win", "--publish", "never"]);
+  await withReleaseVersion(new URL("../package.json", import.meta.url), async () => {
+    await run("pnpm", ["build:app"]);
+    if (proxy.httpsProxy) {
+      console.log(`Publishing GitHub assets through proxy: ${displayProxy(proxy.httpsProxy)}`);
+    }
+    await run("node", ["scripts/package-electron-hoisted.mjs", "--win", "--publish", "never"]);
 
-  const publishEnvironment = { ...process.env, NODE_USE_ENV_PROXY: "1" };
-  delete publishEnvironment.NODE_OPTIONS;
-  if (proxy.httpProxy) publishEnvironment.HTTP_PROXY = proxy.httpProxy;
-  if (proxy.httpsProxy) publishEnvironment.HTTPS_PROXY = proxy.httpsProxy;
-  if (proxy.noProxy) publishEnvironment.NO_PROXY = proxy.noProxy;
-  await run("node", [
-    "scripts/publish-github-release.mjs",
-    "--owner", "yfdevs",
-    "--repo", "DramaBridge",
-  ], { env: publishEnvironment });
+    const publishEnvironment = { ...process.env, NODE_USE_ENV_PROXY: "1" };
+    delete publishEnvironment.NODE_OPTIONS;
+    if (proxy.httpProxy) publishEnvironment.HTTP_PROXY = proxy.httpProxy;
+    if (proxy.httpsProxy) publishEnvironment.HTTPS_PROXY = proxy.httpsProxy;
+    if (proxy.noProxy) publishEnvironment.NO_PROXY = proxy.noProxy;
+    await run("node", [
+      "scripts/publish-github-release.mjs",
+      "--owner", "yfdevs",
+      "--repo", "DramaBridge",
+    ], { env: publishEnvironment });
+  });
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);

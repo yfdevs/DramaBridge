@@ -9,6 +9,7 @@ import type { TaobaoExecutionAttention } from "@dramabridge/taobao-drama-automat
 import { openAutomationDatabase } from "../../storage/database";
 import { TaobaoExecutionRepository } from "../../storage/taobao-drama/execution-repository";
 import { getTaobaoWorkerId } from "./worker-identity";
+import { selectTaobaoAccounts } from "./account-selection";
 import {
   assertGlobalDirectoriesConfigured,
   createConfiguredAiClient,
@@ -38,6 +39,7 @@ type Account = {
   accountName: string;
   loginAccount?: string | null;
   rpaProfileKey?: string | null;
+  status?: string;
 };
 type AccountStatus = {
   platform: "taobao-drama"; running: boolean; loginState: "login-required" | "verification-required" | "logged-in" | "unknown";
@@ -79,7 +81,7 @@ const defaults: TaobaoDramaConfig = {
   episodeUploadWaitTimeoutMinutes: "120", closeFailedTaskPages: "false", runDataDir: "D:\\.drama-runs\\taobao-drama", logRetentionDays: "3",
 };
 const controller = new RuntimeController<Runtime>();
-type StoredConfig = { config: TaobaoDramaConfig; installationId: string };
+type StoredConfig = { config: TaobaoDramaConfig; installationId: string; selectedAccountIds: string[] };
 let store: Store<StoredConfig> | null = null;
 let executionRepository: TaobaoExecutionRepository | undefined;
 function executions() {
@@ -109,7 +111,7 @@ function notifyTaobaoHumanVerification(account: Account) {
 }
 
 function configStore(): Store<StoredConfig> {
-  if (!store) store = createValidatedStore<StoredConfig>({ name: "taobao-drama-config", defaults: { config: defaults, installationId: "" } });
+  if (!store) store = createValidatedStore<StoredConfig>({ name: "taobao-drama-config", defaults: { config: defaults, installationId: "", selectedAccountIds: [] } });
   return store;
 }
 function numberText(value: string | undefined, fallback: string, minimum = 0) {
@@ -157,7 +159,7 @@ function latestLog(paths = storagePaths()) {
 }
 async function runtimePackage() {
   return import("@dramabridge/taobao-drama-automation") as unknown as Promise<{
-    fetchTaobaoDramaAccounts: (baseUrl: string) => Promise<Account[]>;
+    fetchTaobaoDramaAccounts: (baseUrl: string, fetcher?: typeof fetch, options?: { includeDisabled?: boolean }) => Promise<Account[]>;
     flushPendingTaobaoReports: (options: { store: TaobaoExecutionRepository; apiBaseUrl: string; accountId: string }) => Promise<void>;
     fetchTaobaoAccountTaskApi: (options: { apiBaseUrl: string; accountId: string; taskId: number }) => Promise<{ status?: string | null } | undefined>;
     startTaobaoDramaRuntime: (options: Record<string, unknown>) => Promise<AccountRuntime>;
@@ -175,7 +177,7 @@ async function status(): Promise<TaobaoDramaServiceStatus> {
   return { ...current, pid: process.pid, executions: executionAttention() };
 }
 
-async function startRuntime(): Promise<Runtime> {
+async function startRuntime(selectedAccountIds: unknown): Promise<Runtime> {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const workerId = await getTaobaoWorkerId(() => {
@@ -189,8 +191,10 @@ async function startRuntime(): Promise<Runtime> {
   for (const accountId of pendingAccounts) {
     await flushPendingTaobaoReports({ store: executions(), apiBaseUrl: config.apiBaseUrl, accountId });
   }
-  const accounts = await fetchTaobaoDramaAccounts(config.apiBaseUrl);
-  if (!accounts.length) throw new Error("TAOBAO_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
+  const enabledAccounts = await fetchTaobaoDramaAccounts(config.apiBaseUrl);
+  if (!enabledAccounts.length) throw new Error("TAOBAO_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
+  const accounts = selectTaobaoAccounts(enabledAccounts, selectedAccountIds);
+  configStore().set("selectedAccountIds", accounts.map((account) => account.accountId));
   const accountRuntimes: Array<{ account: Account; runtime: AccountRuntime }> = [];
   try {
     for (const account of accounts) {
@@ -256,6 +260,14 @@ export function registerTaobaoDramaPlatformHandlers() {
     return openExistingPath(paths[key]);
   });
   ipcMain.handle("taobao-drama:service:status", () => status());
+  ipcMain.handle("taobao-drama:accounts:list", async () => {
+    const accounts = await (await runtimePackage()).fetchTaobaoDramaAccounts(readConfig().apiBaseUrl, undefined, { includeDisabled: true });
+    const selectedIds = new Set(controller.current?.getStatus().accounts.map((account) => account.accountId) ?? configStore().get("selectedAccountIds"));
+    return {
+      accounts: accounts.map(({ accountId, accountName, loginAccount, status }) => ({ accountId, accountName, loginAccount, status })),
+      selectedAccountIds: accounts.filter((account) => account.status === "ON" && selectedIds.has(account.accountId)).map((account) => account.accountId),
+    };
+  });
   ipcMain.handle("taobao-drama:execution:recheck", async (_event, id: string) => {
     if (controller.running || controller.startingPromise) throw new Error("请先停止淘宝服务，并在淘宝和后台核实、处理该任务，再重新检查。");
     const record = executions().get(id);
@@ -271,7 +283,11 @@ export function registerTaobaoDramaPlatformHandlers() {
       errorMessage: `用户已在后台核实处理，重新检查状态为 ${task.status}，保留原领取和结果记录。` });
     return status();
   });
-  ipcMain.handle("taobao-drama:service:start", async () => { assertGlobalDirectoriesConfigured(); await controller.start(startRuntime); return status(); });
+  ipcMain.handle("taobao-drama:service:start", async (_event, selectedAccountIds: unknown) => {
+    assertGlobalDirectoriesConfigured();
+    await controller.start(() => startRuntime(selectedAccountIds));
+    return status();
+  });
   ipcMain.handle("taobao-drama:service:stop", async () => { await controller.stop(); return status(); });
 }
 export function stopTaobaoDramaPlatformRuntime() { controller.stopInBackground(); }

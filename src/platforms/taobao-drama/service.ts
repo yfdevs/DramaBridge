@@ -1,4 +1,7 @@
 export type TaobaoDramaLoginState = "login-required" | "verification-required" | "logged-in" | "unknown"
+export type TaobaoDramaAccount = {
+  accountId: string; accountName: string; loginAccount?: string | null; status: string
+}
 export type TaobaoDramaConfig = {
   accountProfileName: string
   apiBaseUrl: string
@@ -37,8 +40,8 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   try { return await window.ipcRenderer.invoke(channel, ...args) as T }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (message.includes("TAOBAO_DRAMA_ENABLED_ACCOUNT_NOT_FOUND")) throw new Error("没有获取到已启用的淘宝账号，请先在后台开启账号。")
-    throw new Error(message)
+    if (message.includes("TAOBAO_DRAMA_ENABLED_ACCOUNT_NOT_FOUND")) throw Object.assign(new Error("没有获取到已启用的淘宝账号，请先在后台开启账号。"), { cause: error })
+    throw Object.assign(new Error(message), { cause: error })
   }
 }
 export const taobaoDramaService = {
@@ -46,7 +49,8 @@ export const taobaoDramaService = {
   saveConfig: (config: TaobaoDramaConfig) => invoke<TaobaoDramaConfigResult>("taobao-drama:config:save", config),
   testBrowserPath: (executablePath: string) => invoke<{ ok: boolean; message: string }>("taobao-drama:config:test-browser-path", executablePath),
   status: () => invoke<TaobaoDramaServiceStatus>("taobao-drama:service:status"),
-  start: () => invoke<TaobaoDramaServiceStatus>("taobao-drama:service:start"),
+  listAccounts: () => invoke<{ accounts: TaobaoDramaAccount[]; selectedAccountIds: string[] }>("taobao-drama:accounts:list"),
+  start: (selectedAccountIds: string[]) => invoke<TaobaoDramaServiceStatus>("taobao-drama:service:start", selectedAccountIds),
   stop: () => invoke<TaobaoDramaServiceStatus>("taobao-drama:service:stop"),
   recheckExecution: (id: string) => invoke<TaobaoDramaServiceStatus>("taobao-drama:execution:recheck", id),
 }
