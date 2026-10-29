@@ -2,6 +2,8 @@
 
 Multi-platform desktop automation app built with Electron, React, TypeScript, and Vite+.
 
+macOS 适配范围、实施顺序和验收标准见 [macOS 适配修复方案](MACOS_ADAPTATION_PLAN.md)。
+
 ## Scripts
 
 - `pnpm dev` starts the Vite+ dev server and Electron.

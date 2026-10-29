@@ -1,3 +1,0 @@
-# Runtime dependency pinned to the tested Jianying 11.5-compatible revision.
-git+https://github.com/aoguai/pyJianYingDraft.git@2b6ed48b0f096e5a76a5b8a68a6d7d233defb463
-pyinstaller==6.22.3

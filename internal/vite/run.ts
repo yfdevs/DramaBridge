@@ -257,11 +257,6 @@ export const runConfig = {
       cwd: "packages/baidu-netdisk-automation",
       output: [],
     },
-    "pkg:jianying:check": {
-      command: "tsc --noEmit",
-      cwd: "packages/jianying-automation",
-      output: [],
-    },
     "pkg:qq:check": {
       command: "tsc --noEmit",
       cwd: "packages/qq-drama-automation",
