@@ -44,6 +44,8 @@ import type {
 import { sleep } from "../infrastructure/utils.js";
 import { assertBaiduNativeDownloaderReady } from "../infrastructure/native-downloader.js";
 import { openDedicatedBaiduShareWindow } from "../infrastructure/share-window.js";
+import { selectIncompleteEpisodeDownloads } from "./download-episode-cache.js";
+import { decodeNativeDownloadTasks, selectNativeDownloadStatus } from "../infrastructure/native-download-status.js";
 import { baiduPageRequest } from "../infrastructure/page-request.js";
 
 export { DEFAULT_BAIDU_NETDISK_DOWNLOAD_DIR } from "../domain/constants.js";
@@ -2662,6 +2664,7 @@ async function getNativeDownloadTask(
   targetName: string,
   expectedServerPath = "",
   expectedDownloadRoot = "",
+  targetNames?: string[],
 ) {
   const target = findUsableCoreTarget(await getTargets(port));
   if (!target) return undefined;
@@ -2678,79 +2681,32 @@ async function getNativeDownloadTask(
           size?: string;
           finishSize?: string;
           rate?: string;
+          completed?: boolean;
         };
         tasks: string[];
       }>(
         `
 (async () => {
-  const wanted = ${JSON.stringify(targetName)};
-  const expectedServerPath = ${JSON.stringify(expectedServerPath)};
-  const expectedDownloadRoot = ${JSON.stringify(expectedDownloadRoot)};
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const normalized = (value) => String(value || "").replace(/\\s+/g, " ").trim();
-  const nameFromPath = (value) => String(value || "").split(/[\\\\/]/).filter(Boolean).pop() || "";
-  const normalizeServerPath = (value) => "/" + String(value || "").split("/").filter(Boolean).join("/");
-  const normalizeLocalPath = (value) => String(value || "").replace(/[/]/g, "\\\\").replace(/\\\\+$/g, "").toLowerCase();
-  const isWanted = (task) => {
-    const name = normalized(task?.name || nameFromPath(task?.server_path) || nameFromPath(task?.local_path));
-    const nameMatches = name === wanted || nameFromPath(task?.server_path) === wanted || nameFromPath(task?.local_path) === wanted;
-    if (!nameMatches) return false;
-    if (expectedServerPath && normalizeServerPath(task?.server_path) !== normalizeServerPath(expectedServerPath)) return false;
-    if (expectedDownloadRoot) {
-      const localPath = normalizeLocalPath(task?.local_path);
-      const root = normalizeLocalPath(expectedDownloadRoot);
-      if (localPath !== root && !localPath.startsWith(root + "\\\\")) return false;
-    }
-    return true;
-  };
-
   let payload;
   try {
     const app = require("@electron/remote").app;
     app.$downloader.getDownloadTasks((errorNo, flag, items, count, cid) => {
       payload = { errorNo, flag, items, count, cid };
     }, 0, 1000, "0");
-  } catch {
-    return { tasks: [] };
-  }
+  } catch (error) { throw new Error('无法读取客户端下载任务列表：' + String(error?.message || error)); }
 
   const started = Date.now();
   while (!payload && Date.now() - started < 1500) {
     await sleep(100);
   }
 
-  const list = Array.isArray(payload?.items?.tasks) ? payload.items.tasks : [];
-  const tasks = list.map((task) =>
-    [
-      task?.name,
-      task?.status,
-      task?.finish_size + "/" + task?.size,
-      task?.rate,
-      task?.server_path,
-      task?.local_path,
-    ].map(normalized).filter(Boolean).join(" "),
-  );
-  const matched = list.find(isWanted);
-  return {
-    matched: matched
-      ? {
-          id: String(matched.id || ""),
-          name: String(matched.name || ""),
-          serverPath: String(matched.server_path || ""),
-          localPath: String(matched.local_path || ""),
-          status: String(matched.status || ""),
-          size: String(matched.size || ""),
-          finishSize: String(matched.finish_size || ""),
-          rate: String(matched.rate || ""),
-        }
-      : undefined,
-    tasks,
-  };
+  const list = (${decodeNativeDownloadTasks.toString()})(payload);
+  return (${selectNativeDownloadStatus.toString()})(list, ${JSON.stringify({targetName, expectedServerPath, expectedDownloadRoot, targetNames})});
 })()
 `,
         6000,
-      )
-      .catch(() => undefined),
+      ),
   );
 }
 
@@ -2763,6 +2719,7 @@ export async function getBaiduNetdiskDownloadTaskStatus(options: {
   port?: number;
   targetName: string;
   expectedDownloadRoot?: string;
+  targetNames?: string[];
 }): Promise<BaiduNetdiskDownloadTaskStatus> {
   const port = options.port ?? 9337;
   const targetName = options.targetName.trim();
@@ -2772,8 +2729,9 @@ export async function getBaiduNetdiskDownloadTaskStatus(options: {
   }
 
   await ensureBaiduCdpPort(port);
-  const nativeTask = await getNativeDownloadTask(port, targetName, "", options.expectedDownloadRoot);
-  const matched = nativeTask?.matched;
+  const nativeTask = await getNativeDownloadTask(port, targetName, "", options.expectedDownloadRoot, options.targetNames);
+  if (!nativeTask) throw new Error("客户端下载任务列表暂不可用");
+  const matched = nativeTask.matched;
   const size = parseTaskNumber(matched?.size);
   const finishSize = parseTaskNumber(matched?.finishSize);
   const status = matched?.status;
@@ -2790,7 +2748,7 @@ export async function getBaiduNetdiskDownloadTaskStatus(options: {
     size,
     finishSize,
     rate: matched?.rate,
-    completed: Boolean(matched && (completedBySize || completedByStatus)),
+    completed: matched?.completed ?? Boolean(matched && (completedBySize || completedByStatus)),
     tasks: nativeTask?.tasks ?? [],
   };
 }
@@ -2925,7 +2883,7 @@ async function waitForDownloadSubmitted(port: number, task?: SavedDownloadTask) 
 }
 
 async function isPresentInClientTransfers(port: number, targetName: string) {
-  const nativeTask = await getNativeDownloadTask(port, targetName);
+  const nativeTask = await getNativeDownloadTask(port, targetName).catch(() => undefined);
   if (nativeTask?.matched) return true;
 
   const targets = await getTargets(port);
@@ -3491,7 +3449,9 @@ async function submitSavedDownload(
     if (!downloadDir) throw new Error("按集下载缺少本地下载目录。");
     const limitedDownloadRoot = path.join(downloadDir, downloadTargetName);
     await mkdir(limitedDownloadRoot, { recursive: true });
-    for (const episode of remoteVideos.files) {
+    const pendingEpisodes = await selectIncompleteEpisodeDownloads(remoteVideos.files, limitedDownloadRoot, signal);
+    log(`复用${remoteVideos.files.length - pendingEpisodes.length}集已下载文件，仅提交${pendingEpisodes.length}集缺失或不完整文件。`);
+    for (const episode of pendingEpisodes) {
       signal?.throwIfAborted();
       if (!episode.fsId) {
         throw new Error(`第${episode.index}集缺少百度网盘文件 ID，无法执行按集下载。`);

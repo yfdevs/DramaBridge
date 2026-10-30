@@ -19,8 +19,12 @@ function fakeAiClient(
   ) => void,
 ): DouyinDramaAiClient {
   return {
-    async generateText() {
+    async generateText(options) {
       onGenerate();
+      if (options.prompt.startsWith("角色简介补充：")) {
+        const pending = JSON.parse(options.prompt.split("\n").find(line => line.startsWith("待补充的角色："))!.slice("待补充的角色：".length)) as Array<{ index: number; name: string; intro: string }>;
+        return { model: "fake-text-model", text: JSON.stringify({ roles: pending.map(role => ({ index: role.index, intro: `${role.intro || role.name}作为故事的重要人物，参与并推动剧情的发展。` })) }) };
+      }
       return { finishReason: "stop", model: "fake-text-model", text: responseText };
     },
     async generateImage(options) {
@@ -142,7 +146,7 @@ test("generates a role portrait when fewer than two netdisk role images can be m
 });
 
 for (const intro of [undefined, null, "", "   "]) {
-  test(`fills an absent AI role introduction (${JSON.stringify(intro)}) and preserves supplied prose`, async () => {
+  test(`AI completes an absent role introduction (${JSON.stringify(intro)}) and preserves supplied prose`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "douyin-missing-role-intro-"));
     try {
       const task = createMockDouyinNetdiskTestTask();
@@ -165,10 +169,10 @@ for (const intro of [undefined, null, "", "   "]) {
         aiClientFactory: () => fakeAiClient(JSON.stringify(generated), () => { calls += 1; }),
       };
       const enriched = await enrichDouyinTaskFromNetdisk(task, options);
-      assert.equal(enriched.playlet.roles[0]?.intro, "货车司机。");
-      assert.equal(enriched.playlet.roles[1]?.intro, "货主是本剧重要角色。");
+      assert.match(enriched.playlet.roles[0]?.intro ?? "", /^货车司机。/);
+      assert.ok((enriched.playlet.roles[1]?.intro?.length ?? 0) >= 10);
       assert.equal(enriched.playlet.roles[1]?.photoFile, path.join(imageDir, "货主.png"));
-      assert.equal(calls, 1);
+      assert.equal(calls, 2);
 
       const suppliedTask = createMockDouyinNetdiskTestTask();
       suppliedTask.playlet.roles = [

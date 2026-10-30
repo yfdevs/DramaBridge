@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { DOUYIN_DRAMA_SERIES_TYPE } from "../shared/constants.js";
 import type { DouyinDramaDropdownRecorder } from "../shared/dropdown-options.js";
 import type { DouyinDramaRole } from "../shared/types.js";
+import { requireDouyinRoleIntro } from "../shared/role-intro.js";
 
 const douyinMessageErrorSelectors = [
   ".arco-message.arco-message-error[role='alert']",
@@ -2020,6 +2021,7 @@ export async function fillDouyinRoleNameWithoutSuggestion(
 }
 
 export async function addDouyinRole(page: Page, role: DouyinDramaRole) {
+  const roleIntro = requireDouyinRoleIntro(role.name, role.intro);
   const addButton = page
     .getByRole("button", { name: /添加角色弹窗|至少添加2个角色/ })
     .filter({ visible: true })
@@ -2049,7 +2051,7 @@ export async function addDouyinRole(page: Page, role: DouyinDramaRole) {
 
   const intro = dialog.locator("#role_intro_input, textarea").first();
   await intro.waitFor({ state: "visible", timeout: 10_000 });
-  await intro.fill(role.intro ?? `${role.name}是本剧重要角色。`);
+  await intro.fill(roleIntro);
 
   if (!role.photoFile) throw new Error(`DOUYIN_DRAMA_ROLE_PHOTO_REQUIRED: ${role.name}`);
   const photoInput = dialog.locator([

@@ -87,7 +87,8 @@ export const douyinDramaRoleSchema = z.object({
   actorName: optionalText,
   roleType: z.enum(["主角", "配角", "参演"]).optional(),
   photoFile: fileReference.optional(),
-  intro: z.string().trim().min(1).max(100).optional(),
+  // Empty/short input is accepted here so the runtime can complete it with AI.
+  intro: z.string().trim().max(100).nullish().transform(value => value ?? undefined),
 });
 
 export const douyinDramaTaskPayloadSchema = z

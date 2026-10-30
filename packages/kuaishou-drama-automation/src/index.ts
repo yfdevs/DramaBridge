@@ -1,4 +1,5 @@
 export * from "./app/runtime.js";
+export * from "./recreation.js";
 export * from "./api/task.js";
 export * from "./api/account-config.js";
 export * from "./automation/image-crop.js";

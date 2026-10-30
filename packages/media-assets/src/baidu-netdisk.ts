@@ -131,6 +131,8 @@ export type EnsureBaiduNetdiskEpisodeVideosOptions = {
   }) => Promise<BaiduNetdiskShareDownloadResult>;
   getDownloadTaskStatus?: (request: {
     targetName: string;
+    targetNames?: string[];
+    expectedDownloadRoot?: string;
   }) => Promise<BaiduNetdiskDownloadTaskStatus | undefined>;
   cancelDownloadTask?: (request: {
     targetName: string;
@@ -764,6 +766,8 @@ async function waitForCompleteLocalEpisodeVideos(options: {
   sourceLocalPath?: string;
   assetSourceLocalPath?: string;
   downloadTaskName?: string;
+  downloadTaskNames?: string[];
+  expectedDownloadRoot?: string;
   expectedOwnershipImages?: number;
   expectedOwnershipFiles?: number;
   expectedPosterImages?: number;
@@ -926,6 +930,8 @@ async function waitForCompleteLocalEpisodeVideos(options: {
     if (options.getDownloadTaskStatus) {
       const taskStatus = await options.getDownloadTaskStatus({
         targetName: options.downloadTaskName || options.resourceName,
+        targetNames: options.downloadTaskNames,
+        expectedDownloadRoot: options.expectedDownloadRoot,
       }).catch(() => undefined);
 
       if (taskStatus) {
@@ -1307,6 +1313,8 @@ export async function ensureBaiduNetdiskEpisodeVideos(
         : result.downloadRoot ?? options.sourceLocalPath,
       resourceName: options.resourceName,
       downloadTaskName: result.share.name || options.downloadTaskName || options.resourceName,
+      downloadTaskNames: options.episodeDownloadLimit !== undefined ? result.remoteVideos?.files.map(file => file.name) : undefined,
+      expectedDownloadRoot: options.episodeDownloadLimit !== undefined ? result.downloadRoot ?? options.downloadDir : undefined,
       expectedOwnershipImages: result.expectedOwnershipImages,
       expectedOwnershipFiles: result.expectedOwnershipFiles,
       expectedPosterImages: result.expectedPosterImages,

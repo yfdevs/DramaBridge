@@ -38,7 +38,10 @@ export function BaiduNetdiskPanel() {
   const [statusRefreshing, setStatusRefreshing] = useState(false);
   const [actionPending, setActionPending] = useState<BaiduAction | null>(null);
   const [installPath, setInstallPath] = useState("");
-  const [installPathPending, setInstallPathPending] = useState<"select" | "reset" | null>(null);
+  const [installPathPending, setInstallPathPending] = useState<"select" | "reset" | "save" | null>(
+    null,
+  );
+  const [savedInstallPath, setSavedInstallPath] = useState("");
   const [installPathMessage, setInstallPathMessage] = useState<string | null>(null);
   const [installPathError, setInstallPathError] = useState<string | null>(null);
 
@@ -74,6 +77,7 @@ export function BaiduNetdiskPanel() {
 
         if (!disposed) {
           setInstallPath(nextInstallPath);
+          setSavedInstallPath(nextInstallPath);
           setInstallPathError(null);
         }
       } catch (error) {
@@ -98,7 +102,8 @@ export function BaiduNetdiskPanel() {
         const nextInstallPath = result.config.executablePath.trim();
 
         setInstallPath(nextInstallPath);
-        setInstallPathMessage("启动文件已保存。");
+        setSavedInstallPath(nextInstallPath);
+        setInstallPathMessage("安装目录已保存，启动文件将自动识别。");
         void refreshStatus();
       } catch (error) {
         setInstallPathError(errorMessage(error));
@@ -117,6 +122,7 @@ export function BaiduNetdiskPanel() {
       try {
         const result = await saveBaiduNetdiskConfig({ executablePath: "" });
         setInstallPath(result.config.executablePath.trim());
+        setSavedInstallPath(result.config.executablePath.trim());
         setInstallPathMessage("已恢复默认自动查找。");
         void refreshStatus();
       } catch (error) {
@@ -139,6 +145,29 @@ export function BaiduNetdiskPanel() {
         setStatusError(errorMessage(error));
       } finally {
         setActionPending(null);
+      }
+    })();
+  };
+
+  const handleSaveInstallPath = () => {
+    void (async () => {
+      setInstallPathPending("save");
+      setInstallPathMessage(null);
+      setInstallPathError(null);
+      try {
+        const result = await saveBaiduNetdiskConfig({ executablePath: installPath });
+        setInstallPath(result.config.executablePath);
+        setSavedInstallPath(result.config.executablePath);
+        setInstallPathMessage(
+          result.config.executablePath
+            ? "安装目录已保存，启动文件将自动识别。"
+            : "已恢复默认自动查找。",
+        );
+        void refreshStatus();
+      } catch (error) {
+        setInstallPathError(errorMessage(error));
+      } finally {
+        setInstallPathPending(null);
       }
     })();
   };
@@ -175,7 +204,12 @@ export function BaiduNetdiskPanel() {
               <Button
                 type="button"
                 size="xs"
-                disabled={actionPending !== null || status.isWindows === false}
+                disabled={
+                  actionPending !== null ||
+                  installPathPending !== null ||
+                  installPath !== savedInstallPath ||
+                  status.isWindows === false
+                }
                 onClick={() => handleStart(shouldRestart)}
               >
                 {actionPending ? "连接中…" : shouldRestart ? "重启连接" : "启动并连接"}
@@ -193,20 +227,35 @@ export function BaiduNetdiskPanel() {
         {showClientSetup ? (
           <div className="grid gap-1.5 border-t border-border/60 pt-2.5">
             <label htmlFor="baidu-netdisk-install-path" className="text-xs font-medium">
-              百度网盘启动文件
+              百度网盘安装目录
             </label>
             <InputGroup className="h-8 rounded-lg">
               <InputGroupInput
                 id="baidu-netdisk-install-path"
                 value={installPath}
-                readOnly
+                onChange={(event) => {
+                  setInstallPath(event.target.value);
+                  setInstallPathMessage(null);
+                  setInstallPathError(null);
+                }}
+                disabled={installPathPending !== null || actionPending !== null}
                 title={installPath || undefined}
-                placeholder="未找到百度网盘启动文件"
+                placeholder="自动查找，或填写 D:\BaiduNetdisk"
                 className="text-xs md:text-xs"
                 aria-invalid={Boolean(installPathError)}
+                aria-describedby="baidu-netdisk-install-help"
               />
               <InputGroupAddon align="inline-end">
-                {installPath ? (
+                {installPath !== savedInstallPath ? (
+                  <InputGroupButton
+                    className="text-xs"
+                    disabled={installPathPending !== null || actionPending !== null}
+                    onClick={handleSaveInstallPath}
+                  >
+                    {installPathPending === "save" ? "保存中" : "保存"}
+                  </InputGroupButton>
+                ) : null}
+                {savedInstallPath ? (
                   <InputGroupButton
                     className="text-xs"
                     disabled={installPathPending !== null || actionPending !== null}
@@ -217,15 +266,22 @@ export function BaiduNetdiskPanel() {
                 ) : null}
                 <InputGroupButton
                   className="text-xs"
-                  aria-label="选择百度网盘启动文件"
+                  aria-label="选择百度网盘安装目录"
                   disabled={installPathPending !== null || actionPending !== null}
                   onClick={handleSelectInstallPath}
                 >
                   <Folder aria-hidden="true" />
-                  {installPathPending === "select" ? "选择中" : "选择文件"}
+                  {installPathPending === "select" ? "选择中" : "选择目录"}
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
+            <p
+              id="baidu-netdisk-install-help"
+              className="px-1 text-xs leading-5 text-muted-foreground"
+            >
+              选择 BaiduNetdisk 文件夹即可，例如 D:\BaiduNetdisk；也支持 AppData
+              下的安装目录，无需查找里面的 exe 文件。手动修改后请先保存。
+            </p>
             {installPathError || installPathMessage ? (
               <p
                 className={`px-1 text-xs ${installPathError ? "text-destructive" : "text-muted-foreground"}`}

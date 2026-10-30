@@ -184,7 +184,7 @@ export async function saveBaiduNetdiskConfig(config: Partial<BaiduNetdiskConfig>
 }
 
 export async function selectBaiduNetdiskExecutable() {
-  return requireIpcRenderer("选择百度网盘启动文件").invoke(
+  return requireIpcRenderer("选择百度网盘安装目录").invoke(
     "baidu-netdisk:config:select-executable",
   ) as Promise<BaiduNetdiskConfigResult | null>;
 }

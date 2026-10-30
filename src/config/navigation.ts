@@ -32,6 +32,7 @@ export type AppRoute =
   | "taobao-drama/service"
   | "taobao-drama/config"
   | "kuaishou-drama/service"
+  | "kuaishou-drama/recreation"
   | "kuaishou-drama/config"
   | "kuaishou-drama/projects"
   | "kuaishou-drama/schedule"
@@ -75,6 +76,7 @@ const appRoutes = [
   "taobao-drama/statistics",
   "taobao-drama/logs",
   "kuaishou-drama/service",
+  "kuaishou-drama/recreation",
   "kuaishou-drama/config",
   "kuaishou-drama/statistics",
   "kuaishou-drama/logs",
@@ -344,6 +346,11 @@ const platformNavigationGroups: NavigationGroup[] = [
         title: "实例",
         route: "kuaishou-drama/service",
         icon: Terminal,
+      },
+      {
+        title: "二创",
+        route: "kuaishou-drama/recreation",
+        icon: CloudUpload,
       },
       {
         title: "配置管理",

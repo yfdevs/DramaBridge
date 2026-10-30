@@ -1,11 +1,11 @@
 import { spawn } from "node:child_process";
-import { pathExists } from "@dramabridge/file-utils";
-import { stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Effect } from "effect";
 import { execa } from "execa";
 import { prepareBaiduCdpLauncher } from "./cdp-launcher.js";
+import { findBaiduNetdiskExecutable } from "./executable-discovery.js";
+export { findBaiduNetdiskExecutable } from "./executable-discovery.js";
 import { assertBaiduNativeDownloaderReady } from "../infrastructure/native-downloader.js";
 import { log } from "../infrastructure/logging.js";
 
@@ -71,18 +71,6 @@ export type StartBaiduNetdiskCdpOptions = BaiduNetdiskCdpOptions & {
   launcherCacheDir?: string;
 };
 
-async function pathKind(filePath: string) {
-  try {
-    const fileStat = await stat(filePath);
-    if (fileStat.isDirectory()) return "directory";
-    if (fileStat.isFile()) return "file";
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 async function getJson<T>(url: string, timeoutMs = requestTimeoutMs) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -136,59 +124,6 @@ async function getRunningBaiduProcesses() {
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
-}
-
-function defaultEngineExecutableCandidates() {
-  const appData = process.env.APPDATA;
-  const localAppData = process.env.LOCALAPPDATA;
-  const homeDir = os.homedir();
-  const candidates = [
-    appData
-      ? path.join(appData, "baidu", "BaiduNetdisk", "module", "BrowserEngine", "BaiduNetdiskUnite.exe")
-      : undefined,
-    localAppData
-      ? path.join(localAppData, "baidu", "BaiduNetdisk", "module", "BrowserEngine", "BaiduNetdiskUnite.exe")
-      : undefined,
-    path.join(homeDir, "AppData", "Roaming", "baidu", "BaiduNetdisk", "module", "BrowserEngine", "BaiduNetdiskUnite.exe"),
-    "C:\\Program Files\\BaiduNetdisk\\BaiduNetdisk.exe",
-    "C:\\Program Files (x86)\\BaiduNetdisk\\BaiduNetdisk.exe",
-  ].filter((item): item is string => Boolean(item));
-
-  return [...new Set(candidates)];
-}
-
-export async function findBaiduNetdiskExecutable(explicitPath?: string) {
-  const explicit = explicitPath?.trim();
-
-  if (explicit) {
-    const explicitKind = await pathKind(explicit);
-
-    if (explicitKind === "file") {
-      return explicit;
-    }
-
-    if (explicitKind === "directory") {
-      const directoryCandidates = [
-        path.join(explicit, "module", "BrowserEngine", "BaiduNetdiskUnite.exe"),
-        path.join(explicit, "BaiduNetdiskUnite.exe"),
-        path.join(explicit, "BaiduNetdisk.exe"),
-      ];
-
-      for (const candidate of directoryCandidates) {
-        if (await pathExists(candidate)) return candidate;
-      }
-
-      throw new Error(`百度网盘安装目录中没有找到启动文件：${explicit}`);
-    }
-
-    throw new Error(`百度网盘安装目录或启动文件不存在：${explicit}`);
-  }
-
-  for (const candidate of defaultEngineExecutableCandidates()) {
-    if (await pathExists(candidate)) return candidate;
-  }
-
-  throw new Error("没有找到百度网盘启动文件，请检查是否已安装百度网盘。");
 }
 
 async function stopBaiduNetdiskProcesses() {

@@ -1,6 +1,7 @@
 import { emitIpcEvent, trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
+import { createAsyncCache } from "../../core/async-cache";
 import {
   ensureAiPoster,
   selectBaiduEpisodePathsWithAi,
@@ -26,7 +27,7 @@ import {
   isBaiduNetdiskPlayletCleanupEnabled,
   resolveGlobalPlatformDirectories,
 } from "../../global-app-config";
-import { resolveFromAppRoot, selectDirectory } from "../shared";
+import { playwrightBrowsersPath, resolveFromAppRoot, selectDirectory } from "../shared";
 import { createElectronPlatformLogger } from "../../platform-logger";
 import { runRuntimeAssetCleanup } from "../../runtime-asset-cleanup";
 
@@ -301,6 +302,7 @@ async function cleanupStalePlayletDirectories(rootPath: string, protectedPaths: 
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     if (entry.name === BAIDU_NETDISK_EXTERNAL_DIRECTORY) continue;
     const candidate = path.resolve(resolvedRoot, entry.name);
+    if (normalizedPathKey(candidate) === normalizedPathKey(kuaishouRecreationMaterialRoot())) continue;
     if (path.dirname(candidate).toLowerCase() !== resolvedRoot.toLowerCase()) continue;
     const candidateKey = normalizedPathKey(candidate);
     const activePaths = [...activeDownloadOperations.values()]
@@ -420,7 +422,7 @@ function normalizeConfig(
 ): BaiduNetdiskConfig {
   return {
     debugPort: normalizeDebugPort(config.debugPort),
-    executablePath: config.executablePath?.trim() ?? "",
+    executablePath: config.executablePath?.trim().replace(/^"(.*)"$/, "$1").trim() ?? "",
   };
 }
 
@@ -510,6 +512,25 @@ function uniqueBaiduDownloadDir(resourceName: string, shareKey: string) {
   return path.join(defaultBaiduNetdiskDownloadDir, `${safeName}__${suffix}`);
 }
 
+export function kuaishouRecreationMaterialRoot() {
+  return path.join(defaultBaiduNetdiskDownloadDir, "快手_二创素材");
+}
+
+export async function uploadKuaishouRecreationVersion(options: {
+  localDirectory: string; remoteDirectory: string; signal?: AbortSignal;
+  preferredRemoteDirectory?: string;
+  onRemoteDirectorySelected?: (directory: string) => void;
+  verifiedFiles?: import("@dramabridge/baidu-netdisk-automation").RemoteVerifiedFile[];
+  onFileVerified?: (file: import("@dramabridge/baidu-netdisk-automation").RemoteVerifiedFile) => void;
+  onProgress?: (message: string) => void;
+}) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
+  const { uploadBaiduNetdiskDirectory } = await import("@dramabridge/baidu-netdisk-automation");
+  return runBaiduCdpOperationExclusive("上传快手二创版本", () => uploadBaiduNetdiskDirectory({
+    ...options, port: cdpPort(readConfig()),
+  }));
+}
+
 function assertDisposableBaiduDownloadDir(downloadDir: string) {
   const root = path.resolve(defaultBaiduNetdiskDownloadDir);
   const target = path.resolve(downloadDir);
@@ -529,6 +550,7 @@ async function cleanupBaiduNetdiskDownloadArtifacts(options: {
   downloadDir: string;
   targetName: string;
   port: number;
+  preserveLocalFiles?: boolean;
 }) {
   try {
     assertDisposableBaiduDownloadDir(options.downloadDir);
@@ -570,6 +592,8 @@ async function cleanupBaiduNetdiskDownloadArtifacts(options: {
     resourceName: options.targetName,
     cleanupAttemptCount,
   });
+
+  if (options.preserveLocalFiles) return;
 
   try {
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -831,7 +855,10 @@ function cdpPort(config = readConfig()) {
 }
 
 async function importBaiduNetdiskRuntimePackage() {
+  // Playwright caches its browser directory on first import, including CDP-only use.
+  process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const runtime = await import("@dramabridge/baidu-netdisk-automation") as {
+    findBaiduNetdiskExecutable: (explicitPath?: string) => Promise<string>;
     configureBaiduNetdiskAutomationLogging: (options: {
       logFilePath: string;
       retentionDays?: number;
@@ -855,6 +882,7 @@ async function importBaiduNetdiskRuntimePackage() {
 }
 
 async function importBaiduNetdiskDownloadRuntimePackage() {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const runtime = await import("@dramabridge/baidu-netdisk-automation/download-baidu-folder") as {
     configureBaiduNetdiskAutomationLogging: (options: {
       logFilePath: string;
@@ -897,7 +925,7 @@ async function importBaiduNetdiskDownloadRuntimePackage() {
         }>;
       }) => Promise<Array<{ path: string; index: number }>>;
     }) => Promise<Omit<BaiduNetdiskShareDownloadResult, "downloadDir">>;
-    getBaiduNetdiskDownloadTaskStatus: (options: { port: number; targetName: string; expectedDownloadRoot?: string }) => Promise<{
+    getBaiduNetdiskDownloadTaskStatus: (options: { port: number; targetName: string; expectedDownloadRoot?: string; targetNames?: string[] }) => Promise<{
       found: boolean;
       name?: string;
       localPath?: string;
@@ -934,14 +962,15 @@ async function importBaiduNetdiskDownloadRuntimePackage() {
   return runtime;
 }
 
+let cachedStatus: { key: string; read: () => Promise<BaiduNetdiskCdpStatus> } | undefined;
 async function status() {
   const config = readConfig();
-  const { checkBaiduNetdiskCdpStatus } = await importBaiduNetdiskRuntimePackage();
-
-  return checkBaiduNetdiskCdpStatus({
-    port: cdpPort(config),
-    executablePath: config.executablePath || undefined,
-  });
+  const key = JSON.stringify([config.debugPort, config.executablePath]);
+  if (!cachedStatus || cachedStatus.key !== key) cachedStatus = { key, read: createAsyncCache(async () => {
+    const { checkBaiduNetdiskCdpStatus } = await importBaiduNetdiskRuntimePackage();
+    return checkBaiduNetdiskCdpStatus({ port: cdpPort(config), executablePath: config.executablePath || undefined });
+  }, 2_000) };
+  return cachedStatus.read();
 }
 
 async function controlDownloadTask(targetName: string, action: "pause" | "resume" | "delete") {
@@ -956,12 +985,13 @@ async function startCdp(restart: boolean) {
   const config = readConfig();
   const { startBaiduNetdiskCdp } = await importBaiduNetdiskRuntimePackage();
 
+  cachedStatus = undefined;
   return startBaiduNetdiskCdp({
     port: cdpPort(config),
     executablePath: config.executablePath || undefined,
     restart,
     launcherCacheDir: path.join(baiduNetdiskRunDataDir(), "cdp-launchers"),
-  });
+  }).finally(() => { cachedStatus = undefined; });
 }
 
 export async function ensureBaiduNetdiskCdpReadyOnStartup() {
@@ -1078,7 +1108,7 @@ export async function ensureBaiduNetdiskShareDownloaded(
     normalizedRequest.localEpisodeVideoRoot,
     normalizedRequest.resourceName,
   );
-  if (normalizedRequest.requesterPlatform !== "external-api") {
+  if (normalizedRequest.requesterPlatform !== "external-api" && normalizedRequest.requesterPlatform !== "kuaishou-drama-recreation") {
     monitoredEpisodeVideoRoots.add(path.resolve(normalizedRequest.localEpisodeVideoRoot));
   }
   startDiskCleanupMonitor();
@@ -1136,12 +1166,20 @@ export async function ensureBaiduNetdiskShareDownloaded(
 function ensureDownloadRecordId(request: BaiduNetdiskEnsureDownloadedRequest) {
   let name = request.episodeDownloadLimit ? `${request.resourceName}\nlimit=${request.episodeDownloadLimit}` : request.resourceName;
   if (request.requesterPlatform === "external-api") name = `external-api\n${name}`;
+  if (request.requesterPlatform === "kuaishou-drama-recreation") name = `kuaishou-drama-recreation\n${name}`;
   return createRecordId(shareKeyFromText(request.shareText), name);
 }
 
 export function getExternalBaiduNetdiskDownloadRecord(request: { shareText: string; resourceName: string }) {
   return getDownloadRecordsRepository().findById(ensureDownloadRecordId({ ...request,
     requesterPlatform: "external-api", localEpisodeVideoRoot: "" }));
+}
+
+export function findKuaishouRecreationDownloadedSource(task: { shareText: string; originalTitle: string; downloadCount: number }) {
+  return getDownloadRecordsRepository().findById(ensureDownloadRecordId({
+    shareText: task.shareText, resourceName: task.originalTitle, episodeDownloadLimit: task.downloadCount,
+    requesterPlatform: "kuaishou-drama-recreation", localEpisodeVideoRoot: "",
+  }))?.localPath;
 }
 
 export const getBaiduNetdiskApiStatus = () => status();
@@ -1161,7 +1199,9 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
   shareKey: string,
   request: BaiduNetdiskEnsureDownloadedRequest,
 ): Promise<BaiduNetdiskDownloadRecord> {
-  const baseDownloadDir = uniqueBaiduDownloadDir(request.resourceName, shareKey);
+  const baseDownloadDir = request.requesterPlatform === "kuaishou-drama-recreation"
+    ? path.join(kuaishouRecreationMaterialRoot(), request.resourceName, "临时下载", path.basename(uniqueBaiduDownloadDir(request.resourceName, shareKey)))
+    : uniqueBaiduDownloadDir(request.resourceName, shareKey);
   const uniqueDownloadDir = request.requesterPlatform === "external-api"
     ? path.join(path.dirname(baseDownloadDir), BAIDU_NETDISK_EXTERNAL_DIRECTORY, path.basename(baseDownloadDir))
     : baseDownloadDir;
@@ -1297,7 +1337,8 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
         getBaiduNetdiskDownloadTaskStatus({
           port,
           targetName: statusRequest.targetName,
-          expectedDownloadRoot: request.requesterPlatform === "external-api" ? uniqueDownloadDir : undefined,
+          targetNames: statusRequest.targetNames,
+          expectedDownloadRoot: statusRequest.expectedDownloadRoot ?? (request.requesterPlatform === "external-api" ? uniqueDownloadDir : undefined),
         }),
       cancelDownloadTask: (cancelRequest) =>
         controlBaiduNetdiskDownloadTask({
@@ -1422,6 +1463,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
         downloadDir: uniqueDownloadDir,
         targetName: request.resourceName,
         port,
+        preserveLocalFiles: request.requesterPlatform === "kuaishou-drama-recreation",
       });
       downloadArtifactsCleaned = true;
       record = await cleanupRecordedRemoteTransfer(
@@ -1445,6 +1487,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
         downloadDir: uniqueDownloadDir,
         targetName: request.resourceName,
         port,
+        preserveLocalFiles: request.requesterPlatform === "kuaishou-drama-recreation" && record.state !== "completed",
       }).catch((error) => {
         baiduNetdiskLogger("storage", {
           requesterPlatform: request.requesterPlatform,
@@ -1629,14 +1672,21 @@ export function registerBaiduNetdiskPlatformHandlers() {
 
   ipcMain.handle("baidu-netdisk:config:select-executable", async (event) => {
     const currentConfig = readConfig();
+    const currentPath = currentConfig.executablePath.replace(
+      /[\\/]module[\\/]BrowserEngine[\\/]BaiduNetdiskUnite\.exe$/i,
+      "",
+    );
     const selectedPath = await selectDirectory(event, {
-      title: "选择百度网盘启动文件",
-      defaultPath: currentConfig.executablePath || undefined,
-      properties: ["openFile"],
-      filters: [{ name: "百度网盘启动文件", extensions: ["exe"] }],
+      title: "选择百度网盘安装目录（BaiduNetdisk 文件夹）",
+      defaultPath: currentPath
+        ? /\.exe$/i.test(currentPath) ? path.dirname(currentPath) : currentPath
+        : undefined,
+      properties: ["openDirectory"],
     });
 
     if (!selectedPath) return null;
+    const runtime = await importBaiduNetdiskRuntimePackage();
+    await runtime.findBaiduNetdiskExecutable(selectedPath);
     const config = normalizeConfig({
       ...currentConfig,
       executablePath: selectedPath,
@@ -1645,12 +1695,16 @@ export function registerBaiduNetdiskPlatformHandlers() {
     return { config, path: configPath() } satisfies BaiduNetdiskConfigResult;
   });
 
-  ipcMain.handle("baidu-netdisk:config:save", (_event, config: Partial<BaiduNetdiskConfig>) => {
+  ipcMain.handle("baidu-netdisk:config:save", async (_event, config: Partial<BaiduNetdiskConfig>) => {
     const nextConfig = normalizeConfig({
       ...readConfig(),
       ...config,
     });
 
+    if (config.executablePath !== undefined && nextConfig.executablePath) {
+      const runtime = await importBaiduNetdiskRuntimePackage();
+      await runtime.findBaiduNetdiskExecutable(nextConfig.executablePath);
+    }
     writeConfig(nextConfig);
 
     return {

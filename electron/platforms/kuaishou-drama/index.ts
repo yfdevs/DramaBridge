@@ -1,4 +1,5 @@
 import { app } from "electron";
+import { registerKuaishouRecreationHandlers } from "./recreation";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
@@ -566,6 +567,7 @@ async function startRuntime() {
 }
 
 export function registerKuaishouDramaPlatformHandlers() {
+  registerKuaishouRecreationHandlers();
   registerTaskAnalyticsHandler({
     platform: "kuaishou-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,

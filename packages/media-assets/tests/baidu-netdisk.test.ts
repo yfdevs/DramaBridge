@@ -525,3 +525,33 @@ test("fails quickly when a submitted native download task disappears", async () 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("limited downloads track individual episodes instead of failing on a missing parent task", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-individual-"));
+  const resourceName = "逐集测试剧";
+  const downloaded = path.join(root, "download", resourceName);
+  let checks = 0;
+  try {
+    await mkdir(downloaded, { recursive: true });
+    for (let index = 1; index <= 29; index++) await writeFile(path.join(downloaded, `第${index}集.mp4`), "video");
+    const result = await ensureBaiduNetdiskEpisodeVideos({
+      shareText: "https://pan.baidu.com/s/test", resourceName, localEpisodeVideoRoot: root,
+      episodeCount: 31, episodeDownloadLimit: 31, timeoutMs: 5000, pollIntervalMs: 1, stableCompletePolls: 1,
+      downloadShare: async () => ({
+        share: { link: "https://pan.baidu.com/s/test", pwd: "", name: resourceName },
+        downloadRoot: path.dirname(downloaded), localPath: downloaded, completed: false, skippedExisting: false,
+        remoteVideos: { files: Array.from({ length: 31 }, (_, index) => ({ index: index + 1, name: `第${index + 1}集.mp4`, path: `/本剧/第${index + 1}集.mp4` })) },
+      }),
+      getDownloadTaskStatus: async request => {
+        assert.equal(request.targetNames?.length, 31);
+        assert.equal(request.expectedDownloadRoot, path.dirname(downloaded));
+        checks++;
+        if (checks === 4) for (const index of [30, 31]) await writeFile(path.join(downloaded, `第${index}集.mp4`), "video");
+        return { found: true, localPath: downloaded, completed: false, tasks: ["第30集.mp4", "第31集.mp4"] };
+      },
+    });
+    assert.ok(result.completed);
+    assert.equal(checks, 4);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
