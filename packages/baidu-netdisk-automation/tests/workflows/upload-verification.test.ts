@@ -31,3 +31,25 @@ test("size mismatch and truly different bytes cannot pass verification", async (
   assert.equal(await verify({ ...file, size: 99 }, identity), false);
   assert.equal(await verify(file, identity), false);
 });
+
+test("file pipeline cancellation reaches metadata and content verification without persisting a receipt", async () => {
+  const controller = new AbortController();
+  const file = { path: "/videos/1.mp4", server_filename: "1.mp4", isdir: 0, size: 10, md5: "0".repeat(32) };
+  const identity = { size: 10, md5: "1".repeat(32), hashes: [], modifiedAtMs: 0 };
+  let receipts = 0, reading = false;
+  const verify = createRemoteFileVerifier({
+    metadata: async (_path, signal) => { assert.equal(signal, controller.signal); return { ...file, dlink: "https://d.pcs.baidu.com/content" }; },
+    contentChecksum: async (_url, _size, _path, signal) => {
+      assert.equal(signal, controller.signal);
+      reading = true;
+      return new Promise((_resolve, reject) => signal!.addEventListener("abort", () => reject(signal!.reason), { once: true }));
+    },
+    onVerified: () => { receipts++; },
+  });
+  const pending = verify(file, identity, controller.signal);
+  const rejection = assert.rejects(pending, /另一个文件失败/);
+  while (!reading) await new Promise(resolve => setImmediate(resolve));
+  controller.abort(new Error("另一个文件失败"));
+  await rejection;
+  assert.equal(receipts, 0);
+});

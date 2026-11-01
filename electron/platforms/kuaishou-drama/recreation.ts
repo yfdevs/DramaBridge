@@ -4,6 +4,8 @@ import { emitIpcEvent, trpcIpc as ipcMain } from "../../ipc";
 import { openAutomationDatabase } from "../../storage/database";
 import { KuaishouRecreationRepository } from "../../storage/kuaishou-recreation";
 import { executeRecreationTask } from "./recreation-workflow";
+import { prepareRecreationPoster } from "./recreation-poster";
+import { createConfiguredAiClient, getConfiguredAiImageModel, getConfiguredAiCoverGenerationRetryAttempts } from "../../global-app-config";
 import { createRecreationTemplate, readRecreationExcel } from "./recreation-excel";
 import {
   ensureBaiduNetdiskShareDownloaded,
@@ -65,6 +67,10 @@ export function registerKuaishouRecreationHandlers() {
       materialRoot: kuaishouRecreationMaterialRoot(), runtime, signal,
       legacySourcePath: findKuaishouRecreationDownloadedSource(task),
       update: fields => update(task, fields),
+      generatePoster: input => prepareRecreationPoster({ ...input, signal,
+        client: createConfiguredAiClient, model: getConfiguredAiImageModel, retryAttempts: getConfiguredAiCoverGenerationRetryAttempts,
+        normalize: runtime.normalizeKuaishouRecreationCover, onLog: message => update(task, { message }),
+      }),
       download: async targetRoot => {
         const downloaded = await ensureBaiduNetdiskShareDownloaded({
           requesterPlatform: "kuaishou-drama-recreation", shareText: task.shareText,

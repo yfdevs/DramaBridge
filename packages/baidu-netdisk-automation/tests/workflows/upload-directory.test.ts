@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { createServer } from "node:http";
 import { compileFunction, createContext, runInNewContext, runInContext } from "node:vm";
 import { createHash } from "node:crypto";
+import * as fs from "node:fs";
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -13,7 +14,7 @@ import type { RemoteVerifiedFile } from "../../src/workflows/upload-verification
 
 test(
   "verifies uploads, reuses a legacy attempt under the canonical name, and cleans only this version duplicates",
-  { timeout: 50_000 },
+  { timeout: 120_000 },
   async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "baidu-upload-"));
     const server = createServer((_request, response) => {
@@ -40,29 +41,51 @@ test(
       server_mtime: number;
     };
     const files = new Map<string, Remote>();
-    const blocks = new Map<number, Buffer>();
+    const blocks = new Map<string, Map<number, Buffer>>();
+    let nextUploadId = 1;
     const remoteContents = new Map<string, Buffer>();
     const receipts: RemoteVerifiedFile[] = [];
     let contentReads = 0;
     let shares = 0;
     let nextFsId = 1;
+    let commitConnectionLost = false;
+    let fileCommits = 0;
+    let copyRequests = 0,
+      taskQueries = 0;
+    let denyCleanup = false;
+    let deniedDeletes = 0;
     const deletedPaths: string[] = [];
     const moveTree = (from: string, to: string) => {
       for (const [oldPath, file] of [...files]) {
         if (oldPath !== from && !oldPath.startsWith(from + "/")) continue;
         const newPath = to + oldPath.slice(from.length);
         files.delete(oldPath);
-        files.set(newPath, { ...file, path: newPath, server_filename: path.posix.basename(newPath) });
+        files.set(newPath, {
+          ...file,
+          path: newPath,
+          server_filename: path.posix.basename(newPath),
+        });
         const content = remoteContents.get(oldPath);
-        if (content) { remoteContents.delete(oldPath); remoteContents.set(newPath, content); }
+        if (content) {
+          remoteContents.delete(oldPath);
+          remoteContents.set(newPath, content);
+        }
       }
     };
     const uploadedIndexes: number[] = [];
+    const uploadHosts: string[] = [];
+    let nodeLookups = 0;
+    let primaryNodeFailures = 0;
+    let activeBlocks = 0;
+    let maximumActiveBlocks = 0;
     const requestTimeouts: number[] = [];
     const md5 = (value: Buffer) => createHash("md5").update(value).digest("hex");
     const clientMd5 = (plain: string) => {
-      const swapped = plain.slice(8, 16) + plain.slice(0, 8) + plain.slice(24, 32) + plain.slice(16, 24);
-      const chars = Array.from(swapped, (char, index) => (Number.parseInt(char, 16) ^ (index & 15)).toString(16));
+      const swapped =
+        plain.slice(8, 16) + plain.slice(0, 8) + plain.slice(24, 32) + plain.slice(16, 24);
+      const chars = Array.from(swapped, (char, index) =>
+        (Number.parseInt(char, 16) ^ (index & 15)).toString(16),
+      );
       chars[9] = String.fromCharCode("g".charCodeAt(0) + Number.parseInt(chars[9], 16));
       return chars.join("");
     };
@@ -71,60 +94,128 @@ test(
       const form = new URLSearchParams(payload.toString());
       if (url.pathname.endsWith("gettemplatevariable"))
         return { errno: 0, result: { bdstoken: "test-token" } };
+      if (url.searchParams.get("method") === "locateupload") {
+        nodeLookups++;
+        return { server: [{ server: "https://c3.pcs.baidu.com" }] };
+      }
       if (url.pathname.endsWith("/list"))
         return {
           errno: 0,
-          list: [...files.values()].filter(
-            (file) => path.posix.dirname(file.path) === url.searchParams.get("dir"),
-          ).map(file => ({ ...file, md5: file.md5 ? clientMd5(file.server_filename.endsWith(".mp4") ? "f".repeat(32) : file.md5) : undefined })),
+          list: [...files.values()]
+            .filter((file) => path.posix.dirname(file.path) === url.searchParams.get("dir"))
+            .map((file) => ({
+              ...file,
+              md5: file.md5
+                ? clientMd5(file.server_filename.endsWith(".mp4") ? "f".repeat(32) : file.md5)
+                : undefined,
+            })),
         };
       if (url.pathname.endsWith("/filemetas")) {
         const target = JSON.parse(url.searchParams.get("target")!)[0];
         const file = files.get(target)!;
-        return { errno: 0, info: [{ ...file, md5: "f".repeat(32), dlink: `https://d.pcs.baidu.com/verify-content?path=${encodeURIComponent(target)}` }] };
+        return {
+          errno: 0,
+          info: [
+            {
+              ...file,
+              md5: file.server_filename.endsWith(".mp4") ? "f".repeat(32) : file.md5,
+              dlink: `https://d.pcs.baidu.com/verify-content?path=${encodeURIComponent(target)}`,
+            },
+          ],
+        };
       }
       if (url.pathname === "/verify-content") {
         contentReads++;
         return { rawBody: remoteContents.get(url.searchParams.get("path")!)! };
       }
+      if (url.pathname === "/api/taskquery") {
+        taskQueries++;
+        return { errno: 0, status: "success", list: [{ error_code: 0 }] };
+      }
       if (url.pathname.endsWith("/filemanager")) {
         const entries = JSON.parse(form.get("filelist")!);
         if (url.searchParams.get("opera") === "delete") {
+          if (denyCleanup) {
+            deniedDeletes++;
+            return { errno: 132, request_id: "99423870080723870" };
+          }
           for (const target of entries) {
             deletedPaths.push(target);
-            for (const file of [...files.keys()]) if (file === target || file.startsWith(target + "/")) {
-              files.delete(file); remoteContents.delete(file);
-            }
+            for (const file of [...files.keys()])
+              if (file === target || file.startsWith(target + "/")) {
+                files.delete(file);
+                remoteContents.delete(file);
+              }
           }
         } else if (url.searchParams.get("opera") === "rename") {
-          for (const entry of entries) moveTree(entry.path, path.posix.join(path.posix.dirname(entry.path), entry.newname));
+          for (const entry of entries)
+            moveTree(entry.path, path.posix.join(path.posix.dirname(entry.path), entry.newname));
+        } else if (url.searchParams.get("opera") === "copy") {
+          copyRequests++;
+          assert.equal(url.searchParams.get("async"), "0");
+          assert.equal(url.searchParams.get("onnest"), "fail");
+          for (const entry of entries) {
+            const source = files.get(entry.path)!;
+            const destination = path.posix.join(entry.dest, entry.newname);
+            assert.ok(!files.has(destination), "cloud reuse never overwrites existing files");
+            files.set(destination, {
+              ...source,
+              path: destination,
+              server_filename: entry.newname,
+              fs_id: nextFsId++,
+              server_mtime: 2,
+            });
+            remoteContents.set(destination, remoteContents.get(entry.path)!);
+          }
+          return { errno: 0, taskid: "copy-task" };
         } else throw new Error("Unexpected mutation");
         return { errno: 0 };
       }
       if (url.pathname.endsWith("/precreate")) {
-        blocks.clear();
+        assert.equal(form.get("target_path"), path.posix.dirname(form.get("path")!));
+        const uploadid = `upload-${nextUploadId++}`;
+        blocks.set(uploadid, new Map());
         const hashes = JSON.parse(form.get("block_list")!);
         return {
           errno: 0,
           return_type: 1,
-          uploadid: "upload-1",
+          uploadid,
+          uploadsign: "test-sign",
           block_list: hashes.map((_hash: string, index: number) => index),
         };
       }
       if (url.pathname.endsWith("/superfile2")) {
+        assert.equal(
+          url.searchParams.has("type"),
+          false,
+          "web upload must not use open-platform tmpfile mode",
+        );
+        assert.equal(url.searchParams.get("uploadsign"), "test-sign");
+        assert.equal(url.searchParams.get("channel"), "chunlei");
+        if (url.hostname === "c3.pcs.baidu.com") {
+          primaryNodeFailures++;
+          throw new Error("net::ERR_CONNECTION_CLOSED");
+        }
+        uploadHosts.push(url.hostname);
         const start = payload.indexOf("\r\n\r\n") + 4;
         const end = payload.lastIndexOf("\r\n--");
         const block = payload.subarray(start, end);
         const index = Number(url.searchParams.get("partseq"));
-        blocks.set(index, block);
+        blocks.get(url.searchParams.get("uploadid")!)!.set(index, block);
         uploadedIndexes.push(index);
         return { md5: md5(block) };
       }
       if (url.pathname.endsWith("/create")) {
         const destination = form.get("path")!;
         const isdir = Number(form.get("isdir"));
+        if (!isdir) {
+          assert.equal(form.get("target_path"), path.posix.dirname(destination));
+          assert.equal(form.get("uploadsign"), "test-sign");
+        }
         const content = Buffer.concat(
-          [...blocks.entries()].sort(([left], [right]) => left - right).map(([, buffer]) => buffer),
+          [...(blocks.get(form.get("uploadid")!) ?? new Map<number, Buffer>()).entries()]
+            .sort(([left], [right]) => left - right)
+            .map(([, buffer]) => buffer),
         );
         const file = {
           server_filename: path.posix.basename(destination),
@@ -137,12 +228,26 @@ test(
         };
         files.set(destination, file);
         if (!isdir) remoteContents.set(destination, content);
-        return { errno: 0, ...file };
+        if (!isdir) {
+          fileCommits++;
+          if (!commitConnectionLost) {
+            commitConnectionLost = true;
+            throw new Error("net::ERR_CONNECTION_CLOSED");
+          }
+        }
+        return {
+          errno: 0,
+          ...file,
+          md5: !isdir && file.server_filename.endsWith(".mp4") ? "f".repeat(32) : file.md5,
+        };
       }
       if (url.pathname.endsWith("/share/set")) {
         shares++;
-        assert.ok(files.has("/快手_二创集合/原剧/新剧-60%/成片/新剧-第1集.mp4"));
-        return { errno: 0, shareid: 123, link: "https://pan.baidu.com/s/1test" };
+        const sharedId = JSON.parse(form.get("fid_list")!)[0];
+        const sharedRoot = [...files.values()].find((file) => file.fs_id === sharedId)!.path;
+        const title = path.posix.basename(sharedRoot).replace(/-60%$/, "");
+        assert.ok(files.has(`${sharedRoot}/成片/${title}-第1集.mp4`));
+        return { errno: 0, shareid: 123 + shares, link: `https://pan.baidu.com/s/1test${shares}` };
       }
       throw new Error(`Unhandled test URL ${rawUrl}`);
     };
@@ -162,25 +267,46 @@ test(
         };
         request.abort = () => undefined;
         request.end = () =>
-          queueMicrotask(() => {
+          queueMicrotask(async () => {
+            const isBlock =
+              new URL(options.url).pathname.endsWith("/superfile2") &&
+              new URL(options.url).hostname === "c2.pcs.baidu.com";
+            if (isBlock) {
+              maximumActiveBlocks = Math.max(maximumActiveBlocks, ++activeBlocks);
+              // Keep responses in flight so this fixture detects real CDP/network
+              // overlap, rather than only concurrent calls to a pure helper.
+              await new Promise((resolve) =>
+                setTimeout(resolve, payload.length > 1024 ? 1_500 : 350),
+              );
+            }
             try {
               const data = handle(options.url, payload);
               request.emit("close"); // Real Baidu event order: request closes before response completion.
               const response = Object.assign(new EventEmitter(), { statusCode: 200 });
               request.emit("response", response);
-              response.emit("data", "rawBody" in data ? data.rawBody : Buffer.from(JSON.stringify(data)));
+              response.emit(
+                "data",
+                "rawBody" in data ? data.rawBody : Buffer.from(JSON.stringify(data)),
+              );
               response.emit("end");
             } catch (error) {
               request.emit("error", error);
+            } finally {
+              if (isBlock) activeBlocks--;
             }
           });
         return request;
       },
     };
     const contents = { id: 1, getURL: () => "https://pan.baidu.com/disk/main", session: {} };
-    const electron = { net, webContents: { getAllWebContents: () => [contents], fromId: () => contents } };
+    const electron = {
+      net,
+      webContents: { getAllWebContents: () => [contents], fromId: () => contents },
+    };
     const mainContext = createContext({
-      Buffer, URL, clearTimeout,
+      Buffer,
+      URL,
+      clearTimeout,
       setTimeout: (callback: () => void, ms: number) => {
         requestTimeouts.push(ms);
         return setTimeout(callback, ms);
@@ -202,10 +328,21 @@ test(
                   clearTimeout,
                   require: () => ({
                     getCurrentWebContents: () => contents,
-                    require: (module: string) => module === "electron" ? electron : module === "crypto" ? { createHash } : {
-                      compileFunction: (code: string, parameters: string[]) => compileFunction(code, parameters, { parsingContext: mainContext }),
-                      runInThisContext: (expression: string) => runInContext(expression, mainContext),
-                    },
+                    require: (module: string) =>
+                      module === "electron"
+                        ? electron
+                        : module === "crypto"
+                          ? { createHash }
+                          : module === "fs"
+                            ? fs
+                            : {
+                                compileFunction: (code: string, parameters: string[]) =>
+                                  compileFunction(code, parameters, {
+                                    parsingContext: mainContext,
+                                  }),
+                                runInThisContext: (expression: string) =>
+                                  runInContext(expression, mainContext),
+                              },
                   }),
                 })
               : undefined;
@@ -231,27 +368,57 @@ test(
       await mkdir(path.join(directory, "封面"));
       const cover = Buffer.from("test cover bytes");
       await writeFile(path.join(directory, "封面", "封面.png"), cover);
-      const video = Buffer.alloc(4 * 1024 * 1024 + 123, 7);
+      const video = Buffer.alloc(12 * 1024 * 1024 + 123, 7);
       await writeFile(path.join(directory, "成片", "新剧-第1集.mp4"), video);
+      await writeFile(path.join(directory, "成片", "新剧-第2集.mp4"), video);
       const options = {
         port: (server.address() as { port: number }).port,
         localDirectory: directory,
         remoteDirectory: "/快手_二创集合/原剧/新剧-60%",
         verifiedFiles: receipts,
-        onFileVerified: (file: RemoteVerifiedFile) => { receipts.push(file); },
+        onFileVerified: (file: RemoteVerifiedFile) => {
+          receipts.push(file);
+        },
       };
       const result = await uploadBaiduNetdiskDirectory(options);
-      assert.equal(result.shareUrl, "https://pan.baidu.com/s/1test");
+      assert.equal(result.shareUrl, "https://pan.baidu.com/s/1test1");
       assert.match(result.extractionCode, /^[a-f0-9]{4}$/);
-      assert.deepEqual([...uploadedIndexes].sort(), [0, 0, 1]);
-      assert.equal(requestTimeouts.filter(ms => ms === 600_000).length, 4); // Three upload blocks and one content readback.
+      assert.deepEqual([...uploadedIndexes].sort(), [0, 0, 0, 1, 1, 2, 2, 3, 3]);
+      assert.ok(
+        maximumActiveBlocks > 4 && maximumActiveBlocks <= 8,
+        "two files overlap without exceeding the eight-request budget",
+      );
+      assert.equal(activeBlocks, 0, "all part responses settle before the file is committed");
+      assert.equal(nodeLookups, 1, "upload node discovery is reused across files and blocks");
+      assert.equal(
+        primaryNodeFailures,
+        3,
+        "a failing node is retried within budget then demoted for subsequent blocks",
+      );
+      assert.deepEqual(uploadHosts, Array(9).fill("c2.pcs.baidu.com"));
+      assert.equal(
+        fileCommits,
+        3,
+        "a lost commit response is reconciled without replaying the write",
+      );
+      assert.ok(
+        requestTimeouts.includes(600_000),
+        "large blocks and readbacks retain their explicit transfer budget",
+      );
       assert.equal(files.get(`${options.remoteDirectory}/封面/封面.png`)?.md5, md5(cover));
       assert.equal(files.get(`${options.remoteDirectory}/成片/新剧-第1集.mp4`)?.md5, md5(video));
       const base = options.remoteDirectory;
       const legacy = base + "汇总（2）";
       moveTree(base, legacy);
       for (const receipt of receipts) receipt.path = legacy + receipt.path.slice(base.length);
-      const folder = (target: string): Remote => ({ server_filename: path.posix.basename(target), path: target, fs_id: nextFsId++, isdir: 1, size: 0, server_mtime: 1 });
+      const folder = (target: string): Remote => ({
+        server_filename: path.posix.basename(target),
+        path: target,
+        fs_id: nextFsId++,
+        isdir: 1,
+        size: 0,
+        server_mtime: 1,
+      });
       files.set(base, folder(base));
       files.set(`${base}/未知.txt`, { ...folder(`${base}/未知.txt`), isdir: 0, size: 1 });
       files.set(base + "汇总", folder(base + "汇总"));
@@ -259,22 +426,89 @@ test(
       files.set(unrelated, folder(unrelated));
       const uploadCountBefore = uploadedIndexes.length;
       let selected = "";
-      const isolated = await uploadBaiduNetdiskDirectory({ ...options, preferredRemoteDirectory: legacy, onRemoteDirectorySelected: directory => { selected = directory; } });
+      const isolated = await uploadBaiduNetdiskDirectory({
+        ...options,
+        preferredRemoteDirectory: legacy,
+        onRemoteDirectorySelected: (directory) => {
+          selected = directory;
+        },
+      });
       assert.equal(isolated.remotePath, base);
       assert.equal(selected, base);
       assert.equal(files.get(`${base}/成片/新剧-第1集.mp4`)?.md5, md5(video));
-      assert.equal(uploadedIndexes.length, uploadCountBefore, "legacy uploaded files are reused without retransmission");
+      assert.equal(
+        uploadedIndexes.length,
+        uploadCountBefore,
+        "legacy uploaded files are reused without retransmission",
+      );
       assert.ok(!files.has(`${base}/未知.txt`));
       assert.ok(!files.has(legacy) && !files.has(base + "汇总"));
       assert.ok(files.has(unrelated), "other dramas and versions are preserved");
       assert.ok(!deletedPaths.includes(unrelated));
       assert.equal(shares, 2);
       const uploadCount = uploadedIndexes.length;
-      const retry = await uploadBaiduNetdiskDirectory({ ...options, preferredRemoteDirectory: isolated.remotePath });
+      files.set(legacy, folder(legacy));
+      denyCleanup = true;
+      const messages: string[] = [];
+      const retry = await uploadBaiduNetdiskDirectory({
+        ...options,
+        preferredRemoteDirectory: isolated.remotePath,
+        onProgress: (message) => messages.push(message),
+      });
       assert.equal(retry.remotePath, isolated.remotePath);
       assert.equal(uploadedIndexes.length, uploadCount, "verified files are not uploaded again");
-      assert.equal(contentReads, 1, "persisted verification receipts avoid repeated content downloads");
+      assert.equal(
+        contentReads,
+        2,
+        "persisted verification receipts avoid repeated content downloads",
+      );
       assert.equal(shares, 3);
+      assert.equal(
+        retry.shareUrl,
+        "https://pan.baidu.com/s/1test3",
+        "optional cleanup cannot lose the completed share",
+      );
+      assert.equal(deniedDeletes, 1, "identity verification is never retried");
+      assert.ok(files.has(legacy), "denied cleanup retains the old directory");
+      assert.ok(
+        messages.some((message) => /上传及分享已完成.*清理未完成.*errno=132/.test(message)),
+      );
+      // A different version contains identical bytes under different names.
+      // It must copy inside Baidu, without new multipart transfers/readbacks.
+      const nextLocal = path.join(directory, "next-version");
+      await mkdir(path.join(nextLocal, "成片"), { recursive: true });
+      await mkdir(path.join(nextLocal, "封面"));
+      for (const index of [1, 2])
+        await writeFile(path.join(nextLocal, "成片", `新版本-第${index}集.mp4`), video);
+      await writeFile(path.join(nextLocal, "封面", "封面.png"), cover);
+      const copiedReceipts: RemoteVerifiedFile[] = [];
+      const next = await uploadBaiduNetdiskDirectory({
+        ...options,
+        localDirectory: nextLocal,
+        remoteDirectory: "/快手_二创集合/原剧/新版本-60%",
+        verifiedFiles: [],
+        onFileVerified: (file) => copiedReceipts.push(file),
+        reuseSource: {
+          remoteDirectory: base,
+          verifiedFiles: receipts.filter((file) => file.path.startsWith(base + "/")),
+        },
+      });
+      assert.equal(next.shareUrl, "https://pan.baidu.com/s/1test4");
+      assert.equal(copyRequests, 1);
+      assert.equal(taskQueries, 1);
+      assert.equal(fileCommits, 3, "later versions never precreate/commit another upload");
+      assert.equal(
+        uploadedIndexes.length,
+        uploadCount,
+        "later versions consume no upload bandwidth",
+      );
+      assert.equal(
+        contentReads,
+        2,
+        "verified server-side copies inherit evidence without downloading videos again",
+      );
+      assert.equal(copiedReceipts.length, 3);
+      assert.equal(files.get(next.remotePath + "/成片/新版本-第1集.mp4")?.md5, md5(video));
     } finally {
       for (const socket of sockets.clients) socket.terminate();
       await new Promise<void>((resolve) => sockets.close(() => server.close(() => resolve())));

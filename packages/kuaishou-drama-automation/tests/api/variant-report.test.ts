@@ -33,6 +33,8 @@ test("reports every failed version without truncation or suppressing a closed ve
   await reportKuaishouDramaTaskErrorApi({
     client,
     accountTaskId: 12,
+    workerId: "worker-test",
+    attemptCount: 3,
     failStage: "UPLOAD_FILE",
     errorMessage: message,
   });
@@ -55,11 +57,15 @@ test("reports success with all versions after a successful retry", async () => {
   await reportKuaishouDramaTaskSuccessApi({
     client,
     accountTaskId: 12,
+    workerId: "worker-test",
+    attemptCount: 3,
     resultJson: { variants: ["ad-unlock", "ad-unlock-2", "ad-unlock-3"] },
   });
   assert.deepEqual(calls, [
     {
       taskId: 12,
+      workerId: "worker-test",
+      attemptCount: 3,
       success: true,
       failStage: undefined,
       errorMessage: undefined,

@@ -249,6 +249,8 @@ function extensionForMime(mimeType: string) {
 
 function openAiLandscapeSize(size: string | undefined): "1536x1024" | "1024x1024" | "1024x1536" {
   if (size === "1024x1024" || size === "1024x1536" || size === "1536x1024") return size;
+  const dimensions = /^(\d+)x(\d+)$/.exec(size ?? "");
+  if (dimensions && Number(dimensions[1]) < Number(dimensions[2])) return "1024x1536";
   return "1536x1024";
 }
 

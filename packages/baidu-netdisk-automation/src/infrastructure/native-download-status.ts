@@ -1,12 +1,17 @@
-type NativeTask = {
+export type NativeTask = {
   id?: unknown; name?: unknown; server_path?: unknown; local_path?: unknown;
   status?: unknown; size?: unknown; finish_size?: unknown; rate?: unknown;
 };
 
 /** Client versions return an array, JSON text, or an empty string with count=0. */
-export function decodeNativeDownloadTasks(payload: { errorNo?: unknown; items?: { tasks?: unknown }; count?: unknown } | undefined): NativeTask[] {
+export function decodeNativeDownloadTasks(payload: { errorNo?: unknown; items?: unknown; count?: unknown } | undefined): NativeTask[] {
   if (!payload || Number(payload.errorNo) !== 0) throw new Error("客户端下载任务列表暂不可用");
-  let tasks = payload.items?.tasks;
+  let items = payload.items;
+  if (typeof items === "string") {
+    if (!items.trim() && Number(payload.count) === 0) return [];
+    try { items = JSON.parse(items); } catch { throw new Error("客户端下载任务列表格式不可用"); }
+  }
+  let tasks = Array.isArray(items) ? items : (items as { tasks?: unknown } | undefined)?.tasks;
   if (typeof tasks === "string") {
     if (!tasks.trim() && Number(payload.count) === 0) return [];
     try { tasks = JSON.parse(tasks); } catch { throw new Error("客户端下载任务列表格式不可用"); }
@@ -42,6 +47,10 @@ export function selectNativeDownloadStatus(list: NativeTask[], options: {
     return true;
   });
   const matched = matches[0];
+  const matchedNames = new Set(matches.flatMap(task =>
+    [task.name, helpers.nameFromPath(task.server_path), helpers.nameFromPath(task.local_path)].map(helpers.normalized),
+  ));
+  const allExpectedPresent = [...names].every(name => matchedNames.has(name));
   return {
     matched: matched ? {
       id: String(matched.id || ""),
@@ -52,7 +61,7 @@ export function selectNativeDownloadStatus(list: NativeTask[], options: {
       size: grouped ? String(matches.reduce((sum, task) => sum + (Number(task.size) || 0), 0)) : String(matched.size || ""),
       finishSize: grouped ? String(matches.reduce((sum, task) => sum + (Number(task.finish_size) || 0), 0)) : String(matched.finish_size || ""),
       rate: String(matches.find(task => !helpers.complete(task))?.rate || matched.rate || ""),
-      completed: grouped ? matches.every(helpers.complete) : helpers.complete(matched),
+      completed: grouped ? allExpectedPresent && matches.every(helpers.complete) : helpers.complete(matched),
     } : undefined,
     tasks: list.map(task => [task.name, task.status, `${task.finish_size}/${task.size}`, task.rate, task.server_path, task.local_path].map(helpers.normalized).filter(Boolean).join(" ")),
   };

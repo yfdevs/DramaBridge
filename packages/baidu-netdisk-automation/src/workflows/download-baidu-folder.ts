@@ -1,5 +1,8 @@
 import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
+import { createBaiduDirectoryCache } from "./download-directory-cache.js";
+import { createBaiduShareDirectoryReader } from "./share-directory-reader.js";
+import { confirmSingleFileDownload } from "./download-task-confirmation.js";
 import { Effect } from "effect";
 import {
   ensureBaiduCdpPort,
@@ -46,6 +49,10 @@ import { assertBaiduNativeDownloaderReady } from "../infrastructure/native-downl
 import { openDedicatedBaiduShareWindow } from "../infrastructure/share-window.js";
 import { selectIncompleteEpisodeDownloads } from "./download-episode-cache.js";
 import { decodeNativeDownloadTasks, selectNativeDownloadStatus } from "../infrastructure/native-download-status.js";
+import { confirmNativeTasksDeleted, invokeNativeTaskControl, selectNativeTasksForControl } from "../infrastructure/native-task-control.js";
+import { decodeNativeDownloadHistory } from "../infrastructure/native-download-history.js";
+import { runNativeTaskOperationExclusive } from "../infrastructure/native-task-lane.js";
+import { baiduNativeTaskSnapshotExpression, isMissingBaiduRemoteObject } from "../infrastructure/native-task-snapshot.js";
 import { baiduPageRequest } from "../infrastructure/page-request.js";
 
 export { DEFAULT_BAIDU_NETDISK_DOWNLOAD_DIR } from "../domain/constants.js";
@@ -936,7 +943,7 @@ export function sanitizeBaiduPageFileName(
   return bounded || fallback;
 }
 
-async function saveShareToOwnNetdisk(
+export async function saveShareToOwnNetdisk(
   target: CdpTarget,
   share: ShareInfo,
   options: SaveShareOptions = {},
@@ -1119,7 +1126,11 @@ async function saveShareToOwnNetdisk(
     const name = fileNameOf(item);
     return name === expectedName || Boolean(name && (name.includes(expectedName) || expectedName.includes(name)));
   };
-  const candidates = [pageData, ...localsBlocks].filter((item) => item && typeof item === "object");
+  // Fresh HTML belongs to this verified share. The reused client page can keep
+  // yunData from its previous share, including /sharelink virtual paths.
+  const freshCandidates = localsBlocks.filter((item) => item && typeof item === "object");
+  const candidates = freshCandidates.some((item) => blockShareId(item) && blockShareUk(item))
+    ? freshCandidates : [pageData, ...freshCandidates].filter((item) => item && typeof item === "object");
   const completeFileBlock =
     candidates.find((item) => fileListOf(item).some(isExpectedFile) && blockShareId(item) && blockShareUk(item)) ||
     candidates.find((item) => fileListOf(item).length > 0 && blockShareId(item) && blockShareUk(item)) ||
@@ -1152,47 +1163,28 @@ async function saveShareToOwnNetdisk(
     throw new Error("分享页 HTML 没有解析到 shareid/share_uk，无法保存到我的网盘。");
   }
   const shareListAttempts = [];
-  const fetchShareFileList = async (dir = "/") => {
-    const results = [];
-    const pageSize = 1000;
-    for (let page = 1; page <= SHARE_LIST_MAX_PAGES; page += 1) {
-      const params = new URLSearchParams({
-        uk: shareUk,
-        shareid: shareId,
-        order: "other",
-        desc: "1",
-        showempty: "0",
-        web: "1",
-        page: String(page),
-        num: String(pageSize),
-        dir: normalizeDir(dir),
-        t: String(Date.now()),
-        channel: "chunlei",
-        app_id: "250528",
-        bdstoken: token,
-        clienttype: "0",
-      });
-      const data = await jsonFetch("/share/list?" + params.toString());
-      if (data.errno !== 0) {
-        shareListAttempts.push("page=" + page + " errno=" + data.errno + " " + compactJson(data));
-        break;
-      }
-      const list = Array.isArray(data.list) ? data.list : [];
-      results.push(...list);
-      if (list.length < pageSize && !data.has_more) break;
-    }
-    return results;
-  };
-  let apiFileList = [];
-  try {
-    apiFileList = await fetchShareFileList();
-  } catch (error) {
-    shareListAttempts.push("error=" + String(error?.message || error));
-  }
   const htmlFileList = fileListOf(completeFileBlock).length > 0
     ? fileListOf(completeFileBlock)
     : fileListOf(fallbackFileBlock);
-  const fileList = apiFileList.length > 0 ? apiFileList : htmlFileList;
+  const createDirectoryCache = ${createBaiduDirectoryCache.toString()};
+  const createShareReader = ${createBaiduShareDirectoryReader.toString()};
+  const shareReader = createShareReader({
+    request: jsonFetch, shareId, shareUk, token, maxPages: SHARE_LIST_MAX_PAGES,
+    fallbackRoots: htmlFileList, onFailure: (message) => shareListAttempts.push(message),
+  });
+  const shareDirectoryCache = createDirectoryCache(shareReader.load);
+  const fetchShareFileList = (dir = "/") => shareDirectoryCache.get(normalizeDir(dir));
+  let apiFileList;
+  try {
+    apiFileList = await fetchShareFileList();
+  } catch (error) {
+    // A missing/invalid share root or expired login must not fall through to
+    // cached HTML entries and start a transfer with stale file identities.
+    if (/errno=-(?:6|9)\\b|8001|8011|BAIDU_NETDISK_(?:RISK|IDENTITY)/.test(String(error?.message || error))) throw error;
+    shareListAttempts.push("error=" + String(error?.message || error));
+  }
+  // A successful empty root is authoritative; do not resurrect old HTML files.
+  const fileList = apiFileList ?? htmlFileList;
   const transferableFiles = fileList.filter((item) => Boolean(fileFsIdOf(item)));
   if (transferableFiles.length === 0) {
     throw new Error(
@@ -1233,7 +1225,6 @@ async function saveShareToOwnNetdisk(
     const targetSize = itemSize(target);
     return sourceSize <= 0 || targetSize <= 0 || sourceSize === targetSize;
   };
-  const ownDirListCache = new Map();
   const ownDirListFailureMessage = (dir, data) => {
     const apiMessage = String(data?.show_msg || data?.errmsg || data?.message || "");
     const hint =
@@ -1286,11 +1277,7 @@ async function saveShareToOwnNetdisk(
     }
     return lastData;
   };
-  const listOwnDir = async (dir, forceRefresh = false) => {
-    const normalizedDir = normalizeDir(dir);
-    if (!forceRefresh && ownDirListCache.has(normalizedDir)) {
-      return ownDirListCache.get(normalizedDir);
-    }
+  const ownDirectoryCache = createDirectoryCache(async (normalizedDir) => {
     const results = [];
     for (let page = 1; page <= OWN_NETDISK_DIR_LIST_MAX_PAGES; page += 1) {
       const data = await fetchOwnDirPage(normalizedDir, page);
@@ -1299,11 +1286,11 @@ async function saveShareToOwnNetdisk(
       }
       const list = Array.isArray(data.list) ? data.list : [];
       results.push(...list);
-      if (list.length < OWN_NETDISK_DIR_LIST_PAGE_SIZE && !data.has_more) break;
+      if (list.length < OWN_NETDISK_DIR_LIST_PAGE_SIZE && !data.has_more) return results;
     }
-    ownDirListCache.set(normalizedDir, results);
-    return results;
-  };
+    throw new Error("我的网盘目录分页超出安全上限，已停止转存：" + normalizedDir);
+  });
+  const listOwnDir = (dir, forceRefresh = false) => ownDirectoryCache.get(normalizeDir(dir), forceRefresh);
   const safeExpectedName = safeFileName(
     String(expectedName || sourceName || "百度网盘资源"),
     { fallback: "百度网盘资源", maxLength: 180, replacement: "_" },
@@ -1347,7 +1334,7 @@ async function saveShareToOwnNetdisk(
 
   const findOwnItem = async (dir, name, forceRefresh = false) =>
     (await listOwnDir(dir, forceRefresh)).find((item) => itemName(item) === name);
-  const searchOwnItems = async (name) => {
+  const ownSearchCache = createDirectoryCache(async (name) => {
     const results = [];
     const pageSize = 1000;
     for (let page = 1; page <= OWN_NETDISK_DIR_LIST_MAX_PAGES; page += 1) {
@@ -1367,13 +1354,25 @@ async function saveShareToOwnNetdisk(
       const data = await jsonFetch("/api/search?" + params.toString());
       if (data.errno !== 0) {
         attempts.push("search own item errno=" + data.errno + " name=" + name);
-        break;
+        throw new Error("搜索我的网盘失败：errno=" + data.errno);
       }
       const list = Array.isArray(data.list) ? data.list : [];
       results.push(...list.filter((item) => itemName(item) === name));
-      if (!data.has_more || list.length < pageSize) break;
+      if (!data.has_more && list.length < pageSize) return results;
     }
-    return results;
+    throw new Error("网盘搜索分页超出安全上限，已停止转存：" + name);
+  });
+  const searchOwnItems = async (name) => {
+    try {
+      return await ownSearchCache.get(String(name));
+    } catch (error) {
+      if (/8001|8011|BAIDU_NETDISK_RISK/.test(String(error?.message || error))) throw error;
+      // Global search is only an optional reuse aid. If it is unavailable,
+      // continue with exact directory lookup and transfer reconciliation;
+      // failed/partial search responses remain uncached.
+      attempts.push("网盘搜索暂不可用，回退目录核验：" + String(error?.message || error));
+      return [];
+    }
   };
   const createOwnDirectory = async (destinationDir, name) => {
     const normalizedDestinationDir = normalizeDir(destinationDir);
@@ -1406,7 +1405,8 @@ async function saveShareToOwnNetdisk(
       body: createBody,
     });
     if (created.errno === 0) {
-      ownDirListCache.delete(normalizedDestinationDir);
+      ownDirectoryCache.invalidate(normalizedDestinationDir);
+      ownSearchCache.invalidate();
       return created;
     }
     if (created.errno === 2) {
@@ -1455,7 +1455,8 @@ async function saveShareToOwnNetdisk(
           (copied.errmsg || copied.show_msg ? "；message=" + String(copied.errmsg || copied.show_msg) : ""),
       );
     }
-    ownDirListCache.delete(normalizedDestinationDir);
+    ownDirectoryCache.invalidate(normalizedDestinationDir);
+    ownSearchCache.invalidate();
     const located = await waitForOwnItem(source, normalizedDestinationDir, 70000);
     if (located) return located;
     throw new Error("复制网盘已有素材后未在目标目录找到文件：" + targetPath);
@@ -1463,6 +1464,7 @@ async function saveShareToOwnNetdisk(
   const waitForOwnItem = async (source, destinationDir, timeoutMs) => {
     const name = fileNameOf(source);
     const startedAt = Date.now();
+    let pollDelay = 1500;
     while (Date.now() - startedAt < timeoutMs) {
       const located = await findOwnItem(destinationDir, name, true);
       if (located) {
@@ -1473,7 +1475,8 @@ async function saveShareToOwnNetdisk(
         }
         return located;
       }
-      await sleep(1500);
+      await sleep(Math.min(pollDelay, Math.max(0, timeoutMs - (Date.now() - startedAt))));
+      pollDelay = Math.min(pollDelay * 1.5, 6000);
     }
     return undefined;
   };
@@ -1505,6 +1508,9 @@ async function saveShareToOwnNetdisk(
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: transferBody,
       });
+      // Both successful and uncertain writes invalidate prior negative searches.
+      ownDirectoryCache.invalidate(normalizeDir(destinationDir));
+      ownSearchCache.invalidate();
       const message = String(transferred.show_msg || transferred.errmsg || transferred.message || "");
       if (transferred.errno === -6 || message.includes("账户已过期") || message.includes("重新登陆")) {
         throw new Error("百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载。");
@@ -1712,7 +1718,14 @@ async function saveShareToOwnNetdisk(
     finalFileName = (isolatedBase + uniqueSuffix).slice(0, 180);
   }
   const rootCandidate = isolateRoot ? undefined : await findOwnItem("/", finalFileName);
-  const searchedCandidates = isolateRoot ? [] : (await searchOwnItems(finalFileName))
+  const rootInspection = rootCandidate && itemIsDir(rootCandidate)
+    ? await inspectReusableDirectory(desiredItems, itemPath(rootCandidate))
+    : undefined;
+  const rootIsComplete = rootInspection && !rootInspection.conflict
+    && rootInspection.total > 0 && rootInspection.matched === rootInspection.total;
+  // An exact complete root already answers the reuse question. Avoid recursive
+  // account-wide searches (especially generic anchor names such as “视频”).
+  const searchedCandidates = isolateRoot || rootIsComplete ? [] : (await searchOwnItems(finalFileName))
     .filter((item) => itemIsDir(item) && itemName(item) === finalFileName);
   const candidateByPath = new Map();
   const contentMatchedCandidatePaths = new Set();
@@ -1721,7 +1734,7 @@ async function saveShareToOwnNetdisk(
     candidateByPath.set(normalizeDir(itemPath(candidate)), candidate);
   }
   const anchorSource = desiredItems.find(itemIsDir) || desiredItems[0];
-  if (anchorSource) {
+  if (anchorSource && !rootIsComplete && !isolateRoot) {
     const anchorMatches = (await searchOwnItems(fileNameOf(anchorSource)))
       .filter((item) => compatibleItem(anchorSource, item));
     for (const anchorMatch of anchorMatches) {
@@ -1734,7 +1747,7 @@ async function saveShareToOwnNetdisk(
         candidateName.startsWith(safeExpectedName + "__") ||
         Boolean(wrapperName && candidateName === wrapperName);
       if (!expectedCandidate) continue;
-      const candidate = await findOwnItem(parentPathOf(candidatePath), candidateName, true);
+      const candidate = await findOwnItem(parentPathOf(candidatePath), candidateName);
       if (!candidate || !itemIsDir(candidate)) continue;
       candidateByPath.set(candidatePath, candidate);
       contentMatchedCandidatePaths.add(candidatePath);
@@ -1742,7 +1755,8 @@ async function saveShareToOwnNetdisk(
   }
   const rankedCandidates = [];
   for (const candidate of candidateByPath.values()) {
-    const inspected = await inspectReusableDirectory(desiredItems, itemPath(candidate));
+    const inspected = candidate === rootCandidate && rootInspection
+      ? rootInspection : await inspectReusableDirectory(desiredItems, itemPath(candidate));
     const candidatePath = normalizeDir(itemPath(candidate));
     const requiresCompleteMatch = contentMatchedCandidatePaths.has(candidatePath);
     if (!inspected.conflict && (!requiresCompleteMatch || inspected.matched === inspected.total)) {
@@ -1880,8 +1894,10 @@ async function saveShareToOwnNetdisk(
     return Number.isInteger(index) && index > 0 ? index : undefined;
   };
   const listDir = async (dir) => {
-    const results = [];
     const normalizedDir = normalizeDir(dir);
+    // Reuse the same validated inventory used for transfer reconciliation.
+    // Previously the material scan fetched every directory a second time.
+    const results = await listOwnDir(normalizedDir);
     const debug = {
       path: normalizedDir,
       name: normalizedDir.split("/").filter(Boolean).pop() || normalizedDir,
@@ -1895,18 +1911,6 @@ async function saveShareToOwnNetdisk(
       hasMore: false,
       entries: [],
     };
-    for (let page = 1; page <= OWN_NETDISK_DIR_LIST_MAX_PAGES; page += 1) {
-      const data = await fetchOwnDirPage(normalizedDir, page);
-      if (data.errno !== 0) {
-        if (page === 1) attempts.push("list dir=" + normalizedDir + " " + ownDirListFailureMessage(normalizedDir, data));
-        debug.errno = data.errno;
-        break;
-      }
-      const list = Array.isArray(data.list) ? data.list : [];
-      results.push(...list);
-      debug.hasMore = Boolean(data.has_more);
-      if (list.length < OWN_NETDISK_DIR_LIST_PAGE_SIZE && !data.has_more) break;
-    }
     debug.count = results.length;
     const directFiles = results.filter((entry) => !(entry?.isdir === 1 || entry?.isdir === true));
     debug.fileCount = directFiles.length;
@@ -2665,49 +2669,43 @@ async function getNativeDownloadTask(
   expectedServerPath = "",
   expectedDownloadRoot = "",
   targetNames?: string[],
+  includeHistory = false,
 ) {
-  const target = findUsableCoreTarget(await getTargets(port));
-  if (!target) return undefined;
-
-  return withPage(target, (page) =>
-    page
-      .evaluate<{
-        matched?: {
-          id?: string;
-          name?: string;
-          serverPath?: string;
-          localPath?: string;
-          status?: string;
-          size?: string;
-          finishSize?: string;
-          rate?: string;
-          completed?: boolean;
-        };
-        tasks: string[];
-      }>(
-        `
+  const expression = `
 (async () => {
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  let payload;
-  try {
-    const app = require("@electron/remote").app;
-    app.$downloader.getDownloadTasks((errorNo, flag, items, count, cid) => {
-      payload = { errorNo, flag, items, count, cid };
-    }, 0, 1000, "0");
-  } catch (error) { throw new Error('无法读取客户端下载任务列表：' + String(error?.message || error)); }
-
-  const started = Date.now();
-  while (!payload && Date.now() - started < 1500) {
-    await sleep(100);
-  }
+  const payload = await ${baiduNativeTaskSnapshotExpression("tasks")};
 
   const list = (${decodeNativeDownloadTasks.toString()})(payload);
-  return (${selectNativeDownloadStatus.toString()})(list, ${JSON.stringify({targetName, expectedServerPath, expectedDownloadRoot, targetNames})});
+  if (Number(payload?.count) > list.length) {
+    throw new Error('客户端下载任务列表未完整返回，不能确认任务缺失；请稍后检查客户端任务列表后重试');
+  }
+  const options = ${JSON.stringify({targetName, expectedServerPath, expectedDownloadRoot, targetNames})};
+  const result = (${selectNativeDownloadStatus.toString()})(list, options);
+  if (result.matched || !${JSON.stringify(includeHistory)}) return result;
+  // The installed client's real completed-record API; the older downloader
+  // getDownloadHistory wrapper uses a different native ABI and is not called.
+  const history = await ${baiduNativeTaskSnapshotExpression("history")};
+  const records = (${decodeNativeDownloadHistory.toString()})(history);
+  const historical = (${selectNativeDownloadStatus.toString()})(records, options);
+  return historical.matched ? historical : result;
 })()
-`,
-        6000,
-      ),
-  );
+`;
+  return runNativeTaskOperationExclusive(port, async () => {
+    // Only read operations may reconnect/retry after remote-object disposal.
+    // Resolve the target inside the lane, since a queued target may be replaced.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const target = findUsableCoreTarget(await getTargets(port));
+      if (!target) return undefined;
+      try {
+        return await withPage(target, page =>
+          page.evaluate<ReturnType<typeof selectNativeDownloadStatus>>(expression, 8000));
+      } catch (error) {
+        if (attempt > 0 || !isMissingBaiduRemoteObject(error)) throw error;
+        await sleep(100);
+      }
+    }
+    throw new Error("客户端下载任务快照暂不可用，不能确认任务缺失");
+  });
 }
 
 function parseTaskNumber(value: string | undefined) {
@@ -2729,7 +2727,7 @@ export async function getBaiduNetdiskDownloadTaskStatus(options: {
   }
 
   await ensureBaiduCdpPort(port);
-  const nativeTask = await getNativeDownloadTask(port, targetName, "", options.expectedDownloadRoot, options.targetNames);
+  const nativeTask = await getNativeDownloadTask(port, targetName, "", options.expectedDownloadRoot, options.targetNames, true);
   if (!nativeTask) throw new Error("客户端下载任务列表暂不可用");
   const matched = nativeTask.matched;
   const size = parseTaskNumber(matched?.size);
@@ -2758,10 +2756,34 @@ export async function controlBaiduNetdiskDownloadTask(options: {
   targetName: string;
   action: "pause" | "resume" | "delete";
   expectedDownloadRoot?: string;
+  matchAllInDownloadRoot?: boolean;
 }) {
+  // Validate destructive scope before connecting to the client.
+  selectNativeTasksForControl([], options);
   const target = findUsableCoreTarget(await getTargets(options.port ?? 9337));
   if (!target) throw new Error("百度网盘 CDP 页面不可用。");
-  return withPage(target, (page) => page.evaluate(`(async()=>{const app=require("@electron/remote").app;const wanted=${JSON.stringify(options.targetName)};const action=${JSON.stringify(options.action)};const expectedRoot=${JSON.stringify(options.expectedDownloadRoot ?? "")};const normalizePath=v=>String(v||"").replace(/\\//g,"\\\\").replace(/\\\\+$/g,"").toLowerCase();const root=normalizePath(expectedRoot);const d=app.$downloader;let payload;d.getDownloadTasks((e,f,i)=>payload=i,0,1000,"0");for(let n=0;!payload&&n<20;n++)await new Promise(r=>setTimeout(r,100));const list=Array.isArray(payload?.tasks)?payload.tasks:[];const t=list.find(x=>{const name=String(x?.name||x?.server_path||"");if(!name.includes(wanted))return false;if(!root)return true;const localPath=normalizePath(x?.local_path);return localPath===root||localPath.startsWith(root+"\\\\");});if(!t)throw new Error("未找到匹配下载目录的下载任务");const id=t.id;const names=action==="pause"?["pauseTask","pauseDownloadTask","pause"]:action==="resume"?["resumeTask","resumeDownloadTask","startTask"]:["deleteTask","removeTask","deleteDownloadTask"];const fn=names.find(k=>typeof d[k]==="function");if(!fn)throw new Error("百度网盘当前版本不支持该操作");await Promise.resolve(d[fn](id));return true;})()`));
+  return runNativeTaskOperationExclusive(options.port ?? 9337, () => withPage(target, (page) => page.evaluate(`(async () => {
+    const options = ${JSON.stringify(options)};
+    const read = async () => {
+      const payload = await ${baiduNativeTaskSnapshotExpression("tasks")};
+      const list = (${decodeNativeDownloadTasks.toString()})(payload);
+      if (Number(payload?.count) > list.length) throw new Error("客户端下载任务列表未完整返回，已停止任务操作");
+      return list;
+    };
+    const list = await read();
+    const tasks = (${selectNativeTasksForControl.toString()})(list, options);
+    if (!tasks.length) {
+      if (options.matchAllInDownloadRoot) return true;
+      throw new Error("未找到匹配下载目录的下载任务");
+    }
+    const d = require("@electron/remote").app.$downloader;
+    await (${invokeNativeTaskControl.toString()})(d, options.action, tasks);
+    if (options.action === "delete") await (${confirmNativeTasksDeleted.toString()})(tasks.map(task => task.id), {
+      read,
+      wait: milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
+    });
+    return true;
+  })()`)));
 }
 
 type NativeDownloadSubmission = {
@@ -2770,7 +2792,7 @@ type NativeDownloadSubmission = {
   error?: string;
 };
 
-async function submitNativeDownloadTask(
+export async function submitNativeDownloadTask(
   port: number,
   task: SavedDownloadTask,
 ): Promise<NativeDownloadSubmission> {
@@ -2783,12 +2805,16 @@ async function submitNativeDownloadTask(
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt] > 0) await sleep(retryDelays[attempt]);
 
-    const existing = await getNativeDownloadTask(
-      port,
-      task.targetName,
-      task.savedPath,
-      task.downloadRoot,
-    ).catch(() => undefined);
+    let existing;
+    try {
+      existing = await getNativeDownloadTask(port, task.targetName, task.savedPath, task.downloadRoot);
+      if (!existing) throw new Error("客户端下载任务列表暂不可用");
+    } catch (error) {
+      // A failed inspection is not evidence of absence. Submitting again here
+      // could create duplicate tasks during a busy native-client interval.
+      failures.push(`第${attempt + 1}次：${errorMessage(error)}`);
+      continue;
+    }
     if (existing?.matched) {
       log(`客户端内部下载任务已存在：${task.targetName}`);
       return { submitted: true, alreadyPresent: true };
@@ -2831,11 +2857,32 @@ async function submitNativeDownloadTask(
         })),
     );
 
-    if (result.ok) {
-      log(`客户端内部下载任务已提交：${task.targetName}`);
-      return { submitted: true };
+    if (task.isDirectory === false || !result.ok) {
+      // Even an exception can occur after native acceptance. Only resubmit
+      // after successful reads confirm absence AND local content is incomplete.
+      let confirmed: boolean;
+      try {
+        confirmed = await confirmSingleFileDownload({
+          wait: async () => { await sleep(500); },
+          inspect: async () => {
+            const state = await getNativeDownloadTask(port, task.targetName, task.savedPath, task.downloadRoot);
+            if (!state) throw new Error("客户端下载任务列表暂不可用");
+            return Boolean(state.matched);
+          },
+          localComplete: async () => task.isDirectory === false && Boolean(task.size) && (await selectIncompleteEpisodeDownloads([
+            { name: task.targetName, size: task.size },
+          ], task.downloadRoot!)).length === 0,
+        });
+      } catch (error) {
+        return { submitted: false, error: `下载提交结果尚未确认：${errorMessage(error)}` };
+      }
+      if (!confirmed) {
+        failures.push(`第${attempt + 1}次：原生队列未接受下载任务 ${task.targetName}${result.error ? `；${result.error}` : ""}`);
+        continue;
+      }
     }
-    failures.push(`第${attempt + 1}次：${result.error || "unknown"}`);
+    log(`客户端内部下载任务已提交：${task.targetName}`);
+    return { submitted: true };
   }
 
   const error = failures.join("；") || "unknown";

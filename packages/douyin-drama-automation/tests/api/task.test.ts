@@ -30,6 +30,27 @@ const requiredMaterialReferences = {
   nonInfringementCommitmentFiles: [DOUYIN_DRAMA_MOCK_DOCUMENT_URL],
 };
 
+test("preserves the backend task redownload switch and rejects ambiguous string values", () => {
+  for (const value of [undefined, false, true]) {
+    const task = normalizeClaimedDouyinDramaTask({
+      accountTaskId: 8,
+      originalTitle: "测试剧",
+      payloadJson: {
+        name: "测试剧", episodeCount: 2,
+        douyinPlaylet: {
+          categories: ["剧情"], audience: "通用",
+          baiduNetdiskRedownload: value,
+          ...requiredMaterialReferences,
+        },
+      },
+    });
+    assert.equal(task.playlet.baiduNetdiskRedownload, value);
+    assert.throws(() => douyinDramaTaskPayloadSchema.parse({
+      ...task.playlet, baiduNetdiskRedownload: "false",
+    }), /boolean/);
+  }
+});
+
 test("normalization locks the platform-fixed fields", () => {
   const task = normalizeClaimedDouyinDramaTask({
     accountTaskId: 8,

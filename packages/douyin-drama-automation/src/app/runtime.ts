@@ -180,6 +180,7 @@ export async function ensureDouyinNetdiskResource(
 
   let resource = await ensureWithRetry({
     shareText,
+    forceRedownload: task.playlet.baiduNetdiskRedownload === true,
     resourceName: douyinDramaResourceName(task),
     localEpisodeVideoRoot: douyinDramaLocalRoot(options),
     episodeCount: task.playlet.episodeCount,

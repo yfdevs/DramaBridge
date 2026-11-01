@@ -1,4 +1,21 @@
-﻿export type KuaishouDramaLoginState = "login-required" | "logged-in" | "unknown";
+export type KuaishouDramaAccount = {
+  accountId: string;
+  accountName: string;
+  loginAccount?: string | null;
+  status: string;
+};
+export type KuaishouExecutionAttention = {
+  id: string;
+  accountId: string;
+  taskId: number;
+  workerId: string;
+  attemptCount?: number;
+  originalTitle?: string;
+  phase: string;
+  errorMessage?: string;
+  updatedAt: string;
+};
+export type KuaishouDramaLoginState = "login-required" | "logged-in" | "unknown";
 
 export type KuaishouDramaConfig = {
   accountProfileName: string;
@@ -46,6 +63,8 @@ export type KuaishouDramaServiceStatus = {
     loginState: KuaishouDramaLoginState;
     activeUrl?: string;
     userDataDir: string;
+    workerId?: string;
+    claimPausedReason?: string;
     accountProfileName?: string;
     accountDir?: string;
     credentialStatePath?: string;
@@ -54,11 +73,12 @@ export type KuaishouDramaServiceStatus = {
     lastTask?: {
       accountTaskId: number;
       originalTitle?: string;
-      status: "failed" | "running" | "succeeded";
+      status: "failed" | "running" | "succeeded" | "report-pending" | "review-required";
       errorMessage?: string;
       updatedAt: string;
     };
   }>;
+  executions: KuaishouExecutionAttention[];
   pid: number | null;
 };
 
@@ -107,8 +127,19 @@ export const kuaishouDramaService = {
   status() {
     return invokeKuaishouDrama<KuaishouDramaServiceStatus>("kuaishou-drama:service:status");
   },
-  start() {
-    return invokeKuaishouDrama<KuaishouDramaServiceStatus>("kuaishou-drama:service:start");
+  listAccounts() {
+    return invokeKuaishouDrama<{ accounts: KuaishouDramaAccount[]; selectedAccountIds: string[] }>(
+      "kuaishou-drama:accounts:list",
+    );
+  },
+  recheckExecution(id: string) {
+    return invokeKuaishouDrama<KuaishouDramaServiceStatus>("kuaishou-drama:execution:recheck", id);
+  },
+  start(selectedAccountIds: string[]) {
+    return invokeKuaishouDrama<KuaishouDramaServiceStatus>(
+      "kuaishou-drama:service:start",
+      selectedAccountIds,
+    );
   },
   stop() {
     return invokeKuaishouDrama<KuaishouDramaServiceStatus>("kuaishou-drama:service:stop");

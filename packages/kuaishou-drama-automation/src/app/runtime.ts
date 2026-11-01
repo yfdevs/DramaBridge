@@ -1,3 +1,10 @@
+import {
+  executeKuaishouClaimedTask,
+  flushPendingKuaishouReports,
+  recoverKuaishouExecutions,
+} from "./task-execution.js";
+import { updateKuaishouExecution, type KuaishouTaskReport } from "../shared/task-execution.js";
+import { KuaishouApiBusinessError } from "../api/task.js";
 import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
 import type { BrowserContext, Page } from "playwright";
 import {
@@ -128,6 +135,38 @@ export async function startKuaishouDramaRuntime(
     throw new Error("Kuaishou drama userDataDir is required.");
   }
 
+  if (
+    options.claimTask &&
+    (!options.workerId?.trim() ||
+      !options.executionStore ||
+      !options.apiConfig?.baseUrl.trim() ||
+      !options.kuaishouAccountId?.trim())
+  ) {
+    throw new Error("KUAISHOU_DRAMA_WORKER_ID_EXECUTION_STORE_AND_API_REQUIRED");
+  }
+  if (options.executionStore && options.apiConfig && options.kuaishouAccountId) {
+    recoverKuaishouExecutions(
+      options.executionStore,
+      options.apiConfig.baseUrl,
+      options.kuaishouAccountId,
+    );
+  }
+  const flushReports = async () => {
+    if (options.executionStore && options.apiConfig && options.kuaishouAccountId) {
+      await flushPendingKuaishouReports({
+        store: options.executionStore,
+        apiBaseUrl: options.apiConfig.baseUrl,
+        accountId: options.kuaishouAccountId,
+        onError: (message) => log(options, `[kuaishou-drama] ${message}`),
+      });
+    }
+  };
+  const saveReport = (task: ClaimedKuaishouDramaTask, report: KuaishouTaskReport) => {
+    const store = options.executionStore!;
+    const record = store.get(task.executionId)!;
+    updateKuaishouExecution(store, record, { phase: "report-pending", report });
+  };
+  let claimPausedReason: string | undefined;
   const configuredTask = parseTaskConfig(options);
   const userDataDir = options.userDataDir;
   let running = true;
@@ -155,9 +194,12 @@ export async function startKuaishouDramaRuntime(
   });
   context.on("close", () => {
     running = false;
-    log(options, `[kuaishou-drama] automation browser context closed: ` +
-      `reason=${stopRequested ? "service-stop" : "unexpected-disconnect"} ` +
-      `accountTaskId=${currentClaimedTask()?.accountTaskId ?? "none"}`);
+    log(
+      options,
+      `[kuaishou-drama] automation browser context closed: ` +
+        `reason=${stopRequested ? "service-stop" : "unexpected-disconnect"} ` +
+        `accountTaskId=${currentClaimedTask()?.accountTaskId ?? "none"}`,
+    );
     wakePoll?.();
   });
 
@@ -173,6 +215,20 @@ export async function startKuaishouDramaRuntime(
     log(options, "[kuaishou-drama] polling for next task");
     const claimedTask = await options.claimTask();
     if (!claimedTask) return null;
+    if ("accountTaskId" in claimedTask && "task" in claimedTask) {
+      const saved = options.executionStore!.get(claimedTask.executionId);
+      if (
+        !saved ||
+        saved.phase !== "claimed" ||
+        saved.taskId !== claimedTask.accountTaskId ||
+        saved.workerId !== options.workerId ||
+        saved.workerId !== claimedTask.workerId ||
+        saved.attemptCount !== claimedTask.attemptCount
+      ) {
+        claimPausedReason = "本地领取记录或执行器身份不匹配，请核实后重启服务";
+        throw new Error("KUAISHOU_DRAMA_EXECUTION_INVALID: " + claimPausedReason);
+      }
+    }
     const isClaimedTask = "accountTaskId" in claimedTask && "task" in claimedTask;
     const taskInput = isClaimedTask
       ? (() => {
@@ -256,67 +312,121 @@ export async function startKuaishouDramaRuntime(
       let publishedVariants: KuaishouDramaPublishVariant["kind"][] = [];
       let baiduNetdiskResource: unknown;
       try {
+        await flushReports();
+        if (claimPausedReason) {
+          await waitForNextPoll();
+          continue;
+        }
         const resolvedTask = await resolveTask();
         if (!resolvedTask) {
           log(options, "[kuaishou-drama] no claimable task; idle page left unchanged");
         } else {
           taskPage = await context!.newPage();
           const taskId = resolvedTask.claimedTask?.accountTaskId ?? "configured";
-          taskPage.on("crash", () => log(options, `[kuaishou-drama] dedicated task tab crashed: accountTaskId=${taskId}`));
-          taskPage.on("close", () => log(options, `[kuaishou-drama] dedicated task tab close event: accountTaskId=${taskId}`));
+          taskPage.on("crash", () =>
+            log(options, `[kuaishou-drama] dedicated task tab crashed: accountTaskId=${taskId}`),
+          );
+          taskPage.on("close", () =>
+            log(
+              options,
+              `[kuaishou-drama] dedicated task tab close event: accountTaskId=${taskId}`,
+            ),
+          );
           log(
             options,
             `[kuaishou-drama] opened dedicated task tab: ` +
               `accountTaskId=${resolvedTask.claimedTask?.accountTaskId ?? "configured"}`,
           );
-          publishedVariants = await runPublishTask(
-            context!,
-            taskPage,
-            options,
-            resolvedTask,
-            async (needsFormMaterials) => {
-              baiduNetdiskResource = await prepareTask(resolvedTask, needsFormMaterials);
-            },
-          );
-          const expectedVariants = createKuaishouDramaPublishVariants(resolvedTask.taskConfig)
-            .map((variant) => variant.kind);
-          if (
-            publishedVariants.length !== expectedVariants.length
-            || publishedVariants.some((variant, index) => variant !== expectedVariants[index])
-          ) {
-            throw new Error(
-              `KUAISHOU_DRAMA_PUBLISH_VARIANTS_INCOMPLETE: `
-                + `expected=${expectedVariants.join(",")} actual=${publishedVariants.join(",") || "none"}`,
+          const publish = async (
+            checkpointSaved: NonNullable<KuaishouDramaRuntimeOptions["onSubmitCheckpoint"]>,
+          ) => {
+            publishedVariants = await runPublishTask(
+              context!,
+              taskPage!,
+              {
+                ...options,
+                onSubmitCheckpoint: (checkpoint) => {
+                  checkpointSaved(checkpoint);
+                  options.onSubmitCheckpoint?.(checkpoint);
+                },
+              },
+              resolvedTask,
+              async (needsFormMaterials) => {
+                baiduNetdiskResource = await prepareTask(resolvedTask, needsFormMaterials);
+              },
             );
+            const expectedVariants = createKuaishouDramaPublishVariants(
+              resolvedTask.taskConfig,
+            ).map((variant) => variant.kind);
+            if (
+              publishedVariants.length !== expectedVariants.length ||
+              publishedVariants.some((variant, index) => variant !== expectedVariants[index])
+            ) {
+              throw new Error(
+                `KUAISHOU_DRAMA_PUBLISH_VARIANTS_INCOMPLETE: ` +
+                  `expected=${expectedVariants.join(",")} actual=${publishedVariants.join(",") || "none"}`,
+              );
+            }
+            return publishedVariants;
+          };
+          if (resolvedTask.claimedTask) {
+            await executeKuaishouClaimedTask({
+              store: options.executionStore!,
+              task: resolvedTask.claimedTask,
+              publish,
+              // Centralize diagnostics, daily-limit handling and failure reporting in the outer catch.
+              failure: async (error) => {
+                throw error;
+              },
+              resultJson: () => ({
+                accountId: options.kuaishouAccountId,
+                accountName: options.kuaishouAccountName,
+                requestedAdVersionCount: resolvedTask.taskConfig.adVersionCount,
+                variants: publishedVariants,
+              }),
+            });
+          } else {
+            await publish(() => undefined);
           }
         }
         if (resolvedTask?.claimedTask) {
           const completedTask = resolvedTask.claimedTask;
-          await options.reportTaskSuccess?.({
-            accountTaskId: completedTask.accountTaskId,
-            resultJson: {
-              accountId: options.kuaishouAccountId,
-              accountName: options.kuaishouAccountName,
-              requestedAdVersionCount: completedTask.task.adVersionCount,
-              variants: publishedVariants,
-            },
-          });
-          await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
-            (error) => log(options, `[kuaishou-drama] task succeeded but baidu netdisk cleanup failed: ${errorMessage(error)}`),
-          );
+          await flushReports();
+          const record = options.executionStore!.get(completedTask.executionId)!;
+          if (record.phase === "reported") {
+            await options
+              .cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource)
+              .catch((error) =>
+                log(
+                  options,
+                  `[kuaishou-drama] task succeeded but baidu netdisk cleanup failed: ${errorMessage(error)}`,
+                ),
+              );
+          }
           lastTask = {
             accountTaskId: completedTask.accountTaskId,
             originalTitle: completedTask.originalTitle,
-            status: "succeeded",
+            status:
+              record.phase === "reported"
+                ? "succeeded"
+                : record.phase === "report-pending"
+                  ? "report-pending"
+                  : "review-required",
+            errorMessage: record.errorMessage,
             updatedAt: new Date().toISOString(),
           };
-          log(options, `[kuaishou-drama] task succeeded: ${completedTask.accountTaskId}`);
+          log(
+            options,
+            `[kuaishou-drama] publishing complete: ${completedTask.accountTaskId} reportPhase=${record.phase}`,
+          );
         }
       } catch (error) {
         const message = formatAutomationErrorReport(error, {
           fallbackMessage: "快手任务提交失败，未获取到具体错误原因",
           maxLength: 10_000,
         });
+        if (error instanceof KuaishouApiBusinessError)
+          claimPausedReason = `后台拒绝领取，处理后请重启服务：${error.businessMessage}`;
         const failedTask = currentClaimedTask();
         const stage = classifyFailStage(error);
         const diagnostics = await captureAutomationFailureDiagnostics({
@@ -351,21 +461,43 @@ export async function startKuaishouDramaRuntime(
             errorMessage: message,
             updatedAt: new Date().toISOString(),
           };
-          await options
-            .reportTaskError?.({
-              accountTaskId: failedTask.accountTaskId,
-              failStage: stage,
-              errorMessage: message,
-            })
-            .catch((reportError) => {
-              log(
-                options,
-                `[kuaishou-drama] task error report failed: ${errorMessage(reportError)}`,
-              );
-            });
+          const record = options.executionStore!.get(failedTask.executionId)!;
+          // A saved success must never be rewritten as failure when reporting fails.
+          if (!record.report) {
+            if (record.checkpoints.length) {
+              updateKuaishouExecution(options.executionStore!, record, {
+                phase: "review-required",
+                errorMessage: `已提交部分版本或提交结果待核实，未自动上报失败：${message}`,
+              });
+            } else {
+              saveReport(failedTask, {
+                taskId: failedTask.accountTaskId,
+                workerId: failedTask.workerId,
+                attemptCount: failedTask.attemptCount,
+                success: false,
+                failStage: stage,
+                errorMessage: message,
+              });
+              await flushReports();
+            }
+          }
+          const outcome = options.executionStore!.get(failedTask.executionId)!;
+          lastTask.status =
+            outcome.phase === "review-required" || outcome.phase === "report-blocked"
+              ? "review-required"
+              : outcome.phase === "report-pending"
+                ? "report-pending"
+                : outcome.report?.success
+                  ? "succeeded"
+                  : "failed";
+          lastTask.errorMessage = outcome.errorMessage ?? message;
         }
       } finally {
-        if (taskPage) {
+        const execution = currentClaimedTask();
+        const review =
+          execution &&
+          options.executionStore?.get(execution.executionId)?.phase === "review-required";
+        if (taskPage && !review) {
           const accountTaskId = currentClaimedTask()?.accountTaskId ?? "configured";
           await taskPage.close().catch(() => undefined);
           log(
@@ -388,6 +520,8 @@ export async function startKuaishouDramaRuntime(
     getStatus(): KuaishouDramaRuntimeStatus {
       const activeUrl = page?.url();
       return {
+        workerId: options.workerId,
+        claimPausedReason,
         platform: KUAISHOU_DRAMA_PLATFORM,
         running,
         loginState: loginStateFromUrl(activeUrl),

@@ -9,12 +9,13 @@ export type RemoteVerificationEntry = RemoteUploadEntry & { fs_id?: number | str
 /** Some multipart uploads have an incorrect server MD5. Verify actual bytes before trusting them. */
 export function createRemoteFileVerifier(options: {
   saved?: RemoteVerifiedFile[];
-  metadata: (path: string) => Promise<RemoteVerificationEntry | undefined>;
-  contentChecksum: (url: string, size: number, path: string) => Promise<{ size: number; md5: string }>;
+  metadata: (path: string, signal?: AbortSignal) => Promise<RemoteVerificationEntry | undefined>;
+  contentChecksum: (url: string, size: number, path: string, signal?: AbortSignal) => Promise<{ size: number; md5: string }>;
   onVerified?: (file: RemoteVerifiedFile) => void;
 }) {
   const verified = new Map(options.saved?.map(file => [file.path, file]));
-  const verify = async (file: RemoteVerificationEntry, identity: UploadFileIdentity): Promise<boolean> => {
+  const verify = async (file: RemoteVerificationEntry, identity: UploadFileIdentity, signal?: AbortSignal): Promise<boolean> => {
+    signal?.throwIfAborted();
     if (file.isdir || file.size !== identity.size) return false;
     const serverMd5 = normalizeBaiduMd5(file.md5);
     if (serverMd5 === identity.md5) return true;
@@ -22,7 +23,7 @@ export function createRemoteFileVerifier(options: {
     if (receipt && serverMd5 && file.fs_id && file.server_mtime
       && receipt.fsId === String(file.fs_id) && receipt.serverMd5 === serverMd5
       && receipt.serverMtime === Number(file.server_mtime) && receipt.size === file.size && receipt.contentMd5 === identity.md5) return true;
-    const metadata = await options.metadata(file.path);
+    const metadata = file.dlink ? file : await options.metadata(file.path, signal);
     if (!metadata) throw new Error(`网盘未返回文件详情，暂时无法完成校验：${file.path}`);
     if (metadata.path !== file.path || metadata.isdir || metadata.size !== identity.size) return false;
     if (normalizeBaiduMd5(metadata.md5) === identity.md5) return true;
@@ -30,7 +31,7 @@ export function createRemoteFileVerifier(options: {
     const url = new URL(metadata.dlink);
     if (url.protocol !== "https:" || !/(^|\.)(baidu\.com|baidupcs\.com)$/.test(url.hostname))
       throw new Error("网盘返回的内容校验链接无效");
-    const actual = await options.contentChecksum(metadata.dlink, identity.size, file.path);
+    const actual = await options.contentChecksum(metadata.dlink, identity.size, file.path, signal);
     if (actual.size !== identity.size || actual.md5 !== identity.md5) return false;
     const saved: RemoteVerifiedFile = {
       path: file.path, fsId: String(metadata.fs_id || ""), size: actual.size,

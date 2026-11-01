@@ -8,3 +8,6 @@ export * from "./shared/cover-materials.js";
 export * from "./shared/publish-variants.js";
 export * from "./shared/task-config.js";
 export * from "./shared/types.js";
+
+export * from "./shared/task-execution.js";
+export * from "./app/task-execution.js";

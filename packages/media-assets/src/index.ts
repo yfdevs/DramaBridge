@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { DramaAiClient } from "@dramabridge/ai";
 import sharp from "sharp";
+export { ensureRenamedPortraitPoster, renamedPortraitPosterRecipe } from "./renamed-portrait-poster.js";
 
 import { classifyOwnershipProjectProofScreenshotWithAi } from "./ownership-project-proof-ai.js";
 import { removePathWithRetry, retryFileSystemOperation } from "./filesystem-retry.js";
@@ -167,6 +168,8 @@ export type EpisodeDirectorySummary = {
 };
 
 const nonRetryableBaiduNetdiskResourceErrorPatterns = [
+  "BAIDU_NETDISK_IDENTITY_VERIFICATION",
+  "BAIDU_NETDISK_RISK_CONTROL",
   "BAIDU_NETDISK_CLIENT_RESTART_REQUIRED",
   "不是可用百度网盘 CDP",
   "百度网盘 CDP 核心页面不可用",

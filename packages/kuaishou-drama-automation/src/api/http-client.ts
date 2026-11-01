@@ -21,7 +21,9 @@ export function createKuaishouDramaHttpClient(
           signal: controller.signal,
         });
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status} ${response.statusText}`);
+          throw Object.assign(new Error(`HTTP ${response.status} ${response.statusText}`), {
+            status: response.status,
+          });
         }
         return (await response.json()) as T;
       } finally {
@@ -39,7 +41,9 @@ export function createKuaishouDramaHttpClient(
           signal: controller.signal,
         });
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status} ${response.statusText}`);
+          throw Object.assign(new Error(`HTTP ${response.status} ${response.statusText}`), {
+            status: response.status,
+          });
         }
         return (await response.json()) as T;
       } finally {

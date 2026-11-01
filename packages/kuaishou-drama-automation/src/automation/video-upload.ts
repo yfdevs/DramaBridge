@@ -20,18 +20,13 @@ function normalizedFileNames(files: string[]) {
   return files.map((file) => path.basename(file));
 }
 
-async function confirmBatchUploadStartEpisode(
-  page: Page,
-  options: KuaishouDramaRuntimeOptions,
-) {
-  const dialog = page
-    .locator('.ks-dialog[aria-label="请选择批量上传位置"]:visible')
-    .last();
+async function confirmBatchUploadStartEpisode(page: Page, options: KuaishouDramaRuntimeOptions) {
+  const dialog = page.locator('.ks-dialog[aria-label="请选择批量上传位置"]:visible').last();
   await dialog.waitFor({ state: "visible", timeout: 30_000 });
 
   const startEpisodeInput = dialog.locator('input.ks-input__inner[placeholder="请输入"]').first();
   await startEpisodeInput.fill("1", { timeout: 30_000 });
-  if (await startEpisodeInput.inputValue() !== "1") {
+  if ((await startEpisodeInput.inputValue()) !== "1") {
     throw new Error("KUAISHOU_DRAMA_BATCH_UPLOAD_START_EPISODE_INPUT_FAILED");
   }
 
@@ -44,10 +39,7 @@ async function confirmBatchUploadStartEpisode(
   log(options, "[kuaishou-drama] batch upload start episode confirmed: 1");
 }
 
-async function clickStartBatchUpload(
-  page: Page,
-  options: KuaishouDramaRuntimeOptions,
-) {
+async function clickStartBatchUpload(page: Page, options: KuaishouDramaRuntimeOptions) {
   const drawerFooter = page.locator(".drawer-footer:visible").last();
   await drawerFooter.waitFor({ state: "visible", timeout: 30_000 });
   const startUpload = drawerFooter
@@ -68,8 +60,8 @@ async function clickStartBatchUpload(
       .filter({ hasText: /^\s*确\s*定\s*$/ })
       .last();
     if (
-      await uploading.isVisible().catch(() => false) ||
-      await completed.isVisible().catch(() => false)
+      (await uploading.isVisible().catch(() => false)) ||
+      (await completed.isVisible().catch(() => false))
     ) {
       log(options, "[kuaishou-drama] batch episode upload started");
       return;
@@ -79,10 +71,7 @@ async function clickStartBatchUpload(
   throw new Error("KUAISHOU_DRAMA_VIDEO_UPLOAD_DID_NOT_START");
 }
 
-async function waitForBatchUploadComplete(
-  page: Page,
-  options: KuaishouDramaRuntimeOptions,
-) {
+async function waitForBatchUploadComplete(page: Page, options: KuaishouDramaRuntimeOptions) {
   const drawerFooter = page.locator(".drawer-footer:visible").last();
   const timeoutMinutes = Math.max(1, options.videoUploadTimeoutMinutes ?? 120);
   const deadline = Date.now() + timeoutMinutes * 60_000;
@@ -96,14 +85,14 @@ async function waitForBatchUploadComplete(
       .locator(".ks-message--error:visible,.ks-form-item__error:visible,.err-tips:visible")
       .allInnerTexts()
       .catch(() => []);
-    const normalizedErrors = Array.from(new Set(
-      errorMessages.map((text) => text.replace(/\s+/g, " ").trim()).filter(Boolean),
-    ));
+    const normalizedErrors = Array.from(
+      new Set(errorMessages.map((text) => text.replace(/\s+/g, " ").trim()).filter(Boolean)),
+    );
     if (normalizedErrors.length) {
       throw new Error(`KUAISHOU_DRAMA_VIDEO_UPLOAD_FAILED: ${normalizedErrors.join(" | ")}`);
     }
 
-    if (!await drawerFooter.isVisible().catch(() => false)) {
+    if (!(await drawerFooter.isVisible().catch(() => false))) {
       throw new Error("KUAISHOU_DRAMA_VIDEO_UPLOAD_DRAWER_CLOSED_BEFORE_CONFIRM");
     }
 
@@ -118,9 +107,7 @@ async function waitForBatchUploadComplete(
       return;
     }
 
-    const status = (await drawerFooter.innerText().catch(() => ""))
-      .replace(/\s+/g, " ")
-      .trim();
+    const status = (await drawerFooter.innerText().catch(() => "")).replace(/\s+/g, " ").trim();
     if (/上传失败|上传异常|失败/.test(status)) {
       throw new Error(`KUAISHOU_DRAMA_VIDEO_UPLOAD_FAILED: ${status}`);
     }
@@ -140,6 +127,7 @@ async function waitForBatchUploadComplete(
 
 async function submitKuaishouDramaForReview(
   page: Page,
+  variant: KuaishouDramaPublishVariant,
   options: KuaishouDramaRuntimeOptions,
 ) {
   const postSubmitSettleMs = 10_000;
@@ -152,32 +140,45 @@ async function submitKuaishouDramaForReview(
     .last();
   await submit.waitFor({ state: "visible", timeout: 30_000 });
   await submit.scrollIntoViewIfNeeded();
+  options.onSubmitCheckpoint?.({ variant: variant.kind, state: "submitting" });
   const submittedAt = Date.now();
-  await submit.click({ timeout: 30_000 });
-  log(
-    options,
-    `[kuaishou-drama] submit for review clicked; waiting ${postSubmitSettleMs}ms ` +
-      "before the page may be closed",
-  );
-  let verified = false;
-  while (Date.now() - submittedAt < submitVerificationTimeoutMs) {
-    await throwIfKuaishouWarningCaptured(page, options);
-    const currentUrl = new URL(page.url());
-    const returnedToManagement = currentUrl.origin === "https://kdj.kuaishou.com" &&
-      currentUrl.pathname.startsWith("/home/content/content-management") &&
-      currentUrl.pathname !== "/home/content/content-management/edit";
-    const successMessage = await page.locator(
-      '.ks-message--success:visible, .ks-result--success:visible',
-    ).filter({ hasText: /提交成功|提交审核成功|已提交审核|提交审核已完成/ }).first()
-      .isVisible().catch(() => false);
-    verified ||= returnedToManagement || successMessage;
-    if (verified && Date.now() - submittedAt >= postSubmitSettleMs) {
-      log(options, `[kuaishou-drama] submit success verified after ${Date.now() - submittedAt}ms: ${page.url()}`);
-      return;
+  try {
+    await submit.click({ timeout: 30_000 });
+    log(
+      options,
+      `[kuaishou-drama] submit for review clicked; waiting ${postSubmitSettleMs}ms ` +
+        "before the page may be closed",
+    );
+    let verified = false;
+    while (Date.now() - submittedAt < submitVerificationTimeoutMs) {
+      await throwIfKuaishouWarningCaptured(page, options);
+      const currentUrl = new URL(page.url());
+      const returnedToManagement =
+        currentUrl.origin === "https://kdj.kuaishou.com" &&
+        currentUrl.pathname.startsWith("/home/content/content-management") &&
+        currentUrl.pathname !== "/home/content/content-management/edit";
+      const successMessage = await page
+        .locator(".ks-message--success:visible, .ks-result--success:visible")
+        .filter({ hasText: /提交成功|提交审核成功|已提交审核|提交审核已完成/ })
+        .first()
+        .isVisible()
+        .catch(() => false);
+      verified ||= returnedToManagement || successMessage;
+      if (verified && Date.now() - submittedAt >= postSubmitSettleMs) {
+        log(
+          options,
+          `[kuaishou-drama] submit success verified after ${Date.now() - submittedAt}ms: ${page.url()}`,
+        );
+        options.onSubmitCheckpoint?.({ variant: variant.kind, state: "confirmed" });
+        return;
+      }
+      await page.waitForTimeout(500);
     }
-    await page.waitForTimeout(500);
+    throw new Error(`KUAISHOU_DRAMA_SUBMIT_SUCCESS_NOT_VERIFIED: url=${page.url()}`);
+  } finally {
+    const remainingMs = postSubmitSettleMs - (Date.now() - submittedAt);
+    if (remainingMs > 0) await new Promise((resolve) => setTimeout(resolve, remainingMs));
   }
-  throw new Error(`KUAISHOU_DRAMA_SUBMIT_SUCCESS_NOT_VERIFIED: url=${page.url()}`);
 }
 
 export async function uploadKuaishouDramaEpisodeVideos(
@@ -220,9 +221,9 @@ export async function uploadKuaishouDramaEpisodeVideos(
     await input.waitFor({ state: "attached", timeout: 60_000 });
     await input.setInputFiles(prepared.files, { timeout: 20 * 60_000 });
 
-    const selectedNames = await input.evaluate((node) => (
-      Array.from((node as HTMLInputElement).files ?? []).map((file) => file.name)
-    ));
+    const selectedNames = await input.evaluate((node) =>
+      Array.from((node as HTMLInputElement).files ?? []).map((file) => file.name),
+    );
     if (
       selectedNames.length !== expectedNames.length ||
       selectedNames.some((name, index) => name !== expectedNames[index])
@@ -243,7 +244,7 @@ export async function uploadKuaishouDramaEpisodeVideos(
     await confirmBatchUploadStartEpisode(page, options);
     await clickStartBatchUpload(page, options);
     await waitForBatchUploadComplete(page, options);
-    await submitKuaishouDramaForReview(page, options);
+    await submitKuaishouDramaForReview(page, variant, options);
   } finally {
     if (prepared) {
       await cleanupEpisodeUploadFiles(prepared);

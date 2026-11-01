@@ -50,3 +50,27 @@ test("page request reports HTTP errors without exposing query credentials", asyn
     return true;
   });
 });
+
+test("8001 opens a circuit so subsequent reads and writes do not reach Baidu", async () => {
+  let calls = 0;
+  const request = requestInPage(async () => {
+    calls++;
+    return new Response(JSON.stringify({ errno: 8001, request_id: "risk-trace", bdstoken: "secret" }));
+  });
+  await assert.rejects(request("/api/list?bdstoken=secret"), error => {
+    assert.match(String(error), /BAIDU_NETDISK_RISK_CONTROL.*errno=8001.*request_id=risk-trace/);
+    assert.doesNotMatch(String(error), /secret/);
+    return true;
+  });
+  await assert.rejects(request("/share/transfer", { method: "POST" }), /BAIDU_NETDISK_RISK_CONTROL/);
+  assert.equal(calls, 1);
+});
+
+test("filemanager 132 never replays the delete or blocks a subsequent directory read", async () => {
+  let calls = 0;
+  const request = requestInPage(async input => { calls++; return new Response(String(input).includes("filemanager") ? '{"errno":132}' : '{"errno":0}'); });
+  await assert.rejects(request("/api/filemanager?opera=delete", { method: "POST" }), /BAIDU_NETDISK_IDENTITY_VERIFICATION.*验证身份.*errno=132/);
+  assert.equal(calls, 1);
+  assert.equal((await request<{ errno: number }>("/api/list")).errno, 0);
+  assert.equal(calls, 2);
+});

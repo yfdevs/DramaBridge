@@ -7,11 +7,16 @@ export type RecreationInput = {
 export type RecreationVersion = {
   title: string;
   localPath?: string;
+  poster?: { recipe: string; title: string; sha256: string };
   localFiles?: Array<{ path: string; size: number; modifiedAtMs: number }>;
   verifiedFiles?: Array<{ path: string; fsId: string; size: number; serverMd5: string; serverMtime: number; contentMd5: string }>;
   remotePath?: string;
   shareUrl?: string;
   extractionCode?: string;
+};
+export type RecreationReuseSource = {
+  remoteDirectory: string;
+  verifiedFiles?: RecreationVersion["verifiedFiles"];
 };
 export type RecreationTask = RecreationInput & {
   id: string;

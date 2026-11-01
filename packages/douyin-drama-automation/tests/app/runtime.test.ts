@@ -18,6 +18,24 @@ const netdiskTask = {
   },
 } as ClaimedDouyinDramaTask;
 
+test("passes the per-task redownload switch only to the full resource download", async () => {
+  for (const enabled of [undefined, false, true]) {
+    const requests: Array<{ forceRedownload?: boolean }> = [];
+    const task = {
+      ...netdiskTask,
+      playlet: { ...netdiskTask.playlet, baiduNetdiskRedownload: enabled, summary: "简介".repeat(60), roles: [{ name: "主角", intro: "人物简介" }] },
+    };
+    await ensureDouyinNetdiskResource(task, {
+      localEpisodeVideoRoot: "D:\\BaiduNetdiskDownload",
+      ensureBaiduNetdiskResource: async request => {
+        requests.push(request);
+        return { skippedExisting: !request.forceRedownload };
+      },
+    });
+    assert.equal(requests[0]?.forceRedownload, enabled === true);
+  }
+});
+
 test("does not block netdisk completion on ambiguous ownership directory names", () => {
   assert.deepEqual(douyinNetdiskOwnershipDownloadRequirements, {
     minimumImages: 4,

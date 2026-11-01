@@ -3,8 +3,88 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { KuaishouDramaHttpClient } from "../../src/api/http-client.js";
-import { claimNextKuaishouDramaTaskApi } from "../../src/api/task.js";
+import { claimNextKuaishouDramaTaskApi as claimNextApi } from "../../src/api/task.js";
+import { memoryExecutionStore } from "../helpers/execution-store.js";
 import { createKuaishouDramaPublishVariants } from "../../src/shared/publish-variants.js";
+
+const claimNextKuaishouDramaTaskApi = (options: Parameters<typeof claimNextApi>[0]) =>
+  claimNextApi({
+    ...options,
+    apiConfig: { baseUrl: "http://backend.test" },
+    runtimeOptions: {
+      workerId: "worker-test",
+      executionStore: memoryExecutionStore(),
+      ...options.runtimeOptions,
+    },
+  });
+
+test("empty READY queue logs the account and task counts", async () => {
+  const logs: string[] = [];
+  const result = await claimNextKuaishouDramaTaskApi({
+    client: {
+      async post() {
+        return { code: 0, data: { total: 0, data: [] } } as never;
+      },
+    },
+    runtimeOptions: { kuaishouAccountId: "account-1", onLog: (message) => logs.push(message) },
+  });
+  assert.equal(result, null);
+  assert.ok(
+    logs.some((message) =>
+      /accountId=account-1 requestedStatus=READY returned=0 eligible=0 total=0/.test(message),
+    ),
+  );
+});
+
+test("claim errors remain visible and uncertain claims stop further attempts", async () => {
+  const logs: string[] = [];
+  const attempted: unknown[] = [];
+  await assert.rejects(
+    claimNextKuaishouDramaTaskApi({
+      client: {
+        async post(path, payload) {
+          if (path.endsWith("/page"))
+            return {
+              code: 0,
+              data: {
+                data: [1, 2].map((id) => ({
+                  id,
+                  accountId: "account-1",
+                  status: "READY",
+                })),
+              },
+            } as never;
+          attempted.push(payload);
+          throw new Error("backend unavailable");
+        },
+      },
+      runtimeOptions: { kuaishouAccountId: "account-1", onLog: (message) => logs.push(message) },
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /backend unavailable/);
+      return true;
+    },
+  );
+  assert.deepEqual(attempted, [{ accountTaskId: 1, workerId: "worker-test" }]);
+  assert.ok(logs.some((message) => /accountTaskId=1.*backend unavailable/.test(message)));
+});
+
+test("an explicit claim conflict can still return an idle result", async () => {
+  const result = await claimNextKuaishouDramaTaskApi({
+    client: {
+      async post(path) {
+        return (
+          path.endsWith("/page")
+            ? { code: 0, data: { data: [{ id: 1, accountId: "account-1", status: "READY" }] } }
+            : { code: -1, msg: "任务已被领取" }
+        ) as never;
+      },
+    },
+    runtimeOptions: { kuaishouAccountId: "account-1" },
+  });
+  assert.equal(result, null);
+});
 
 test("keeps exact dynamic ad-version titles when claiming a backend task", async () => {
   const calls: Array<{ path: string; payload: unknown }> = [];
@@ -20,13 +100,7 @@ test("keeps exact dynamic ad-version titles when claiming a backend task", async
             kuaishouPlaylet: {
               publishType: "全部",
               adVersionCount: 6,
-              adVersionTitles: [
-                "雨夜归人",
-                "旧城来信",
-                "长街灯火",
-                "故园春深",
-                "星河入梦",
-              ],
+              adVersionTitles: ["雨夜归人", "旧城来信", "长街灯火", "故园春深", "星河入梦"],
             },
           },
         },
@@ -40,14 +114,16 @@ test("keeps exact dynamic ad-version titles when claiming a backend task", async
           msg: "操作成功",
           data: {
             total: 1,
-            data: [{
-              id: 401,
-              dramaId: 901,
-              accountId: "kuaishou-account-1",
-              accountName: "快手一号",
-              status: "READY",
-              originalTitle: "逆风归途",
-            }],
+            data: [
+              {
+                id: 401,
+                dramaId: 901,
+                accountId: "kuaishou-account-1",
+                accountName: "快手一号",
+                status: "READY",
+                originalTitle: "逆风归途",
+              },
+            ],
           },
         } as never;
       }
@@ -57,6 +133,8 @@ test("keeps exact dynamic ad-version titles when claiming a backend task", async
           msg: "操作成功",
           data: {
             accountTaskId: 401,
+            workerId: "worker-test",
+            attemptCount: 1,
             accountId: "kuaishou-account-1",
             originalTitle: "逆风归途",
             rpaProfileKey: null,
@@ -118,10 +196,10 @@ test("keeps exact dynamic ad-version titles when claiming a backend task", async
       { kind: "ad-unlock-6", title: "星河入梦" },
     ],
   );
-  assert.deepEqual(calls.map(({ path }) => path), [
-    "/dramaAiRpa/kuaishou/accountTask/page",
-    "/dramaAiRpa/kuaishou/rpa/claim",
-  ]);
+  assert.deepEqual(
+    calls.map(({ path }) => path),
+    ["/dramaAiRpa/kuaishou/accountTask/page", "/dramaAiRpa/kuaishou/rpa/claim"],
+  );
   assert.deepEqual(getCalls, ["/dramaAiRpa/detail/901"]);
 });
 
@@ -134,13 +212,15 @@ test("fills missing backend ad-version titles with distinct safe titles", async 
           msg: "操作成功",
           data: {
             total: 1,
-            data: [{
-              id: 402,
-              dramaId: 902,
-              accountId: "kuaishou-account-1",
-              status: "READY",
-              originalTitle: "逆风归途",
-            }],
+            data: [
+              {
+                id: 402,
+                dramaId: 902,
+                accountId: "kuaishou-account-1",
+                status: "READY",
+                originalTitle: "逆风归途",
+              },
+            ],
           },
         } as never;
       }
@@ -150,6 +230,8 @@ test("fills missing backend ad-version titles with distinct safe titles", async 
           msg: "操作成功",
           data: {
             accountTaskId: 402,
+            workerId: "worker-test",
+            attemptCount: 1,
             accountId: "kuaishou-account-1",
             originalTitle: "逆风归途",
             payloadJson: {
@@ -194,12 +276,14 @@ test("keeps all versions when the backend uses 广告 plus dynamic version field
           msg: "操作成功",
           data: {
             total: 1,
-            data: [{
-              id: 403,
-              accountId: "kuaishou-account-1",
-              status: "READY",
-              originalTitle: "逆风归途",
-            }],
+            data: [
+              {
+                id: 403,
+                accountId: "kuaishou-account-1",
+                status: "READY",
+                originalTitle: "逆风归途",
+              },
+            ],
           },
         } as never;
       }
@@ -209,6 +293,8 @@ test("keeps all versions when the backend uses 广告 plus dynamic version field
           msg: "操作成功",
           data: {
             accountTaskId: 403,
+            workerId: "worker-test",
+            attemptCount: 1,
             accountId: "kuaishou-account-1",
             originalTitle: "逆风归途",
             payloadJson: {

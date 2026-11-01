@@ -1327,16 +1327,30 @@ export async function selectYearByLabel(page: Page, labelText: string, year: num
     return;
   }
 
-  const popperId = await input.getAttribute("aria-describedby");
-  if (!popperId) {
-    throw new Error("KUAISHOU_DRAMA_YEAR_POPPER_ID_NOT_FOUND");
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await input.inputValue() === yearText) return;
+    // Re-read the association after each render. Do not force a click through
+    // an overlay or keep waiting on an obsolete/hidden year panel.
+    await input.click({ timeout: 10_000 });
+    const popperId = await input.getAttribute("aria-describedby");
+    if (!popperId) {
+      if (attempt < 2) { await page.waitForTimeout(fieldSettleMs); continue; }
+      throw new Error("KUAISHOU_DRAMA_YEAR_POPPER_ID_NOT_FOUND");
+    }
+    const popper = page.locator(`[id="${escapeCssAttributeValue(popperId)}"]`).first();
+    const opened = await popper.waitFor({ state: "visible", timeout: 3_000 })
+      .then(() => true).catch(() => false);
+    if (!opened) continue;
+    const yearCell = popper.locator("td,.ks-select-dropdown__item,[role='option']")
+      .filter({ hasText: exactTextPattern(yearText) }).first();
+    await yearCell.click({ timeout: 10_000 });
+    await page.waitForFunction(({ id, expected }) => {
+      const panel = document.getElementById(id);
+      const input = Array.from(document.querySelectorAll<HTMLInputElement>("input"))
+        .find(node => node.getAttribute("aria-describedby") === id);
+      return input?.value === expected || !panel;
+    }, { id: popperId, expected: yearText }, { timeout: 3_000 }).catch(() => undefined);
+    if (await input.inputValue() === yearText) return;
   }
-
-  await input.click({ force: true, timeout: 30_000 });
-  const popper = page.locator(`[id="${popperId}"]`).first();
-  await popper.waitFor({ state: "visible", timeout: 30_000 });
-  const yearCell = popper.locator("td").filter({ hasText: exactTextPattern(yearText) }).first();
-  await yearCell.waitFor({ state: "visible", timeout: 30_000 });
-  await yearCell.click({ timeout: 30_000 });
-  await page.waitForTimeout(fieldSettleMs);
+  throw new Error(`KUAISHOU_DRAMA_YEAR_SELECTION_FAILED: expected=${yearText} actual=${await input.inputValue()}`);
 }

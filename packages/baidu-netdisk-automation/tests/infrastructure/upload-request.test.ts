@@ -2,18 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EventEmitter } from "node:events";
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
+import path from "node:path";
+import { tmpdir } from "node:os";
 import { compileFunction, createContext, runInContext } from "node:vm";
 import { clientUploadRequest } from "../../src/infrastructure/upload-request.js";
 
-function fixture(respond: (attempt: number) => { status?: number; data?: unknown; body?: Buffer } | undefined) {
+function fixture(respond: (attempt: number) => { status?: number; data?: unknown; body?: Buffer } | undefined, fileSystem: unknown = fs) {
   let attempts = 0;
   let aborted = 0;
+  const writes: Buffer[] = [], expressions: string[] = [];
   const net = {
     request: () => {
       const attempt = ++attempts;
       const request = Object.assign(new EventEmitter(), {
         setHeader: () => undefined,
-        write: () => undefined,
+        write: (body: Buffer) => { writes.push(body); },
         abort: () => { aborted++; request.emit("close"); },
         end: () => queueMicrotask(() => {
           const result = respond(attempt);
@@ -38,15 +42,16 @@ function fixture(respond: (attempt: number) => { status?: number; data?: unknown
   const context = createContext({
     require: () => ({
       getCurrentWebContents: () => contents,
-      require: (module: string) => module === "electron" ? electron : module === "crypto" ? crypto : {
+      require: (module: string) => module === "electron" ? electron : module === "crypto" ? crypto : module === "fs" ? fileSystem : {
         compileFunction: (code: string, parameters: string[]) => compileFunction(code, parameters, { parsingContext: mainContext }),
         runInThisContext: (expression: string) => runInContext(expression, mainContext),
       },
     }),
   });
   return {
-    page: { evaluate: async <T>(expression: string): Promise<T> => await runInContext(expression, context) },
-    counts: () => ({ attempts, aborted, active: runInContext("globalThis.__dramaBridgeUploads.size", mainContext) }),
+    page: { evaluate: async <T>(expression: string): Promise<T> => { expressions.push(expression); return await runInContext(expression, context); } },
+    writes, expressions,
+    counts: () => ({ attempts, aborted, active: runInContext("globalThis.__dramaBridgeUploads?.size ?? 0", mainContext) }),
   };
 }
 
@@ -110,6 +115,8 @@ test("stopping a task aborts its active client request immediately", async () =>
   const pending = clientUploadRequest(page, "https://d.pcs.baidu.com/rest/2.0/pcs/superfile2", Buffer.from("block"), undefined, {
     signal: controller.signal, timeoutMs: 600_000, retryable: true,
   });
+  // Wait until the paced request actually starts, then test active cancellation.
+  while (counts().attempts === 0) await new Promise(resolve => setTimeout(resolve, 5));
   controller.abort(new Error("用户停止任务"));
   await assert.rejects(pending, /用户停止任务/);
   assert.deepEqual(counts(), { attempts: 1, aborted: 1, active: 0 });
@@ -122,4 +129,74 @@ test("repeated timeouts stop after three attempts and omit sensitive URL paramet
     error => error instanceof Error && /尝试 3 次/.test(error.message) && !error.message.includes("secret"),
   );
   assert.deepEqual(counts(), { attempts: 3, aborted: 3, active: 0 });
+});
+
+test("file management identity verification does not block the next upload request", async () => {
+  const { page, counts } = fixture(attempt => ({ data: attempt === 1 ? { errno: 132, request_id: "delete-132" } : { errno: 0, uploadid: "next-upload" } }));
+  await assert.rejects(clientUploadRequest(page, "https://pan.baidu.com/api/filemanager?opera=delete", Buffer.from("filelist=[]")), /BAIDU_NETDISK_IDENTITY_VERIFICATION.*errno=132/);
+  assert.equal(counts().attempts, 1, "a denied delete is not retried");
+  const next = await clientUploadRequest(page, "https://pan.baidu.com/api/precreate", Buffer.from("path=next.mp4"));
+  assert.equal(next.uploadid, "next-upload");
+  assert.equal(counts().attempts, 2);
+});
+
+test("the client reads a local part without sending file bytes through CDP, validating content before upload", async () => {
+  const directory = await fs.promises.mkdtemp(path.join(tmpdir(), "baidu-local-part-"));
+  try {
+    const local = path.join(directory, "video.mp4");
+    const bytes = Buffer.alloc(32 * 1024, 123);
+    await fs.promises.writeFile(local, bytes);
+    const info = await fs.promises.stat(local);
+    const part = { path: local, offset: 0, length: bytes.length, size: bytes.length, modifiedAtMs: info.mtimeMs, md5: crypto.createHash("md5").update(bytes).digest("hex"), boundary: "testBoundary" };
+    const { page, writes, expressions, counts } = fixture(() => ({ data: { md5: part.md5 } }));
+    const url = "https://c2.pcs.baidu.com/rest/2.0/pcs/superfile2?method=upload&partseq=0";
+    await clientUploadRequest(page, url, undefined, undefined, { filePart: part, traffic: "data" });
+    assert.ok(writes[0].includes(bytes));
+    assert.ok(expressions.every(expression => expression.length < bytes.length));
+    assert.ok(expressions.every(expression => !expression.includes(bytes.toString("base64"))));
+    await fs.promises.writeFile(local, Buffer.alloc(bytes.length, 7));
+    await assert.rejects(clientUploadRequest(page, url, undefined, undefined, { filePart: part }), /发生变化/);
+    assert.equal(counts().attempts, 1, "changed content never reaches the upload endpoint");
+    await assert.rejects(clientUploadRequest(page, "https://example.com/rest/2.0/pcs/superfile2?method=upload", undefined, undefined, { filePart: part }), /无效.*本地上传分片/);
+  } finally { await fs.promises.rm(directory, { recursive: true, force: true }); }
+});
+
+test("cancellation during a client-local read prevents a late HTTP submission and closes the file", async () => {
+  const bytes = Buffer.from("local part");
+  let release: () => void = () => undefined;
+  const barrier = new Promise<void>(resolve => { release = resolve; });
+  let closed = false;
+  const fileSystem = { promises: { open: async () => {
+    await barrier;
+    return {
+      stat: async () => ({ isFile: () => true, size: bytes.length, mtimeMs: 10 }),
+      read: async (buffer: Buffer) => { bytes.copy(buffer); return { bytesRead: bytes.length }; },
+      close: async () => { closed = true; },
+    };
+  } } };
+  const { page, counts } = fixture(() => ({ data: { errno: 0 } }), fileSystem);
+  const controller = new AbortController();
+  const pending = clientUploadRequest(page, "https://c2.pcs.baidu.com/rest/2.0/pcs/superfile2?method=upload", undefined, undefined, {
+    signal: controller.signal, traffic: "data",
+    filePart: { path: path.resolve("test.mp4"), offset: 0, length: bytes.length, size: bytes.length, modifiedAtMs: 10, md5: crypto.createHash("md5").update(bytes).digest("hex"), boundary: "testBoundary" },
+  });
+  const rejection = assert.rejects(pending, /用户停止/);
+  while (!counts().active) await new Promise(resolve => setTimeout(resolve, 5));
+  controller.abort(new Error("用户停止"));
+  await rejection;
+  release();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(closed, true);
+  assert.deepEqual(counts(), { attempts: 0, aborted: 0, active: 0 });
+});
+
+test("risk responses include errno and request id, pause further dispatch and never replay", async () => {
+  const { page, counts } = fixture(() => ({ data: { errno: 8001, request_id: "risk-42" } }));
+  await assert.rejects(clientUploadRequest(page, "https://pan.baidu.com/api/list?bdstoken=secret"), error => {
+    assert.match(String(error), /BAIDU_NETDISK_RISK_CONTROL.*errno=8001.*request_id=risk-42/);
+    assert.doesNotMatch(String(error), /secret/);
+    return true;
+  });
+  await assert.rejects(clientUploadRequest(page, "https://pan.baidu.com/api/list"), /BAIDU_NETDISK_RISK_CONTROL/);
+  assert.equal(counts().attempts, 1);
 });

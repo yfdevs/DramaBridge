@@ -15,6 +15,8 @@ import {
 } from "../src/index.js";
 
 test("expired and deleted Baidu shares do not retry on platform runtimes", () => {
+  assert.equal(isNonRetryableBaiduNetdiskResourceError(new Error("[BAIDU_NETDISK_IDENTITY_VERIFICATION] errno=132 endpoint=/api/filemanager")), true);
+  assert.equal(isNonRetryableBaiduNetdiskResourceError(new Error("[BAIDU_NETDISK_RISK_CONTROL] errno=8001 endpoint=/api/list")), true);
   assert.equal(
     isNonRetryableBaiduNetdiskResourceError(new Error("分享链接不可用：分享文件已过期")),
     true,

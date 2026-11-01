@@ -1561,13 +1561,15 @@ export async function runPublishTask(
       if (preparationFailure) throw preparationFailure.error;
       log(options, `[kuaishou-drama] opening next publish variant: ${variant.kind}`);
       const variantPage = index === 0 ? await pages.readyQueryPage() : await pages.newUploadPage();
+      let completed = false;
       try {
         if (index > 0) await openKuaishouDramaEditPage(context, variantPage, options, false);
         await runVariant(variantPage, variant);
+        completed = true;
       } catch (error) {
         throw pages.failure(error);
       } finally {
-        if (variantPage !== page) await variantPage.close().catch(() => undefined);
+        if (variantPage !== page && (completed || !options.executionStore)) await variantPage.close().catch(() => undefined);
       }
     }, async (variant) => {
       if (queryFailures.has(variant.kind)) throw queryFailures.get(variant.kind);

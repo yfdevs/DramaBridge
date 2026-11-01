@@ -1,15 +1,10 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -116,6 +111,45 @@ export function KuaishouRecreationPage() {
   const hasActive = workspace.tasks.some(active);
   return (
     <main aria-label="二创" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <WorkspaceActions label="二创处理操作">
+        <Button
+          size="sm"
+          className="h-7 min-w-20 gap-1.5 px-3 text-xs"
+          aria-busy={busy}
+          disabled={
+            busy ||
+            loading ||
+            workspace.running ||
+            hasActive ||
+            !workspace.tasks.some((task) => task.state === "queued")
+          }
+          onClick={() => void action(service.start)}
+        >
+          开始处理
+        </Button>
+        {workspace.running && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-3 text-xs"
+            disabled={busy}
+            onClick={() => void action(service.pause)}
+          >
+            本条完成后暂停
+          </Button>
+        )}
+        {hasActive && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-3 text-xs"
+            disabled={busy}
+            onClick={() => void action(service.cancel)}
+          >
+            停止当前任务
+          </Button>
+        )}
+      </WorkspaceActions>
       <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col">
         <header className="shrink-0 space-y-3 border-b px-6 py-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -145,39 +179,6 @@ export function KuaishouRecreationPage() {
               >
                 导入 Excel
               </Button>
-              <Button
-                size="sm"
-                disabled={
-                  busy ||
-                  loading ||
-                  workspace.running ||
-                  hasActive ||
-                  !workspace.tasks.some((task) => task.state === "queued")
-                }
-                onClick={() => void action(service.start)}
-              >
-                开始处理
-              </Button>
-              {workspace.running && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void action(service.pause)}
-                >
-                  本条完成后暂停
-                </Button>
-              )}
-              {hasActive && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void action(service.cancel)}
-                >
-                  停止当前任务
-                </Button>
-              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -220,7 +221,7 @@ export function KuaishouRecreationPage() {
           )}
         </header>
         <div className="min-h-0 flex-1 overflow-auto px-6 pb-4">
-          <Table className="min-w-[860px] table-fixed text-xs">
+          <Table className="min-w-[1000px] table-fixed text-xs">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-40">原剧名</TableHead>
@@ -228,7 +229,7 @@ export function KuaishouRecreationPage() {
                 <TableHead className="w-24">状态</TableHead>
                 <TableHead>进度</TableHead>
                 <TableHead className="w-24">版本</TableHead>
-                <TableHead className="w-48 text-right">操作</TableHead>
+                <TableHead className="sticky right-0 z-20 w-80 border-l bg-background text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -253,7 +254,7 @@ export function KuaishouRecreationPage() {
                 visibleTasks.map((task) => {
                   const completedVersions = task.results.filter((result) => result.shareUrl).length;
                   return (
-                    <TableRow key={task.id} className="h-11">
+                    <TableRow key={task.id} className="group h-11">
                       <TableCell className="py-1.5 font-medium">
                         <div className="truncate" title={task.originalTitle}>
                           {task.originalTitle}
@@ -350,8 +351,8 @@ export function KuaishouRecreationPage() {
                           </PopoverContent>
                         </Popover>
                       </TableCell>
-                      <TableCell className="py-1.5">
-                        <div className="flex items-center justify-end gap-1">
+                      <TableCell className="sticky right-0 z-10 border-l bg-background py-1.5 group-hover:bg-muted">
+                        <div className="flex flex-wrap items-center justify-end gap-1">
                           {completedVersions > 0 && (
                             <Button
                               size="sm"
@@ -373,46 +374,34 @@ export function KuaishouRecreationPage() {
                               重试
                             </Button>
                           )}
-                          {(task.localPath || !active(task)) && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger
-                                render={
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2 text-xs"
-                                    disabled={busy}
-                                    aria-label={`${task.originalTitle}的更多操作`}
-                                  />
-                                }
-                              >
-                                更多
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {task.localPath && (
-                                  <DropdownMenuItem
-                                    onClick={() => void action(() => service.open(task.id))}
-                                  >
-                                    本地目录
-                                  </DropdownMenuItem>
-                                )}
-                                {!active(task) && (
-                                  <DropdownMenuItem
-                                    variant="destructive"
-                                    onClick={() => {
-                                      if (
-                                        window.confirm(
-                                          `删除“${task.originalTitle}”的任务记录？本地素材与网盘文件会保留。`,
-                                        )
-                                      )
-                                        void action(() => service.delete(task.id));
-                                    }}
-                                  >
-                                    删除记录
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                          {task.localPath && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs"
+                              disabled={busy}
+                              onClick={() => void action(() => service.open(task.id))}
+                            >
+                              本地目录
+                            </Button>
+                          )}
+                          {!active(task) && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="h-7 px-2 text-xs"
+                              disabled={busy}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `删除“${task.originalTitle}”的任务记录？本地素材与网盘文件会保留。`,
+                                  )
+                                )
+                                  void action(() => service.delete(task.id));
+                              }}
+                            >
+                              删除记录
+                            </Button>
                           )}
                         </div>
                       </TableCell>

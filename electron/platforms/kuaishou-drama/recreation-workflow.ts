@@ -1,6 +1,6 @@
 import path from "node:path";
 import { lstat, mkdir, rename, rmdir } from "node:fs/promises";
-import type { RecreationTask, RecreationVersion } from "../../../src/platforms/kuaishou-drama/recreation-types";
+import type { RecreationTask, RecreationVersion, RecreationReuseSource } from "../../../src/platforms/kuaishou-drama/recreation-types";
 import { validateRecreationTitle } from "./recreation-excel";
 
 type Runtime = Pick<typeof import("@dramabridge/kuaishou-drama-automation"),
@@ -13,9 +13,11 @@ export async function executeRecreationTask(task: RecreationTask, options: {
   legacySourcePath?: string;
   update: (fields: Partial<RecreationTask>) => void;
   download: (targetRoot: string) => Promise<string>;
+  generatePoster: (options: { localDirectory: string; originalTitle: string; title: string;
+    source: () => Promise<string>; checkpoint?: RecreationVersion["poster"] }) => Promise<NonNullable<RecreationVersion["poster"]>>;
   upload: (localPath: string, title: string, onProgress: (message: string) => void,
     preferredRemoteDirectory: string | undefined, onRemoteDirectorySelected: (directory: string) => void,
-    verification: { verifiedFiles?: RecreationVersion["verifiedFiles"]; onFileVerified: (file: NonNullable<RecreationVersion["verifiedFiles"]>[number]) => void }) => Promise<{
+    verification: { verifiedFiles?: RecreationVersion["verifiedFiles"]; reuseSource?: RecreationReuseSource; onFileVerified: (file: NonNullable<RecreationVersion["verifiedFiles"]>[number]) => void }) => Promise<{
     remotePath: string; shareUrl: string; extractionCode: string;
   }>;
 }) {
@@ -75,6 +77,7 @@ export async function executeRecreationTask(task: RecreationTask, options: {
   await ensureSource(false); // Adopt completed legacy downloads without starting a new download.
   for (const version of task.results) {
     signal.throwIfAborted();
+    if (version.shareUrl) continue;
     update({ state: "checking", message: `检查版本：${version.title}` });
     const target = path.join(versions, `${version.title}-60%`);
     const candidates = [version.localPath, target,
@@ -103,6 +106,11 @@ export async function executeRecreationTask(task: RecreationTask, options: {
       });
     }
     await runtime.normalizeKuaishouRecreationCover(localPath, version.title, signal);
+    // Persist preparation before AI work so generation failure preserves videos.
+    Object.assign(version, { localPath, localFiles: await runtime.inspectKuaishouRecreationVersion(localPath, version.title, task.downloadCount) });
+    update({ results: task.results, state: version.poster ? "checking" : "processing", message: `准备 AI 竖屏海报：${version.title}` });
+    version.poster = await options.generatePoster({ localDirectory: localPath, title: version.title, originalTitle: task.originalTitle,
+      checkpoint: version.poster, source: async () => { const value = await ensureSource(); if (!value) throw new Error("缺少原版海报素材"); return value; } });
     const files = await runtime.inspectKuaishouRecreationVersion(localPath, version.title, task.downloadCount);
     if (!files) throw new Error(`版本目录不完整或含有额外文件：${localPath}`);
     Object.assign(version, { localPath, localFiles: files });
@@ -110,14 +118,31 @@ export async function executeRecreationTask(task: RecreationTask, options: {
       update({ results: task.results });
       continue;
     }
+    // Only a successful sibling of this same task can supply cloud-side content.
+    // The automation package still verifies every candidate by content identity.
+    const sourceVersion = task.results.find(candidate => {
+      const canonical = `/快手_二创集合/${task.originalTitle}/${candidate.title}-60%`;
+      if (candidate === version || candidate.title === version.title || candidate.remotePath !== canonical
+        || candidate.remotePath === version.remotePath || !candidate.shareUrl) return false;
+      try {
+        const url = new URL(candidate.shareUrl);
+        return url.protocol === "https:" && url.hostname === "pan.baidu.com" && /^\/s\/[^/]+$/.test(url.pathname)
+          && !url.username && !url.password;
+      } catch { return false; }
+    });
+    const reuseSource: RecreationReuseSource | undefined = sourceVersion ? {
+      remoteDirectory: sourceVersion.remotePath!,
+      verifiedFiles: sourceVersion.verifiedFiles?.filter(file => file.path.startsWith(sourceVersion.remotePath! + "/")),
+    } : undefined;
     // Persist the completed local stage before attempting any network operation.
-    update({ state: "uploading", message: `上传版本：${version.title}` });
+    update({ state: "uploading", message: reuseSource ? `复用已上传版本，准备网盘复制：${version.title}` : `上传版本：${version.title}` });
     Object.assign(version, await options.upload(localPath, version.title, message => update({ message: `${version.title}：${message}` }),
       version.remotePath, directory => {
         version.remotePath = directory;
         update({ results: task.results });
       }, {
         verifiedFiles: version.verifiedFiles,
+        reuseSource,
         onFileVerified: file => {
           version.verifiedFiles = [...(version.verifiedFiles ?? []).filter(saved => saved.path !== file.path), file];
           update({ results: task.results });

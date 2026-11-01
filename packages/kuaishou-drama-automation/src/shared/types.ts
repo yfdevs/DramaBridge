@@ -1,3 +1,4 @@
+import type { KuaishouExecutionStore, KuaishouSubmitCheckpoint } from "./task-execution.js";
 import { z } from "zod";
 import type { DramaAiClient } from "@dramabridge/ai";
 
@@ -360,6 +361,9 @@ export type KuaishouDramaPublishVariant = {
 };
 
 export type ClaimedKuaishouDramaTask = {
+  workerId: string;
+  attemptCount: number;
+  executionId: string;
   accountTaskId: number;
   dramaId?: number;
   originalTitle: string;
@@ -395,6 +399,8 @@ export type KuaishouDramaConfig = Partial<KuaishouDramaTaskInput> & {
 };
 
 export type KuaishouDramaRuntimeStatus = {
+  workerId?: string;
+  claimPausedReason?: string;
   platform: "kuaishou-drama";
   running: boolean;
   loginState: KuaishouDramaLoginState;
@@ -408,13 +414,16 @@ export type KuaishouDramaRuntimeStatus = {
   lastTask?: {
     accountTaskId: number;
     originalTitle?: string;
-    status: "failed" | "running" | "succeeded";
+    status: "failed" | "running" | "succeeded" | "report-pending" | "review-required";
     errorMessage?: string;
     updatedAt: string;
   };
 };
 
 export type KuaishouDramaRuntimeOptions = {
+  workerId?: string;
+  executionStore?: KuaishouExecutionStore;
+  onSubmitCheckpoint?: (checkpoint: KuaishouSubmitCheckpoint) => void;
   config?: KuaishouDramaConfig;
   userDataDir?: string;
   accountProfileName?: string;
@@ -439,13 +448,13 @@ export type KuaishouDramaRuntimeOptions = {
   /** Polled only after the initial idle page has displayed the authenticated edit form. */
   claimTask?: () => Promise<KuaishouDramaTaskInput | ClaimedKuaishouDramaTask | null>;
   reportTaskError?: (
-    task: Pick<ClaimedKuaishouDramaTask, "accountTaskId"> & {
+    task: Pick<ClaimedKuaishouDramaTask, "accountTaskId" | "workerId" | "attemptCount"> & {
       errorMessage: string;
       failStage: KuaishouDramaTaskFailStage;
     },
   ) => Promise<void>;
   reportTaskSuccess?: (
-    task: Pick<ClaimedKuaishouDramaTask, "accountTaskId"> & {
+    task: Pick<ClaimedKuaishouDramaTask, "accountTaskId" | "workerId" | "attemptCount"> & {
       resultJson?: Record<string, unknown>;
     },
   ) => Promise<void>;

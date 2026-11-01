@@ -1,21 +1,12 @@
-﻿import { useState } from "react";
-import { toast } from "sonner";
-
-import { Separator } from "@/components/ui/separator";
-import {
-  ConfigPanelSection,
+﻿import {
   ConfigSection,
   ConfigurationPageFrame,
-  StoragePathRow,
   type ConfigSectionDefinition,
   usePlatformConfig,
 } from "@/pages/shared/configuration-page";
 import {
   kuaishouDramaService,
   type KuaishouDramaConfig,
-  type KuaishouDramaConfigResult,
-  type KuaishouDramaStoragePathKey,
-  type KuaishouDramaStoragePaths,
 } from "@/platforms/kuaishou-drama/service";
 
 const emptyConfig: KuaishouDramaConfig = {
@@ -29,16 +20,6 @@ const emptyConfig: KuaishouDramaConfig = {
   taskPollIntervalSeconds: "10",
   runDataDir: ".drama-runs/kuaishou-drama",
   logRetentionDays: "3",
-};
-
-const emptyStoragePaths: KuaishouDramaStoragePaths = {
-  runDataDir: "",
-  accountDir: "",
-  userDataDir: "",
-  credentialStatePath: "",
-  assetDownloadDir: "",
-  logDir: "",
-  logFilePath: "",
 };
 
 const configSections: ConfigSectionDefinition<KuaishouDramaConfig>[] = [
@@ -110,46 +91,7 @@ const configSections: ConfigSectionDefinition<KuaishouDramaConfig>[] = [
   },
 ];
 
-const storagePathRows: Array<{
-  key: keyof KuaishouDramaStoragePaths;
-  label: string;
-  description: string;
-}> = [
-  {
-    key: "runDataDir",
-    label: "运行数据目录",
-    description: "保存此平台的运行文件。",
-  },
-  {
-    key: "accountDir",
-    label: "账号目录",
-    description: "保存当前账号的独立数据。",
-  },
-  {
-    key: "userDataDir",
-    label: "浏览器数据",
-    description: "保存登录信息和浏览器缓存。",
-  },
-  {
-    key: "credentialStatePath",
-    label: "登录信息快照",
-    description: "用于排查登录问题，不与其他账号共享。",
-  },
-  {
-    key: "logDir",
-    label: "日志目录",
-    description: "按日期保存运行日志。",
-  },
-  {
-    key: "assetDownloadDir",
-    label: "素材缓存",
-    description: "临时存放下载的封面、海报和授权材料。",
-  },
-];
-
 export function KuaishouDramaConfigurationPage() {
-  const [storagePaths, setStoragePaths] = useState<KuaishouDramaStoragePaths>(emptyStoragePaths);
-  const [configFilePath, setConfigFilePath] = useState("");
   const {
     config,
     discardChanges,
@@ -162,21 +104,7 @@ export function KuaishouDramaConfigurationPage() {
     emptyConfig,
     getConfig: kuaishouDramaService.getConfig,
     saveConfig: kuaishouDramaService.saveConfig,
-    onApplyResult: (result: KuaishouDramaConfigResult) => {
-      setStoragePaths(result.storagePaths);
-      setConfigFilePath(result.path);
-    },
   });
-
-  const openStoragePath = async (key: KuaishouDramaStoragePathKey) => {
-    try {
-      await kuaishouDramaService.openStoragePath(key);
-    } catch (error) {
-      toast.error("打开路径失败", {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
 
   return (
     <ConfigurationPageFrame
@@ -197,35 +125,6 @@ export function KuaishouDramaConfigurationPage() {
         />
       ))}
 
-      <ConfigPanelSection
-        description="配置、账号和素材的实际保存位置"
-        title="文件位置"
-      >
-        <StoragePathRow
-          description="保存当前平台的设置。"
-          label="配置文件"
-          pathText={configFilePath}
-          onOpen={() => openStoragePath("configFilePath")}
-        />
-        {storagePathRows.map((row) => (
-          <div key={row.key}>
-            <Separator />
-            <StoragePathRow
-              description={row.description}
-              label={row.label}
-              pathText={storagePaths[row.key] ?? ""}
-              onOpen={() => openStoragePath(row.key)}
-            />
-          </div>
-        ))}
-        <Separator />
-        <StoragePathRow
-          description="打开最新日志，没有日志时打开目录。"
-          label="最近日志"
-          pathText={storagePaths.logFilePath}
-          onOpen={() => openStoragePath("latestLog")}
-        />
-      </ConfigPanelSection>
     </ConfigurationPageFrame>
   );
 }

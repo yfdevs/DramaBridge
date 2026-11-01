@@ -101,6 +101,7 @@ export const douyinDramaTaskPayloadSchema = z
     outsideFreeAlias: optionalText,
     episodeCount: z.coerce.number().int().min(1).max(300),
     baiduPanResourceLink: optionalText,
+    baiduNetdiskRedownload: z.boolean().optional(),
     isAi: z.boolean().default(true),
     aigcTools: z.array(z.literal(DOUYIN_DRAMA_AIGC_TOOL)).max(1)
       .default([DOUYIN_DRAMA_AIGC_TOOL]),
@@ -278,6 +279,7 @@ export type DouyinDramaRuntimeOptions = {
     downloadEpisodeVideos?: boolean;
     downloadAssetMaterials?: boolean;
     forceAssetDownload?: boolean;
+    forceRedownload?: boolean;
     signal?: AbortSignal;
     onStableEpisodeFiles?: (files: Array<{
       index: number;

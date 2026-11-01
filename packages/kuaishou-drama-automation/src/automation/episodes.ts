@@ -11,6 +11,10 @@ import { resolveKuaishouEpisodeCoverFile } from "../shared/cover-materials.js";
 import { resolveUploadAssetFile } from "./upload/remote-assets.js";
 import { enterKuaishouDramaVideoUploadStep } from "./video-upload-step.js";
 import { uploadKuaishouDramaEpisodeVideos } from "./video-upload.js";
+import {
+  confirmKuaishouBatchDialog,
+  confirmVisibleKuaishouPriceNotice,
+} from "./batch-dialog.js";
 
 const episodeSettleMs = 120;
 const episodesPerPage = 10;
@@ -51,26 +55,6 @@ async function selectEpisodeRangeBoundary(
         `${selectorIndex === 0 ? "start" : "end"}=${optionText}; actual=${selectedText || "-"}`,
     );
   }
-}
-
-async function visibleDialogContaining(page: Page, text: string) {
-  const dialogs = page.locator(".ks-dialog,[role='dialog']").filter({ hasText: text });
-  for (let index = 0; index < (await dialogs.count()); index += 1) {
-    const dialog = dialogs.nth(index);
-    if (await dialog.isVisible().catch(() => false)) return dialog;
-  }
-  return null;
-}
-
-async function confirmVisiblePriceNotice(page: Page) {
-  const notice = await visibleDialogContaining(page, "我已确认");
-  if (!notice) return;
-  const confirm = notice
-    .locator("button,.ks-button")
-    .filter({ hasText: /我已确认/ })
-    .first();
-  await confirm.click({ timeout: 30_000 });
-  await notice.waitFor({ state: "hidden", timeout: 30_000 }).catch(() => undefined);
 }
 
 async function confirmImageCropIfVisible(page: Page) {
@@ -130,16 +114,7 @@ async function openBatchDialog(page: Page) {
 }
 
 async function confirmBatchDialog(page: Page, dialog: Locator) {
-  const confirm = dialog
-    .locator("button,.ks-button")
-    .filter({ hasText: /确\s*认/ })
-    .first();
-  await confirm.click({ timeout: 30_000 });
-  await confirmVisiblePriceNotice(page);
-  if (await dialog.isVisible().catch(() => false)) {
-    await confirm.click({ timeout: 30_000 });
-  }
-  await dialog.waitFor({ state: "hidden", timeout: 30_000 });
+  await confirmKuaishouBatchDialog(page, dialog);
   await page.waitForTimeout(episodeSettleMs);
 }
 
@@ -167,7 +142,7 @@ async function selectBatchEpisodePrice(
       .first();
   }
   await radio.click({ timeout: 30_000 });
-  await confirmVisiblePriceNotice(page);
+  await confirmVisibleKuaishouPriceNotice(page);
 }
 
 async function setBatchEpisodeCover(

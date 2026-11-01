@@ -10,6 +10,8 @@ test("empty client lists and JSON task lists are decoded without treating read e
   assert.throws(() => decodeNativeDownloadTasks({ errorNo: 1, items: { tasks: [] } }), /暂不可用/);
   assert.throws(() => decodeNativeDownloadTasks({ errorNo: 0, items: { tasks: "" }, count: 2 }), /格式不可用/);
   assert.equal(runInNewContext(`(${decodeNativeDownloadTasks.toString()})(${JSON.stringify(payload)})`)[0].name, "第31集.mp4");
+  assert.equal(decodeNativeDownloadTasks({ errorNo: 0, items: [{ name: "第31集.mp4" }] })[0].name, "第31集.mp4");
+  assert.equal(decodeNativeDownloadTasks({ errorNo: 0, items: JSON.stringify({ tasks: [{ name: "第31集.mp4" }] }) })[0].name, "第31集.mp4");
 });
 
 test("individual episode tasks are matched only within their own download directory", () => {
@@ -33,4 +35,12 @@ test("an absent parent task does not hide active episode downloads, and unscoped
   assert.equal(selectNativeDownloadStatus([task], { targetName: "本剧" }).matched, undefined);
   assert.ok(selectNativeDownloadStatus([task], { targetName: "本剧", targetNames: [task.name], expectedDownloadRoot: "D:/本剧" }).matched);
   assert.throws(() => selectNativeDownloadStatus([task], { targetName: "本剧", targetNames: [task.name] }), /缺少下载目录/);
+});
+
+test("completed episodes cannot mark a group complete while expected episodes are absent", () => {
+  const options = { targetName: "本剧", targetNames: ["第30集.mp4", "第31集.mp4"], expectedDownloadRoot: "D:/本剧" };
+  const task = { name: "第30集.mp4", local_path: "D:/本剧/第30集.mp4", size: 100, finish_size: 100, status: "completed" };
+  assert.equal(selectNativeDownloadStatus([task], options).matched?.completed, false);
+  const other = { ...task, name: "第31集.mp4", local_path: "D:/本剧/第31集.mp4" };
+  assert.equal(selectNativeDownloadStatus([task, other], options).matched?.completed, true);
 });

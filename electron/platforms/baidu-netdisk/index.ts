@@ -30,6 +30,7 @@ import {
 import { playwrightBrowsersPath, resolveFromAppRoot, selectDirectory } from "../shared";
 import { createElectronPlatformLogger } from "../../platform-logger";
 import { runRuntimeAssetCleanup } from "../../runtime-asset-cleanup";
+import { resetLocalResourceForRedownload } from "./redownload";
 
 export type BaiduNetdiskConfig = {
   debugPort: string;
@@ -152,6 +153,7 @@ export type BaiduNetdiskEnsureDownloadedRequest = {
   downloadEpisodeVideos?: boolean;
   downloadAssetMaterials?: boolean;
   forceAssetDownload?: boolean;
+  forceRedownload?: boolean;
   requireAllDiscoveredAssets?: boolean;
   requiredOwnership?: {
     minimumImages?: number;
@@ -365,6 +367,8 @@ function startDiskCleanupMonitor() {
   diskCleanupTimer.unref();
 }
 
+let baiduRiskBlockedUntil = 0;
+
 function runBaiduCdpOperationExclusive<T>(label: string, operation: () => Promise<T>): Promise<T> {
   queuedBaiduCdpOperations += 1;
   const queuePosition = queuedBaiduCdpOperations;
@@ -381,7 +385,20 @@ function runBaiduCdpOperationExclusive<T>(label: string, operation: () => Promis
     .then(async () => {
       baiduNetdiskLogger("netdisk").info("Netdisk operation started", { action: label });
       try {
+        if (Date.now() < baiduRiskBlockedUntil) {
+          throw new Error("[BAIDU_NETDISK_RISK_CONTROL] 百度网盘自动操作暂停中，请在客户端完成验证后稍后手动重试。");
+        }
         return await operation();
+      } catch (error) {
+        if (String(error).includes("BAIDU_NETDISK_RISK_CONTROL")) {
+          // Preserve the first cooldown instead of extending it for every
+          // queued cleanup/task that is rejected without issuing a request.
+          if (Date.now() >= baiduRiskBlockedUntil) baiduRiskBlockedUntil = Date.now() + 60_000;
+          baiduNetdiskLogger("netdisk").warn("Baidu risk control paused automatic operations", {
+            action: label, blockedUntil: new Date(baiduRiskBlockedUntil).toISOString(),
+          });
+        }
+        throw error;
       } finally {
         queuedBaiduCdpOperations = Math.max(0, queuedBaiduCdpOperations - 1);
         baiduNetdiskLogger("netdisk").info("Netdisk operation finished", { action: label });
@@ -521,6 +538,10 @@ export async function uploadKuaishouRecreationVersion(options: {
   preferredRemoteDirectory?: string;
   onRemoteDirectorySelected?: (directory: string) => void;
   verifiedFiles?: import("@dramabridge/baidu-netdisk-automation").RemoteVerifiedFile[];
+  reuseSource?: {
+    remoteDirectory: string;
+    verifiedFiles?: import("@dramabridge/baidu-netdisk-automation").RemoteVerifiedFile[];
+  };
   onFileVerified?: (file: import("@dramabridge/baidu-netdisk-automation").RemoteVerifiedFile) => void;
   onProgress?: (message: string) => void;
 }) {
@@ -528,6 +549,18 @@ export async function uploadKuaishouRecreationVersion(options: {
   const { uploadBaiduNetdiskDirectory } = await import("@dramabridge/baidu-netdisk-automation");
   return runBaiduCdpOperationExclusive("上传快手二创版本", () => uploadBaiduNetdiskDirectory({
     ...options, port: cdpPort(readConfig()),
+    onProgress: (message) => {
+      if (message.startsWith("上传阶段统计：")) baiduNetdiskLogger("upload").info(message);
+      // Optional cleanup can fail after a valid share already exists. Retain
+      // that result while still pausing subsequent cloud operations globally.
+      if (message.includes("BAIDU_NETDISK_RISK_CONTROL")) {
+        baiduRiskBlockedUntil = Math.max(baiduRiskBlockedUntil, Date.now() + 60_000);
+        baiduNetdiskLogger("netdisk").warn("Upload succeeded; remote cleanup requires identity verification", { message });
+      } else if (message.includes("BAIDU_NETDISK_IDENTITY_VERIFICATION")) {
+        baiduNetdiskLogger("netdisk").warn("Upload succeeded; legacy cleanup deferred without pausing other uploads", { message });
+      }
+      options.onProgress?.(message);
+    },
   }));
 }
 
@@ -556,44 +589,35 @@ async function cleanupBaiduNetdiskDownloadArtifacts(options: {
     assertDisposableBaiduDownloadDir(options.downloadDir);
   } catch (error) {
     baiduNetdiskLogger("storage").warn("Skipped unsafe temporary directory cleanup", { error });
-    return;
+    return false;
   }
 
   const { controlBaiduNetdiskDownloadTask } = await importBaiduNetdiskDownloadRuntimePackage();
-  const downloadTaskNames = [
-    options.targetName,
-    "视频",
-    "成片",
-    "成品",
-    "正片",
-    "权属",
-    "工程",
-    "封面",
-    "海报",
-    "AI制作证明",
-  ];
   let cleanupAttemptCount = 0;
-  for (const targetName of downloadTaskNames) {
-    try {
-      await runBaiduCdpOperationExclusive(`清理百度下载任务：${targetName}`, () =>
-        controlBaiduNetdiskDownloadTask({
-          port: options.port,
-          targetName,
-          action: "delete",
-          expectedDownloadRoot: options.downloadDir,
-        }),
-      );
-      cleanupAttemptCount += 1;
-    } catch {
-      // A material category may not have created its own native download task.
-    }
+  try {
+    const confirmed = await runBaiduCdpOperationExclusive(`清理百度下载任务：${options.targetName}`, () =>
+      controlBaiduNetdiskDownloadTask({
+        port: options.port,
+        targetName: options.targetName,
+        action: "delete",
+        expectedDownloadRoot: options.downloadDir,
+        matchAllInDownloadRoot: true,
+      }),
+    );
+    if (!confirmed) throw new Error("百度客户端下载任务删除未确认，保留临时文件供后续恢复。");
+    cleanupAttemptCount += 1;
+  } catch (error) {
+    baiduNetdiskLogger("download").warn("Baidu download task cleanup could not be confirmed", { error });
+    // A native task may still be writing to this directory. Never remove its
+    // files until client-side cancellation has been confirmed.
+    return false;
   }
   baiduNetdiskLogger("download").info("Baidu download task cleanup completed", {
     resourceName: options.targetName,
     cleanupAttemptCount,
   });
 
-  if (options.preserveLocalFiles) return;
+  if (options.preserveLocalFiles) return true;
 
   try {
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -622,6 +646,7 @@ async function cleanupBaiduNetdiskDownloadArtifacts(options: {
       error,
     });
   }
+  return true;
 }
 
 async function cleanupRecordedRemoteTransfer(
@@ -686,11 +711,12 @@ function recoverPendingRemoteTransferCleanups() {
     await startCdp(false);
     for (const pendingRecord of pendingRecords) {
       if (activeDownloadOperations.has(pendingRecord.id)) continue;
-      await cleanupBaiduNetdiskDownloadArtifacts({
+      const stopped = await cleanupBaiduNetdiskDownloadArtifacts({
         downloadDir: pendingRecord.downloadDir,
         targetName: pendingRecord.resourceName,
         port,
       });
+      if (!stopped) continue;
       const recovered = await cleanupRecordedRemoteTransfer(
         pendingRecord,
         port,
@@ -764,6 +790,7 @@ function normalizeEnsureDownloadRequest(
     downloadEpisodeVideos,
     downloadAssetMaterials: request.downloadAssetMaterials,
     forceAssetDownload: request.forceAssetDownload,
+    forceRedownload: request.forceRedownload === true,
     requireAllDiscoveredAssets: request.requireAllDiscoveredAssets,
     requiredOwnership: request.requiredOwnership,
     requiredOwnershipFiles: request.requiredOwnershipFiles,
@@ -941,6 +968,7 @@ async function importBaiduNetdiskDownloadRuntimePackage() {
       targetName: string;
       action: "pause" | "resume" | "delete";
       expectedDownloadRoot?: string;
+      matchAllInDownloadRoot?: boolean;
     }) => Promise<boolean>;
     deleteBaiduNetdiskTemporaryTransfer: (options: {
       port?: number;
@@ -1114,6 +1142,12 @@ export async function ensureBaiduNetdiskShareDownloaded(
   startDiskCleanupMonitor();
   const activeOperation = activeDownloadOperations.get(id);
 
+  if (normalizedRequest.forceRedownload && [...activeDownloadOperations.values()].some(
+    operation => normalizedPathKey(operation.localPath) === normalizedPathKey(localPath),
+  )) {
+    throw new Error("该剧仍有正在执行的下载任务，请等待完成或停止原任务后再重新下载。");
+  }
+
   if (activeOperation) {
     if (normalizedRequest.onStableEpisodeFiles) {
       activeOperation.stableEpisodeFilesListeners.add(normalizedRequest.onStableEpisodeFiles);
@@ -1260,6 +1294,30 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
       getBaiduNetdiskDownloadTaskStatus,
       controlBaiduNetdiskDownloadTask,
     } = await importBaiduNetdiskDownloadRuntimePackage();
+    if (request.forceRedownload) {
+      assertDisposableBaiduDownloadDir(uniqueDownloadDir);
+      await resetLocalResourceForRedownload({
+        localRoot: request.localEpisodeVideoRoot,
+        resourceName: request.resourceName,
+        downloadDir: uniqueDownloadDir,
+        cancelDownloads: async () => {
+          request.signal?.throwIfAborted();
+          await startCdp(false);
+          const confirmed = await cleanupBaiduNetdiskDownloadArtifacts({
+            downloadDir: uniqueDownloadDir,
+            targetName: request.resourceName,
+            port,
+            preserveLocalFiles: true,
+          });
+          if (!confirmed) throw new Error("重新下载前未能确认旧下载任务已清理，请检查百度网盘客户端后重试。");
+          request.signal?.throwIfAborted();
+        },
+      });
+      baiduNetdiskLogger("download", {
+        requesterPlatform: request.requesterPlatform,
+        resourceName: request.resourceName,
+      }).info("已清理该剧本地素材和临时下载文件，开始重新下载");
+    }
     const runDownload = () => ensureBaiduNetdiskEpisodeVideos({
       shareText: request.shareText,
       resourceName: request.resourceName,
@@ -1279,7 +1337,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
       mergeOwnershipMaterials: request.mergeOwnershipMaterials,
       timeoutMs,
       downloadDir: uniqueDownloadDir,
-      sourceLocalPath: existingRecord?.localPath,
+      sourceLocalPath: request.forceRedownload ? undefined : existingRecord?.localPath,
       downloadTaskName: existingRecord?.resourceName,
       downloadShare: async (downloadRequest) => {
         const downloadResult = await runBaiduCdpOperationExclusive(downloadRequest.resourceName, () =>
@@ -1459,14 +1517,14 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
   } catch (error) {
     const message = readableError(error);
     if (record.remoteCleanupPending) {
-      await cleanupBaiduNetdiskDownloadArtifacts({
+      const stopped = await cleanupBaiduNetdiskDownloadArtifacts({
         downloadDir: uniqueDownloadDir,
         targetName: request.resourceName,
         port,
         preserveLocalFiles: request.requesterPlatform === "kuaishou-drama-recreation",
       });
       downloadArtifactsCleaned = true;
-      record = await cleanupRecordedRemoteTransfer(
+      if (stopped) record = await cleanupRecordedRemoteTransfer(
         record,
         port,
         request.signal?.aborted ? "用户终止任务" : "任务失败",

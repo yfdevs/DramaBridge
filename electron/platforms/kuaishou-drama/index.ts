@@ -1,3 +1,12 @@
+import { randomUUID } from "node:crypto";
+import type {
+  KuaishouDramaRuntimeOptions,
+  KuaishouExecutionAttention,
+} from "@dramabridge/kuaishou-drama-automation";
+import { openAutomationDatabase } from "../../storage/database";
+import { KuaishouExecutionRepository } from "../../storage/kuaishou-drama/execution-repository";
+import { getKuaishouWorkerId } from "./worker-identity";
+import { selectKuaishouAccounts } from "./account-selection";
 import { app } from "electron";
 import { registerKuaishouRecreationHandlers } from "./recreation";
 import { trpcIpc as ipcMain } from "../../ipc";
@@ -6,7 +15,10 @@ import { createValidatedStore } from "../../core/config-store";
 import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk";
+import {
+  cleanupBaiduNetdiskPlayletAfterTaskSuccess,
+  ensureBaiduNetdiskShareDownloaded,
+} from "../baidu-netdisk";
 import { createElectronPlatformLogger } from "../../platform-logger";
 import { registerRuntimeAssetCleanupRoot } from "../../runtime-asset-cleanup";
 import {
@@ -35,6 +47,8 @@ type KuaishouDramaAccountRuntimeStatus = {
   loginState: "login-required" | "logged-in" | "unknown";
   activeUrl?: string;
   userDataDir: string;
+  workerId?: string;
+  claimPausedReason?: string;
   accountProfileName?: string;
   accountDir?: string;
   credentialStatePath?: string;
@@ -43,7 +57,7 @@ type KuaishouDramaAccountRuntimeStatus = {
   lastTask?: {
     accountTaskId: number;
     originalTitle?: string;
-    status: "failed" | "running" | "succeeded";
+    status: "failed" | "running" | "succeeded" | "report-pending" | "review-required";
     errorMessage?: string;
     updatedAt: string;
   };
@@ -86,6 +100,7 @@ export type KuaishouDramaConfig = {
 };
 
 export type KuaishouDramaServiceStatus = KuaishouDramaRuntimeStatus & {
+  executions: KuaishouExecutionAttention[];
   pid: number | null;
 };
 
@@ -107,6 +122,8 @@ type KuaishouDramaStoragePaths = {
 };
 
 type KuaishouDramaStore = {
+  installationId: string;
+  selectedAccountIds: string[];
   config: Partial<KuaishouDramaConfig> & Record<string, string | undefined>;
   dailyUploadLimitResumeAtByAccount?: Record<string, number>;
 };
@@ -187,6 +204,8 @@ function getStore() {
       name: "kuaishou-drama-config",
       defaults: {
         config: defaultKuaishouDramaConfig,
+        installationId: "",
+        selectedAccountIds: [],
       },
     });
   }
@@ -370,41 +389,50 @@ function ensureStorageDirectories(paths = storagePaths()) {
 }
 
 async function importKuaishouDramaRuntimePackage() {
-  return import("@dramabridge/kuaishou-drama-automation") as Promise<{
-    fetchKuaishouDramaAccounts: (apiBaseUrl: string) => Promise<
-      Array<{
-        id: number;
-        accountId: string;
-        accountName: string;
-        loginAccount?: string | null;
-        rpaProfileKey?: string | null;
-      }>
-    >;
-    claimNextKuaishouDramaTaskApi: (options: Record<string, unknown>) => Promise<{
-      accountTaskId: number;
-      task: unknown;
-    } | null>;
-    reportKuaishouDramaTaskErrorApi: (task: {
-      apiConfig: { baseUrl: string };
-      accountTaskId: number;
-      failStage: string;
-      errorMessage: string;
-    }) => Promise<void>;
-    reportKuaishouDramaTaskSuccessApi: (task: {
-      apiConfig: { baseUrl: string };
-      accountTaskId: number;
-      resultJson?: Record<string, unknown>;
-    }) => Promise<void>;
-    startKuaishouDramaRuntime: (
-      options: Record<string, unknown>,
-    ) => Promise<KuaishouDramaAccountRuntime>;
-  }>;
+  return import("@dramabridge/kuaishou-drama-automation");
+}
+let executionRepository: KuaishouExecutionRepository | undefined;
+function executions() {
+  if (!executionRepository) {
+    executionRepository = new KuaishouExecutionRepository(openAutomationDatabase().database);
+    executionRepository.recoverInterrupted();
+  }
+  return executionRepository;
+}
+function executionAttention(): KuaishouExecutionAttention[] {
+  return executions()
+    .list(readConfig().apiBaseUrl)
+    .filter((record) =>
+      ["review-required", "report-pending", "report-blocked"].includes(record.phase),
+    )
+    .map(
+      ({
+        id,
+        accountId,
+        taskId,
+        workerId,
+        attemptCount,
+        originalTitle,
+        phase,
+        errorMessage,
+        updatedAt,
+      }) => ({
+        id,
+        accountId,
+        taskId,
+        workerId,
+        attemptCount,
+        originalTitle,
+        phase,
+        errorMessage,
+        updatedAt,
+      }),
+    );
 }
 
 function findLatestLogPath(paths = storagePaths()) {
-  return findLatestFile(
-    paths.logDir,
-    (fileName) => /^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:log|jsonl)$/i.test(fileName),
+  return findLatestFile(paths.logDir, (fileName) =>
+    /^app(?:-.+)?-\d{4}-\d{2}-\d{2}\.(?:log|jsonl)$/i.test(fileName),
   );
 }
 
@@ -414,6 +442,7 @@ async function defaultStoppedStatus(): Promise<KuaishouDramaServiceStatus> {
     running: false,
     accounts: [],
     pid: null,
+    executions: executionAttention(),
   };
 }
 
@@ -430,13 +459,34 @@ async function status(): Promise<KuaishouDramaServiceStatus> {
   return {
     ...runtimeStatus,
     pid: process.pid,
+    executions: executionAttention(),
   };
 }
 
-async function startRuntime() {
+async function startRuntime(selectedAccountIds: unknown) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
 
   const config = readConfig();
+  const workerId = await getKuaishouWorkerId(() => {
+    const saved = getStore().get("installationId");
+    if (saved) return saved;
+    const generated = randomUUID();
+    getStore().set("installationId", generated);
+    return generated;
+  });
+  const { flushPendingKuaishouReports } = await importKuaishouDramaRuntimePackage();
+  const pendingAccounts = new Set(
+    executions()
+      .list(config.apiBaseUrl)
+      .filter((record) => record.phase === "report-pending")
+      .map((record) => record.accountId),
+  );
+  for (const accountId of pendingAccounts)
+    await flushPendingKuaishouReports({
+      store: executions(),
+      apiBaseUrl: config.apiBaseUrl,
+      accountId,
+    });
   let aiClient: ReturnType<typeof createConfiguredAiClient> | undefined;
   let aiImageModel: string | undefined;
   try {
@@ -471,16 +521,16 @@ async function startRuntime() {
   );
   const taskPollIntervalMs =
     Math.max(1, Number.parseFloat(config.taskPollIntervalSeconds) || 10) * 1000;
-  const {
-    fetchKuaishouDramaAccounts,
-    claimNextKuaishouDramaTaskApi,
-    reportKuaishouDramaTaskErrorApi,
-    reportKuaishouDramaTaskSuccessApi,
-    startKuaishouDramaRuntime,
-  } = await importKuaishouDramaRuntimePackage();
-  const accounts = await fetchKuaishouDramaAccounts(config.apiBaseUrl);
-  if (!accounts.length) throw new Error("KUAISHOU_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
+  const { fetchKuaishouDramaAccounts, claimNextKuaishouDramaTaskApi, startKuaishouDramaRuntime } =
+    await importKuaishouDramaRuntimePackage();
+  const enabledAccounts = await fetchKuaishouDramaAccounts(config.apiBaseUrl);
+  if (!enabledAccounts.length) throw new Error("KUAISHOU_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
 
+  const accounts = selectKuaishouAccounts(enabledAccounts, selectedAccountIds);
+  getStore().set(
+    "selectedAccountIds",
+    accounts.map((account) => account.accountId),
+  );
   const accountRuntimes: Array<{
     account: (typeof accounts)[number];
     runtime: KuaishouDramaAccountRuntime;
@@ -491,7 +541,9 @@ async function startRuntime() {
       const paths = storagePaths(config, account.accountId);
       ensureStorageDirectories(paths);
       const apiOptions = { apiConfig: { baseUrl: config.apiBaseUrl } };
-      const runtimeOptions: Record<string, unknown> = {
+      const runtimeOptions: KuaishouDramaRuntimeOptions = {
+        workerId,
+        executionStore: executions(),
         accountProfileName: account.accountId,
         kuaishouAccountId: account.accountId,
         kuaishouAccountName: account.accountName,
@@ -512,10 +564,13 @@ async function startRuntime() {
         aiImageModel,
         aiCoverGenerationRetryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
         apiConfig: apiOptions.apiConfig,
-        ensureBaiduNetdiskResource: (request: Parameters<typeof ensureBaiduNetdiskShareDownloaded>[0]) => ensureBaiduNetdiskShareDownloaded({
-          ...request,
-          requesterPlatform: "kuaishou-drama",
-        }),
+        ensureBaiduNetdiskResource: (
+          request: Parameters<typeof ensureBaiduNetdiskShareDownloaded>[0],
+        ) =>
+          ensureBaiduNetdiskShareDownloaded({
+            ...request,
+            requesterPlatform: "kuaishou-drama",
+          }),
         cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
         config: {
           browser: { headless: config.headless === "true", slowMo: operationDelayMs },
@@ -525,19 +580,6 @@ async function startRuntime() {
         claimNextKuaishouDramaTaskApi({
           ...apiOptions,
           runtimeOptions,
-        });
-      runtimeOptions.reportTaskSuccess = (task: Record<string, unknown>) =>
-        reportKuaishouDramaTaskSuccessApi({ ...apiOptions, ...task } as unknown as {
-          apiConfig: { baseUrl: string };
-          accountTaskId: number;
-          resultJson?: Record<string, unknown>;
-        });
-      runtimeOptions.reportTaskError = (task: Record<string, unknown>) =>
-        reportKuaishouDramaTaskErrorApi({ ...apiOptions, ...task } as unknown as {
-          apiConfig: { baseUrl: string };
-          accountTaskId: number;
-          failStage: string;
-          errorMessage: string;
         });
       const runtime = await startKuaishouDramaRuntime(runtimeOptions);
       accountRuntimes.push({ account, runtime });
@@ -643,14 +685,66 @@ export function registerKuaishouDramaPlatformHandlers() {
 
   ipcMain.handle("kuaishou-drama:service:status", () => status());
 
-  ipcMain.handle("kuaishou-drama:service:start", async () => {
+  ipcMain.handle("kuaishou-drama:execution:recheck", async (_event, id: string) => {
+    if (runtimeController.running || runtimeController.startingPromise)
+      throw new Error("请先停止快手服务，并在快手和后台核实、处理该任务，再重新检查。");
+    const record = executions().get(id);
+    if (!record || record.apiBaseUrl !== readConfig().apiBaseUrl.trim().replace(/\/+$/, ""))
+      throw new Error("未找到当前后台的本地任务记录。");
+    if (!["review-required", "report-blocked"].includes(record.phase))
+      throw new Error("该记录无需人工解除；待补报记录会在服务启动后自动重试。");
+    const task = await (
+      await importKuaishouDramaRuntimePackage()
+    ).fetchKuaishouAccountTaskApi({
+      apiBaseUrl: record.apiBaseUrl,
+      accountId: record.accountId,
+      taskId: record.taskId,
+    });
+    if (runtimeController.running || runtimeController.startingPromise)
+      throw new Error("检查期间服务已启动，请先停止服务再检查。");
+    if (executions().get(id)?.updatedAt !== record.updatedAt)
+      throw new Error("任务记录已更新，请刷新后重新检查。");
+    if (
+      !task ||
+      !["READY", "FAILED", "COMPLETED", "CANCELED", "DRAFT", "CONTRACT_FILLING"].includes(
+        task.status || "",
+      )
+    ) {
+      throw new Error(
+        "后台任务仍在上传中或状态无法确认。请先在快手确认是否已提交，并在后台处理占用，再重新检查。",
+      );
+    }
+    executions().save({
+      ...record,
+      phase: "released",
+      updatedAt: new Date().toISOString(),
+      errorMessage: `用户已在后台核实处理，重新检查状态为 ${task.status}，保留原领取和结果记录。`,
+    });
+    return status();
+  });
+  ipcMain.handle("kuaishou-drama:accounts:list", async () => {
+    const accounts = await (
+      await importKuaishouDramaRuntimePackage()
+    ).fetchKuaishouDramaAccounts(readConfig().apiBaseUrl);
+    const selectedIds = new Set(
+      runtimeController.current?.getStatus().accounts.map((account) => account.accountId) ??
+        getStore().get("selectedAccountIds"),
+    );
+    return {
+      accounts: accounts.map((account) => ({ ...account, status: "ON" })),
+      selectedAccountIds: accounts
+        .filter((account) => selectedIds.has(account.accountId))
+        .map((account) => account.accountId),
+    };
+  });
+  ipcMain.handle("kuaishou-drama:service:start", async (_event, selectedAccountIds: unknown) => {
     assertGlobalDirectoriesConfigured();
     const runtime = runtimeController.current;
     if (runtime && !runtime.getStatus().running) {
       await runtimeController.stop();
     }
 
-    await runtimeController.start(startRuntime);
+    await runtimeController.start(() => startRuntime(selectedAccountIds));
     return status();
   });
 
