@@ -35,10 +35,12 @@ async function runExecutable(command, args, options = {}) {
     env: { ...process.env, ...options.env },
     reject: false,
     stdin: "ignore",
-    timeout: 15_000,
+    timeout: options.timeoutMs ?? 15_000,
     windowsHide: true,
   });
-  if (result.failed) throw new Error(result.shortMessage, { cause: result });
+  if (result.failed) {
+    throw new Error([result.shortMessage, result.all?.trim()].filter(Boolean).join("\n"), { cause: result });
+  }
   return result.all ?? result.stdout;
 }
 
@@ -163,14 +165,21 @@ async function validatePackagedNativeModules(version) {
     'const database = new Database(":memory:")',
     'database.prepare("SELECT 1").get()',
     'database.close()',
+    'console.log("SQLite check passed")',
     'await load("sharp")({ create: { width: 2, height: 2, channels: 3, background: "white" } }).png().toBuffer()',
+    'console.log("Sharp check passed")',
     'load("@napi-rs/canvas").createCanvas(2, 2).toBuffer("image/png")',
+    'console.log("Canvas check passed")',
     'load("write-file-atomic")._getTmpname("runtime-check")',
-    '})().catch(error => { console.error(error); process.exitCode = 1 })',
+    'console.log("Atomic write check passed")',
+    // Native worker pools can keep this one-shot Electron/Node probe alive.
+    // Every awaited operation has finished before success is reported.
+    'process.exit(0)',
+    '})().catch(error => { console.error(error); process.exit(1) })',
   ].join(";\n");
   await runExecutable(path.join(packagedDir, "DramaBridge.exe"), [
     "-e", source, path.join(packagedDir, "resources", "app.asar"),
-  ], { env: { ELECTRON_RUN_AS_NODE: "1" } });
+  ], { env: { ELECTRON_RUN_AS_NODE: "1" }, timeoutMs: 60_000 });
   console.log("Validated packaged SQLite, Sharp, canvas and atomic writes from ASAR.");
 }
 
