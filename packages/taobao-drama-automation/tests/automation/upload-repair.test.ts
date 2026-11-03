@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, test, type TestContext } from "node:test";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isTaobaoVideoResolutionFailure, retryFailedTaobaoEpisodes, waitForUploadComplete } from "../../src/automation/episodes.js";
+import { isTaobaoVideoResolutionFailure, retryFailedTaobaoEpisodes, restartTaobaoBatchForResolution, waitForUploadComplete } from "../../src/automation/episodes.js";
 import { prepareTaobaoEpisodeVideos } from "../../src/shared/local-materials.js";
 
 const cacheRoot = path.resolve(import.meta.dirname, "../../../../.cache");
@@ -44,7 +44,7 @@ test("initial video preparation retains original files without probing or conver
   }, { localMaterialRoot: directory, assetDownloadDir: path.join(directory, "assets") });
   assert.equal(result.episodes[0].file, original);
   assert.deepEqual(result.prepared.files, []);
-  assert.deepEqual(await readdir(result.prepared.uploadDir), []);
+  assert.deepEqual(await readdir(result.prepared.uploadDir), [".drama-artifact-lease.json"]);
 });
 
 async function uploadFixture(t: TestContext, reason: string, rejectReplacement = false, automaticRejection = false, deletionDelayMs = 0) {
@@ -231,4 +231,145 @@ test("a failed item cannot bypass repair through an enabled publish button while
   });
   const result = await waitForUploadComplete(page, files, {}, true);
   assert.deepEqual(result.failedFileNames, ["low-resolution.mp4"]);
+});
+
+
+test("automatic resolution modals can animate continuously without aborting the batch", async (t) => {
+  const { page, files } = await uploadFixture(t, "视频分辨率低于平台要求");
+  await page.addStyleTag({ content: `@keyframes moveDialog { from { transform:translateX(0) } to { transform:translateX(10px) } } .next-dialog { animation:moveDialog 30ms infinite alternate; }` });
+  await page.getByText("查看原因", { exact: true }).click();
+  const result = await waitForUploadComplete(page, files, {}, true);
+  assert.deepEqual(result.failedFileNames, ["low-resolution.mp4"]);
+});
+
+test("a replaced automatic modal never retargets a different rejection by visible-list index", async (t) => {
+  const { page, files } = await uploadFixture(t, "视频分辨率低于平台要求");
+  await page.getByText("查看原因", { exact: true }).click();
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.next-dialog')!;
+    dialog.querySelector('button')!.addEventListener('pointerdown', () => {
+      const replacement = dialog.cloneNode(true) as HTMLElement;
+      replacement.querySelector('button')!.addEventListener('click', () => replacement.remove());
+      dialog.replaceWith(replacement);
+    }, { once: true });
+  });
+  const result = await waitForUploadComplete(page, files, {}, true);
+  assert.deepEqual(result.failedFileNames, ["low-resolution.mp4"]);
+});
+
+test("a pending structured row cannot be bypassed by an enabled publish button", async (t) => {
+  const { page, files } = await uploadFixture(t, "网络超时");
+  await page.evaluate(() => {
+    const statuses = document.querySelectorAll('.batchItemStatus');
+    statuses[1].textContent = '等待上传';
+    document.querySelectorAll('.batchItemWrap button').forEach(button => button.remove());
+    const publish = document.createElement('button');publish.textContent='批量发布';document.body.append(publish);
+    setTimeout(() => statuses[1].textContent='已上传', 1200);
+  });
+  const started = Date.now();
+  await waitForUploadComplete(page, files, {});
+  assert.ok(Date.now() - started >= 1000);
+});
+
+
+test("a button replaced inside the same modal is reacquired without failing the task", async (t) => {
+  const { page, files } = await uploadFixture(t, "视频分辨率低于平台要求");
+  await page.getByText("查看原因", { exact: true }).click();
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.next-dialog') as HTMLElement;
+    const button = dialog.querySelector('button')!;
+    button.addEventListener('pointerdown', () => {
+      const next = button.cloneNode(true);
+      next.addEventListener('click', () => dialog.style.display = 'none');
+      button.replaceWith(next);
+    }, { once:true });
+  });
+  assert.deepEqual((await waitForUploadComplete(page, files, {}, true)).failedFileNames, ["low-resolution.mp4"]);
+});
+
+
+async function resolutionBurst(t: TestContext, reasons: string[], pending = false) {
+  const { page } = await uploadFixture(t, "视频分辨率低于平台要求");
+  const files = reasons.map((_, index) => `burst-${index}.mp4`).concat('last.mp4');
+  await page.addScriptTag({ content: `
+    document.querySelector('#publish-container').replaceChildren();
+    const reasons = ${JSON.stringify(reasons)};
+    ${JSON.stringify(files)}.forEach((name, index) => {
+      const item = document.createElement('div');item.className='batchItemWrap';
+      const title = document.createElement('span');title.className='batchItemTitle';title.textContent=name;
+      const status = document.createElement('span');status.className='batchItemStatus';
+      status.textContent = index < reasons.length ? '上传失败' : ${JSON.stringify(pending ? '等待上传中' : '已上传')};
+      const reasonButton = document.createElement('button');reasonButton.textContent='查看原因';
+      reasonButton.onclick = () => { document.querySelector('#reason').textContent=reasons[index];document.querySelector('.next-dialog').style.display='block'; };
+      item.append(title,status,reasonButton);document.querySelector('#publish-container').append(item);
+    });
+    setTimeout(() => document.querySelectorAll('.batchItemStatus')[reasons.length].textContent='已上传', 2000);
+  ` });
+  return { page, files };
+}
+
+test("five confirmed dimension failures in the first minute escape a blocked pending queue", async (t) => {
+  const { page, files } = await resolutionBurst(t, Array(5).fill("视频宽高均需大于1080，当前宽高不符合要求"), true);
+  const result = await waitForUploadComplete(page, files, {}, true, Date.now());
+  assert.equal(result.restartForResolution, true);
+  assert.equal(result.failedFileNames.length, 5);
+});
+
+test("a mixed failure reason cannot trigger full dimension conversion", async (t) => {
+  const { page, files } = await resolutionBurst(t, ["网络错误", ...Array(4).fill("分辨率低于平台要求")]);
+  const result = await waitForUploadComplete(page, files, {}, true, Date.now());
+  assert.equal(result.restartForResolution, undefined);
+});
+
+test("four failures or failures outside the first minute retain per-item repair", async (t) => {
+  for (const [count, elapsed] of [[4, 0], [5, 60001]]) {
+    const { page, files } = await resolutionBurst(t, Array(count).fill("分辨率低于平台要求"));
+    assert.equal((await waitForUploadComplete(page, files, {}, true, Date.now() - elapsed)).restartForResolution, undefined);
+  }
+});
+
+test("missing per-item reasons cannot be inferred from other episodes", async (t) => {
+  const { page, files } = await resolutionBurst(t, [...Array(4).fill("分辨率低于平台要求"), ""]);
+  assert.equal((await waitForUploadComplete(page, files, {}, true, Date.now())).restartForResolution, undefined);
+});
+
+test("full recovery normalizes every file before refreshing once and reuploading in the same tab", { timeout: 15000 }, async (t) => {
+  const { page, files } = await uploadFixture(t, "视频分辨率低于平台要求");
+  const html = `<div id="publish-container"></div><input type="file" accept="video/mp4" multiple><button>添加视频</button>
+    <script>document.querySelector('input').onchange=event=>{for(const file of event.target.files){
+      const item=document.createElement('div');item.className='batchItemWrap';
+      const title=document.createElement('span');title.className='batchItemTitle';title.textContent=file.name;
+      const status=document.createElement('span');status.className='batchItemStatus';status.textContent='已上传';
+      item.append(title,status);document.querySelector('#publish-container').append(item);
+    }}</script>`;
+  await page.route('**/*', route => route.fulfill({contentType:'text/html; charset=utf-8',body:html}));
+  await page.goto('https://creator.guanghe.taobao.com/page/unify/creation-tool/batch-publish?ugc_scene=short_drama_multipublish');
+  let refreshes = 0;
+  page.on('load', () => refreshes++);
+  const pagesBefore = page.context().pages().length;
+  const converted: string[] = [];
+  const episodes = files.map(file => ({file}));
+  const result = await restartTaobaoBatchForResolution(page, episodes, {}, async file => {
+    assert.equal(refreshes, 0);
+    converted.push(file);return file;
+  });
+  assert.deepEqual(converted, files);
+  assert.equal(refreshes, 1);
+  assert.equal(page.context().pages().length, pagesBefore);
+  assert.equal(await page.locator('.batchItemWrap').count(), files.length);
+  assert.deepEqual(result.failedFileNames, []);
+  assert.equal(result.restartForResolution, undefined);
+});
+
+test("conversion failure preserves the current queue without refreshing or changing episode references", async (t) => {
+  const { page, files } = await uploadFixture(t, "视频分辨率低于平台要求");
+  const episodes = files.map(file => ({file}));
+  const before = await page.content();
+  let calls = 0;
+  await assert.rejects(restartTaobaoBatchForResolution(page, episodes, {}, async file => {
+    if (++calls === 2) throw new Error('transcode failed');
+    return file+'.converted';
+  }), /transcode failed/);
+  assert.deepEqual(episodes.map(episode => episode.file), files);
+  assert.equal(await page.content(), before);
 });

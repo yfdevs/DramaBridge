@@ -15,10 +15,10 @@ const help = `快手上传中任务重置（Node.js 18+，无需安装依赖）
 --username NAME      后台登录账号，默认 admin；执行时提示输入隐藏密码
 --password-stdin     从标准输入读取密码，用于自动调用；不保存密码或 token
 --account-id ID      只处理指定快手账号，默认查询全部快手账号
---ids ID,ID          只处理指定任务；未指定时间参数时不限制其领取时长
+--ids ID,ID          只处理指定任务；未指定时间参数时不限制其未更新时长
 --skip-ids ID,ID     跳过指定任务（优先于 --ids），可简写 --skip
 --worker-id ID       可进一步限定原领取执行器
---older-than-hours N 最短领取时长，默认 4 小时（也接受 --min-age-hours）
+--older-than-hours N 最短未更新时长（按 updateTime），默认 4 小时，支持小数（也接受 --min-age-hours）
 --claimed-before T   只处理在此时间之前领取的任务；无时区时按北京时间
 --resume-failed      额外允许处理符合筛选条件的 FAILED 任务
 --log FILE          操作记录位置，默认 .cache/kuaishou-reset-时间.json
@@ -50,7 +50,7 @@ export function parseResetArgs(args) {
   options.ids = [...new Set(options.ids)];
   options.skipIds = [...new Set(options.skipIds)];
   options.minAgeHours = Number(options.minAgeHours);
-  if (!Number.isFinite(options.minAgeHours) || options.minAgeHours < 0) throw new Error("最短领取时长必须为非负小时数");
+  if (!Number.isFinite(options.minAgeHours) || options.minAgeHours < 0) throw new Error("最短未更新时长必须为非负小时数");
   if (options.claimedBefore && !Number.isFinite(parseClaimTime(options.claimedBefore))) throw new Error("--claimed-before 时间无效");
   options.apply = !options.dryRun;
   return options;
@@ -123,8 +123,10 @@ export function resetEligibility(row, options, now = Date.now()) {
   if (!row.rpaWorkerId?.trim() || !Number.isSafeInteger(row.rpaAttemptCount) || row.rpaAttemptCount <= 0) return "缺少有效的领取者或轮次，需人工核实";
   // The backend's zone-less timestamps are Asia/Shanghai, independent of this computer's zone.
   const claimed = parseClaimTime(row.rpaClaimTime);
+  const updated = parseClaimTime(row.updateTime);
   const minAge = options.ids.length && !options.ageExplicit ? 0 : options.minAgeHours;
-  if (!Number.isFinite(claimed) || now - claimed < minAge * 3_600_000) return "领取时间无效或未达到最短时长";
+  if (!Number.isFinite(updated) || updated > now || now - updated < minAge * 3_600_000) return "更新时间无效或未达到最短时长";
+  if (!Number.isFinite(claimed)) return "领取时间无效，需人工核实";
   if (options.claimedBefore && claimed >= parseClaimTime(options.claimedBefore)) return "不早于指定领取时间";
   return null;
 }
@@ -217,7 +219,7 @@ async function main() {
     const password = await readPassword(options.passwordStdin);
     if (!password) throw new Error("密码不能为空，尚未修改后台");
     authentication = await loginResetAdmin(options.baseUrl, { username: options.username, password });
-    console.log(`后台登录成功。${options.ids.length && !options.ageExplicit ? "仅处理指定任务 ID。" : `处理领取超过 ${options.minAgeHours} 小时的任务。`}`);
+    console.log(`后台登录成功。${options.ids.length && !options.ageExplicit ? "仅处理指定任务 ID。" : `处理未更新超过 ${options.minAgeHours} 小时的任务。`}`);
   }
   const filename = path.resolve(options.logFile || `.cache/kuaishou-reset-${Date.now()}.json`);
   await mkdir(path.dirname(filename), { recursive: true });
@@ -225,7 +227,7 @@ async function main() {
   await writeFile(filename, "{}", { flag: "wx" });
   console.log(`${options.apply ? "执行重置" : "仅预览，不修改后台"}；操作记录：${filename}`);
   const result = await resetKuaishouTasks(options, { api: createResetApi(options.baseUrl, fetch, authentication), checkpoint: journal => writeFile(filename, JSON.stringify(journal, null, 2)) });
-  console.table(result.tasks.map(({ id, title, status, claimTime, action, reason, resultStatus }) => ({ id, title, status, claimTime, action, reason, resultStatus })));
+  console.table(result.tasks.map(({ id, title, status, claimTime, updateTime, action, reason, resultStatus }) => ({ id, title, status, claimTime, updateTime, action, reason, resultStatus })));
   if (result.missingIds.length) console.log(`这些 ID 不在当前候选状态内，未修改：${result.missingIds.join(",")}`);
   console.log(options.apply ? `已重置 ${result.tasks.filter(task => task.action === "reset").length} 条任务。` : "本次仅预览；去掉 --dry-run 并登录后台后执行。正在执行的长任务请用 --skip-ids 排除。");
 }

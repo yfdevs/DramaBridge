@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   cleanupEpisodeUploadFiles,
+  createRuntimeArtifactLease,
   ensureVideoMinimumDimensions,
   findLocalEpisodeVideos,
   listLocalPosterImages,
@@ -62,6 +63,7 @@ export async function prepareTaobaoEpisodeVideos(
   );
   await mkdir(uploadRootDir, { recursive: true });
   const uploadDir = await mkdtemp(path.join(uploadRootDir, "episode-upload-"));
+  await createRuntimeArtifactLease(uploadDir);
   const prepared = { uploadDir, files: [] as string[] };
   const episodes = sourceEpisodes.map((episode) => ({ ...episode, sourceFile: episode.file }));
   log(options, `[taobao-drama] 视频文件校验完成：${episodes.length} 集，先上传原文件，仅在淘宝明确提示分辨率不符合要求时转换对应剧集`);
@@ -72,6 +74,7 @@ export async function convertTaobaoEpisodeForResolutionFailure(
   inputFile: string,
   prepared: { uploadDir: string; files: string[] },
   options: TaobaoDramaRuntimeOptions,
+  allowCompliant = false,
 ) {
   const outputFile = path.join(prepared.uploadDir, `${path.basename(inputFile, path.extname(inputFile))}.mp4`);
   const result = await ensureVideoMinimumDimensions({
@@ -80,6 +83,7 @@ export async function convertTaobaoEpisodeForResolutionFailure(
     minimumHeight: TAOBAO_DRAMA_MIN_VIDEO_DIMENSION,
     onLog: (message) => log(options, `[taobao-drama] ${message}`),
   });
+  if (!result.transcoded && allowCompliant) return result.file;
   if (!result.transcoded) {
     throw new Error(`TAOBAO_DRAMA_VIDEO_RESOLUTION_REPAIR_NOT_POSSIBLE: 淘宝报告视频分辨率不符，但当前文件已达到转换目标，请检查平台要求。文件：${path.basename(inputFile)}，分辨率：${result.source.width}x${result.source.height}`);
   }

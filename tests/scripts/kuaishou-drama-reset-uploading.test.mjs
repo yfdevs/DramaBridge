@@ -103,7 +103,7 @@ test("a task reclaimed immediately after retry counts as reset, without overwrit
 });
 
 test("bulk selection uses Beijing claim times and defaults to a four-hour threshold", async () => {
-  const backend = server([task(), task({ id: 1498, rpaClaimTime: "2026-10-31T11:44:26" }), task({ id: 1497, rpaClaimTime: "2026-10-31T09:00:00" })]);
+  const backend = server([task(), task({ id: 1498, rpaClaimTime: "2026-10-31T11:44:26" }), task({ id: 1497, rpaClaimTime: "2026-10-31T09:00:00", updateTime: "2026-10-31T09:00:00" })]);
   const result = await resetKuaishouTasks(parseResetArgs(["--skip-ids", "1498"]), { api: backend.api, now });
   assert.equal(result.tasks.find(row => row.id === 1500).action, "reset");
   assert.equal(result.tasks.find(row => row.id === 1498).reason, "在跳过列表中");
@@ -111,7 +111,7 @@ test("bulk selection uses Beijing claim times and defaults to a four-hour thresh
 });
 
 test("explicit IDs override default age, but explicit time filters still apply and skip always wins", () => {
-  const recent = task({ rpaClaimTime: "2026-10-31T11:00:00" });
+  const recent = task({ rpaClaimTime: "2026-10-31T11:00:00", updateTime: "2026-10-31T11:00:00" });
   assert.equal(resetEligibility(recent, args(), now), null);
   assert.match(resetEligibility(recent, args("--older-than-hours", "4"), now), /最短时长/);
   assert.equal(resetEligibility(recent, args("--skip-ids", "1500"), now), "在跳过列表中");
@@ -185,4 +185,11 @@ test("the standalone CLI logs in through a PowerShell-style password pipe withou
     await new Promise(resolve => server.close(resolve));
     await rm(log, { force: true }); await rmdir(directory);
   }
+});
+
+ test("staleness uses last update, supports fractional hours and rejects missing or future timestamps", () => {
+  const options = parseResetArgs(["--older-than-hours", "1.5"]);
+  assert.ok(resetEligibility(task({ updateTime: "2026-10-31T11:00:00" }), options, now));
+  assert.equal(resetEligibility(task({ updateTime: "2026-10-31T10:30:00" }), options, now), null);
+  for (const updateTime of [null, "invalid", "2026-11-01T01:00:00"]) assert.ok(resetEligibility(task({ updateTime }), options, now));
 });

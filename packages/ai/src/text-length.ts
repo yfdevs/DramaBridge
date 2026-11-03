@@ -1,9 +1,9 @@
-import type { DramaAiClient } from "./types.js";
+import type { TextGenerationOptions } from "./types.js";
 
 const defaultAttempts = 3;
 
 export type OptimizeTextLengthOptions = {
-  client: Pick<DramaAiClient, "generateText">;
+  client: { generateText: (options: TextGenerationOptions) => Promise<{ text: string }> };
   text: string;
   maxLength: number;
   minLength?: number;
@@ -51,7 +51,9 @@ function promptForTextLength(options: OptimizeTextLengthOptions, previousOutput?
   return [
     `请优化“${options.fieldName ?? "文本"}”，使其长度为 ${minimum} 至 ${options.maxLength} 个字符。`,
     "忠实保留原文的关键事实、人物关系、剧情主线和核心卖点，不得虚构信息。",
-    "通过精炼和改写自然缩短内容，不要生硬截断句子。",
+    options.text.trim().length < minimum
+      ? "通过完整表达已有事实、补充人物动机和已知冲突的衔接自然扩写，不得新增人物、事件或结局，不要重复凑字。"
+      : "通过精炼和改写自然缩短内容，不要生硬截断句子。",
     "只输出最终文本，不要解释、标签、引号或 Markdown 代码块。",
     options.contentDescription ? `内容用途：${options.contentDescription}` : "",
     options.context ? `补充背景：${options.context}` : "",

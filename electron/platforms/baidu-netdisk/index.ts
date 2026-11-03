@@ -30,6 +30,7 @@ import {
 import { playwrightBrowsersPath, resolveFromAppRoot, selectDirectory } from "../shared";
 import { createElectronPlatformLogger } from "../../platform-logger";
 import { runRuntimeAssetCleanup } from "../../runtime-asset-cleanup";
+import { canCleanupPlayletDirectory } from "./disk-cleanup-policy";
 import { resetLocalResourceForRedownload } from "./redownload";
 
 export type BaiduNetdiskConfig = {
@@ -239,6 +240,8 @@ const activeDownloadOperations = new Map<string, ActiveDownloadOperation>();
 const appVideoTranscodeQueues = new Map<number, VideoTranscodeQueue>();
 const monitoredEpisodeVideoRoots = new Set<string>();
 const pendingDownloadPaths = new Set<string>();
+// Keep source materials for downstream upload/transcode consumers for this app session.
+const sessionMaterialPaths = new Set<string>();
 const diskCleanupUsageThreshold = 0.8;
 const stalePlayletAgeMs = 2 * 60 * 60 * 1000;
 const diskCleanupIntervalMs = 5 * 60 * 1000;
@@ -306,16 +309,19 @@ async function cleanupStalePlayletDirectories(rootPath: string, protectedPaths: 
     const candidate = path.resolve(resolvedRoot, entry.name);
     if (normalizedPathKey(candidate) === normalizedPathKey(kuaishouRecreationMaterialRoot())) continue;
     if (path.dirname(candidate).toLowerCase() !== resolvedRoot.toLowerCase()) continue;
-    const candidateKey = normalizedPathKey(candidate);
-    const activePaths = [...activeDownloadOperations.values()]
-      .some((operation) => normalizedPathKey(operation.localPath) === candidateKey);
-    if (protectedPaths.has(candidateKey) || pendingDownloadPaths.has(candidateKey) || activePaths) continue;
+    const canDelete = () => canCleanupPlayletDirectory(candidate, readDownloadRecords(), [
+      ...protectedPaths, ...pendingDownloadPaths, ...sessionMaterialPaths,
+      ...[...activeDownloadOperations.values()].map(operation => operation.localPath),
+    ]);
+    if (!canDelete()) continue;
 
     const candidateStat = await lstat(candidate).catch(() => undefined);
     if (!candidateStat?.isDirectory() || candidateStat.isSymbolicLink()) continue;
     const latestModifiedAtMs = await latestTreeModifiedAtMs(candidate).catch(() => candidateStat.mtimeMs);
     if (latestModifiedAtMs > cutoffMs) continue;
 
+    // Scanning awaits filesystem IO: a task may have started since the first check.
+    if (!canDelete()) continue;
     await rm(candidate, { recursive: true, force: true });
     deletedCount += 1;
     baiduNetdiskLogger("storage").warn("Deleted stale playlet directory", {
@@ -1156,6 +1162,7 @@ export async function ensureBaiduNetdiskShareDownloaded(
     return activeOperation.promise;
   }
 
+  sessionMaterialPaths.add(normalizedPathKey(localPath));
   const localPathKey = normalizedPathKey(localPath);
   pendingDownloadPaths.add(localPathKey);
   try {
@@ -1396,7 +1403,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
           port,
           targetName: statusRequest.targetName,
           targetNames: statusRequest.targetNames,
-          expectedDownloadRoot: statusRequest.expectedDownloadRoot ?? (request.requesterPlatform === "external-api" ? uniqueDownloadDir : undefined),
+          expectedDownloadRoot: statusRequest.expectedDownloadRoot ?? uniqueDownloadDir,
         }),
       cancelDownloadTask: (cancelRequest) =>
         controlBaiduNetdiskDownloadTask({

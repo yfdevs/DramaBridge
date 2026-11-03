@@ -5,14 +5,13 @@ type ClipboardSnapshot = Array<Array<{ type: string; bytes: number[] }>>;
 let clipboardQueue = Promise.resolve();
 
 /** Native paste is required by Cangjie. Serialize accounts sharing the OS clipboard. */
-export async function pasteTaobaoTagWithClipboard(page: Page, text: string) {
+export async function pasteTaobaoTagWithClipboard(page: Page, text: string, focusInput?: () => Promise<void>) {
   const previous = clipboardQueue;
   let release!: () => void;
   clipboardQueue = new Promise<void>((resolve) => { release = resolve; });
   await previous;
   let snapshot: ClipboardSnapshot | undefined;
   let changed = false;
-  let granted = false;
   try {
     const url = new URL(page.url());
     if (!["creator.guanghe.taobao.com", "creator.tiancheng.taobao.com"].includes(url.hostname)) {
@@ -22,16 +21,43 @@ export async function pasteTaobaoTagWithClipboard(page: Page, text: string) {
     // The embedded upload frame forbids the Clipboard API. Read/write through
     // the creator top-level document; Ctrl+V still targets the focused textarea.
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: url.origin });
-    granted = true;
-    snapshot = await page.evaluate(async () => {
-      const items = await navigator.clipboard.read();
-      const saved = await Promise.all(items.map((item) => Promise.all(item.types.map(async (type) => ({
-        type, bytes: Array.from(new Uint8Array(await (await item.getType(type)).arrayBuffer())),
-      })))));
-      return saved.filter((item) => item.length > 0);
-    });
-    await page.evaluate(async (value) => navigator.clipboard.writeText(value), text);
-    changed = true;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await page.bringToFront();
+        snapshot = await page.evaluate(async () => {
+          let items: ClipboardItem[];
+          try {
+            items = await navigator.clipboard.read();
+          } catch {
+            // Some OS clipboard formats cannot be exposed by read(). Text can
+            // still be read and pasted normally; do not fail the entire task.
+            const text = await navigator.clipboard.readText();
+            return text ? [[{ type: "text/plain", bytes: Array.from(new TextEncoder().encode(text)) }]] : [];
+          }
+          const saved = await Promise.all(items.map((item) => Promise.all(item.types.map(async (type) => ({
+            type, bytes: Array.from(new Uint8Array(await (await item.getType(type)).arrayBuffer())),
+          })))));
+          return saved.filter((item) => item.length > 0);
+        });
+        break;
+      } catch (error) {
+        if (attempt >= 3 || page.isClosed()) throw error;
+        await page.waitForTimeout(200 * attempt);
+      }
+    }
+    // Retry only before dispatching paste, so a delivered tag is never duplicated.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await page.bringToFront();
+        await page.evaluate(async (value) => navigator.clipboard.writeText(value), text);
+        changed = true;
+        if (focusInput) await focusInput();
+        break;
+      } catch (error) {
+        if (attempt >= 3 || page.isClosed()) throw error;
+        await page.waitForTimeout(200 * attempt);
+      }
+    }
     await page.keyboard.press("Control+V");
   } catch (error) {
     throw Object.assign(new Error("TAOBAO_DRAMA_CONTENT_TAG_PASTE_FAILED: 无法将完整内容标签原生粘贴到淘宝标签输入框，请检查浏览器焦点和剪贴板权限。"), { cause: error });
@@ -55,7 +81,7 @@ export async function pasteTaobaoTagWithClipboard(page: Page, text: string) {
         });
       }
     } finally {
-      if (granted) await page.context().clearPermissions().catch(() => undefined);
+      // Do not clear all context permissions: other tasks may be using them.
       release();
     }
   }

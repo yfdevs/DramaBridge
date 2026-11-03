@@ -237,3 +237,38 @@ test("accepts a Baidu cover upload when the component clears the file input imme
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("scrolls a rendered Baidu dropdown option into its clipped list before clicking", async () => {
+  const browser = await chromium.launch({ channel: "chromium", headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+    await page.setContent(`
+      <div class="cheetah-select">
+        <div class="cheetah-select-selector"><input role="combobox" readonly aria-expanded="false"></div>
+      </div>
+      <div class="cheetah-select-dropdown" style="display:none">
+        <div class="rc-virtual-list-holder" style="height:100px;overflow:auto">
+          <div style="height:900px"></div>
+          <div class="cheetah-select-item-option" style="height:32px">奇幻</div>
+        </div>
+      </div>
+      <script>
+        const input = document.querySelector('input');
+        const dropdown = document.querySelector('.cheetah-select-dropdown');
+        document.querySelector('.cheetah-select-selector').onclick = () => {
+          dropdown.style.display = 'block';
+          input.setAttribute('aria-expanded', 'true');
+        };
+        document.querySelector('.cheetah-select-item-option').onclick = () => {
+          input.value = '奇幻';
+          dropdown.style.display = 'none';
+          input.setAttribute('aria-expanded', 'false');
+        };
+      </script>
+    `);
+    await selectDropdownOption(page, page.getByRole("combobox"), "奇幻");
+    assert.equal(await page.getByRole("combobox").inputValue(), "奇幻");
+  } finally {
+    await browser.close();
+  }
+});

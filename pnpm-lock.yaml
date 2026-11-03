@@ -485,6 +485,9 @@ importers:
 
   packages/douyin-drama-automation:
     dependencies:
+      '@dramabridge/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@dramabridge/automation-logging':
         specifier: workspace:*
         version: link:../automation-logging

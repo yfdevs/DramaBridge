@@ -105,7 +105,10 @@ export async function selectDropdownOption(page: Page, trigger: Locator, value: 
   const dropdown = page.locator(".cheetah-select-dropdown:visible").last();
   await dropdown.waitFor({ state: "visible", timeout: 10_000 });
   const option = await findVirtualizedDropdownOption(page, dropdown, value);
-  await option.click({ force: true, timeout: 5_000 });
+  // A rendered virtual-list option can still be outside its scroll container.
+  // Keep actionability checks enabled so layout changes are retried before clicking.
+  await option.scrollIntoViewIfNeeded({ timeout: 5_000 });
+  await option.click({ timeout: 5_000 });
   await dropdown.waitFor({ state: "hidden", timeout: 5_000 });
 
   const selectedValue = await dropdownTriggerValue(trigger);

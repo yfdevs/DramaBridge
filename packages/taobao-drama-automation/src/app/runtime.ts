@@ -125,6 +125,7 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
     wake = null;
   });
 
+  let reusableTaskPage: Page | undefined;
   const loop = (async () => {
     while (running && !homePage.isClosed()) {
       try {
@@ -134,13 +135,18 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
         const task = await claimNextTaobaoDramaTaskApi({ apiBaseUrl: options.apiConfig!.baseUrl, account,
           workerId: options.workerId!, executionStore, runtimeOptions: options });
         if (task) {
-          const taskPage = await context.newPage();
-          log(options, "[taobao-drama] 已领取任务，在独立任务标签页执行", { accountTaskId: task.accountTaskId });
+          const taskPage = reusableTaskPage && !reusableTaskPage.isClosed() ? reusableTaskPage : await context.newPage();
+          reusableTaskPage = undefined;
+          log(options, "[taobao-drama] 已领取任务，在任务标签页执行", { accountTaskId: task.accountTaskId });
           const outcome = await runTask(taskPage, task, options, (value) => { lastTask = value; }, (reason) => {
             claimPausedReason = reason;
             errorLog(options, `[taobao-drama] ${reason}`);
           });
-          if (!taskPage.isClosed() && (outcome === "success" || (outcome === "failure" && options.closeFailedTaskPages === true))) {
+          if (!taskPage.isClosed() && outcome === "success") {
+            // Submission verification and the >=10s settle period have finished.
+            // Keep the tab visible and reuse it for the next task.
+            reusableTaskPage = taskPage;
+          } else if (!taskPage.isClosed() && outcome === "failure" && options.closeFailedTaskPages === true) {
             await taskPage.close().catch(() => undefined);
           } else if (!taskPage.isClosed()) {
             log(options, "[taobao-drama] 已保留失败任务页面供排查", { accountTaskId: task.accountTaskId, activeUrl: taskPage.url() });

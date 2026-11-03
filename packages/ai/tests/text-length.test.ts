@@ -79,3 +79,19 @@ test("falls back to bounded original text when the AI service fails", async () =
   assert.equal(result, "一二三四五");
   assert.equal(fake.requests.length, 3);
 });
+
+
+test("expands short synopses to exactly 200 characters with bounded retries", async () => {
+  const fake = fakeTextClient(["仍然太短", "剧情".repeat(100)]);
+  const result = await optimizeTextLength({ client: fake.client, text: "司机维护自己的权益。", minLength:200, maxLength:200 });
+  assert.equal(result.length, 200);
+  assert.equal(fake.requests.length, 2);
+  assert.match(fake.requests[0]!.prompt, /自然扩写/);
+  assert.match(fake.requests[0]!.prompt, /不得新增人物、事件或结局/);
+});
+
+test("does not pad undersized AI output when exact length cannot be reached", async () => {
+  const fake = fakeTextClient(["太短", "太短", "太短"]);
+  await assert.rejects(optimizeTextLength({ client:fake.client, text:"原始简介", minLength:200, maxLength:200 }), /TEXT_LENGTH_OPTIMIZATION_FAILED/);
+  assert.equal(fake.requests.length, 3);
+});

@@ -147,7 +147,7 @@ async function fillBasicInformation(
 ) {
   const data = task.playlet;
   const sanitizedSummary = sanitizeDouyinDescriptionText(data.summary);
-  if (sanitizedSummary.length <= 100) {
+  if (sanitizedSummary.length < 50) {
     throw new Error(
       `DOUYIN_DRAMA_SUMMARY_TOO_SHORT_AFTER_SANITIZE: actual=${sanitizedSummary.length}`,
     );

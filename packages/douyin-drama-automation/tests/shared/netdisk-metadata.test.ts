@@ -21,6 +21,10 @@ function fakeAiClient(
   return {
     async generateText(options) {
       onGenerate();
+      if (options.prompt.includes('请优化“抖音短剧剧情简介”')) {
+        const summary = JSON.parse(responseText).summary;
+        return { model: "fake-text-model", text: summary.repeat(20).slice(0, 200) };
+      }
       if (options.prompt.startsWith("角色简介补充：")) {
         const pending = JSON.parse(options.prompt.split("\n").find(line => line.startsWith("待补充的角色："))!.slice("待补充的角色：".length)) as Array<{ index: number; name: string; intro: string }>;
         return { model: "fake-text-model", text: JSON.stringify({ roles: pending.map(role => ({ index: role.index, intro: `${role.intro || role.name}作为故事的重要人物，参与并推动剧情的发展。` })) }) };
@@ -37,7 +41,7 @@ function fakeAiClient(
   };
 }
 
-test("uses one AI text call to produce synopsis, roles, and filename-matched avatars", async () => {
+test("repairs short AI synopsis after producing roles and filename-matched avatars", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "douyin-netdisk-metadata-"));
   const task = createMockDouyinNetdiskTestTask();
   const resourceDir = path.join(root, task.originalTitle);
@@ -266,7 +270,7 @@ test("reports missing, short and unreadable synopsis sources accurately", async 
       return true;
     });
     task.playlet.summary = "简短介绍";
-    await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), /简介不足 101 字（当前 4 字）/u);
+    await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), /简介不足 50 字（当前 4 字）/u);
     await writeFile(path.join(resourceDir, "简介.docx"), "invalid docx");
     await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), /DOUYIN_DRAMA_NETDISK_TEXT_UNREADABLE.*已找到百度网盘简介文件.*简介.docx/u);
   } finally {
@@ -310,3 +314,30 @@ test("collects RTF synopsis content and prioritizes synopsis directories", async
     await rm(root, { recursive: true, force: true });
   }
 });
+
+
+for (const length of [49, 50, 80, 197, 200, 240]) {
+  test(`repairs AI synopsis length ${length} before the final 200-character boundary`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "douyin-summary-length-"));
+    const task = createMockDouyinNetdiskTestTask();
+    task.playlet.summary = "";
+    const resourceDir = path.join(root, task.originalTitle);
+    const imageDir = path.join(resourceDir, "海报封面", "原始图片");
+    const textDir = path.join(resourceDir, "剧情资料");
+    await mkdir(imageDir, { recursive:true });await mkdir(textDir);
+    await writeFile(path.join(imageDir,"刘晓.png"),"image");
+    await writeFile(path.join(imageDir,"货主.png"),"image");
+    await writeFile(path.join(textDir,"简介.txt"),"刘晓是司机，货主长期要求他免费拉货，他决定维护劳动权益。");
+    const summary = "刘晓是司机，货主长期要求他免费拉货，他决定维护劳动权益。".repeat(10).slice(0,length);
+    const response = JSON.stringify({ summary, roles:[
+      { name:"刘晓",roleType:"主角",intro:"货车司机，决心维护自己的劳动权益。",photoImageId:null },
+      { name:"货主",roleType:"配角",intro:"长期要求司机免费拉货的货主。",photoImageId:null },
+    ] });
+    let calls=0;
+    try {
+      const result = await enrichDouyinTaskFromNetdisk(task,{ localEpisodeVideoRoot:root, aiClientFactory:()=>fakeAiClient(response,()=>calls++) });
+      assert.equal(result.playlet.summary.length,length < 50 || length > 200 ? 200 : length);
+      assert.equal(calls,length >= 50 && length <= 200 ? 1 : 2);
+    } finally { await rm(root,{recursive:true,force:true}); }
+  });
+}

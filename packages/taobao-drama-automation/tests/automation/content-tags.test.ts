@@ -418,3 +418,42 @@ test("a partial title cannot substitute for a record matching the complete drama
   assert.deepEqual(state.selected, ["#AI短剧"]);
 });
 
+
+
+test("unsupported rich clipboard formats do not prevent a trusted text paste", async (t) => {
+  const { page, editor } = await tagEditor(t);
+  await page.evaluate(`(() => {
+    Object.defineProperty(navigator.clipboard, 'read', { configurable: true, value: async () => { throw new Error('Unsupported clipboard format'); } });
+  })()`);
+  await selectTaobaoContentTag(page, editor, tag, true, "title");
+  const state = await searchState(page);
+  assert.deepEqual(state.pastes, [tag]);
+  assert.deepEqual(state.pasteTrust, [true]);
+});
+
+test("temporary clipboard focus failures recover before delivering exactly one tag", async (t) => {
+  const { page, editor } = await tagEditor(t);
+  await page.evaluate(`(() => {
+    const write = navigator.clipboard.writeText.bind(navigator.clipboard);
+    let attempts = 0;
+    Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: async (text) => {
+      if (++attempts === 1) throw new Error('Document is not focused');
+      await write(text);
+    } });
+  })()`);
+  await selectTaobaoContentTag(page, editor, tag, true, "title");
+  assert.deepEqual((await searchState(page)).pastes, [tag]);
+});
+
+
+test("restores the editor focus after bringing the tab forward for clipboard access", async (t) => {
+  const { page, editor } = await tagEditor(t);
+  await page.evaluate(`document.body.appendChild(document.createElement('input')).id='focus-decoy'`);
+  const bringToFront = page.bringToFront.bind(page);
+  t.mock.method(page, 'bringToFront', async () => {
+    await bringToFront();
+    await page.locator('#focus-decoy').focus();
+  });
+  await selectTaobaoContentTag(page, editor, tag, true, "title");
+  assert.deepEqual((await searchState(page)).pastes, [tag]);
+});

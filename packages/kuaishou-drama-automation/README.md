@@ -50,7 +50,7 @@
 
 ## 一键重置遗留的上传中任务
 
-Windows 可双击 `scripts/kuaishou-drama-reset-uploading.cmd`。默认后台账号为 `admin`，输入隐藏密码后，自动重置领取超过 4 小时的快手 `UPLOADING` 任务。无需 `--apply` 或停服确认参数；密码和登录 token 仅保留在本次进程内，不写入脚本、配置或日志。需要 Node.js 18+，无需安装额外依赖。
+Windows 可双击 `scripts/kuaishou-drama-reset-uploading.cmd`。默认后台账号为 `admin`，输入隐藏密码后，自动重置连续 4 小时未更新（按后台 `updateTime`）的的快手 `UPLOADING` 任务。无需 `--apply` 或停服确认参数；密码和登录 token 仅保留在本次进程内，不写入脚本、配置或日志。需要 Node.js 18+，无需安装额外依赖。
 
 在仓库根目录运行的常用方式：
 
@@ -67,7 +67,7 @@ node scripts/kuaishou-drama-reset-uploading.mjs --ids 1500,1501
 # 自定义超时时间，并限定账号。
 node scripts/kuaishou-drama-reset-uploading.mjs --older-than-hours 4 --account-id 15510675085
 
-# 指定 ID 时也可显式要求领取超过 4 小时。
+# 指定 ID 时也可显式要求连续 4 小时未更新（按后台 `updateTime`）的。
 node scripts/kuaishou-drama-reset-uploading.mjs --ids 1500,1501 --older-than-hours 4
 
 # 按领取时间截止点筛选，无时区时按北京时间（支持 YYYY-MM-DD）。
@@ -84,3 +84,5 @@ node scripts/kuaishou-drama-reset-uploading.mjs --dry-run --skip-ids 1498
 默认只自动恢复本脚本此前已回写失败、但重试未完成的 `FAILED` 遗留任务，不批量重试其他正常失败任务；显式 `--ids` 或 `--resume-failed` 可将其纳入处理。不会重置成功任务。网络异常会停止后续操作；操作记录保存在 `.cache/kuaishou-reset-时间.json`。
 
 脚本不修改本机 SQLite；若客户端仍显示“需要核实”，请先停止服务，点击该任务的“已在后台处理，重新检查”。新一轮执行会查询并跳过平台上已提交的版本。
+
+小时阈值按任务最后更新时间 `updateTime` 判断，支持小数，如 `--older-than-hours 1.5`。缺失或无效的更新时间会跳过。`--claimed-before` 仍是额外的领取时间筛选。

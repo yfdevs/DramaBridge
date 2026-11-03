@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { Frame, Locator, Page, Request } from "playwright";
+import type { Dialog, ElementHandle, Frame, Locator, Page, Request } from "playwright";
 import {
   TAOBAO_DRAMA_EPISODE_UPLOAD_RETRY_ATTEMPTS,
   TAOBAO_DRAMA_MAX_VIDEOS_PER_BATCH,
@@ -156,7 +156,7 @@ export function summarizeTaobaoUploadText(text: string, fileNames: string[]): Ta
   return {
     matchedFileCount,
     completedFileCount,
-    pending: /上传中|正在上传|排队中|解析中|转码中|视频处理中|文件处理中|\b(?:[0-9]|[1-9][0-9])%/.test(normalized),
+    pending: /等待上传|上传中|正在上传|排队中|解析中|转码中|视频处理中|文件处理中|\b(?:[0-9]|[1-9][0-9])%/.test(normalized),
     failed: /上传失败|上传异常|解析失败|转码失败|发布失败|重新上传/.test(normalized),
     complete,
     progressText,
@@ -197,7 +197,7 @@ export function taobaoFatalUploadDialogReason(texts: string[]) {
 }
 
 export function isTaobaoVideoResolutionFailure(reason: string) {
-  return /分辨率|宽高|宽度|高度/.test(reason) &&
+  return /分辨率|宽高|宽度|高度|尺寸/.test(reason) &&
     /不符合|不满足|低于|小于|至少|大于|不得小于/.test(reason);
 }
 
@@ -210,25 +210,54 @@ function taobaoUploadDialogs(scope: TaobaoDomScope) {
   ].join(", "));
 }
 
+async function dismissTaobaoUploadDialog(dialog: ElementHandle<Node>) {
+  // Pin this DOM node, not its index in a changing :visible list. Taobao can
+  // replace automatic modals while dozens of videos fail validation at once.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const buttons = await dialog.$$("button");
+      try {
+        for (const button of buttons) {
+          if ((await button.innerText()).trim() !== "我知道了") continue;
+          // Only the acknowledgment bypasses animation stability. This never
+          // bypasses validation, clicks publish, or changes another modal.
+          await button.click({ force: true, timeout: 2_000 });
+          await dialog.waitForElementState("hidden", { timeout: 2_000 });
+          return;
+        }
+        if (await dialog.isVisible()) throw new Error("TAOBAO_DRAMA_UPLOAD_DIALOG_ACK_NOT_FOUND");
+        return;
+      } finally {
+        await Promise.all(buttons.map(button => button.dispose()));
+      }
+    } catch (error) {
+      if (!(await dialog.isVisible().catch(() => false))) return;
+      // The parent can survive while React replaces just its button. Re-read
+      // the buttons in the pinned dialog, never an index in a new dialog list.
+      if (attempt === 3) throw Object.assign(new Error("TAOBAO_DRAMA_UPLOAD_DIALOG_ACK_FAILED: 上传提示框连续重绘或无法关闭，请检查当前页面。"), { cause: error });
+    }
+  }
+}
+
 async function checkTaobaoUploadDialogs(
   scopes: TaobaoDomScope[],
   allowResolutionRepair = false,
 ) {
   for (const scope of scopes) {
-    // Work backwards: dismissing a modal changes the :visible list indexes.
-    const dialogs = await taobaoUploadDialogs(scope).all();
-    for (const dialog of dialogs.reverse()) {
-      const reason = taobaoFatalUploadDialogReason([await dialog.innerText()]);
-      if (!reason) continue;
-      if (allowResolutionRepair && isTaobaoVideoResolutionFailure(reason)) {
-        // An automatic modal must not prevent the batch from settling. Read
-        // each failed item's own reason later so another episode is never
-        // converted based on an unassociated global error message.
-        await dialog.getByRole("button", { name: "我知道了", exact: true }).click({ timeout: 5_000 });
-        await dialog.waitFor({ state: "hidden", timeout: 5_000 });
-      } else {
-        throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: ${reason}`);
+    const dialogs = await taobaoUploadDialogs(scope).elementHandles();
+    try {
+      for (const dialog of dialogs.reverse()) {
+        if (!(await dialog.isVisible())) continue;
+        const reason = taobaoFatalUploadDialogReason([await dialog.innerText()]);
+        if (!reason) continue;
+        if (allowResolutionRepair && isTaobaoVideoResolutionFailure(reason)) {
+          await dismissTaobaoUploadDialog(dialog);
+        } else {
+          throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_REJECTED: ${reason}`);
+        }
       }
+    } finally {
+      await Promise.all(dialogs.map(dialog => dialog.dispose()));
     }
   }
 }
@@ -309,12 +338,19 @@ async function runWithLiveTaobaoBatchScope<T>(
   throw new Error(`TAOBAO_DRAMA_BATCH_SCOPE_RETRY_EXHAUSTED: ${fileName}`);
 }
 
+export const TAOBAO_EARLY_RESOLUTION_WINDOW_MS = 60_000;
+export const TAOBAO_EARLY_RESOLUTION_FAILURE_COUNT = 5;
+
+type TaobaoUploadResult = { scope: TaobaoDomScope; failedFileNames: string[]; restartForResolution?: true };
+
 export async function waitForUploadComplete(
   page: Page,
   files: string[],
   options: TaobaoDramaRuntimeOptions,
   allowFailedTerminalState = false,
-) {
+  earlyResolutionStartedAt?: number,
+): Promise<TaobaoUploadResult> {
+  const checkedReasons = new Map<string, string>();
   const timeoutMs = Math.max(1, options.episodeUploadWaitTimeoutMinutes ?? 120) * 60_000;
   let deadline = Date.now() + timeoutMs;
   let lastLine = "";
@@ -363,6 +399,27 @@ export async function waitForUploadComplete(
       log(options, `[taobao-drama] 剧集上传进度：${line}`);
       lastLine = line;
     }
+    if (allowFailedTerminalState && earlyResolutionStartedAt !== undefined &&
+        Date.now() - earlyResolutionStartedAt <= TAOBAO_EARLY_RESOLUTION_WINDOW_MS &&
+        itemSummary.failedFileNames.length >= TAOBAO_EARLY_RESOLUTION_FAILURE_COUNT) {
+      // Confirm each failed row's own reason. A global popup cannot establish
+      // that five different episodes all failed for the same reason.
+      for (const fileName of itemSummary.failedFileNames) {
+        if (checkedReasons.has(fileName)) continue;
+        try {
+          const scope = await findLiveTaobaoBatchScope(page, fileName, 5_000, true);
+          const reason = await readTaobaoEpisodeUploadFailure(scope, fileName);
+          if (reason) checkedReasons.set(fileName, reason);
+        } catch (error) {
+          log(options, "[taobao-drama] 首分钟尺寸检查暂未读到失败原因，保留当前队列继续检查", { fileName, error: String(error) });
+          break;
+        }
+      }
+      if (itemSummary.failedFileNames.every(fileName => isTaobaoVideoResolutionFailure(checkedReasons.get(fileName) ?? ""))) {
+        log(options, `[taobao-drama] 上传首分钟已有 ${itemSummary.failedFileNames.length} 集失败且均为尺寸问题，停止等待队列，统一调整尺寸后刷新重传`);
+        return { scope: uploadScope, failedFileNames: itemSummary.failedFileNames, restartForResolution: true };
+      }
+    }
     if (itemSummary.settled && itemSummary.failed) {
       if (allowFailedTerminalState) {
         log(
@@ -391,13 +448,15 @@ export async function waitForUploadComplete(
       matchedFileCount,
       expectedFileCount: files.length,
     });
-    if (ready && !itemSummary.failed && !summary.failed) {
+    // Structured rows are authoritative: an enabled button or unrelated page
+    // text must not turn a pending episode into a successful upload.
+    if (ready && itemSummary.matchedFileCount === 0 && !itemSummary.failed && !summary.failed) {
       log(options, `[taobao-drama] ${files.length} 个剧集视频已全部上传完成`);
       return { scope: uploadScope, failedFileNames: [] as string[] };
     }
     await ownerPage(uploadScope).waitForTimeout(1_000);
   }
-  throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_TIMEOUT: expected=${files.length}`);
+  throw new Error(`TAOBAO_DRAMA_VIDEO_UPLOAD_TIMEOUT: expected=${files.length}; ${lastLine}; scope=${uploadScope.url()}`);
 }
 
 async function deleteFailedTaobaoEpisode(
@@ -451,10 +510,15 @@ async function readTaobaoEpisodeUploadFailure(scope: TaobaoDomScope, fileName: s
     for (const liveScope of await liveTaobaoScopes(page)) {
       const dialog = taobaoUploadDialogs(liveScope).filter({ hasText: "上传失败" }).last();
       if (!(await dialog.isVisible())) continue;
-      const reason = await dialog.innerText();
-      await dialog.getByRole("button", { name: "我知道了", exact: true }).click({ timeout: 5_000 });
-      await dialog.waitFor({ state: "hidden", timeout: 5_000 });
-      return reason;
+      const handle = await dialog.elementHandle();
+      if (!handle) continue;
+      try {
+        const reason = await handle.innerText();
+        await dismissTaobaoUploadDialog(handle);
+        return reason;
+      } finally {
+        await handle.dispose();
+      }
     }
     await page.waitForTimeout(100);
   } while (Date.now() < deadline);
@@ -719,7 +783,7 @@ function normalizeTaobaoTagText(value: string) {
 }
 
 async function pasteTaobaoContentTagQuery(page: Page, editor: Locator, tag: string) {
-  await editor.evaluate((element) => {
+  await pasteTaobaoTagWithClipboard(page, tag, async () => editor.evaluate((element) => {
     const documentKey = element.querySelector("[data-cangjie-editable='true']")?.getAttribute("data-cangjie-key");
     if (documentKey) {
       const input = element.ownerDocument.querySelector<HTMLTextAreaElement>(
@@ -727,9 +791,17 @@ async function pasteTaobaoContentTagQuery(page: Page, editor: Locator, tag: stri
       );
       if (!input) throw new Error("TAOBAO_DRAMA_CONTENT_TAG_INPUT_NOT_FOUND: 未找到淘宝内容标签编辑器的实际输入框，请检查页面是否已加载完成。");
       input.focus();
+      if (input.ownerDocument.activeElement !== input) throw new Error("TAOBAO_DRAMA_CONTENT_TAG_INPUT_NOT_FOCUSED");
+    } else {
+      (element as HTMLElement).focus();
+      const range = element.ownerDocument.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      const selection = element.ownerDocument.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
     }
-  });
-  await pasteTaobaoTagWithClipboard(page, tag);
+  }));
 }
 
 async function readTaobaoSelectedTags(editor: Locator) {
@@ -1246,6 +1318,37 @@ async function fillEpisodeMetadata(
   }
 }
 
+export async function restartTaobaoBatchForResolution(
+  page: Page,
+  episodes: Array<{ file: string }>,
+  options: TaobaoDramaRuntimeOptions,
+  normalizeFile: (file: string) => Promise<string>,
+) {
+  const replacements: string[] = [];
+  for (const [position, episode] of episodes.entries()) {
+    replacements.push(await normalizeFile(episode.file));
+    log(options, `[taobao-drama] 批量尺寸整理：${position + 1}/${episodes.length}`);
+  }
+  // Do not discard the existing queue unless every replacement is ready.
+  const acceptReload = (dialog: Dialog) => {
+    void (dialog.type() === "beforeunload" ? dialog.accept() : dialog.dismiss()).catch(() => undefined);
+  };
+  page.on("dialog", acceptReload);
+  try {
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
+  } finally {
+    page.off("dialog", acceptReload);
+  }
+  await waitForTaobaoPage(page, "batch", options);
+  for (const [index, episode] of episodes.entries()) episode.file = replacements[index]!;
+  const input = await videoInput(page);
+  await input.setInputFiles(replacements, { timeout: 120_000 });
+  log(options, `[taobao-drama] 已在原标签页刷新并重新上传本批全部 ${replacements.length} 集；本批不再触发整批刷新`);
+  // No early-window argument: a second rejection uses bounded per-item repair,
+  // never another full conversion/reload loop.
+  return waitForUploadComplete(page, replacements, options, true);
+}
+
 export async function uploadAndPublishTaobaoEpisodes(
   page: Page,
   task: TaobaoBatchUploadTask,
@@ -1253,6 +1356,7 @@ export async function uploadAndPublishTaobaoEpisodes(
   options: TaobaoDramaRuntimeOptions,
 ) {
   const { episodes, prepared } = await prepareTaobaoEpisodeVideos(task, options);
+  let finished = false;
   try {
     const plan = options.collectionUploadPlan;
     let currentPlan = plan ? await refreshTaobaoCollectionUploadPlan(page.context(), plan, options) : undefined;
@@ -1277,6 +1381,7 @@ export async function uploadAndPublishTaobaoEpisodes(
       const batch = batchEpisodes.map((episode) => episode.file);
       const input = await videoInput(batchPage);
       await input.setInputFiles(batch, { timeout: 120_000 });
+      const selectedAt = Date.now();
       log(
         options,
         `[taobao-drama] 已选择发布批次 ${batchIndex + 1}/${batches.length}：` +
@@ -1286,7 +1391,12 @@ export async function uploadAndPublishTaobaoEpisodes(
       await batchPage.waitForTimeout(500);
       // Taobao internally queues up to 100 selected videos. Selecting them in small
       // follow-up batches can leave later files permanently stuck at “等待上传中”.
-      const uploadResult = await waitForUploadComplete(batchPage, batch, options, true);
+      let uploadResult = await waitForUploadComplete(batchPage, batch, options, true, selectedAt);
+      if (uploadResult.restartForResolution) {
+        uploadResult = await restartTaobaoBatchForResolution(batchPage, batchEpisodes, options,
+          file => convertTaobaoEpisodeForResolutionFailure(file, prepared, options, true));
+        batch.splice(0, batch.length, ...batchEpisodes.map(episode => episode.file));
+      }
       if (uploadResult.failedFileNames.length > 0) {
         await retryFailedTaobaoEpisodes(
           batchPage,
@@ -1323,7 +1433,9 @@ export async function uploadAndPublishTaobaoEpisodes(
     if (currentPlan?.missingEpisodeNumbers.length) {
       throw new Error(`TAOBAO_DRAMA_EPISODE_SUBMISSIONS_INCOMPLETE: 仍有 ${currentPlan.missingEpisodeNumbers.length} 集未确认提交，请核实发布结果。`);
     }
+    finished = true;
   } finally {
-    await cleanupEpisodeUploadFiles(prepared);
+    if (finished) await cleanupEpisodeUploadFiles(prepared);
+    else log(options, "[taobao-drama] 已保留失败上传的转换素材，避免删除页面仍在读取的文件", { uploadDir: prepared.uploadDir });
   }
 }
