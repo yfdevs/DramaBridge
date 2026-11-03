@@ -27,6 +27,9 @@ export const taobaoBatchUploadTaskSchema = z.object({
   shortDramaType: z.enum(["真人实拍短剧", "AI动漫短剧", "AI仿真人短剧"]).optional(),
   shortDramaTags: z.array(requiredText).optional(),
   audience: z.enum(["男", "女"]).optional(),
+  guaranteePlanType: z.enum(["新剧保底", "热剧保底", "暂不参与"]).default("暂不参与"),
+  offsiteRankPlatform: z.enum(["dataeye", "其它"]).optional(),
+  offsiteRankScreenshotUrls: z.array(z.string().url()).max(9).default([]),
   sourceCoverFile: requiredText.optional(),
   sourceCoverUrl: z.string().trim().url().optional(),
   productionCostProofFiles: z.array(requiredText).default([]),
@@ -62,6 +65,9 @@ export type TaobaoCollectionMetadata = {
   episodeCount: number;
   shortDramaType: "真人实拍短剧" | "AI动漫短剧" | "AI仿真人短剧";
   shortDramaTags: string[];
+  guaranteePlanType?: "新剧保底" | "热剧保底" | "暂不参与";
+  offsiteRankPlatform?: "dataeye" | "其它";
+  offsiteRankScreenshotUrls?: string[];
   audience: "男" | "女";
 };
 

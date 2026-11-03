@@ -102,6 +102,9 @@ export function normalizeClaimedTaobaoDramaTask(claimed: ClaimData, listed: Read
     shortDramaTags: texts(playlet.shortDramaTags ?? playlet.tags),
     audience: text(playlet.audience) ?? text(playlet.audienceType),
     sourceCoverFile: text(playlet.sourceCoverFile),
+    guaranteePlanType: playlet.guaranteePlanType,
+    offsiteRankPlatform: playlet.offsiteRankPlatform,
+    offsiteRankScreenshotUrls: playlet.offsiteRankScreenshotUrls,
     sourceCoverUrl: text(playlet.sourceCoverUrl) ?? text(playlet.coverImageUrl) ?? text(posters.main) ?? imageUrl(payload, "collectionCover"),
     productionCostProofFiles: texts(productionCost.proofFiles),
   });

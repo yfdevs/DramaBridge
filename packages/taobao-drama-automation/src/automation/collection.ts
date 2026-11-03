@@ -1,3 +1,4 @@
+import { fillTaobaoGuaranteePlan } from "./guarantee-plan.js";
 import type { Locator, Page } from "playwright";
 import { TAOBAO_DRAMA_FIXED_FIELDS, TAOBAO_DRAMA_MIN_SETTLE_MS } from "../shared/constants.js";
 import { log } from "../shared/logger.js";
@@ -394,6 +395,8 @@ export async function fillAndCreateTaobaoCollection(
   await runStep("填写内容概要", () =>
     fillTextField(page, ["内容概要"], task.summary.trim().slice(0, 3_000)));
   await runStep("上传成本配置材料", () => uploadTaobaoCostConfigMaterial(page, costConfigImage));
+
+  await runStep("填写新热剧保底计划", () => fillTaobaoGuaranteePlan(page, task));
 
   const createButton = page.getByRole("button", { name: /^\s*(?:确认创建|创建合集|创建)\s*$/ })
     .filter({ visible: true }).last();

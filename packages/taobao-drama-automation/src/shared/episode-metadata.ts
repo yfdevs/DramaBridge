@@ -324,6 +324,9 @@ export function createTaobaoCollectionMetadata(
       synopsisText: metadata.synopsisText,
     }),
     episodeCount: task.episodeCount,
+    guaranteePlanType: task.guaranteePlanType,
+    offsiteRankPlatform: task.offsiteRankPlatform,
+    offsiteRankScreenshotUrls: task.offsiteRankScreenshotUrls,
     shortDramaType: task.shortDramaType ?? "AI动漫短剧",
     shortDramaTags: task.shortDramaTags?.length
       ? task.shortDramaTags
