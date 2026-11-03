@@ -4,6 +4,7 @@ import { registerAppRuntimeHandlers } from "./app-runtime";
 import { registerAppUpdaterHandlers } from "./app-updater";
 import { initializeAppEnvironment } from "./core/app-environment";
 import { registerGracefulShutdown } from "./core/graceful-shutdown";
+import { initializeSystemTray, showMainWindow } from "./core/system-tray";
 import {
   appIconPath,
   createMainWindow,
@@ -49,12 +50,14 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createMainWindow(environment);
+  else showMainWindow();
 });
 
 void app.whenReady().then(() => {
   try {
     logMain("info", "Application ready");
     Menu.setApplicationMenu(null);
+    initializeSystemTray(appIconPath(environment));
     initializeTrpcIpc();
     registerAppRuntimeHandlers();
     registerGlobalAppConfigHandlers({

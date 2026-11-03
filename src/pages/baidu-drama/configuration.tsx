@@ -1,4 +1,7 @@
-﻿import {
+import { Fragment } from "react"
+import { Textarea } from "@/components/ui/textarea"
+import { Field, FieldLabel, FieldDescription } from "@/components/ui/field"
+import {
   ConfigSection,
   ConfigurationPageFrame,
   type ConfigSectionDefinition,
@@ -11,6 +14,8 @@ const emptyConfig: BaiduDramaConfig = {
   localEpisodeVideoRoot: "",
   baiduNetdiskDownloadRetryAttempts: "3",
   episodeUploadWaitTimeoutMinutes: "120",
+  supportDistribution: "false",
+  distributionMaterial: "",
   headless: "false",
   operationDelaySeconds: "0",
   taskPollIntervalSeconds: "10",
@@ -19,6 +24,12 @@ const emptyConfig: BaiduDramaConfig = {
 }
 
 const sections: ConfigSectionDefinition<BaiduDramaConfig>[] = [
+  {
+    title: "分销设置",
+    description: "开启后，在经营模式步骤设置支持分销。",
+    fields: [{ kind: "switch", key: "supportDistribution", label: "支持分销",
+      activeLabel: "已开启", inactiveLabel: "未开启" }],
+  },
   {
     title: "任务接口",
     description: "读取已启用的账号，领取待处理任务并提交结果。",
@@ -104,6 +115,7 @@ export function BaiduDramaConfigurationPage() {
       onSave={configState.persistConfig}
     >
       {sections.map((section) => (
+        <Fragment key={section.title}>
         <ConfigSection
           key={section.title}
           config={configState.config}
@@ -111,6 +123,17 @@ export function BaiduDramaConfigurationPage() {
           section={section}
           onChange={configState.updateConfig}
         />
+      {section.title === "分销设置" && configState.config.supportDistribution === "true" && (
+        <Field>
+          <FieldLabel htmlFor="baidu-distribution-material">分销素材（选填）</FieldLabel>
+          <Textarea id="baidu-distribution-material" rows={4} maxLength={1000}
+            placeholder="请输入分销素材的下载链接或获取方法"
+            value={configState.config.distributionMaterial}
+            onChange={(event) => configState.updateConfig("distributionMaterial", event.target.value)} />
+          <FieldDescription>最多 1000 字符，可留空。</FieldDescription>
+        </Field>
+      )}
+        </Fragment>
       ))}
     </ConfigurationPageFrame>
   )

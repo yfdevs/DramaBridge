@@ -5,6 +5,8 @@ export type BaiduDramaConfig = {
   localEpisodeVideoRoot: string
   baiduNetdiskDownloadRetryAttempts: string
   episodeUploadWaitTimeoutMinutes: string
+  supportDistribution: string
+  distributionMaterial: string
   headless: string
   operationDelaySeconds: string
   taskPollIntervalSeconds: string

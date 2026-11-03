@@ -55,6 +55,8 @@ export const baiduDramaTaskPayloadSchema = z
     secondaryCategory: requiredText,
     updateStatus: z.enum(baiduDramaUpdateStatusValues),
     topic: optionalText,
+    supportDistribution: z.boolean().optional(),
+    distributionMaterial: z.string().max(1000).optional(),
     isMatched: z.boolean().default(false),
     matchedIp: optionalText,
     director: baiduDramaPersonSchema,
@@ -125,6 +127,8 @@ export type BaiduDramaRuntimeOptions = {
   apiConfig?: BaiduDramaApiConfig;
   localEpisodeVideoRoot?: string;
   baiduNetdiskDownloadRetryAttempts?: number;
+  supportDistribution?: boolean;
+  distributionMaterial?: string;
   episodeUploadWaitTimeoutMinutes?: number;
   taskPollIntervalMs?: number;
   taskClaimResumeAt?: number;

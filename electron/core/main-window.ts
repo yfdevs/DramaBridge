@@ -6,6 +6,7 @@ import path from "node:path";
 import { trpcIpc } from "../ipc";
 import { logMain } from "../main-logger";
 import type { AppEnvironment } from "./app-environment";
+import { attachWindowToSystemTray } from "./system-tray";
 
 const minimumWindowSize = { width: 900, height: 620 };
 
@@ -49,6 +50,7 @@ export function createMainWindow(environment: AppEnvironment) {
   });
 
   state.manage(window);
+  attachWindowToSystemTray(window);
   attachTitlebarToWindow(window);
   // The titlebar library resets minimum dimensions when attaching to a window.
   window.setMinimumSize(minimumWindowSize.width, minimumWindowSize.height);

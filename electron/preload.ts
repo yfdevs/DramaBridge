@@ -134,7 +134,7 @@ window.addEventListener('DOMContentLoaded', () => {
       minimize: '最小化',
       maximize: '最大化',
       restoreDown: '还原',
-      close: '关闭',
+      close: '收起到托盘（右键托盘图标可退出）',
     },
   })
 

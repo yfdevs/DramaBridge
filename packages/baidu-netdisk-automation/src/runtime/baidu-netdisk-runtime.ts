@@ -126,16 +126,27 @@ async function getRunningBaiduProcesses() {
     .filter((item) => item.length > 0);
 }
 
-async function stopBaiduNetdiskProcesses() {
-  const runningProcesses = await getRunningBaiduProcesses();
-  if (runningProcesses.length === 0) return;
-
+export async function stopBaiduNetdiskProcesses(dependencies = {
+  getRunningProcesses: getRunningBaiduProcesses,
+  killProcess: (name: string) => execText("taskkill.exe", ["/IM", `${name}.exe`, "/T", "/F"]),
+}) {
+  let lastKillError: unknown;
   for (const name of baiduProcessNames) {
+    // Killing the parent tree can also remove the engine process. Never reuse
+    // the process snapshot from before the previous taskkill call.
+    const runningProcesses = await dependencies.getRunningProcesses();
     if (!runningProcesses.some((runningName) => runningName.toLowerCase() === name.toLowerCase())) continue;
-    await execText("taskkill.exe", ["/IM", `${name}.exe`, "/T", "/F"]);
+    try {
+      await dependencies.killProcess(name);
+    } catch (error) {
+      // A process can exit between discovery and taskkill, or while taskkill
+      // walks its children. The final process query determines success.
+      lastKillError = error;
+    }
   }
-  if ((await getRunningBaiduProcesses()).length > 0) {
-    throw new Error("百度网盘旧进程未能退出，重启失败。请先退出百度网盘后再启动 CDP 模式。");
+  const remaining = await dependencies.getRunningProcesses();
+  if (remaining.length > 0) {
+    throw Object.assign(new Error(`百度网盘旧进程未能退出，重启失败（残留进程：${remaining.join("、")}）。请先退出百度网盘后再启动 CDP 模式。`), { cause: lastKillError });
   }
 }
 

@@ -83,6 +83,8 @@ export type BaiduDramaConfig = {
   localEpisodeVideoRoot: string;
   baiduNetdiskDownloadRetryAttempts: string;
   episodeUploadWaitTimeoutMinutes: string;
+  supportDistribution: string;
+  distributionMaterial: string;
   headless: string;
   operationDelaySeconds: string;
   taskPollIntervalSeconds: string;
@@ -111,6 +113,8 @@ const defaultConfig: BaiduDramaConfig = {
   localEpisodeVideoRoot: "",
   baiduNetdiskDownloadRetryAttempts: "3",
   episodeUploadWaitTimeoutMinutes: "120",
+  supportDistribution: "false",
+  distributionMaterial: "",
   headless: "false",
   operationDelaySeconds: "0",
   taskPollIntervalSeconds: "10",
@@ -146,6 +150,8 @@ function normalizeConfig(config: Partial<BaiduDramaConfig>): BaiduDramaConfig {
       defaultConfig.episodeUploadWaitTimeoutMinutes,
       1,
     ),
+    supportDistribution: config.supportDistribution === "true" ? "true" : "false",
+    distributionMaterial: (config.distributionMaterial ?? "").slice(0, 1000),
     headless: config.headless ?? defaultConfig.headless,
     operationDelaySeconds: numberText(config.operationDelaySeconds, defaultConfig.operationDelaySeconds, 0),
     taskPollIntervalSeconds: numberText(config.taskPollIntervalSeconds, defaultConfig.taskPollIntervalSeconds, 1),
@@ -446,6 +452,8 @@ async function startRuntime() {
         logRetentionDays: Number.parseInt(config.logRetentionDays, 10),
         localEpisodeVideoRoot,
         baiduNetdiskDownloadRetryAttempts: Number.parseInt(config.baiduNetdiskDownloadRetryAttempts, 10),
+        supportDistribution: config.supportDistribution === "true",
+        distributionMaterial: config.distributionMaterial,
         episodeUploadWaitTimeoutMinutes: Number.parseFloat(config.episodeUploadWaitTimeoutMinutes),
         taskPollIntervalMs: Number.parseFloat(config.taskPollIntervalSeconds) * 1000,
         taskClaimResumeAt: taskClaimResumeAt(account.accountId),

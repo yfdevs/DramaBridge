@@ -108,10 +108,20 @@ function createActionRunner(
   };
 }
 
+export async function configureBaiduDistribution(page: Page, options: BaiduDramaRuntimeOptions) {
+  if (!options.supportDistribution) return;
+      await ensureCheckboxByExactText(page, "支持分销");
+      await page.waitForTimeout(200);
+      const material = page.locator("#commissionMaterial");
+      await material.waitFor({ state: "visible", timeout: 10_000 });
+      await material.fill(options.distributionMaterial ?? "");
+}
+
 async function chooseDramaType(
   page: Page,
   task: ClaimedBaiduDramaTask,
   runAction: BaiduAutomationAction,
+  options: BaiduDramaRuntimeOptions,
 ) {
   await runAction("选择短剧类型=非真人短剧", async () => {
     await page.getByText("非真人短剧", { exact: true }).filter({ visible: true }).first().click();
@@ -126,6 +136,15 @@ async function chooseDramaType(
   if (task.playlet.isMatched && task.playlet.matchedIp) {
     await runAction(`选择关联版权IP=${logValue(task.playlet.matchedIp)}`, () =>
       selectFormItem(page, "关联版权IP", task.playlet.matchedIp!));
+  }
+  const distributionOptions = {
+    supportDistribution: task.playlet.supportDistribution ?? options.supportDistribution,
+    distributionMaterial: task.playlet.distributionMaterial ?? options.distributionMaterial,
+  };
+  if (distributionOptions.supportDistribution) {
+    await runAction("开启支持分销并填写分销素材", async () => {
+      await configureBaiduDistribution(page, distributionOptions);
+    });
   }
   await runAction("经营模式页点击下一步", () => clickBaiduNext(page));
 }
@@ -482,7 +501,7 @@ export async function runBaiduDramaPublishTask(
       await page.goto(BAIDU_DRAMA_CREATE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
       await waitForBaiduDramaCreatePageReady(page, undefined, options);
     });
-    await chooseDramaType(page, task, runAction);
+    await chooseDramaType(page, task, runAction, options);
     await fillDramaInformation(page, task, runAction, options);
     await runAction("短剧信息页点击下一步", () => clickBaiduNext(page));
     await runAction("短剧信息确认弹窗点击确定", () => confirmBaiduDramaInformation(page));

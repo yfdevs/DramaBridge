@@ -6,6 +6,23 @@ macOS 适配范围、实施顺序和验收标准见 [macOS 适配修复方案](M
 
 ## Scripts
 
+Pushes to `master` run the Windows release workflow in GitHub Actions. It selects
+the next patch version above `package.json` and existing stable `v*` tags, checks
+types, builds the NSIS installer, then commits the version and tag back to
+`master`. The bot commit does not trigger another release. Each release includes
+the installer, its `.blockmap`, and `latest.yml` for the desktop updater. Files
+are uploaded to a draft before the release becomes public, and retained as an
+Actions artifact for 14 days. You can also start it from Actions → Build and
+release Windows → Run workflow on `master`.
+
+The workflow uses the built-in `GITHUB_TOKEN`; no personal token is needed. The
+repository must allow Actions to write contents and push to `master` (branch
+protection rules may otherwise reject the version commit). Concurrent releases
+are serialized. If another push advances `master` during a build, the version
+push fails safely without overwriting that commit; the next queued run builds
+the latest branch. After a bot version commit, run `git pull` before pushing your
+next local change. Local `pnpm release:win` remains available.
+
 - `pnpm dev` starts the Vite+ dev server and Electron.
 - `pnpm build:app` builds workspace packages, checks types, verifies the shared Playwright browser, and builds the renderer and Electron with Vite+ task caching.
 - `pnpm build` runs `build:app` and packages Electron. Installer packaging and its runtime checks run each time.

@@ -1,0 +1,111 @@
+name: Build and release Windows
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/master'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Use upstream downloads on GitHub-hosted runners rather than local mirrors.
+      npm_config_electron_mirror: https://github.com/electron/electron/releases/download/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare next release version
+        id: version
+        run: node scripts/prepare-ci-release.mjs
+
+      - name: Type check
+        run: |
+          pnpm exec tsc --noEmit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec tsc -p tsconfig.node.json --noEmit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm -r exec tsc --noEmit
+
+      - name: Install shared Chromium runtime
+        run: pnpm playwright:install-browsers
+
+      - name: Build application
+        run: pnpm build:app
+
+      - name: Package Windows installer
+        run: node scripts/package-electron-hoisted.mjs --win --x64 --publish never
+
+      - name: Preserve release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: DramaBridge-Windows-${{ steps.version.outputs.version }}
+          path: |
+            release/${{ steps.version.outputs.version }}/*.exe
+            release/${{ steps.version.outputs.version }}/*.blockmap
+            release/${{ steps.version.outputs.version }}/latest.yml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Commit version and tag
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: release v$env:RELEASE_VERSION [skip ci]"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git tag "$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push --atomic origin HEAD:master "refs/tags/$env:RELEASE_TAG"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          $releaseDir = "release/$env:RELEASE_VERSION"
+          $installer = "$releaseDir/DramaBridge-Windows-$env:RELEASE_VERSION-Setup.exe"
+          $blockmap = "$installer.blockmap"
+          $metadata = "$releaseDir/latest.yml"
+          foreach ($file in @($installer, $blockmap, $metadata)) {
+            if (!(Test-Path -LiteralPath $file)) { throw "Missing release file: $file" }
+          }
+          # Keep incomplete releases out of the updater's latest-release feed.
+          gh release view "$env:RELEASE_TAG" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "$env:RELEASE_TAG" --draft --title "$env:RELEASE_TAG" --generate-notes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          gh release upload "$env:RELEASE_TAG" "$installer" "$blockmap" "$metadata" --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release edit "$env:RELEASE_TAG" --draft=false --latest

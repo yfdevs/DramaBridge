@@ -3,6 +3,7 @@ import test from "node:test";
 import { chromium } from "playwright";
 
 import {
+  configureBaiduDistribution,
   collectShortDramaCertificationFiles,
   submitBaiduDramaForReview,
 } from "../../src/automation/publish-runner.js";
@@ -163,3 +164,21 @@ test("keeps all files per type and removes duplicate references", () => {
     "commitment.pdf",
   ]);
 });
+
+for (const material of ["", "下载链接：https://example.com/material"]) {
+  test(`Baidu distribution waits for the delayed material field (${material || "optional empty"})`, async () => {
+    const browser = await chromium.launch({ channel: "chromium", headless: true });
+    try {
+      const page = await browser.newPage();
+      await configureBaiduDistribution(page, { supportDistribution: false });
+      await page.setContent(`<label><input type="checkbox" id="canSplit"><span>支持分销</span></label>
+        <script>document.querySelector('input').onchange = () => setTimeout(() => {
+          const field = document.createElement('textarea'); field.id = 'commissionMaterial';
+          document.body.append(field);
+        }, 200);</script>`);
+      await configureBaiduDistribution(page, { supportDistribution: true, distributionMaterial: material });
+      assert.equal(await page.locator('#canSplit').isChecked(), true);
+      assert.equal(await page.locator('#commissionMaterial').inputValue(), material);
+    } finally { await browser.close(); }
+  });
+}
