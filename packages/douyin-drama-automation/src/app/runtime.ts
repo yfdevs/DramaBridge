@@ -197,7 +197,7 @@ export async function ensureDouyinNetdiskResource(
       summary: task.playlet.summary || task.playlet.title,
     },
     requiredAiProductionProofFiles: 0,
-    requiredMetadataTextFiles: task.playlet.summary.trim().length < 50 ? 1 : 0,
+    requiredMetadataTextFiles: task.playlet.summary.trim().length < 101 ? 1 : 0,
     mergeOwnershipMaterials: false,
     signal,
   });
@@ -205,10 +205,10 @@ export async function ensureDouyinNetdiskResource(
   if (!douyinTaskNeedsNetdiskMetadata(task)) return resource;
   const resourceDir = path.join(douyinDramaLocalRoot(options), douyinDramaResourceName(task));
   const inputs = await collectDouyinNetdiskMetadataInputs(resourceDir);
-  const missingRequiredText = task.playlet.summary.trim().length < 50 && inputs.texts.length === 0;
+  const missingRequiredText = task.playlet.summary.trim().length < 101 && inputs.texts.length === 0;
   if (!missingRequiredText) return resource;
 
-  log(options, "[douyin-drama] “短剧信息填写”中的简介不足 50 字，且本地未读取到剧情资料，重新下载百度网盘简介文件。", {
+  log(options, "[douyin-drama] “短剧信息填写”中的简介不足 101 字，且本地未读取到剧情资料，重新下载百度网盘简介文件。", {
     accountTaskId: task.accountTaskId,
     missingRequiredText,
   }, "download");

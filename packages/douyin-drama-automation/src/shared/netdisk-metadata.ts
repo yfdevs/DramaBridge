@@ -1,3 +1,4 @@
+import { optimizeDouyinSummary } from "./summary.js";
 import { optimizeTextLength } from "@dramabridge/ai";
 import { createHash } from "node:crypto";
 import { safeFileName, walkFiles } from "@dramabridge/file-utils";
@@ -200,7 +201,7 @@ export async function collectDouyinNetdiskMetadataInputs(
 }
 
 export function douyinTaskNeedsNetdiskMetadata(task: ClaimedDouyinDramaTask) {
-  return task.playlet.summary.trim().length < 50
+  return task.playlet.summary.trim().length < 101
     || task.playlet.roles.length < 2
     || task.playlet.roles.some((role) => !role.roleType || !isDouyinRoleIntroValid(role.intro) || !role.photoFile);
 }
@@ -250,7 +251,7 @@ function buildPrompt(task: ClaimedDouyinDramaTask, inputs: MetadataInputs) {
   return [
     "请一次性整理抖音漫剧提报所需的简介和角色资料，只输出 JSON 对象，不要 Markdown。",
     "JSON 格式：{\"summary\":\"...\",\"roles\":[{\"name\":\"...\",\"roleType\":\"主角|配角|参演\",\"intro\":\"...\",\"photoImageId\":\"image-1或null\"}]}。",
-    "规则：summary 必须为 50-200 个字符（含标点），忠于资料，不虚构关键剧情；每个角色必须包含10-100字的 intro 人物简介，建议20-80字，空白不计字数。",
+    "规则：summary 必须为 101-200 个字符（含标点），忠于资料，不虚构关键剧情；每个角色必须包含10-100字的 intro 人物简介，建议20-80字，空白不计字数。",
     "根据简介和角色资料返回至少2个、最多10个重要角色。图片候选中能明确匹配到单人头像时填写对应 photoImageId；没有匹配头像时填写 null，后续会为该角色生成头像。不要把封面、海报、横图或竖图当成角色头像。",
     "短剧信息填写中已提供的简介和角色属于权威信息，应保留事实并补全缺项。所有角色和简介在这一次响应中同时完成。",
     `剧名：${task.playlet.title}`,
@@ -405,8 +406,11 @@ export async function enrichDouyinTaskFromNetdisk(
   task: ClaimedDouyinDramaTask,
   options: DouyinDramaRuntimeOptions,
 ): Promise<ClaimedDouyinDramaTask> {
+  if (task.playlet.summary.trim() && options.aiClientFactory) {
+    task.playlet.summary = await optimizeDouyinSummary(task.playlet.summary, options.aiClientFactory());
+  }
   if (!douyinTaskNeedsNetdiskMetadata(task)) return task;
-  if (task.playlet.summary.trim().length >= 50 && task.playlet.roles.length >= 2
+  if (task.playlet.summary.trim().length >= 101 && task.playlet.roles.length >= 2
     && task.playlet.roles.every(role => role.roleType && role.photoFile)) {
     if (!options.aiClientFactory) throw new Error("DOUYIN_DRAMA_AI_CLIENT_REQUIRED: 补充人物简介需要全局 AI 配置");
     await completeRoleIntroductions(task, task.playlet.roles, task.playlet.summary, options.aiClientFactory(), options);
@@ -416,17 +420,17 @@ export async function enrichDouyinTaskFromNetdisk(
   if (!root) throw new Error("DOUYIN_DRAMA_LOCAL_VIDEO_ROOT_REQUIRED");
   const resourceDir = path.join(root, task.originalTitle.trim());
   const inputs = await collectDouyinNetdiskMetadataInputs(resourceDir);
-  if (task.playlet.summary.trim().length < 50 && inputs.texts.length === 0) {
+  if (task.playlet.summary.trim().length < 101 && inputs.texts.length === 0) {
     if (inputs.textReadFailures.length > 0) {
       const files = inputs.textReadFailures.slice(0, 3)
         .map((failure) => `${failure.relativePath}（${failure.reason}）`).join("、");
-      throw new Error(`DOUYIN_DRAMA_NETDISK_TEXT_UNREADABLE: 已找到百度网盘简介文件，但读取失败：${files}。请检查文件内容，或在“短剧信息填写”中补充 50-200 字简介`);
+      throw new Error(`DOUYIN_DRAMA_NETDISK_TEXT_UNREADABLE: 已找到百度网盘简介文件，但读取失败：${files}。请检查文件内容，或在“短剧信息填写”中补充 101-200 字简介`);
     }
     const summaryLength = task.playlet.summary.trim().length;
     const summaryStatus = summaryLength === 0
       ? "“短剧信息填写”中也未提供简介"
-      : `“短剧信息填写”中的简介不足 50 字（当前 ${summaryLength} 字）`;
-    throw new Error(`DOUYIN_DRAMA_NETDISK_TEXT_REQUIRED: 百度网盘链接对应的素材中未找到 TXT、MD、DOCX 或 RTF 简介文件，${summaryStatus}。请在网盘中补充简介文件，或在“短剧信息填写”中填写 50-200 字简介`);
+      : `“短剧信息填写”中的简介不足 101 字（当前 ${summaryLength} 字）`;
+    throw new Error(`DOUYIN_DRAMA_NETDISK_TEXT_REQUIRED: 百度网盘链接对应的素材中未找到 TXT、MD、DOCX 或 RTF 简介文件，${summaryStatus}。请在网盘中补充简介文件，或在“短剧信息填写”中填写 101-200 字简介`);
   }
   if (!options.aiClientFactory) {
     throw new Error("DOUYIN_DRAMA_AI_CLIENT_REQUIRED: 网盘简介和角色资料需要全局 AI 配置");
@@ -445,19 +449,19 @@ export async function enrichDouyinTaskFromNetdisk(
     temperature: 0.1,
   });
   const generated = aiMetadataSchema.parse(parseAiJsonObject(completion.text));
-  const sourceSummary = task.playlet.summary.trim().length >= 50
+  const sourceSummary = task.playlet.summary.trim().length >= 101
     ? task.playlet.summary.trim()
     : generated.summary;
   const summary = await optimizeTextLength({
-    client: aiClient, text: sourceSummary, minLength: 50, maxLength: 200,
+    client: aiClient, text: sourceSummary, minLength: 101, maxLength: 200,
     fieldName: "抖音短剧剧情简介",
     context: `剧名：${task.originalTitle}\n资料：${inputs.texts.map(text => text.content).join("\n").slice(0, 6000)}`,
-    instructions: "简介不足50字符时忠于资料自然扩写，超过200字符时压缩；最终为50-200字符（含标点），不得虚构剧情，不输出字数说明。",
+    instructions: "简介不足101字符时忠于资料自然扩写，超过200字符时压缩；最终为101-200字符（含标点），不得虚构剧情，不输出字数说明。",
   });
   if (sourceSummary.length !== summary.length) log(options, `[douyin-drama] AI 简介长度修复完成：${sourceSummary.length} → ${summary.length}字符`, undefined, "metadata");
   const roles = mergeRoles(task.playlet.roles, generated.roles, inputs.images);
-  if (summary.length < 50) {
-    throw new Error(`DOUYIN_DRAMA_AI_SUMMARY_TOO_SHORT: AI 整理后的简介需要至少50字，实际=${summary.length}`);
+  if (summary.length < 101) {
+    throw new Error(`DOUYIN_DRAMA_AI_SUMMARY_TOO_SHORT: AI 整理后的简介需要至少101字，实际=${summary.length}`);
   }
   if (roles.length < 2) {
     throw new Error(
@@ -485,7 +489,7 @@ export async function enrichDouyinTaskFromNetdisk(
       `DOUYIN_DRAMA_ROLE_PHOTO_REQUIRED: 网盘中找不到角色图片：${rolesWithoutPhoto.map((role) => role.name).join("、")}`,
     );
   }
-  task.playlet.summary = summary.slice(0, 200);
+  task.playlet.summary = await optimizeDouyinSummary(summary, aiClient);
   task.playlet.roles = roles;
   log(options, "[douyin-drama] 网盘元数据整理及人物简介校验完成。", {
     accountTaskId: task.accountTaskId,

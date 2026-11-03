@@ -75,7 +75,7 @@ function exactTextPattern(value: string) {
   return new RegExp(`^\\s*${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
 }
 
-export function sanitizeDouyinDescriptionText(value: string) {
+export function sanitizeDouyinDescriptionText(value: string, maxLength = 200) {
   return value
     .replace(/[:：]/gu, "，")
     .replace(/[,]/gu, "，")
@@ -88,7 +88,7 @@ export function sanitizeDouyinDescriptionText(value: string) {
     .replace(/[—–_]/gu, "—")
     .replace(/\s+/gu, "")
     .replace(/[^\p{Script=Han}A-Za-z0-9，。；“”？、—《》！（）\-·]/gu, "")
-    .slice(0, 200);
+    .slice(0, maxLength);
 }
 
 export function douyinFormItem(page: Page, label: string) {

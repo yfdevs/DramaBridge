@@ -96,7 +96,7 @@ export const douyinDramaTaskPayloadSchema = z
     title: requiredText.max(20),
     // Douyin is the only platform where the backend may omit the synopsis. The
     // runtime enriches an empty value from the downloaded netdisk text files.
-    summary: z.string().trim().max(200).default(""),
+    summary: z.string().trim().default(""),
     outsideSaleAlias: optionalText,
     outsideFreeAlias: optionalText,
     episodeCount: z.coerce.number().int().min(1).max(300),

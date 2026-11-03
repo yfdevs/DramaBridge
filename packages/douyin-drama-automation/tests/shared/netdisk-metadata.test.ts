@@ -270,7 +270,7 @@ test("reports missing, short and unreadable synopsis sources accurately", async 
       return true;
     });
     task.playlet.summary = "简短介绍";
-    await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), /简介不足 50 字（当前 4 字）/u);
+    await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), /简介不足 101 字（当前 4 字）/u);
     await writeFile(path.join(resourceDir, "简介.docx"), "invalid docx");
     await assert.rejects(enrichDouyinTaskFromNetdisk(task, { localEpisodeVideoRoot: root }), /DOUYIN_DRAMA_NETDISK_TEXT_UNREADABLE.*已找到百度网盘简介文件.*简介.docx/u);
   } finally {
@@ -316,7 +316,7 @@ test("collects RTF synopsis content and prioritizes synopsis directories", async
 });
 
 
-for (const length of [49, 50, 80, 197, 200, 240]) {
+for (const length of [100, 101, 197, 200, 201, 240]) {
   test(`repairs AI synopsis length ${length} before the final 200-character boundary`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "douyin-summary-length-"));
     const task = createMockDouyinNetdiskTestTask();
@@ -336,8 +336,8 @@ for (const length of [49, 50, 80, 197, 200, 240]) {
     let calls=0;
     try {
       const result = await enrichDouyinTaskFromNetdisk(task,{ localEpisodeVideoRoot:root, aiClientFactory:()=>fakeAiClient(response,()=>calls++) });
-      assert.equal(result.playlet.summary.length,length < 50 || length > 200 ? 200 : length);
-      assert.equal(calls,length >= 50 && length <= 200 ? 1 : 2);
+      assert.equal(result.playlet.summary.length,length < 101 || length > 200 ? 200 : length);
+      assert.equal(calls,length >= 101 && length <= 200 ? 1 : 2);
     } finally { await rm(root,{recursive:true,force:true}); }
   });
 }

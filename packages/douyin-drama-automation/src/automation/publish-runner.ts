@@ -1,3 +1,4 @@
+import { optimizeDouyinSummary } from "../shared/summary.js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -38,7 +39,6 @@ import {
   installDouyinPageMessageCapture,
   resetRestoredDouyinFormIfPresent,
   reuploadFailedDouyinEpisodeAfterDelete,
-  sanitizeDouyinDescriptionText,
   selectDropdownByPlaceholder,
   selectDropdownValues,
   selectDouyinChargeEpisodes,
@@ -146,12 +146,8 @@ async function fillBasicInformation(
   recorder: DouyinDramaDropdownRecorder,
 ) {
   const data = task.playlet;
-  const sanitizedSummary = sanitizeDouyinDescriptionText(data.summary);
-  if (sanitizedSummary.length < 50) {
-    throw new Error(
-      `DOUYIN_DRAMA_SUMMARY_TOO_SHORT_AFTER_SANITIZE: actual=${sanitizedSummary.length}`,
-    );
-  }
+  const sanitizedSummary = await optimizeDouyinSummary(data.summary, options.aiClientFactory?.());
+  data.summary = sanitizedSummary;
   await runAction(`填写作品名称=${logValue(data.title)}`, () =>
     fillInputById(page, "book_name_input", data.title));
   await runAction(`填写作品简介=${logValue(sanitizedSummary)}`, () =>
