@@ -1689,3 +1689,38 @@ test("fails after five retries when a cloud image stays at upload 100 percent", 
     await browser.close();
   }
 });
+
+test("binds a delayed contract on the clue step before clicking next", async () => {
+  const browser = await launchTestBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`
+      <div class="arco-form-item" id="clue-step">
+        <label>是否关联线索</label>
+        <div id="has_associate_clue"><label><input type="radio" name="clue"><span>否</span></label></div>
+        <input id="contract" placeholder="请选择（温馨提示：合同绑定错误会影响结算）" style="display:none">
+        <button>下一步</button>
+      </div>
+      <input id="book_name_input" style="display:none">
+      <script>
+        window.earlyNext = false;
+        document.querySelector('input[type=radio]').onchange = () => setTimeout(() => {
+          document.querySelector('#contract').style.display = '';
+        }, 800);
+        document.querySelector('button').onclick = () => {
+          if (document.querySelector('#contract').value !== '已绑定') { window.earlyNext = true; return; }
+          document.querySelector('#clue-step').style.display = 'none';
+          document.querySelector('#book_name_input').style.display = '';
+        };
+      </script>`);
+    let bound = false;
+    await enterDouyinBasicInformation(page, async (_name, action) => action(), async () => {
+      await page.waitForTimeout(300);
+      await page.locator('#contract').fill('已绑定');
+      bound = true;
+    });
+    assert.equal(bound, true);
+    assert.equal(await page.evaluate(() => (window as unknown as { earlyNext: boolean }).earlyNext), false);
+    assert.equal(await page.locator('#book_name_input').isVisible(), true);
+  } finally { await browser.close(); }
+});

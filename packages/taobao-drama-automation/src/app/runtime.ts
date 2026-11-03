@@ -1,3 +1,4 @@
+import { runWithTaobaoPageRecovery } from "./page-recovery.js";
 import type { Page } from "playwright";
 import { captureAutomationFailureDiagnostics, formatAutomationErrorReport } from "@dramabridge/automation-logging";
 import { claimNextTaobaoDramaTaskApi, TaobaoApiBusinessError } from "../api/task.js";
@@ -47,27 +48,38 @@ export function classifyTaobaoDramaFailStage(error: unknown): TaobaoDramaTaskFai
   return "OTHER";
 }
 
-async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: TaobaoDramaRuntimeOptions, setLastTask: (task: TaobaoDramaRuntimeStatus["lastTask"]) => void, pauseClaims: (reason: string) => void) {
+async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: TaobaoDramaRuntimeOptions, setLastTask: (task: TaobaoDramaRuntimeStatus["lastTask"]) => void, pauseClaims: (reason: string) => void, isRunning: () => boolean, onPage: (page: Page) => void) {
+  let activePage = page;
   setLastTask({ accountTaskId: task.accountTaskId, originalTitle: task.originalTitle, status: "running", updatedAt: new Date().toISOString() });
   const store = options.executionStore!;
   const result = await executeTaobaoClaimedTask({
     store, task,
-    publish: (checkpoint) => runWithLogContext(
-      { taskId: String(task.accountTaskId), title: task.originalTitle },
-      () => runTaobaoPublishTask(page, page.context(), task, { ...options, onSubmitCheckpoint: checkpoint }),
-    ),
-    resultJson: () => ({ activeUrl: page.url(), accountId: task.accountId, accountName: task.accountName }),
+    publish: (checkpoint) => runWithTaobaoPageRecovery({
+      page,
+      checkpoints: () => store.get(task.executionId)?.checkpoints ?? [],
+      isRunning,
+      onRecovered: (replacement, attempt) => {
+        activePage = replacement;
+        onPage(replacement);
+        log(options, `[taobao-drama] 上传页面已关闭，自动重新打开（${attempt}/3），重新核对合集并继续补传`, { taskId: task.accountTaskId });
+      },
+      publish: (currentPage) => runWithLogContext(
+        { taskId: String(task.accountTaskId), title: task.originalTitle },
+        () => runTaobaoPublishTask(currentPage, currentPage.context(), task, { ...options, onSubmitCheckpoint: checkpoint }),
+      ),
+    }),
+    resultJson: () => ({ activeUrl: activePage.url(), accountId: task.accountId, accountName: task.accountName }),
     async failure(error) {
       const pauseReason = taobaoDownloadInfrastructurePauseReason(error);
       if (pauseReason) pauseClaims(pauseReason);
       const message = formatAutomationErrorReport(error, { fallbackMessage: "淘宝短剧任务提交失败，未获取到具体错误原因" });
       const stage = classifyTaobaoDramaFailStage(error);
       const diagnostics = await captureAutomationFailureDiagnostics({
-        platform: "taobao-drama", error, page, logFilePath: options.logFilePath, stage,
+        platform: "taobao-drama", error, page: activePage, logFilePath: options.logFilePath, stage,
         task: { accountTaskId: task.accountTaskId, title: task.originalTitle },
       });
       errorLog(options, message, { error, failStage: stage, taskId: task.accountTaskId, title: task.originalTitle,
-        activeUrl: page.url(), diagnosticDir: diagnostics?.directory, diagnosticRecord: diagnostics?.recordFile,
+        activeUrl: activePage.url(), diagnosticDir: diagnostics?.directory, diagnosticRecord: diagnostics?.recordFile,
         screenshotFile: diagnostics?.screenshotFile });
       return { stage, message };
     },
@@ -135,13 +147,13 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
         const task = await claimNextTaobaoDramaTaskApi({ apiBaseUrl: options.apiConfig!.baseUrl, account,
           workerId: options.workerId!, executionStore, runtimeOptions: options });
         if (task) {
-          const taskPage = reusableTaskPage && !reusableTaskPage.isClosed() ? reusableTaskPage : await context.newPage();
+          let taskPage = reusableTaskPage && !reusableTaskPage.isClosed() ? reusableTaskPage : await context.newPage();
           reusableTaskPage = undefined;
           log(options, "[taobao-drama] 已领取任务，在任务标签页执行", { accountTaskId: task.accountTaskId });
           const outcome = await runTask(taskPage, task, options, (value) => { lastTask = value; }, (reason) => {
             claimPausedReason = reason;
             errorLog(options, `[taobao-drama] ${reason}`);
-          });
+          }, () => running, (replacement) => { taskPage = replacement; });
           if (!taskPage.isClosed() && outcome === "success") {
             // Submission verification and the >=10s settle period have finished.
             // Keep the tab visible and reuse it for the next task.

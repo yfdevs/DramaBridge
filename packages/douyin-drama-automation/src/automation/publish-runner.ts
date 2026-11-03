@@ -124,15 +124,68 @@ function createActionRunner(page: Page, options: DouyinDramaRuntimeOptions): Dou
   };
 }
 
+const contractPlaceholder = "请选择（温馨提示：合同绑定错误会影响结算）";
+
+async function bindDouyinContract(
+  page: Page, task: ClaimedDouyinDramaTask, runAction: DouyinAutomationAction,
+  recorder: DouyinDramaDropdownRecorder,
+) {
+  const data = task.playlet;
+  const selectedContractName = data.contractName?.trim();
+  if (selectedContractName) {
+    const contractId = /^CT\d+/u.exec(selectedContractName)?.[0];
+    if (!contractId) {
+      throw new Error(`DOUYIN_DRAMA_CONTRACT_ID_INVALID: contractName=${selectedContractName}`);
+    }
+    await runAction(`选择后台指定合同=${selectedContractName}`, () =>
+      selectRequiredDropdownByStableId(
+        page,
+        contractPlaceholder,
+        "contract",
+        contractId,
+        recorder,
+      ));
+  } else if (data.isCopyrightIpAdaptation) {
+    await runAction(`旧任务兼容选择绑定合同=${DOUYIN_DRAMA_FRAMEWORK_CONTRACT_NAME}`, () =>
+      selectRequiredDropdownByStableId(
+        page,
+        contractPlaceholder,
+        "contract",
+        DOUYIN_DRAMA_FRAMEWORK_CONTRACT_ID,
+        recorder,
+      ));
+  } else {
+    await runAction(`旧任务兼容选择绑定合同=${DOUYIN_DRAMA_STANDARD_CONTRACT_NAME}`, () =>
+      selectRequiredDropdownByContractName(
+        page,
+        contractPlaceholder,
+        "contract",
+        DOUYIN_DRAMA_STANDARD_CONTRACT_NAME,
+        recorder,
+      ));
+  }
+}
+
 export async function enterDouyinBasicInformation(
   page: Page,
   runAction: DouyinAutomationAction = async (_name, action) => action(),
+  bindContract?: () => Promise<void>,
 ) {
   // Wait for a real form control: all step titles are present even on the first step.
   await page.locator("#has_associate_clue:visible, #book_name_input:visible")
     .first().waitFor({ state: "visible", timeout: 30_000 });
   if (await page.locator("#has_associate_clue").isVisible()) {
     await runAction("选择是否关联线索=否", () => selectRadio(page, "是否关联线索", "否"));
+    // The radio updates a conditional form asynchronously. New layouts require
+    // contract binding on this step rather than on basic information.
+    await page.waitForTimeout(500);
+    const contract = page.getByPlaceholder(contractPlaceholder, { exact: true });
+    const contractVisible = await contract.waitFor({ state: "visible", timeout: 2_000 })
+      .then(() => true, () => false);
+    if (contractVisible && bindContract) {
+      await bindContract();
+      await page.waitForTimeout(300);
+    }
     await runAction("关联线索点击下一步", () => clickDouyinNext(page));
   }
   await page.locator("#book_name_input").waitFor({ state: "visible", timeout: 30_000 });
@@ -230,40 +283,10 @@ async function fillBasicInformation(
       );
     }
   }
-  const contractPlaceholder = "请选择（温馨提示：合同绑定错误会影响结算）";
-  const selectedContractName = data.contractName?.trim();
-  if (selectedContractName) {
-    const contractId = /^CT\d+/u.exec(selectedContractName)?.[0];
-    if (!contractId) {
-      throw new Error(`DOUYIN_DRAMA_CONTRACT_ID_INVALID: contractName=${selectedContractName}`);
-    }
-    await runAction(`选择后台指定合同=${selectedContractName}`, () =>
-      selectRequiredDropdownByStableId(
-        page,
-        contractPlaceholder,
-        "contract",
-        contractId,
-        recorder,
-      ));
-  } else if (data.isCopyrightIpAdaptation) {
-    await runAction(`旧任务兼容选择绑定合同=${DOUYIN_DRAMA_FRAMEWORK_CONTRACT_NAME}`, () =>
-      selectRequiredDropdownByStableId(
-        page,
-        contractPlaceholder,
-        "contract",
-        DOUYIN_DRAMA_FRAMEWORK_CONTRACT_ID,
-        recorder,
-      ));
-  } else {
-    await runAction(`旧任务兼容选择绑定合同=${DOUYIN_DRAMA_STANDARD_CONTRACT_NAME}`, () =>
-      selectRequiredDropdownByContractName(
-        page,
-        contractPlaceholder,
-        "contract",
-        DOUYIN_DRAMA_STANDARD_CONTRACT_NAME,
-        recorder,
-      ));
+  if (await page.getByPlaceholder(contractPlaceholder, { exact: true }).isVisible().catch(() => false)) {
+    await bindDouyinContract(page, task, runAction, recorder);
   }
+
   await runAction(`上传权属文件=${fileNames(data.ownershipProofFiles)}`, () =>
     uploadFormFiles(page, "权属文件", data.ownershipProofFiles, 120_000, "copyright_files_input"));
   await runAction(`上传不侵权承诺函=${fileNames(data.nonInfringementCommitmentFiles)}`, () =>
@@ -569,7 +592,7 @@ export async function runDouyinDramaPublishTask(
         "automation",
       );
     });
-    await enterDouyinBasicInformation(page, runAction);
+    await enterDouyinBasicInformation(page, runAction, () => bindDouyinContract(page, task, runAction, recorder));
     await fillBasicInformation(page, task, options, runAction, recorder);
     await uploadEpisodes(page, task, options, runAction);
     await fillPublishConfiguration(page, task, runAction, recorder);
