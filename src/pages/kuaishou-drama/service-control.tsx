@@ -1,3 +1,5 @@
+import { ManualTaskCleanupButton } from "@/pages/shared/manual-task-cleanup-button";
+import { AccountEnabledIcon } from "@/pages/shared/account-enabled-icon";
 import { ServiceControlButtonPage, useServiceControl } from "@/pages/shared/service-control";
 import {
   kuaishouDramaService,
@@ -9,7 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 
 const initialStatus: KuaishouDramaServiceStatus = {
   platform: "kuaishou-drama",
@@ -20,7 +21,6 @@ const initialStatus: KuaishouDramaServiceStatus = {
 };
 
 export function KuaishouDramaServiceControlPage() {
-  const [checking, setChecking] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<KuaishouDramaAccount[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
@@ -43,7 +43,11 @@ export function KuaishouDramaServiceControlPage() {
     try {
       const result = await kuaishouDramaService.listAccounts();
       setAccounts(result.accounts);
-      setSelectedIds(result.selectedAccountIds);
+      setSelectedIds(
+        result.selectedAccountIds.filter((id) =>
+          result.accounts.some((account) => account.accountId === id && account.status === "ON"),
+        ),
+      );
     } catch (error) {
       setAccountsError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -57,19 +61,6 @@ export function KuaishouDramaServiceControlPage() {
   const enabledIds = accounts
     .filter((account) => account.status === "ON")
     .map((account) => account.accountId);
-  const recheck = async (id: string) => {
-    if (checking) return;
-    setChecking(id);
-    try {
-      await kuaishouDramaService.recheckExecution(id);
-      await state.refreshStatus();
-      toast.success("后台状态已确认，本地暂停记录已解除");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setChecking(null);
-    }
-  };
   return (
     <ServiceControlButtonPage
       analyticsPlatform="kuaishou-drama"
@@ -79,7 +70,11 @@ export function KuaishouDramaServiceControlPage() {
       startDisabled={accountsLoading || accountsError !== null || selectedIds.length === 0}
       onToggle={() => void state.toggleService()}
       beforeBrowserInstances={
-        <section aria-label="快手账号选择" aria-busy={accountsLoading} className="mt-10 space-y-4">
+        <section
+          aria-label="快手账号选择"
+          aria-busy={accountsLoading}
+          className="mt-10 min-w-0 space-y-4"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-[13px] font-medium">
               快手账号{" "}
@@ -87,7 +82,7 @@ export function KuaishouDramaServiceControlPage() {
                 已选 {selectedIds.length} / {accounts.length}
               </span>
             </h2>
-            <div className="flex gap-1">
+            <div className="flex max-w-full flex-wrap items-center gap-1">
               <Button
                 size="sm"
                 variant="ghost"
@@ -112,15 +107,18 @@ export function KuaishouDramaServiceControlPage() {
               >
                 刷新账号
               </Button>
+              <ManualTaskCleanupButton
+                disabled={state.loading}
+                onCleanup={kuaishouDramaService.cleanupTasks}
+                onComplete={() => state.refreshStatus(true)}
+              />
             </div>
           </div>
-          <p className="text-[13px] leading-6 text-muted-foreground">
-            {state.status.running
-              ? "服务正在运行，停止后可重新选择账号。"
-              : "勾选本次使用的账号，启动服务时只打开所选账号的浏览器。"}
-          </p>
           {accountsLoading ? (
-            <div className="grid gap-3 sm:grid-cols-2" aria-label="正在加载账号">
+            <div
+              className="grid max-h-[min(50vh,28rem)] min-w-0 auto-rows-max grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-1.5 [scrollbar-gutter:stable] sm:grid-cols-2"
+              aria-label="正在加载账号"
+            >
               {[0, 1].map((key) => (
                 <Skeleton key={key} className="h-24 rounded-lg" />
               ))}
@@ -134,7 +132,7 @@ export function KuaishouDramaServiceControlPage() {
               暂无快手账号，请先在后台添加账号，再刷新列表。
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid max-h-[min(50vh,28rem)] min-w-0 auto-rows-max grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-1.5 [scrollbar-gutter:stable] sm:grid-cols-2">
               {accounts.map((account) => {
                 const selected = selectedIds.includes(account.accountId);
                 const disabled = account.status !== "ON";
@@ -145,7 +143,7 @@ export function KuaishouDramaServiceControlPage() {
                   <label
                     key={account.accountId}
                     className={cn(
-                      "flex min-w-0 items-start gap-3 rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring",
+                      "flex h-fit min-w-0 items-start gap-3 rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring",
                       selected ? "border-primary bg-accent/50" : "border-border",
                       selectionLocked || disabled
                         ? "cursor-default"
@@ -166,11 +164,11 @@ export function KuaishouDramaServiceControlPage() {
                       }
                     />
                     <span className="min-w-0 flex-1 space-y-1">
-                      <span className="flex flex-wrap items-center justify-between gap-2 text-[13px] font-medium">
-                        <span className="break-all">{account.accountName}</span>
-                        <span className="shrink-0 text-xs font-normal text-muted-foreground">
-                          {disabled ? "已停用" : selected ? "已选择" : "未选择"}
+                      <span className="flex min-w-0 items-start justify-between gap-2 text-[13px] font-medium">
+                        <span className="min-w-0 flex-1 whitespace-normal break-all">
+                          {account.accountName}
                         </span>
+                        <AccountEnabledIcon enabled={!disabled} />
                       </span>
                       <span className="block break-all text-xs text-muted-foreground">
                         账号 ID：{account.accountId}
@@ -205,40 +203,6 @@ export function KuaishouDramaServiceControlPage() {
             {account.accountName}：{account.claimPausedReason}
           </p>
         ))}
-      {state.status.executions.length > 0 && (
-        <section aria-label="待处理任务" className="mt-10 space-y-4">
-          <h2 className="text-sm font-medium">待处理任务</h2>
-          <p className="text-xs leading-6 text-muted-foreground">
-            待补报的结果会在服务运行时自动重发。结果待核实的任务请先停止服务，在快手和后台确认、处理，再点击重新检查。
-          </p>
-          {state.status.executions.map((record) => (
-            <div key={record.id} className="space-y-2 border-t pt-4 text-sm">
-              <p className="font-medium">
-                {record.originalTitle || `任务 ${record.taskId}`} ·{" "}
-                {record.phase === "report-pending" ? "等待补报" : "需要核实"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                账号 {record.accountId} · 任务 {record.taskId} · 轮次{" "}
-                {record.attemptCount ?? "未取得"}
-              </p>
-              <p className="break-all text-xs text-muted-foreground">执行器：{record.workerId}</p>
-              <p className="text-xs leading-6">
-                {record.errorMessage || "结果已保存，等待后台确认，不会重新上传。"}
-              </p>
-              {record.phase !== "report-pending" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={state.status.running || checking !== null}
-                  onClick={() => void recheck(record.id)}
-                >
-                  {checking === record.id ? "正在检查…" : "已在后台处理，重新检查"}
-                </Button>
-              )}
-            </div>
-          ))}
-        </section>
-      )}
     </ServiceControlButtonPage>
   );
 }

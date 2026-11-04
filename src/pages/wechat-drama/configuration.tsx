@@ -4,7 +4,6 @@ import { toast } from "sonner";
 
 import { ConfigurationToolbar } from "@/pages/shared/configuration-page";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldContent,
@@ -36,6 +35,7 @@ import {
 
 const emptyConfig: WechatVideoConfig = {
   apiBaseUrl: "http://180.184.76.232:19090",
+  selectedVideoAccountIds: "",
   videoAccountContractSubjects:
     "MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU,YOUDIANNIU,ZHENCUIYIHAO,RUIXIAODOU,YUANMAN,YUNQIMANYING,MENGDONG,CHONGBAO,DOURAN",
   localEpisodeVideoRoot: "",
@@ -94,31 +94,7 @@ type SwitchField = {
   inactiveLabel: string;
 };
 
-type SubjectField = {
-  kind: "subjects";
-  key: "videoAccountContractSubjects";
-  label: string;
-  description?: string;
-  options: Array<{ value: string; label: string }>;
-};
-
-type ConfigField = TextField | SelectField | SwitchField | SubjectField;
-
-const contractSubjectOptions = [
-  { label: "明星说", value: "MINGXINGSHUO" },
-  { label: "米苏", value: "MISU" },
-  { label: "微淘", value: "WEITAO" },
-  { label: "幻走", value: "HUANZOU" },
-  { label: "小石榴", value: "XIAOSHILIU" },
-  { label: "有点牛", value: "YOUDIANNIU" },
-  { label: "珍萃一号", value: "ZHENCUIYIHAO" },
-  { label: "瑞小豆", value: "RUIXIAODOU" },
-  { label: "广州元漫科技有限公司", value: "YUANMAN" },
-  { label: "北京云起漫影科技有限公司", value: "YUNQIMANYING" },
-  { label: "广州梦动科技有限公司", value: "MENGDONG" },
-  { label: "广州冲宝科技有限公司", value: "CHONGBAO" },
-  { label: "广州豆燃科技有限公司", value: "DOURAN" },
-];
+type ConfigField = TextField | SelectField | SwitchField;
 
 const sections: Array<{
   title: string;
@@ -134,13 +110,6 @@ const sections: Array<{
         label: "接口地址",
         type: "url",
         description: "填写后端服务地址，可使用线上或测试环境。",
-      },
-      {
-        kind: "subjects",
-        key: "videoAccountContractSubjects",
-        label: "视频号主体",
-        description: "选择需要加载的视频号主体。",
-        options: contractSubjectOptions,
       },
     ],
   },
@@ -464,59 +433,6 @@ function ConfigFieldControl({
   onChange: (key: keyof WechatVideoConfig, value: string) => void;
 }) {
   const value = config[field.key];
-
-  if (field.kind === "subjects") {
-    const selectedSubjects = new Set(
-      value
-        .split(",")
-        .map((subject) => subject.trim())
-        .filter(Boolean),
-    );
-
-    const toggleSubject = (subject: string, checked: boolean) => {
-      const nextSubjects = new Set(selectedSubjects);
-
-      if (checked) {
-        nextSubjects.add(subject);
-      } else {
-        nextSubjects.delete(subject);
-      }
-
-      onChange(
-        field.key,
-        field.options
-          .map((option) => option.value)
-          .filter((subject) => nextSubjects.has(subject))
-          .join(","),
-      );
-    };
-
-    return (
-      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
-        <FieldContent>
-          <FieldLabel className="text-[13px]">{field.label}</FieldLabel>
-          {field.description ? (
-            <FieldDescription className="text-xs">{field.description}</FieldDescription>
-          ) : null}
-        </FieldContent>
-        <div className="flex min-w-0 flex-wrap gap-2">
-          {field.options.map((option) => (
-            <label
-              key={option.value}
-              className="flex h-8 w-auto min-w-0 items-center gap-2 bg-background px-2.5 text-[13px]"
-            >
-              <Checkbox
-                checked={selectedSubjects.has(option.value)}
-                onCheckedChange={(checked) => toggleSubject(option.value, checked === true)}
-                aria-label={option.label}
-              />
-              <span className="truncate">{option.label}</span>
-            </label>
-          ))}
-        </div>
-      </Field>
-    );
-  }
 
   if (field.kind === "switch") {
     const checked = value === "true";

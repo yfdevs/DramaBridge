@@ -1,3 +1,4 @@
+import type { TaskWatchdog } from "@dramabridge/automation-logging";
 import type { KuaishouExecutionStore, KuaishouSubmitCheckpoint } from "./task-execution.js";
 import { z } from "zod";
 import type { DramaAiClient } from "@dramabridge/ai";
@@ -421,6 +422,8 @@ export type KuaishouDramaRuntimeStatus = {
 };
 
 export type KuaishouDramaRuntimeOptions = {
+  taskWatchdog?: TaskWatchdog;
+  watchedTaskId?: number;
   workerId?: string;
   executionStore?: KuaishouExecutionStore;
   onSubmitCheckpoint?: (checkpoint: KuaishouSubmitCheckpoint) => void;
@@ -459,6 +462,7 @@ export type KuaishouDramaRuntimeOptions = {
     },
   ) => Promise<void>;
   ensureBaiduNetdiskResource?: (request: {
+    onStableEpisodeFiles?: (files: Array<{ index: number; size: number; file: string; modifiedAtMs: number }>) => void;
     shareText: string;
     resourceName: string;
     localEpisodeVideoRoot: string;

@@ -275,13 +275,6 @@ export function BaiduNetdiskPanel() {
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
-            <p
-              id="baidu-netdisk-install-help"
-              className="px-1 text-xs leading-5 text-muted-foreground"
-            >
-              选择 BaiduNetdisk 文件夹即可，例如 D:\BaiduNetdisk；也支持 AppData
-              下的安装目录，无需查找里面的 exe 文件。手动修改后请先保存。
-            </p>
             {installPathError || installPathMessage ? (
               <p
                 className={`px-1 text-xs ${installPathError ? "text-destructive" : "text-muted-foreground"}`}

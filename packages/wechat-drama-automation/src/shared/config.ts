@@ -134,7 +134,8 @@ export interface ServiceConfig {
 export async function loadServiceConfig(): Promise<ServiceConfig> {
   const settings = getWechatVideoRuntimeSettings();
   const allVideoAccounts = await fetchVideoAccountsApi();
-  const videoAccounts = filterVideoAccountsByContractSubjects(allVideoAccounts, settings.videoAccountContractSubjects);
+  const selectedIds = new Set(settings.selectedVideoAccountIds.split(",").map(id => id.trim()).filter(Boolean));
+  const videoAccounts = allVideoAccounts.filter(account => selectedIds.has(account.id));
   const accountIds = videoAccounts.map((account) => account.id);
   configLogger.info("账号列表已更新", {
     selectedContractSubjects: settings.videoAccountContractSubjects,
@@ -144,10 +145,7 @@ export async function loadServiceConfig(): Promise<ServiceConfig> {
   });
 
   if (videoAccounts.length === 0) {
-    const availableContractSubjects = Array.from(new Set(
-      allVideoAccounts.map((account) => account.contractSubject?.trim()).filter(Boolean),
-    ));
-    throw new Error(`Video account list must contain at least one account after contract subject filter: ${settings.videoAccountContractSubjects}; available contract subjects: ${availableContractSubjects.join(", ") || "-"}`);
+    throw new Error("请先在服务页面勾选需要启动的视频号账号。");
   }
   if (new Set(accountIds).size !== accountIds.length) {
     throw new Error("Video account list must not contain duplicate account ids.");

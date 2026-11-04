@@ -54,10 +54,11 @@ async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: Taobao
   const store = options.executionStore!;
   const result = await executeTaobaoClaimedTask({
     store, task,
-    publish: (checkpoint) => runWithTaobaoPageRecovery({
+    publish: (checkpoint) => {
+      const publish = () => runWithTaobaoPageRecovery({
       page,
       checkpoints: () => store.get(task.executionId)?.checkpoints ?? [],
-      isRunning,
+      isRunning: () => isRunning() && !expired,
       onRecovered: (replacement, attempt) => {
         activePage = replacement;
         onPage(replacement);
@@ -65,9 +66,15 @@ async function runTask(page: Page, task: ClaimedTaobaoDramaTask, options: Taobao
       },
       publish: (currentPage) => runWithLogContext(
         { taskId: String(task.accountTaskId), title: task.originalTitle },
-        () => runTaobaoPublishTask(currentPage, currentPage.context(), task, { ...options, onSubmitCheckpoint: checkpoint }),
+        () => runTaobaoPublishTask(currentPage, currentPage.context(), task, { ...options, onSubmitCheckpoint: value => { options.taskWatchdog?.assertActive(task.accountTaskId, task.workerId, task.attemptCount); checkpoint(value); } }),
       ),
-    }),
+    });
+      let expired = false;
+      return options.taskWatchdog ? options.taskWatchdog.run({
+        taskId: task.accountTaskId, accountId: options.accountId!, workerId: task.workerId,
+        attemptCount: task.attemptCount, apiBaseUrl: options.apiConfig!.baseUrl,
+      }, publish, async () => { expired = true; await activePage.close().catch(() => undefined); }) : publish();
+    },
     resultJson: () => ({ activeUrl: activePage.url(), accountId: task.accountId, accountName: task.accountName }),
     async failure(error) {
       const pauseReason = taobaoDownloadInfrastructurePauseReason(error);

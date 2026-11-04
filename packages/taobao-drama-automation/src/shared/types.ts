@@ -1,3 +1,4 @@
+import type { TaskWatchdog } from "@dramabridge/automation-logging";
 import { z } from "zod";
 import type { DramaAiClient } from "@dramabridge/ai";
 import { TAOBAO_DRAMA_MAX_EPISODES_PER_TASK } from "./constants.js";
@@ -72,6 +73,7 @@ export type TaobaoCollectionMetadata = {
 };
 
 export type TaobaoDramaRuntimeOptions = {
+  taskWatchdog?: TaskWatchdog;
   collectionUploadPlan?: TaobaoCollectionUploadPlan;
   workerId?: string;
   executionStore?: TaobaoExecutionStore;
@@ -98,6 +100,7 @@ export type TaobaoDramaRuntimeOptions = {
   aiImageModel?: string;
   aiCoverGenerationRetryAttempts?: number;
   ensureBaiduNetdiskResource?: (request: {
+    onStableEpisodeFiles?: (files: Array<{ index: number; size: number; file: string; modifiedAtMs: number }>) => void;
     shareText: string;
     resourceName: string;
     localEpisodeVideoRoot: string;

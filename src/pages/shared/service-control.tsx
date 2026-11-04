@@ -163,7 +163,7 @@ export function ServiceControlButtonPage({
           ? stopLabel
           : startLabel;
   return (
-    <main className="service-workspace flex min-h-full flex-col">
+    <main className="service-workspace flex min-h-full min-w-0 flex-col">
       <WorkspaceActions label="服务操作">
         <Button
           aria-busy={loading}
@@ -200,7 +200,7 @@ export function ServiceControlButtonPage({
           </Popover>
         )}
       </WorkspaceActions>
-      <div className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-7 pt-10 pb-8 md:px-12 md:pt-14">
+      <div className="mx-auto flex w-full min-w-0 max-w-[920px] flex-1 flex-col px-7 pt-10 pb-8 md:px-12 md:pt-14">
         <div className="flex items-start gap-3">
           <span
             className={cn(
@@ -245,7 +245,7 @@ export function ServiceControlButtonPage({
           </div>
         </div>
         {beforeBrowserInstances}
-        <section aria-label="浏览器连接" className="mt-10">
+        <section aria-label="浏览器连接" className="mt-10 min-w-0">
           <div className="mb-5 flex items-center gap-3 text-[13px] font-medium">
             <Chrome className="size-4 text-muted-foreground" />
             <h2>浏览器实例</h2>

@@ -104,7 +104,7 @@ async function ensureResource(
       log(options, `[taobao-drama] 百度网盘资源仍在下载或校验，已等待 ${elapsedText}：${task.originalTitle}`);
     }, 30_000);
     try {
-      const resource = await options.ensureBaiduNetdiskResource(taobaoBaiduResourceRequest(task, options));
+      const resource = await options.ensureBaiduNetdiskResource({ ...taobaoBaiduResourceRequest(task, options), onStableEpisodeFiles: files => options.taskWatchdog?.progress(task.accountTaskId!, JSON.stringify(files.map(file => [file.index, file.size]))) });
       log(options, `[taobao-drama] 百度网盘资源准备完成：${task.originalTitle}`);
       return resource;
     } catch (error) {

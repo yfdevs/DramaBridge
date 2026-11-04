@@ -32,21 +32,15 @@ interface VideoAccountPageResponse {
 }
 
 export async function fetchVideoAccountsApi(): Promise<VideoAccount[]> {
-  const payload = await httpClient.post<VideoAccountPageResponse>(
-    "/dramaAiRpa/videoAccountConfig/page",
-    {
-      page: 1,
-      pageSize: 500,
-      status: "ON",
-    },
-  );
-
-  if (payload.code !== 0) {
-    throw new Error(`Failed to fetch video accounts: ${payload.msg || `code=${payload.code}`}`);
-  }
-  const records = payload.data?.data;
-  if (!Array.isArray(records)) {
-    throw new Error("Video account page response data.data is required.");
+  const records: VideoAccountRecord[] = [];
+  for (let page = 1; ; page++) {
+    const payload = await httpClient.post<VideoAccountPageResponse>(
+      "/dramaAiRpa/videoAccountConfig/page", { page, pageSize: 100, status: "ON" },
+    );
+    if (payload.code !== 0) throw new Error(`Failed to fetch video accounts: ${payload.msg || `code=${payload.code}`}`);
+    if (!Array.isArray(payload.data?.data)) throw new Error("Video account page response data.data is required.");
+    records.push(...payload.data.data);
+    if (payload.data.data.length < 100 || records.length >= payload.data.total) break;
   }
 
   return records.map((record, index) => {

@@ -4,6 +4,7 @@ import { registerAppRuntimeHandlers } from "./app-runtime";
 import { registerAppUpdaterHandlers } from "./app-updater";
 import { initializeAppEnvironment } from "./core/app-environment";
 import { registerGracefulShutdown } from "./core/graceful-shutdown";
+import { initializeSingleInstance } from "./core/single-instance";
 import { initializeSystemTray, showMainWindow } from "./core/system-tray";
 import {
   appIconPath,
@@ -24,66 +25,72 @@ import {
 } from "./platforms/registry";
 import { startRuntimeAssetCleanupMonitor } from "./runtime-asset-cleanup";
 
-const environment = initializeAppEnvironment(import.meta.url);
+// Acquire the lock before registering shutdown handlers or starting any service.
+// A duplicate launch only notifies the primary process and exits.
+if (initializeSingleInstance(app, showMainWindow)) startApplication();
 
-registerMainProcessLogging();
-logMain("info", "Application startup initiated", {
-  version: app.getVersion(),
-  packaged: app.isPackaged,
-  appRoot: environment.appRoot,
-  mainDist: environment.mainDist,
-  rendererDist: environment.rendererDist,
-  logDir: getMainLogDir(),
-});
+function startApplication() {
+  const environment = initializeAppEnvironment(import.meta.url);
 
-initializeMainWindowIntegration();
-registerGracefulShutdown(async () => {
-  stopLocalOwnershipOcr();
-  await stopLocalApi();
-  await stopAllPlatformServices();
-});
+  registerMainProcessLogging();
+  logMain("info", "Application startup initiated", {
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    appRoot: environment.appRoot,
+    mainDist: environment.mainDist,
+    rendererDist: environment.rendererDist,
+    logDir: getMainLogDir(),
+  });
 
-app.on("window-all-closed", () => {
-  logMain("info", "All windows closed");
-  if (process.platform !== "darwin") app.quit();
-});
+  initializeMainWindowIntegration();
+  registerGracefulShutdown(async () => {
+    stopLocalOwnershipOcr();
+    await stopLocalApi();
+    await stopAllPlatformServices();
+  });
 
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createMainWindow(environment);
-  else showMainWindow();
-});
+  app.on("window-all-closed", () => {
+    logMain("info", "All windows closed");
+    if (process.platform !== "darwin") app.quit();
+  });
 
-void app.whenReady().then(() => {
-  try {
-    logMain("info", "Application ready");
-    Menu.setApplicationMenu(null);
-    initializeSystemTray(appIconPath(environment));
-    initializeTrpcIpc();
-    registerAppRuntimeHandlers();
-    registerGlobalAppConfigHandlers({
-      getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,
-      configureExternalApi: configureLocalApi,
-      getExternalApiStatus: getLocalApiStatus,
-    });
-    registerAllPlatformHandlers();
-    void initializeLocalApi();
-    configurePlatformLogViewer(getPlatformLogDir);
-    startRuntimeAssetCleanupMonitor();
-    registerAppUpdaterHandlers({
-      getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,
-      stopAllPlatformServices,
-    });
-    ensureBaiduNetdiskCdpReadyInBackground();
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow(environment);
+    else showMainWindow();
+  });
 
-    if (process.platform === "darwin" && environment.devServerUrl) {
-      app.dock?.setIcon(appIconPath(environment));
+  void app.whenReady().then(() => {
+    try {
+      logMain("info", "Application ready");
+      Menu.setApplicationMenu(null);
+      initializeSystemTray(appIconPath(environment));
+      initializeTrpcIpc();
+      registerAppRuntimeHandlers();
+      registerGlobalAppConfigHandlers({
+        getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,
+        configureExternalApi: configureLocalApi,
+        getExternalApiStatus: getLocalApiStatus,
+      });
+      registerAllPlatformHandlers();
+      void initializeLocalApi();
+      configurePlatformLogViewer(getPlatformLogDir);
+      startRuntimeAssetCleanupMonitor();
+      registerAppUpdaterHandlers({
+        getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,
+        stopAllPlatformServices,
+      });
+      ensureBaiduNetdiskCdpReadyInBackground();
+
+      if (process.platform === "darwin" && environment.devServerUrl) {
+        app.dock?.setIcon(appIconPath(environment));
+      }
+      createMainWindow(environment);
+    } catch (error) {
+      logMain("error", "Application startup failed", error);
+      throw error;
     }
-    createMainWindow(environment);
-  } catch (error) {
-    logMain("error", "Application startup failed", error);
-    throw error;
-  }
-});
+  });
+}
 
 function ensureBaiduNetdiskCdpReadyInBackground() {
   void (async () => {

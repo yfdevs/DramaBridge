@@ -2106,6 +2106,15 @@ export async function addDouyinRole(page: Page, role: DouyinDramaRole) {
   }
 }
 
+// The basic-information page can immediately announce its empty contract field.
+// Defer that exact warning while filling this step; restore validation before Next.
+const deferredContractPages = new WeakSet<Page>();
+
+export function deferDouyinContractValidation(page: Page, deferred: boolean) {
+  if (deferred) deferredContractPages.add(page);
+  else deferredContractPages.delete(page);
+}
+
 export async function assertNoDouyinFormError(page: Page, action: string) {
   const errors = page.locator([
     ".arco-message-error:visible",
@@ -2118,12 +2127,16 @@ export async function assertNoDouyinFormError(page: Page, action: string) {
   // contains a persistent informational Arco alert whose copy says settings
   // are "不可修改"; treating that advisory text as validation blocks the
   // workflow immediately after the video step has already succeeded.
+  const enteringUnfilledBasicForm = deferredContractPages.has(page)
+    && await page.locator("#book_name_input").isVisible().catch(() => false)
+    && !await page.locator("#has_associate_clue").isVisible().catch(() => false);
   const messages = [
     ...await capturedDouyinPageMessageTexts(page),
     ...await errors.allTextContents(),
   ]
     .map((text) => text.replace(/\s+/g, " ").trim())
     .filter(Boolean)
+    .filter((text) => !(enteringUnfilledBasicForm && /^请完成合同绑定[。！!]?$/u.test(text)))
     .filter((text) => !isTransientDouyinUploadMessage(text));
   if (messages.length > 0) {
     throw new Error(`DOUYIN_DRAMA_FORM_ERROR: ${action}: ${[...new Set(messages)].join("；")}`);
@@ -2134,7 +2147,7 @@ export function isTransientDouyinUploadMessage(message: string) {
   return /资源上传中请等待|上传中.*请等待|正在上传/.test(message.replace(/\s+/g, " ").trim());
 }
 
-export async function clickDouyinNext(page: Page) {
+export async function clickDouyinNext(page: Page, options: { enteringBasicInformation?: boolean } = {}) {
   const button = page
     .getByRole("button", { name: "下一步", exact: true })
     .filter({ visible: true })
@@ -2142,5 +2155,11 @@ export async function clickDouyinNext(page: Page) {
   await button.waitFor({ state: "visible", timeout: 10_000 });
   await button.click();
   await page.waitForTimeout(800);
+  const basicFormReached = options.enteringBasicInformation
+    ? await page.locator("#book_name_input").waitFor({ state: "visible", timeout: 5_000 }).then(() => true, () => false)
+    : false;
+  if (basicFormReached && !await page.locator("#has_associate_clue").isVisible().catch(() => false)) {
+    deferDouyinContractValidation(page, true);
+  }
   await assertNoDouyinFormError(page, "下一步");
 }

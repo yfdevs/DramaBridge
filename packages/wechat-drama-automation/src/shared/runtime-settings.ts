@@ -1,5 +1,6 @@
 export interface WechatVideoRuntimeSettings {
   apiBaseUrl: string;
+  selectedVideoAccountIds: string;
   videoAccountContractSubjects: string;
   localEpisodeVideoRoot: string;
   closeFailedTaskPages: string;
@@ -31,6 +32,7 @@ export interface WechatVideoRuntimeSettings {
 
 export const defaultWechatVideoRuntimeSettings: WechatVideoRuntimeSettings = {
   apiBaseUrl: "http://180.184.76.232:19090",
+  selectedVideoAccountIds: "",
   videoAccountContractSubjects: "MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU",
   localEpisodeVideoRoot: "",
   closeFailedTaskPages: "false",

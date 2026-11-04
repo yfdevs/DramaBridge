@@ -26,6 +26,7 @@ import { prepareShortDouyinEpisodeVideos } from "./episode-speed.js";
 import {
   addDouyinRole,
   assertNoDouyinFormError,
+  deferDouyinContractValidation,
   clickDouyinNext,
   douyinFormItem,
   fillDouyinSeriesDialog,
@@ -186,9 +187,13 @@ export async function enterDouyinBasicInformation(
       await bindContract();
       await page.waitForTimeout(300);
     }
-    await runAction("关联线索点击下一步", () => clickDouyinNext(page));
+    if (!await page.locator("#book_name_input").isVisible().catch(() => false)
+      || await page.locator("#has_associate_clue").isVisible().catch(() => false)) {
+      await runAction("关联线索点击下一步", () => clickDouyinNext(page, { enteringBasicInformation: true }));
+    }
   }
   await page.locator("#book_name_input").waitFor({ state: "visible", timeout: 30_000 });
+  deferDouyinContractValidation(page, true);
 }
 
 async function fillBasicInformation(
@@ -199,7 +204,7 @@ async function fillBasicInformation(
   recorder: DouyinDramaDropdownRecorder,
 ) {
   const data = task.playlet;
-  const sanitizedSummary = await optimizeDouyinSummary(data.summary, options.aiClientFactory?.());
+  const sanitizedSummary = await optimizeDouyinSummary(data.summary, options.aiClientFactory);
   data.summary = sanitizedSummary;
   await runAction(`填写作品名称=${logValue(data.title)}`, () =>
     fillInputById(page, "book_name_input", data.title));
@@ -305,6 +310,7 @@ async function fillBasicInformation(
       120_000,
       "engineering_file_screenshots_input",
     ));
+  deferDouyinContractValidation(page, false);
   await runAction("基本信息点击下一步", () => clickDouyinNext(page));
 }
 

@@ -377,7 +377,7 @@ export function AppTitlebarMemory() {
           render={
             <button
               type="button"
-              className={titlebarIconButtonClass}
+              className={`${titlebarIconButtonClass} w-auto gap-1.5 px-2`}
               onClick={openBaiduNetdiskDialog}
             />
           }
@@ -386,6 +386,7 @@ export function AppTitlebarMemory() {
             className={`size-3.5 shrink-0 ${baiduNetdiskIconClass(baiduStatus, baiduError)}`}
             aria-hidden="true"
           />
+          <span>网盘</span>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end" sideOffset={8} className="z-[100000]">
           百度网盘：{baiduSummary}

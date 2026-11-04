@@ -76,7 +76,7 @@ function AppContent() {
                 </div>
               </div>
             </WorkspaceToolbarProvider>
-            <Toaster position="bottom-right" closeButton={true} richColors />
+            <Toaster position="bottom-right" closeButton={true} />
           </SidebarProvider>
         </AppRuntimeProvider>
       </BaiduNetdiskDialogProvider>

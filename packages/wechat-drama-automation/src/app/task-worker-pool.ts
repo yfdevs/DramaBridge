@@ -1,3 +1,4 @@
+import { isStaleTaskError, type TaskWatchdog } from "@dramabridge/automation-logging";
 import {
   findLocalEpisodeVideos,
   findOwnershipProjectProofFiles,
@@ -101,6 +102,7 @@ export class TaskWorkerPool {
     private readonly ownershipAiClient?: NonNullable<Parameters<typeof findOwnershipProjectProofFiles>[0]["aiClient"]>,
     private readonly cleanupBaiduNetdiskResourceAfterTaskSuccess?: CleanupBaiduNetdiskResource,
     private readonly classifyOwnershipLocally?: Parameters<typeof findOwnershipProjectProofFiles>[0]["classifyLocally"],
+    private readonly taskWatchdog?: TaskWatchdog,
   ) {
     const settings = getWechatVideoRuntimeSettings();
     this.materialPreparationQueue = new PQueue({
@@ -324,6 +326,21 @@ export class TaskWorkerPool {
   }
 
   private enqueueClaimedTask(worker: AccountWorkerControl, claimedAccountTask: ClaimedTask) {
+    const abort = new AbortController();
+    const signal = AbortSignal.any([worker.abortController.signal, abort.signal]);
+    const execute = () => runWithLogContext({ accountTaskId: claimedAccountTask.accountTaskId, videoAccountId: worker.videoAccount.id }, () => this.enqueueClaimedTaskWork(worker, claimedAccountTask, signal));
+    const work = this.taskWatchdog ? this.taskWatchdog.run({
+      taskId: claimedAccountTask.accountTaskId, accountId: worker.videoAccount.id,
+      workerId: claimedAccountTask.workerId, attemptCount: claimedAccountTask.attemptCount,
+      apiBaseUrl: getWechatVideoRuntimeSettings().apiBaseUrl,
+    }, execute, async () => { abort.abort(new Error("STALE_TASK_NO_PROGRESS")); this.taskService.cancelClaimedTask(claimedAccountTask.accountTaskId); }) : execute();
+    return work.catch(async error => {
+      if (isStaleTaskError(error)) return;
+      await this.handleClaimedTaskFailure(worker, claimedAccountTask, error);
+    });
+  }
+
+  private enqueueClaimedTaskWork(worker: AccountWorkerControl, claimedAccountTask: ClaimedTask, signal: AbortSignal) {
     const videoAccount = worker.videoAccount;
     const videoAccountId = videoAccount.id;
     let baiduNetdiskResource: unknown;
@@ -334,7 +351,7 @@ export class TaskWorkerPool {
           videoAccount,
           claimedAccountTask,
           playletConfig,
-          worker.abortController.signal,
+          signal,
         );
         await validateLocalEpisodeVideos(playletConfig);
         await prepareWechatPosterMaterials(playletConfig);
@@ -375,7 +392,7 @@ export class TaskWorkerPool {
       },
       {
         id: `materials:${claimedAccountTask.accountTaskId}`,
-        signal: worker.abortController.signal,
+        signal: signal,
       },
     ).then(async (playletConfig): Promise<PreparedClaimedTask> => {
       const settings = getWechatVideoRuntimeSettings();
@@ -391,7 +408,7 @@ export class TaskWorkerPool {
         cacheRootDir,
         policy,
         replaceSource: true,
-        signal: worker.abortController.signal,
+        signal: signal,
         onLog: (message) => logger.info(message, {
           accountTaskId: claimedAccountTask.accountTaskId,
           videoAccountId,
@@ -409,21 +426,20 @@ export class TaskWorkerPool {
     const lifecycle = this.getPublishQueue(videoAccountId).add(
       async () => {
         const prepared = await preparation;
-        await this.publishPreparedTask(worker, claimedAccountTask, prepared);
+        this.taskWatchdog?.assertActive(claimedAccountTask.accountTaskId, claimedAccountTask.workerId, claimedAccountTask.attemptCount);
+        await this.publishPreparedTask(worker, claimedAccountTask, prepared, signal);
       },
       {
         id: `publish:${claimedAccountTask.accountTaskId}`,
-        signal: worker.abortController.signal,
+        signal: signal,
       },
     ) as Promise<void>;
 
-    return lifecycle.catch(async (error) => {
-      await this.handleClaimedTaskFailure(worker, claimedAccountTask, error);
-    });
+    return lifecycle;
   }
 
-  private async reserveChannelForPublish(worker: AccountWorkerControl) {
-    while (!this.stopped && !worker.stopped && !worker.abortController.signal.aborted) {
+  private async reserveChannelForPublish(worker: AccountWorkerControl, signal = worker.abortController.signal) {
+    while (!this.stopped && !worker.stopped && !signal.aborted) {
       const reservation = this.taskService.tryReserveChannel(worker.videoAccount.id, "worker-publish");
       if (reservation) return reservation;
       await sleep(1000);
@@ -437,10 +453,12 @@ export class TaskWorkerPool {
     worker: AccountWorkerControl,
     claimedAccountTask: ClaimedTask,
     prepared: PreparedClaimedTask,
+    signal: AbortSignal,
   ) {
     const videoAccount = worker.videoAccount;
-    const reservation = await this.reserveChannelForPublish(worker);
+    const reservation = await this.reserveChannelForPublish(worker, signal);
     try {
+      this.taskWatchdog?.assertActive(claimedAccountTask.accountTaskId, claimedAccountTask.workerId, claimedAccountTask.attemptCount);
       const { taskRecord, taskFinished } = await this.taskService.createTaskFromClaim(
         videoAccount.id,
         claimedAccountTask,
@@ -455,7 +473,10 @@ export class TaskWorkerPool {
         originalTitle: claimedAccountTask.originalTitle,
       });
       await taskFinished;
+      this.taskWatchdog?.assertActive(claimedAccountTask.accountTaskId, claimedAccountTask.workerId, claimedAccountTask.attemptCount);
       await reportClaimedTaskSuccessApi({
+        workerId: claimedAccountTask.workerId,
+        attemptCount: claimedAccountTask.attemptCount,
         accountTaskId: claimedAccountTask.accountTaskId,
       });
       await this.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(prepared.baiduNetdiskResource)
@@ -490,6 +511,8 @@ export class TaskWorkerPool {
     }
 
     await reportClaimedTaskErrorApi({
+      workerId: claimedAccountTask.workerId,
+      attemptCount: claimedAccountTask.attemptCount,
       accountTaskId: claimedAccountTask.accountTaskId,
       dramaId: claimedAccountTask.dramaId,
       failStage: inferRpaFailStage(errorInfo.type, errorInfo.failStage),
@@ -553,6 +576,7 @@ export class TaskWorkerPool {
             summary: playletConfig.playlet.summary,
           },
           onStableEpisodeFiles: (files) => {
+            this.taskWatchdog?.progress(claimedAccountTask.accountTaskId, JSON.stringify(files.map(file => [file.index, file.size])));
             for (const file of files) {
               if (file.size <= videoPolicy.maxFileBytes) continue;
               logger.info("download scan queued oversized episode video", {

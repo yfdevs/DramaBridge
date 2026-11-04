@@ -1,3 +1,4 @@
+import type { TaskSweepResult } from "@dramabridge/automation-logging"
 import type { IpcRendererEvent } from "electron"
 
 export type WechatVideoAccountStatus = {
@@ -21,6 +22,7 @@ export type WechatVideoServiceStatus = {
 
 export type WechatVideoConfig = {
   apiBaseUrl: string
+  selectedVideoAccountIds: string
   videoAccountContractSubjects: string
   localEpisodeVideoRoot: string
   closeFailedTaskPages: string
@@ -141,6 +143,13 @@ function formatContractSubjectList(value: string) {
 }
 
 export const wechatVideoService = {
+  cleanupTasks: () => invokeWechatVideo<TaskSweepResult>("wechat-drama:tasks:cleanup"),
+  listAccounts() {
+    return invokeWechatVideo<{ accounts: Array<{ id: string; name: string; status: string }>; selectedAccountIds: string[] }>("wechat-drama:accounts:list")
+  },
+  selectAccounts(ids: string[]) {
+    return invokeWechatVideo<{ selectedAccountIds: string[] }>("wechat-drama:accounts:select", ids)
+  },
   getConfig() {
     return invokeWechatVideo<WechatVideoConfigResult>("wechat-drama:config:get")
   },

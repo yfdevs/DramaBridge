@@ -1,3 +1,4 @@
+import type { TaskSweepResult } from "@dramabridge/automation-logging"
 export type TaobaoDramaLoginState = "login-required" | "verification-required" | "logged-in" | "unknown"
 export type TaobaoDramaAccount = {
   accountId: string; accountName: string; loginAccount?: string | null; status: string
@@ -45,6 +46,7 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   }
 }
 export const taobaoDramaService = {
+  cleanupTasks: () => invoke<TaskSweepResult>("taobao-drama:tasks:cleanup"),
   getConfig: () => invoke<TaobaoDramaConfigResult>("taobao-drama:config:get"),
   saveConfig: (config: TaobaoDramaConfig) => invoke<TaobaoDramaConfigResult>("taobao-drama:config:save", config),
   testBrowserPath: (executablePath: string) => invoke<{ ok: boolean; message: string }>("taobao-drama:config:test-browser-path", executablePath),

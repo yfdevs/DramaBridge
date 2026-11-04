@@ -1,3 +1,4 @@
+import { isStaleTaskError } from "@dramabridge/automation-logging";
 import {
   executeKuaishouClaimedTask,
   flushPendingKuaishouReports,
@@ -95,6 +96,7 @@ async function ensureBaiduNetdiskResourceReady(
           `episodeCount=${task.episodeCount} attempt=${attempt}/${maxAttempts}`,
       );
       const resource = await options.ensureBaiduNetdiskResource({
+        onStableEpisodeFiles: files => { if (accountTaskId) options.taskWatchdog?.progress(accountTaskId, JSON.stringify(files.map(file => [file.index, file.size]))); },
         shareText,
         resourceName,
         localEpisodeVideoRoot,
@@ -346,6 +348,7 @@ export async function startKuaishouDramaRuntime(
               {
                 ...options,
                 onSubmitCheckpoint: (checkpoint) => {
+                  if (resolvedTask.claimedTask) options.taskWatchdog?.assertActive(resolvedTask.claimedTask.accountTaskId, resolvedTask.claimedTask.workerId, resolvedTask.claimedTask.attemptCount);
                   checkpointSaved(checkpoint);
                   options.onSubmitCheckpoint?.(checkpoint);
                 },
@@ -373,7 +376,14 @@ export async function startKuaishouDramaRuntime(
             await executeKuaishouClaimedTask({
               store: options.executionStore!,
               task: resolvedTask.claimedTask,
-              publish,
+              publish: (checkpoint) => {
+                const claimed = resolvedTask.claimedTask!;
+                options.watchedTaskId = claimed.accountTaskId;
+                return options.taskWatchdog ? options.taskWatchdog.run({
+                  taskId: claimed.accountTaskId, accountId: options.kuaishouAccountId!, workerId: claimed.workerId,
+                  attemptCount: claimed.attemptCount, apiBaseUrl: options.apiConfig!.baseUrl,
+                }, () => publish(checkpoint), async () => { await taskPage?.close().catch(() => undefined); }) : publish(checkpoint);
+              },
               // Centralize diagnostics, daily-limit handling and failure reporting in the outer catch.
               failure: async (error) => {
                 throw error;
@@ -421,6 +431,10 @@ export async function startKuaishouDramaRuntime(
           );
         }
       } catch (error) {
+        if (isStaleTaskError(error)) {
+          log(options, "[kuaishou-drama] 连续4小时无进展的任务已交由定时巡检回写失败");
+          continue;
+        }
         const message = formatAutomationErrorReport(error, {
           fallbackMessage: "快手任务提交失败，未获取到具体错误原因",
           maxLength: 10_000,

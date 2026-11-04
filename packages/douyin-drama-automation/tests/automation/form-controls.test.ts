@@ -9,6 +9,8 @@ import { chromium } from "playwright";
 import sharp from "sharp";
 import {
   assertNoDouyinFormError,
+  clickDouyinNext,
+  deferDouyinContractValidation,
   DOUYIN_DROPDOWN_LOAD_TIMEOUT_MS,
   DOUYIN_DRAMA_VIDEO_TOPICS,
   fillDouyinEpisodeBatchEdit,
@@ -1722,5 +1724,62 @@ test("binds a delayed contract on the clue step before clicking next", async () 
     assert.equal(bound, true);
     assert.equal(await page.evaluate(() => (window as unknown as { earlyNext: boolean }).earlyNext), false);
     assert.equal(await page.locator('#book_name_input').isVisible(), true);
+  } finally { await browser.close(); }
+});
+
+
+test("does not attribute the new basic form's unbound-contract warning to the clue transition", async () => {
+  const browser = await launchTestBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`
+      <div id="clue" class="arco-form-item"><label>是否关联线索</label>
+        <div id="has_associate_clue"><label><input name="clue" type="radio"><span>否</span></label></div>
+        <button>下一步</button>
+      </div>
+      <div id="basic" style="display:none"><input id="book_name_input"><input id="contract"><button>下一步</button></div>
+      <script>
+        document.querySelector('#clue button').onclick = () => {
+          document.querySelector('#clue').style.display = 'none';
+          document.querySelector('#basic').style.display = '';
+          const message = document.createElement('div'); message.className = 'arco-message-error';
+          message.setAttribute('role', 'alert'); message.textContent = '请完成合同绑定'; document.body.append(message);
+        };
+      </script>`);
+    await enterDouyinBasicInformation(page, async (name, action) => {
+      await installDouyinPageMessageCapture(page);
+      const result = await action();
+      await assertNoDouyinFormError(page, name);
+      return result;
+    });
+    assert.equal(await page.locator('#book_name_input').isVisible(), true);
+    await page.locator('#book_name_input').fill('测试作品');
+    await assertNoDouyinFormError(page, '填写作品名称');
+    deferDouyinContractValidation(page, false);
+    await assert.rejects(assertNoDouyinFormError(page, '基本信息提交前校验'), /请完成合同绑定/);
+    await page.locator('#contract').fill('已绑定合同');
+    await page.locator('.arco-message-error').evaluate(element => element.remove());
+    await assertNoDouyinFormError(page, '合同绑定完成');
+  } finally { await browser.close(); }
+});
+
+test("does not suppress a contract error when the clue step really failed to advance", async () => {
+  const browser = await launchTestBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<div id="has_associate_clue">关联线索</div><input id="book_name_input" style="display:none">
+      <button onclick="document.querySelector('#error').style.display=''">下一步</button>
+      <div id="error" class="arco-message-error" style="display:none">请完成合同绑定</div>`);
+    await assert.rejects(clickDouyinNext(page, { enteringBasicInformation: true }), /请完成合同绑定/);
+  } finally { await browser.close(); }
+});
+
+test("other validation errors remain fatal while entering basic information", async () => {
+  const browser = await launchTestBrowser();
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<input id="book_name_input"><div class="arco-message-error">请先完成账号认证</div>');
+    deferDouyinContractValidation(page, true);
+    await assert.rejects(assertNoDouyinFormError(page, '进入基本信息'), /请先完成账号认证/);
   } finally { await browser.close(); }
 });

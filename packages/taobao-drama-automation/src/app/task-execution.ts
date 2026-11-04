@@ -1,3 +1,4 @@
+import { isStaleTaskError } from "@dramabridge/automation-logging";
 import { formatAutomationErrorReport } from "@dramabridge/automation-logging";
 import { isTaobaoReportRetryable, reportTaobaoAccountTaskApi } from "../api/task.js";
 import type { TaobaoDramaHttpClient } from "../api/http-client.js";
@@ -50,6 +51,7 @@ export async function executeTaobaoClaimedTask<T>(options: {
       record = updateTaobaoExecution(store, record, { checkpoints: [...record.checkpoints, checkpoint] });
     });
   } catch (error) {
+    if (isStaleTaskError(error)) return { record: store.get(task.executionId)! };
     const { stage, message } = await options.failure(error);
     if (needsTaobaoSubmissionReview(record.checkpoints)) {
       return { record: updateTaobaoExecution(store, record, { phase: "review-required",

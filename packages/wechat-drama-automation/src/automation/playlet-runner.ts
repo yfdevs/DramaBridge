@@ -102,9 +102,13 @@ async function runPlayletTaskInContext(runOptions: TaskRunOptions, managedBrowse
   const page = ownsBrowserContext
     ? (browserContext.pages()[0] ?? await browserContext.newPage())
     : await openManagedTaskPage(browserContext);
+  const cancel = () => { void page.close({ runBeforeUnload: false }).catch(() => undefined); };
+  runOptions.signal?.addEventListener("abort", cancel, { once: true });
+  if (runOptions.signal?.aborted) cancel();
   let failed = false;
 
   try {
+    runOptions.signal?.throwIfAborted();
     try {
       await page.goto(playletUrl, { waitUntil: "domcontentloaded" });
       const loggedIn = await waitForLoginIfNeeded(page);
@@ -147,6 +151,7 @@ async function runPlayletTaskInContext(runOptions: TaskRunOptions, managedBrowse
     }
     publishLogger.info("开始检查并提交");
     try {
+      runOptions.signal?.throwIfAborted();
       await confirmAndMaybeSubmitStep(page);
     } catch (error) {
       throw attachFailStage(error, "SUBMIT");
@@ -175,6 +180,7 @@ async function runPlayletTaskInContext(runOptions: TaskRunOptions, managedBrowse
     });
     throw error;
   } finally {
+    runOptions.signal?.removeEventListener("abort", cancel);
     if (ownsBrowserContext) {
       await saveStorageState(browserContext, standaloneStateFile).catch(() => undefined);
       if (playletConfig) {

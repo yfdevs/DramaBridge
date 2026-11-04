@@ -25,6 +25,9 @@ export interface LogContext {
 export type LogFieldValue = unknown;
 export type LogFields = AutomationLogFields;
 
+let taskProgressObserver: ((id: number, signature: string) => void) | undefined;
+export function configureWechatTaskProgress(observer?: (id: number, signature: string) => void) { taskProgressObserver = observer; }
+
 const logContextStorage = new AsyncLocalStorage<LogContext>();
 
 function logFilePath() {
@@ -49,6 +52,12 @@ function loggerFor(scope: string) {
     context: contextFields(),
     logFilePath: logFilePath(),
     retentionDays: Math.max(1, integerSetting(settings.logRetentionDays, 3)),
+    onEntry: entry => {
+      const taskId = Number(entry.details?.accountTaskId ?? entry.context?.accountTaskId);
+      if (taskId && entry.level === "info" && !/等待|仍在|暂无|探测|heartbeat|waiting/i.test(entry.message)) {
+        taskProgressObserver?.(taskId, JSON.stringify([entry.scope, entry.message, entry.details]));
+      }
+    },
   });
 }
 

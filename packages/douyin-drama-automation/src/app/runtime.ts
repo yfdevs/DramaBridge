@@ -59,6 +59,7 @@ function errorMessage(error: unknown) {
 
 export function classifyDouyinDramaFailStage(error: unknown): DouyinDramaTaskFailStage {
   const message = errorMessage(error);
+  if (/DOUYIN_DRAMA_FORM_ERROR/.test(message)) return "FILL_FORM";
   if (/LOGIN/i.test(message)) return "LOGIN";
   if (/NETDISK|DOWNLOAD|网盘|下载/i.test(message)) return "UPLOAD_FILE";
   if (/FILE|UPLOAD|VIDEO|COVER|POSTER|MATERIAL|IMAGE|文件|上传|视频|封面|海报|头像|图片|素材|合同|承诺/i.test(message)) {

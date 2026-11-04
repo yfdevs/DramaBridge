@@ -1,10 +1,13 @@
 import { optimizeTextLength, type DramaAiClient } from "@dramabridge/ai";
 import { sanitizeDouyinDescriptionText } from "../automation/form-controls.js";
 
-export async function optimizeDouyinSummary(text: string, client?: { generateText: (options: Parameters<DramaAiClient["generateText"]>[0]) => Promise<{ text: string }> }) {
+type SummaryAiClient = { generateText: (options: Parameters<DramaAiClient["generateText"]>[0]) => Promise<{ text: string }> };
+
+export async function optimizeDouyinSummary(text: string, sourceClient?: SummaryAiClient | (() => SummaryAiClient)) {
   const clean = (value: string) => sanitizeDouyinDescriptionText(value, Number.MAX_SAFE_INTEGER);
   const source = clean(text);
   if (source.length >= 101 && source.length <= 200) return source;
+  const client = typeof sourceClient === "function" ? sourceClient() : sourceClient;
   if (!client) throw new Error("DOUYIN_DRAMA_AI_CLIENT_REQUIRED: 简介需 AI 优化到101-200字符，请配置全局 AI");
   return optimizeTextLength({
     client: {

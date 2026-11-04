@@ -1296,3 +1296,4 @@ export async function cleanupAutomationLogFiles(configuredPath: string, retentio
     }),
   );
 }
+export * from "./task-watchdog.js";

@@ -1,7 +1,7 @@
+import { getWechatVideoRuntimeSettings } from "../shared/runtime-settings.js";
 import { fetchVideoAccountsApi, type VideoAccount } from "../api/video-accounts.js";
 import { BrowserContextManager } from "../automation/browser-context-manager.js";
 import {
-  filterVideoAccountsByContractSubjects,
   type ServiceConfig,
 } from "../shared/config.js";
 import { createLogger } from "../shared/logger.js";
@@ -44,10 +44,8 @@ export class VideoAccountSyncService {
 
     try {
       const allVideoAccounts = await fetchVideoAccountsApi();
-      const videoAccounts = filterVideoAccountsByContractSubjects(
-        allVideoAccounts,
-        this.serviceConfig.videoAccountContractSubjects,
-      );
+      const selectedIds = new Set(getWechatVideoRuntimeSettings().selectedVideoAccountIds.split(",").map(id => id.trim()).filter(Boolean));
+      const videoAccounts = allVideoAccounts.filter(account => selectedIds.has(account.id));
       this.validateVideoAccounts(videoAccounts);
       const changes = this.browserContexts.syncVideoAccounts(videoAccounts);
       this.taskWorkerPool.syncVideoAccounts(videoAccounts);

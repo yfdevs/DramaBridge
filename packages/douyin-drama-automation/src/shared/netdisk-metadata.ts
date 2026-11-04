@@ -407,7 +407,7 @@ export async function enrichDouyinTaskFromNetdisk(
   options: DouyinDramaRuntimeOptions,
 ): Promise<ClaimedDouyinDramaTask> {
   if (task.playlet.summary.trim() && options.aiClientFactory) {
-    task.playlet.summary = await optimizeDouyinSummary(task.playlet.summary, options.aiClientFactory());
+    task.playlet.summary = await optimizeDouyinSummary(task.playlet.summary, options.aiClientFactory);
   }
   if (!douyinTaskNeedsNetdiskMetadata(task)) return task;
   if (task.playlet.summary.trim().length >= 101 && task.playlet.roles.length >= 2

@@ -1,3 +1,5 @@
+import { staleTaskMonitor } from "../shared/stale-task-monitor"
+import type { WechatPendingReport } from "@dramabridge/wechat-drama-automation"
 import { app } from 'electron'
 import { emitIpcEvent, trpcIpc as ipcMain } from '../../ipc'
 import Store from 'electron-store'
@@ -55,6 +57,7 @@ export type WechatVideoServiceStatus = {
 
 export type WechatVideoConfig = {
   apiBaseUrl: string
+  selectedVideoAccountIds: string
   videoAccountContractSubjects: string
   localEpisodeVideoRoot: string
   closeFailedTaskPages: string
@@ -91,11 +94,13 @@ type WechatVideoConfigResult = {
 }
 
 type WechatVideoStore = {
+  pendingTaskReports?: WechatPendingReport[]
   config: Partial<WechatVideoConfig> & Record<string, string | undefined>
 }
 
 const defaultWechatVideoConfig: WechatVideoConfig = {
   apiBaseUrl: 'http://180.184.76.232:19090',
+  selectedVideoAccountIds: '',
   videoAccountContractSubjects: 'MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU,YOUDIANNIU,ZHENCUIYIHAO,RUIXIAODOU,YUANMAN,YUNQIMANYING,MENGDONG,CHONGBAO,DOURAN',
   localEpisodeVideoRoot: '',
   closeFailedTaskPages: 'false',
@@ -297,6 +302,7 @@ function normalizeConfig(
 
   return {
     apiBaseUrl: config.apiBaseUrl ?? defaultWechatVideoConfig.apiBaseUrl,
+    selectedVideoAccountIds: config.selectedVideoAccountIds ?? '',
     videoAccountContractSubjects: contractSubjectOptions
       .map((option) => option.value)
       .filter((subject) => selectedContractSubjects.has(subject))
@@ -517,12 +523,34 @@ function assertWechatVideoConfigReady(config = readConfig()) {
   }
 }
 
+async function listSelectableWechatAccounts() {
+  const config = readConfig();
+  const accounts: Array<{ id: string; name: string; status: string }> = [];
+  for (let page = 1; ; page++) {
+    const response = await fetch(`${config.apiBaseUrl.replace(/\/$/, '')}/dramaAiRpa/videoAccountConfig/page`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ page, pageSize: 100 }), signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) throw new Error(`视频号账号查询失败：HTTP ${response.status}`);
+    const result = await response.json() as { code: number; msg?: string; data?: { total?: number; data?: Array<{ videoAccountId: string; videoAccountName: string; status: string }> } };
+    if (result.code !== 0 || !Array.isArray(result.data?.data)) throw new Error(result.msg || '视频号账号查询失败');
+    accounts.push(...result.data.data.map(item => ({ id: item.videoAccountId, name: item.videoAccountName, status: item.status })));
+    if (result.data.data.length < 100 || accounts.length >= (result.data.total ?? Infinity)) break;
+  }
+  return { accounts, selectedAccountIds: config.selectedVideoAccountIds.split(',').filter(Boolean) };
+}
+
 async function startRuntime() {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath()
 
   const { startWechatVideoRuntime } = await import('@dramabridge/wechat-drama-automation')
   return startWechatVideoRuntime({
     settings: readConfig(),
+    taskWatchdog: staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl }),
+    reportStore: {
+      load: () => getStore().get('pendingTaskReports') ?? [],
+      save: (reports) => getStore().set('pendingTaskReports', reports),
+    },
     ownershipAiClient: createConfiguredAiClient(),
     classifyOwnershipLocally: classifyConfiguredOwnershipLocally,
     ensureBaiduNetdiskResource: (request) => ensureBaiduNetdiskShareDownloaded({
@@ -534,6 +562,8 @@ async function startRuntime() {
 }
 
 export function registerWechatVideoPlatformHandlers() {
+  ipcMain.handle("wechat-drama:tasks:cleanup", () => staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl }).sweep());
+  staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl });
   registerTaskAnalyticsHandler({
     platform: 'wechat-drama',
     apiBaseUrl: () => readConfig().apiBaseUrl,
@@ -553,7 +583,7 @@ export function registerWechatVideoPlatformHandlers() {
 
   ipcMain.handle('wechat-drama:config:save', async (_event, config: WechatVideoConfig) => {
     assertOwnershipProofCounts(config)
-    const nextConfig = normalizeConfig(config)
+    const nextConfig = normalizeConfig({ ...config, selectedVideoAccountIds: readConfig().selectedVideoAccountIds })
     writeConfig(nextConfig)
     registerWechatRuntimeAssetCleanup(readConfig())
     const result = {
@@ -584,6 +614,18 @@ export function registerWechatVideoPlatformHandlers() {
   })
 
   ipcMain.handle('wechat-drama:service:status', () => status())
+
+  ipcMain.handle('wechat-drama:accounts:list', () => listSelectableWechatAccounts())
+  ipcMain.handle('wechat-drama:accounts:select', async (_event, ids: string[]) => {
+    if (runtimeController.running || runtimeController.startingPromise) throw new Error('请先停止服务再调整账号')
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('账号选择无效')
+    const { accounts } = await listSelectableWechatAccounts()
+    const available = new Set(accounts.filter(account => account.status === 'ON').map(account => account.id))
+    if (ids.some(id => !available.has(id))) throw new Error('所选账号已停用或不存在，请刷新列表')
+    const config = normalizeConfig({ ...readConfig(), selectedVideoAccountIds: [...new Set(ids)].join(',') })
+    getStore().set('config', config)
+    return { selectedAccountIds: ids }
+  })
 
   ipcMain.handle('wechat-drama:service:start', async () => {
     assertGlobalDirectoriesConfigured()

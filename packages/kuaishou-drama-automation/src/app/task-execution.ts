@@ -1,3 +1,4 @@
+import { isStaleTaskError } from "@dramabridge/automation-logging";
 import { formatAutomationErrorReport } from "@dramabridge/automation-logging";
 import { isKuaishouReportRetryable, reportKuaishouAccountTaskApi } from "../api/task.js";
 import type { KuaishouDramaHttpClient } from "../api/http-client.js";
@@ -76,6 +77,7 @@ export async function executeKuaishouClaimedTask<T>(options: {
       });
     });
   } catch (error) {
+    if (isStaleTaskError(error)) throw error;
     const { stage, message } = await options.failure(error);
     if (needsKuaishouSubmissionReview(record.checkpoints)) {
       return {

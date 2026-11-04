@@ -1,3 +1,4 @@
+import { seedUnconfirmedClaims, staleTaskMonitor } from "../shared/stale-task-monitor";
 import { app, Notification } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -84,6 +85,41 @@ const controller = new RuntimeController<Runtime>();
 type StoredConfig = { config: TaobaoDramaConfig; installationId: string; selectedAccountIds: string[] };
 let store: Store<StoredConfig> | null = null;
 let executionRepository: TaobaoExecutionRepository | undefined;
+function taskMonitor() {
+  const monitor = staleTaskMonitor("taobao-drama", {
+    apiBaseUrl: () => readConfig().apiBaseUrl,
+    beforeSweep: async () => {
+      const current = taskMonitor();
+      await seedUnconfirmedClaims("taobao-drama", executions().list(readConfig().apiBaseUrl), current, record => executions().save(record));
+    },
+    onResolved: identity => {
+      for (const record of executions().list(identity.apiBaseUrl, identity.accountId)) {
+        if (record.taskId !== identity.taskId || record.workerId !== identity.workerId || record.attemptCount !== identity.attemptCount) continue;
+        executions().save({ ...record, phase: "released", updatedAt: new Date().toISOString(), errorMessage: "定时巡检确认后台任务已结束或领取归属已变更，解除旧领取记录" });
+      }
+    },
+    onReported: (identity, success) => {
+      for (const record of executions().list(identity.apiBaseUrl, identity.accountId)) {
+        if (record.taskId !== identity.taskId || record.workerId !== identity.workerId || record.attemptCount !== identity.attemptCount) continue;
+        executions().save({ ...record, phase: "reported", updatedAt: new Date().toISOString(),
+          report: { taskId: identity.taskId, workerId: identity.workerId, attemptCount: identity.attemptCount, success,
+            ...(!success && { failStage: "OTHER" as const, errorMessage: "任务领取后连续4小时无进展，定时巡检已清理并上报失败" }) },
+        });
+      }
+    },
+  });
+  for (const record of executions().list(readConfig().apiBaseUrl)) {
+    if (!record.attemptCount || ["reported", "released", "claim-rejected"].includes(record.phase)) continue;
+    if (record.ownerProcessId && record.ownerProcessId !== process.pid) {
+      try { process.kill(record.ownerProcessId, 0); continue; }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") continue; }
+    }
+    monitor.seed({ taskId: record.taskId, accountId: record.accountId, workerId: record.workerId,
+      attemptCount: record.attemptCount, apiBaseUrl: record.apiBaseUrl }, record.updatedAt, record.report?.success === true);
+  }
+  return monitor;
+}
+
 function executions() {
   if (!executionRepository) {
     const repository = new TaobaoExecutionRepository(openAutomationDatabase().database);
@@ -201,7 +237,7 @@ async function startRuntime(selectedAccountIds: unknown): Promise<Runtime> {
       const accountProfileName = account.rpaProfileKey?.trim() || account.accountId;
       const paths = storagePaths(config, accountProfileName); ensureDirectories(paths);
       const runtime = await startTaobaoDramaRuntime({
-        workerId, executionStore: executions(),
+        workerId, executionStore: executions(), taskWatchdog: taskMonitor(),
         accountProfileName, accountId: account.accountId, accountName: account.accountName,
         accountDir: paths.accountDir, userDataDir: paths.userDataDir, credentialStatePath: paths.credentialStatePath,
         assetDownloadDir: paths.assetDownloadDir, logFilePath: paths.logFilePath, logRetentionDays: Number(config.logRetentionDays) || 3,
@@ -243,6 +279,8 @@ export function getTaobaoDramaPlatformRuntimeSummary() {
 export function openTaobaoDramaLogDir() { const paths = storagePaths(); ensureDirectories(paths); return openExistingPath(paths.logDir); }
 
 export function registerTaobaoDramaPlatformHandlers() {
+  taskMonitor();
+  ipcMain.handle("taobao-drama:tasks:cleanup", () => taskMonitor().sweep());
   registerTaskAnalyticsHandler({ platform: "taobao-drama", apiBaseUrl: () => readConfig().apiBaseUrl, apiPrefix: "/dramaAiRpa/taobao" });
   registerRuntimeAssetCleanupRoot({ platform: "taobao-drama", rootPath: path.join(storagePaths().runDataDir, "assets"), maxDepth: 2, retentionMs: 3 * 60 * 60 * 1_000 });
   ipcMain.handle("taobao-drama:config:get", () => ({ config: readConfig(), path: configStore().path, storagePaths: storagePaths(), restartRequired: false }));

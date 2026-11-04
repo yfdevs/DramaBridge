@@ -110,3 +110,8 @@ test("aborts an in-flight netdisk task when the runtime stops", async () => {
   controller.abort(new Error("DOUYIN_DRAMA_RUNTIME_STOPPED"));
   await assert.rejects(pending, /DOUYIN_DRAMA_RUNTIME_STOPPED/);
 });
+
+
+test("classifies an unbound-contract form warning as form validation rather than file upload", () => {
+  assert.equal(classifyDouyinDramaFailStage(new Error("DOUYIN_DRAMA_FORM_ERROR: 关联线索点击下一步: 请完成合同绑定")), "FILL_FORM");
+});

@@ -39,6 +39,8 @@ export type ChannelBusyState =
     };
 
 export class TaskService {
+  private readonly taskAbortControllers = new Map<number, AbortController>();
+  cancelClaimedTask(taskId: number) { this.taskAbortControllers.get(taskId)?.abort(new Error("STALE_TASK_NO_PROGRESS")); }
   private readonly taskRecordsByKey = new Map<string, TaskRecord>();
 
   private readonly activeTaskKeyByChannelId = new Map<string, string>();
@@ -199,9 +201,14 @@ export class TaskService {
     runWithLogContext(this.createLogContext(taskRecord), () => {
       this.enqueueTaskRecord(taskRecord, "queued claimed task");
     });
+    const abort = new AbortController();
+    this.taskAbortControllers.set(claimedAccountTask.accountTaskId, abort);
     return {
       taskRecord,
-      taskFinished: this.runTaskRecord(taskRecord, playletConfig, preparedEpisodeVideos),
+      taskFinished: this.runTaskRecord(taskRecord, playletConfig, preparedEpisodeVideos, abort.signal)
+        .finally(() => {
+          if (this.taskAbortControllers.get(claimedAccountTask.accountTaskId) === abort) this.taskAbortControllers.delete(claimedAccountTask.accountTaskId);
+        }),
     };
   }
 
@@ -260,6 +267,7 @@ export class TaskService {
     taskRecord: TaskRecord,
     playletConfig?: Config,
     preparedEpisodeVideos?: PreparedEpisodeVideo[],
+    signal?: AbortSignal,
   ): Promise<void> {
     return runWithLogContext(this.createLogContext(taskRecord), async () => {
       taskRecord.status = "running";
@@ -267,7 +275,9 @@ export class TaskService {
       logger.info("task started", this.createTaskLogFields(taskRecord));
       try {
         const browserContext = await this.browserContexts.getOrLaunch(taskRecord.channelId);
+        signal?.throwIfAborted();
         await runPlayletTask({
+          signal,
           accountTaskId: taskRecord.accountTaskId,
           playletConfig,
           preparedEpisodeVideos,

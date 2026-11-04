@@ -31,9 +31,12 @@ function runtimeLogger(options: KuaishouDramaRuntimeOptions) {
     },
     logFilePath: options.logFilePath,
     retentionDays: options.logRetentionDays,
-    onEntry: options.onLog
-      ? (entry) => options.onLog?.(formatReadableLogEntry(entry))
-      : undefined,
+    onEntry: (entry) => {
+      options.onLog?.(formatReadableLogEntry(entry));
+      if (options.watchedTaskId && entry.level === "info" && !/等待|仍在|暂无|探测|heartbeat|waiting/i.test(entry.message)) {
+        options.taskWatchdog?.progress(options.watchedTaskId, JSON.stringify([entry.scope, entry.message, entry.details]));
+      }
+    },
   });
 }
 

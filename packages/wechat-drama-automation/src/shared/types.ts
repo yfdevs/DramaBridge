@@ -60,6 +60,8 @@ export interface RunTaskRequest {
 }
 
 export interface ClaimedAccountTask {
+  workerId: string;
+  attemptCount: number;
   accountTaskId: number;
   originalTitle: string;
   dramaId?: number;
@@ -71,6 +73,7 @@ export interface ClaimedAccountTask {
 }
 
 export interface TaskRunOptions {
+  signal?: AbortSignal;
   accountTaskId?: number;
   playletConfig?: Config;
   preparedEpisodeVideos?: PreparedEpisodeVideo[];

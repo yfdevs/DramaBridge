@@ -1,3 +1,7 @@
+import { configureWechatTaskWatchdog } from "../api/task.js";
+import type { TaskWatchdog } from "@dramabridge/automation-logging";
+import { configureWechatTaskProgress } from "../shared/logger.js";
+import { configureWechatReportStore, flushWechatTaskReports, type WechatReportStore } from "../api/task-reports.js";
 import { BrowserContextManager, type VideoAccountRuntimeStatus } from "../automation/browser-context-manager.js";
 import type { findOwnershipProjectProofFiles } from "@dramabridge/media-assets";
 import { loadServiceConfig } from "../shared/config.js";
@@ -46,6 +50,8 @@ export type WechatVideoRuntimeStatus = {
 }
 
 export type WechatVideoRuntimeOptions = {
+  reportStore?: WechatReportStore;
+  taskWatchdog?: TaskWatchdog;
   onLog?: (message: string) => void;
   settings?: Partial<WechatVideoRuntimeSettings>;
   ensureBaiduNetdiskResource?: EnsureBaiduNetdiskResource;
@@ -63,6 +69,9 @@ function log(options: WechatVideoRuntimeOptions, message: string) {
 export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions = {}): Promise<WechatVideoRuntime> {
   configureWechatVideoRuntimeSettings(options.settings);
   const serviceConfig = await loadServiceConfig();
+  configureWechatReportStore(options.reportStore);
+  configureWechatTaskWatchdog(options.taskWatchdog);
+  configureWechatTaskProgress((id, signature) => options.taskWatchdog?.progress(id, signature));
   const browserContexts = new BrowserContextManager(serviceConfig);
   await browserContexts.initialize();
 
@@ -75,6 +84,7 @@ export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions
     options.ownershipAiClient,
     options.cleanupBaiduNetdiskResourceAfterTaskSuccess,
     options.classifyOwnershipLocally,
+    options.taskWatchdog,
   );
   const idlePageRefreshService = new IdlePageRefreshService(serviceConfig, browserContexts, taskService);
   const videoAccountSyncService = new VideoAccountSyncService(
@@ -96,6 +106,8 @@ export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions
     });
   }
 
+  await flushWechatTaskReports();
+  const reportTimer = setInterval(() => { void flushWechatTaskReports().catch(error => logger.error("任务回写重试失败", { error })); }, 30_000);
   taskWorkerPool.start();
   videoAccountSyncService.start();
   idlePageRefreshService.start();
@@ -114,6 +126,7 @@ export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions
     async stop() {
       logger.info("stopping");
       log(options, "[runtime] stopping");
+      clearInterval(reportTimer);
       idlePageRefreshService.stop();
       videoAccountSyncService.stop();
       taskWorkerPool.stop();
