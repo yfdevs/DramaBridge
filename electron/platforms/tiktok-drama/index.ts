@@ -1,3 +1,4 @@
+import { registerTiktokNetdiskHandlers } from "./netdisk";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -226,6 +227,7 @@ async function startRuntime() {
 }
 
 export function registerTiktokDramaCenterPlatformHandlers() {
+  registerTiktokNetdiskHandlers();
   registerTaskAnalyticsHandler({
     platform: "tiktok-drama",
     unsupportedReason: "TikTok 任务日志接口尚未接入",

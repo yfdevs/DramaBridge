@@ -120,3 +120,12 @@ H5 源码第 176 行（UTF-16 下标 6044）明确说明 `uploadsign` 只有共�
 - 主项目 renderer 与 Electron 类型检查，百度网盘、快手和微信自动化包类型检查通过；百度网盘、素材和微信自动化包构建通过。
 - 本仓库使用 Vite Plus，原 AGENTS 的 `pnpm exec vite build` 因没有独立 `vite` 命令不可用；等价的 `pnpm exec vp build` 已通过，包含 renderer/main/preload 构建。
 - 未重新提交真实账号素材，未重启现有百度客户端，未修改客户端安装包。自动测试通过不代表首次 8001 的触发原因已被实证确定，也不代表账号端到端上传已复验。
+
+
+## 2026-11-04：TikTok 剧单视频转存
+
+本次 REA 对相同 app.asar 的定向分析父证据为 `ev_77711449143d0396c849844988431117debf441b406274b3017619562109c608`，摘要为 `ev_efdc3cf0b538977aef5024afce2f95f309f32527bc9e16a60e16aeea7a93a7b9`。选择 `node_modules/@baidu/disk-core/assets/base/tools/transfer.js` 与 `node_modules/@baidu/disk-ee/components/batch-rename/src/utils/requestHelper.js`；前者只有路径取名工具，不能用作转存协议证据。后者静态声明 filemanager 的 `opera=rename`、`filelist` 项的 `path/newname`，以及异步任务查询工厂。其消费方涉及企业和多人空间，不能直接证明个人网盘运行时兼容性。
+
+实现复用项目已存在的个人网盘分享验证、目录分页、`/share/transfer` 转存及请求风控逻辑；新增单视频 `/api/filemanager?opera=rename` 请求，逐文件回读目标路径与内容身份，接口成功本身不作为完成依据。只选择集号 1..N 完整且唯一的一组视频，使用现有字幕目录优先级、视频目录排序和重复别名折叠规则；不转存版权、封面或整个源目录。不把 MOV 直接改后缀冒充 MP4。发生同名内容冲突时停止该剧目，失败后重试会核验已有文件。
+
+客户端 9337 端口在本次调查时不可达，REA 被动运行态观察未完成。已通过模拟 CDP 运行完整注入脚本、视频选择/改名/重试测试和临时用户配置下的 Electron 导入、数据库、日期筛选、导出冒烟测试；尚未以真实登录账户提交云端转存。Excel 数据存入 `tiktok_netdisk_dramas`，原工作簿模板存入 `tiktok_netdisk_imports`，导出按导入日期选择全部状态并保留模板表头、列宽、格式及空白列。

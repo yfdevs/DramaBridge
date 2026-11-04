@@ -165,7 +165,7 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
             // Submission verification and the >=10s settle period have finished.
             // Keep the tab visible and reuse it for the next task.
             reusableTaskPage = taskPage;
-          } else if (!taskPage.isClosed() && outcome === "failure" && options.closeFailedTaskPages === true) {
+          } else if (!taskPage.isClosed() && outcome === "failure" && (options.closeFailedTaskPages === true || executionStore.get(task.executionId)?.report?.errorMessage?.includes("TAOBAO_DRAMA_COLLECTION_FORM_INVALID"))) {
             await taskPage.close().catch(() => undefined);
           } else if (!taskPage.isClosed()) {
             log(options, "[taobao-drama] 已保留失败任务页面供排查", { accountTaskId: task.accountTaskId, activeUrl: taskPage.url() });

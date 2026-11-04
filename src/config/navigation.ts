@@ -49,6 +49,7 @@ export type AppRoute =
   | "douyin-drama/service"
   | "douyin-drama/config"
   | "tiktok-drama/service"
+  | "tiktok-drama/netdisk"
   | "tiktok-drama/config"
   | "pinduoduo-drama/service"
   | "pinduoduo-drama/records"
@@ -105,6 +106,7 @@ const appRoutes = [
   "douyin-drama/statistics",
   "douyin-drama/logs",
   "tiktok-drama/service",
+  "tiktok-drama/netdisk",
   "tiktok-drama/config",
   "tiktok-drama/statistics",
   "tiktok-drama/logs",
@@ -472,6 +474,7 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "tiktok-drama/service",
         icon: Terminal,
       },
+      { title: "转存网盘", route: "tiktok-drama/netdisk", icon: CloudUpload },
       {
         title: "配置管理",
         route: "tiktok-drama/config",

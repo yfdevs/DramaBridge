@@ -1799,3 +1799,10 @@ export function registerBaiduNetdiskPlatformHandlers() {
     void recoverPendingRemoteTransferCleanups();
   }, 1_000);
 }
+
+export async function transferTiktokDramaNetdiskVideos(options: { title: string; shareText: string; episodeCount: number; onProgress?: (progress: { completed: number; total: number; stage: string }) => void }) {
+  const { transferBaiduDramaVideos } = await import("@dramabridge/baidu-netdisk-automation");
+  return runBaiduCdpOperationExclusive("转存 TikTok 剧目视频", () => transferBaiduDramaVideos({
+    ...options, port: cdpPort(readConfig()),
+  }));
+}

@@ -1,3 +1,5 @@
+import { matchBaiduEpisodeIndex } from "./episode-index.js";
+import { transferNormalizedEpisodeVideos } from "./transfer-normalized-videos.js";
 import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { createBaiduDirectoryCache } from "./download-directory-cache.js";
@@ -901,6 +903,7 @@ export async function openBaiduNetdiskSharePage(share: ShareInfo, port = 9337) {
 }
 
 type SavedShareResult = {
+  shareUrl?: string;
   fileName: string;
   savedPath: string;
   fsId: number | string;
@@ -920,6 +923,9 @@ type SavedShareResult = {
 };
 
 type SaveShareOptions = {
+  normalizedVideoEpisodeCount?: number;
+  videoSharePassword?: string;
+  onVideoProgress?: (progress: { completed: number; total: number; stage: string }) => void;
   isolatedRoot?: boolean;
   isolatedRootUnique?: boolean;
 };
@@ -953,6 +959,17 @@ export async function saveShareToOwnNetdisk(
     const temporaryTransferNotifications: Promise<void>[] = [];
     log(options.isolatedRoot ? "保存分享目录到干净的网盘中转目录" : "保存分享目录到我的网盘");
     const stopConsoleForwarding = page.onConsole((message) => {
+      if (message.startsWith("[baidu-video-progress] ")) {
+        try {
+          const progress = JSON.parse(message.slice("[baidu-video-progress] ".length));
+          if (Number.isInteger(progress.completed) && Number.isInteger(progress.total)
+            && progress.total === options.normalizedVideoEpisodeCount
+            && progress.completed >= 0 && progress.completed <= progress.total && typeof progress.stage === "string") {
+            options.onVideoProgress?.(progress);
+          }
+        } catch (error) { warn("记录转存进度失败", { error }); }
+        return;
+      }
       if (message.startsWith("[baidu-temp-transfer] ")) {
         try {
           const transfer = JSON.parse(message.slice("[baidu-temp-transfer] ".length));
@@ -1482,6 +1499,9 @@ export async function saveShareToOwnNetdisk(
   };
   const transferOne = async (source, destinationDir) => {
     const name = fileNameOf(source);
+    if (${JSON.stringify(options.normalizedVideoEpisodeCount ?? 0)} > 0 && (itemIsDir(source) || !/\\.mp4$/i.test(name))) {
+      throw new Error("视频转存模式禁止转存目录或非 MP4 文件：" + name);
+    }
     const existing = await findOwnItem(destinationDir, name);
     if (existing) {
       if (!compatibleItem(source, existing)) {
@@ -1708,6 +1728,21 @@ export async function saveShareToOwnNetdisk(
   };
 
   const stableSuffix = String(surl || shareId).replace(/[^a-zA-Z0-9]/g, "").slice(-10) || "share";
+  if (${JSON.stringify(options.normalizedVideoEpisodeCount ?? 0)} > 0) {
+    // tsx development transforms may retain function-name helpers in serialized code.
+    const __name = (value) => value;
+    return await (${transferNormalizedEpisodeVideos.toString()})({
+      sharePassword: ${JSON.stringify(options.videoSharePassword)},
+      title: safeExpectedName, episodeCount: ${JSON.stringify(options.normalizedVideoEpisodeCount ?? 0)},
+      roots: transferableFiles, listShare: fetchShareFileList, listOwn: listOwnDir,
+      createDirectory: createOwnDirectory, transferOne, request: jsonFetch, token,
+      identical: strictlyIdenticalFile,
+      compare: ${compareRemoteVideoDirectoryCandidates.toString()},
+      subtitlePreference: ${baiduVideoSubtitleDirectoryPreference.toString()},
+      collapseAliases: ${collapseIdenticalRemoteEpisodeAliases.toString()},
+      episodeIndex: ${matchBaiduEpisodeIndex.toString()},
+    });
+  }
   let finalFileName = safeFileName(
     String(shareHasDramaWrapper ? wrapperName : safeExpectedName),
     { fallback: "百度网盘资源", maxLength: 180, replacement: "_" },
@@ -1877,7 +1912,10 @@ export async function saveShareToOwnNetdisk(
     /^(?:ep|episode|e)[\\s._-]*(\\d+)\\.(?:mp4|mov)$/i,
     /^(\\d+)\\.(?:mp4|mov)$/i,
   );
+  const sharedEpisodeIndex = ${matchBaiduEpisodeIndex.toString()};
   const matchEpisodeIndex = (fileName) => {
+    const sharedIndex = sharedEpisodeIndex(fileName);
+    if (sharedIndex !== undefined) return sharedIndex;
     const leadingIndex = matchLeadingEpisodeIndex(fileName);
     if (leadingIndex !== undefined) return leadingIndex;
 

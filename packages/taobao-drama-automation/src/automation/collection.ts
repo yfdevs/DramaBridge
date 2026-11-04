@@ -423,7 +423,11 @@ export async function fillAndCreateTaobaoCollection(
   while (Date.now() < deadline) {
     deadline += await waitForTaobaoHumanVerification(page, options);
     const validation = await validationMessages(page);
-    if (validation.length) throw new Error(`TAOBAO_DRAMA_COLLECTION_FORM_INVALID: ${validation.join("；")}`);
+    if (validation.length) {
+      await options.onSubmitCheckpoint?.({ kind: "collection", state: "rejected" });
+      await page.waitForTimeout(Math.max(0, TAOBAO_DRAMA_MIN_SETTLE_MS - (Date.now() - clickedAt)));
+      throw new Error(`TAOBAO_DRAMA_COLLECTION_FORM_INVALID: ${validation.join("；")}`);
+    }
     success ||= await createSucceeded(page, createButton, clickedAt);
     if (success && Date.now() - clickedAt >= TAOBAO_DRAMA_MIN_SETTLE_MS) break;
     const settlePeriodComplete = Date.now() - clickedAt >= TAOBAO_DRAMA_MIN_SETTLE_MS;

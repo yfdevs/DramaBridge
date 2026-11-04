@@ -1,3 +1,4 @@
+import { TiktokNetdiskTransferPage } from "@/pages/tiktok-drama/netdisk-transfer";
 import { AppUpdateControl } from "@/components/app-update-control";
 import { TaskStatisticsPage } from "@/pages/shared/task-statistics-page";
 import { PlatformLogPage } from "@/pages/shared/platform-log-page";
@@ -85,6 +86,7 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "douyin-drama/service": DouyinDramaServiceControlPage,
   "douyin-drama/config": DouyinDramaConfigurationPage,
   "tiktok-drama/service": TiktokDramaCenterServiceControlPage,
+  "tiktok-drama/netdisk": TiktokNetdiskTransferPage,
   "tiktok-drama/config": TiktokDramaCenterConfigurationPage,
   "pinduoduo-drama/service": PinduoduoDramaServiceControlPage,
   "pinduoduo-drama/records": PinduoduoDramaUploadRecordsPage,

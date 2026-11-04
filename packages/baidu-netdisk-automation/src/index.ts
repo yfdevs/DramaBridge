@@ -5,3 +5,5 @@
 export * from "./runtime/baidu-netdisk-runtime.js";
 export { uploadBaiduNetdiskDirectory } from "./workflows/upload-directory.js";
 export type { RemoteVerifiedFile } from "./workflows/upload-verification.js";
+
+export { transferBaiduDramaVideos } from "./workflows/transfer-drama-videos.js";

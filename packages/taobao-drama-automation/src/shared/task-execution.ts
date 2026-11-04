@@ -9,7 +9,7 @@ export type TaobaoTaskReport = {
 export type TaobaoExecutionPhase = "claiming" | "claim-rejected" | "claimed" | "executing" |
   "review-required" | "report-pending" | "report-blocked" | "reported" | "released";
 export type TaobaoSubmitCheckpoint = {
-  kind: "collection" | "batch"; state: "submitting" | "confirmed";
+  kind: "collection" | "batch"; state: "submitting" | "confirmed" | "rejected";
   startEpisode?: number; endEpisode?: number;
   episodeNumbers?: number[]; collectionId?: string;
 };

@@ -6,7 +6,7 @@ import { WebSocketServer } from "ws";
 import { saveShareToOwnNetdisk } from "../../src/workflows/download-baidu-folder.js";
 
 test("real injected transfer script uses fresh share metadata and rejects -9 before any cloud write", async () => {
-  for (const rootState of ["valid", "missing", "empty"]) {
+  for (const rootState of ["valid", "missing", "empty", "normalized"]) {
     const failRoot = rootState === "missing";
     const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
     await once(server, "listening");
@@ -83,13 +83,20 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
                               server_filename: "第1集.mp4",
                               isdir: 0,
                               size: 10,
+                              md5: "test-content",
                             },
                           ],
                         }),
                       };
                     }
-                    if (url.pathname === "/api/list")
+                    if (url.pathname === "/api/list") {
+                      if (rootState === "normalized") return { ok: true, json: async () => ({ errno: 0,
+                        list: url.searchParams.get("dir") === "/"
+                          ? [{ fs_id: 20, isdir: 1, path: "/" + title, server_filename: title }]
+                          : [{ fs_id: 21, isdir: 0, path: "/" + title + "/" + title + "-第1集.mp4",
+                              server_filename: title + "-第1集.mp4", size: 10, md5: "test-content" }] }) };
                       throw new Error("confirmed correct source before transfer");
+                    }
                     throw new Error("unexpected endpoint: " + url.pathname);
                   },
                 })
@@ -106,8 +113,7 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
       });
     });
     try {
-      await assert.rejects(
-        saveShareToOwnNetdisk(
+      const operation = saveShareToOwnNetdisk(
           {
             id: "share",
             type: "page",
@@ -116,7 +122,13 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
             webSocketDebuggerUrl: `ws://127.0.0.1:${port}`,
           },
           { name: title, link: "https://pan.baidu.com/s/1fresh", pwd: "1234" },
-        ),
+          rootState === "normalized" ? { normalizedVideoEpisodeCount: 1 } : {},
+        );
+      if (rootState === "normalized") {
+        const result = await operation;
+        assert.equal(result.resourceRootPath, "/" + title);
+        assert.equal(result.remoteVideos.files.length, 1);
+      } else await assert.rejects(operation,
         failRoot
           ? /errno=-9.*request_id=987/
           : rootState === "empty"
@@ -126,9 +138,9 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
       assert.equal(writes, 0);
       assert.equal(
         calls.filter((endpoint) => endpoint === "/share/list").length,
-        rootState === "valid" ? 2 : 1,
+        ["valid", "normalized"].includes(rootState) ? 2 : 1,
       );
-      assert.equal(calls.includes("/api/list"), rootState === "valid");
+      assert.equal(calls.includes("/api/list"), ["valid", "normalized"].includes(rootState));
     } finally {
       for (const client of server.clients) client.terminate();
       await new Promise<void>((resolve, reject) =>

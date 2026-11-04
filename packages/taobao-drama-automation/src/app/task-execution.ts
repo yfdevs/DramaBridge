@@ -26,7 +26,7 @@ export function needsTaobaoSubmissionReview(checkpoints: TaobaoSubmitCheckpoint[
   for (const checkpoint of checkpoints) latest.set(
     `${checkpoint.kind}:${checkpoint.startEpisode ?? ""}:${checkpoint.endEpisode ?? ""}`, checkpoint,
   );
-  return [...latest.values()].some((item) => item.state === "submitting" || item.kind === "batch");
+  return [...latest.values()].some((item) => item.state === "submitting" || (item.kind === "batch" && item.state !== "rejected"));
 }
 
 // Publishing and reporting have separate lifecycles. A report failure must never
