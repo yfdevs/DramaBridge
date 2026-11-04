@@ -12,13 +12,14 @@ import {
 } from "electron";
 import Store from "electron-store";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import sharp from "sharp";
 
 import { WindowsOwnershipOcr } from "./local-ownership-ocr";
 
 import { createValidatedStore } from "./core/config-store";
 import { emitIpcEvent, trpcIpc as ipcMain } from "./ipc";
-import { directoryDefaultPath, selectDirectory } from "./platforms/shared";
+import { directoryDefaultPath, resolveFromAppRoot, selectDirectory } from "./platforms/shared";
 
 const ARK_API_KEY_URL = "https://console.volcengine.com/ark/region:ark+cn-beijing/apikey";
 const LEGACY_DEFAULT_AI_BASE_URL = "https://api.openai.com/v1";
@@ -291,6 +292,15 @@ function configResult(config = readGlobalAppConfig(), restartRequired = false) {
   };
 }
 
+function portableDirectory(value: string | undefined, fallback: string) {
+  const selected = value?.trim();
+  if (!selected) return fallback;
+  // A saved path on an unavailable Windows drive must never reach mkdir/logging.
+  if (process.platform === "win32" && path.isAbsolute(selected)
+    && !existsSync(path.parse(selected).root)) return fallback;
+  return selected;
+}
+
 export function resolveGlobalPlatformDirectories(
   platformDirectoryName: string,
   fallback: { runDataDir: string; localMaterialRoot: string },
@@ -300,8 +310,10 @@ export function resolveGlobalPlatformDirectories(
   const localMaterialRoot = config.localMaterialRoot?.trim();
 
   return {
-    runDataDir: runDataRoot ? path.join(runDataRoot, platformDirectoryName) : fallback.runDataDir,
-    localMaterialRoot: localMaterialRoot || fallback.localMaterialRoot,
+    runDataDir: runDataRoot
+      ? path.join(portableDirectory(runDataRoot, path.join(app.getPath("userData"), ".drama-runs")), platformDirectoryName)
+      : resolveFromAppRoot(portableDirectory(fallback.runDataDir, path.join(app.getPath("userData"), ".drama-runs", platformDirectoryName))),
+    localMaterialRoot: portableDirectory(localMaterialRoot || fallback.localMaterialRoot, path.join(app.getPath("downloads"), "DramaBridge")),
   };
 }
 

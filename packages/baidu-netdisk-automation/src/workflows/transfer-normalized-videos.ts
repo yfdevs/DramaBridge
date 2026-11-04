@@ -2,7 +2,7 @@ type Entry = Record<string, any>;
 
 /** Serialized into the authenticated share page. No module-scope dependencies. */
 export async function transferNormalizedEpisodeVideos(o: {
-  title: string; episodeCount: number; roots: Entry[]; sharePassword?: string;
+  parentDirectoryName?: string; title: string; episodeCount: number; roots: Entry[]; sharePassword?: string;
   listShare: (path: string) => Promise<Entry[]>;
   listOwn: (path: string, refresh?: boolean) => Promise<Entry[]>;
   createDirectory: (parent: string, name: string) => Promise<Entry>;
@@ -49,8 +49,10 @@ export async function transferNormalizedEpisodeVideos(o: {
     throw new Error('选中的全集包含 MOV 文件，云端改名不能转换视频格式，已停止转存');
   }
   progress(0, '转存视频');
-  const root = await o.createDirectory('/', o.title);
-  const rootPath = String(root.path || '/' + o.title);
+  const parent = o.parentDirectoryName ? await o.createDirectory('/', o.parentDirectoryName) : undefined;
+  const parentPath = parent ? String(parent.path || '/' + o.parentDirectoryName) : '/';
+  const root = await o.createDirectory(parentPath, o.title);
+  const rootPath = String(root.path || parentPath.replace(/\/$/, '') + '/' + o.title);
   let transferredItemCount = 0;
   const results: Entry[] = [];
   // Validate every target before the first write. Never overwrite another drama's file.

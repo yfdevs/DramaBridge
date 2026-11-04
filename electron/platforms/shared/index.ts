@@ -37,7 +37,7 @@ export async function readMemoryStatus(processRssBytes = process.memoryUsage().r
   }
 }
 
-export async function readDriveStatus(targetMount = 'D:'): Promise<PlatformDriveStatus | null> {
+export async function readDriveStatus(targetMount = path.parse(app.getPath('userData')).root): Promise<PlatformDriveStatus | null> {
   let driveList: Awaited<ReturnType<typeof fsSize>>
 
   try {
@@ -108,6 +108,13 @@ export function normalizePlatformRunDataDir(selectedPath: string | null, platfor
 }
 
 export function resolveFromAppRoot(value: string) {
+  const normalized = value.replace(/\\/g, '/');
+  if (normalized === '.drama-runs' || normalized.startsWith('.drama-runs/')) {
+    return path.join(app.getPath('userData'), normalized);
+  }
+  if (/^[a-z]:\/\.drama-runs(?:\/|$)/i.test(normalized)) {
+    return path.join(app.getPath('userData'), normalized.slice(3));
+  }
   if (path.isAbsolute(value)) {
     return value
   }

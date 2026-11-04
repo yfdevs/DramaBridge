@@ -1,3 +1,4 @@
+import { app } from "electron";
 import { emitIpcEvent, trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
@@ -222,7 +223,7 @@ const defaultBaiduNetdiskConfig: BaiduNetdiskConfig = {
   executablePath: "",
 };
 
-const defaultBaiduNetdiskDownloadDir = "D:\\BaiduNetdiskDownload";
+const defaultBaiduNetdiskDownloadDir = path.join(app.getPath("downloads"), "DramaBridge");
 
 let store: Store<BaiduNetdiskStore> | null = null;
 let downloadRecordsRepository: BaiduNetdiskDownloadRecordsRepository | null = null;
@@ -278,8 +279,8 @@ async function latestTreeModifiedAtMs(targetPath: string): Promise<number> {
   return latest;
 }
 
-async function driveDUsageRatio() {
-  const stats = await statfs("D:\\", { bigint: true });
+async function driveDUsageRatio(targetPath = defaultBaiduNetdiskDownloadDir) {
+  const stats = await statfs(path.parse(path.resolve(targetPath)).root, { bigint: true });
   if (stats.blocks <= 0n) return 0;
   return Number(stats.blocks - stats.bfree) / Number(stats.blocks);
 }
@@ -290,7 +291,7 @@ async function cleanupStalePlayletDirectories(rootPath: string, protectedPaths: 
     return;
   }
 
-  const usageRatio = await driveDUsageRatio();
+  const usageRatio = await driveDUsageRatio(rootPath);
   if (usageRatio < diskCleanupUsageThreshold) return;
 
   const resolvedRoot = path.resolve(rootPath);
@@ -1803,6 +1804,6 @@ export function registerBaiduNetdiskPlatformHandlers() {
 export async function transferTiktokDramaNetdiskVideos(options: { title: string; shareText: string; episodeCount: number; onProgress?: (progress: { completed: number; total: number; stage: string }) => void }) {
   const { transferBaiduDramaVideos } = await import("@dramabridge/baidu-netdisk-automation");
   return runBaiduCdpOperationExclusive("转存 TikTok 剧目视频", () => transferBaiduDramaVideos({
-    ...options, port: cdpPort(readConfig()),
+    ...options, parentDirectoryName: "TikTok短剧", port: cdpPort(readConfig()),
   }));
 }
