@@ -65,6 +65,7 @@ test("a crashed or closed task page during material preparation is replaced befo
   try {
     assert.equal(await f.pages.readyQueryPage(), f.replacements[0]!.asPage());
     assert.equal(f.replacements.length, 1);
+    assert.equal(f.initial.closed, true, "close crashed tab before opening its replacement");
   } finally { await f.pages.dispose(); }
 });
 

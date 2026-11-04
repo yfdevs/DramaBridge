@@ -507,11 +507,7 @@ export async function startKuaishouDramaRuntime(
           lastTask.errorMessage = outcome.errorMessage ?? message;
         }
       } finally {
-        const execution = currentClaimedTask();
-        const review =
-          execution &&
-          options.executionStore?.get(execution.executionId)?.phase === "review-required";
-        if (taskPage && !review) {
+        if (taskPage) {
           const accountTaskId = currentClaimedTask()?.accountTaskId ?? "configured";
           await taskPage.close().catch(() => undefined);
           log(

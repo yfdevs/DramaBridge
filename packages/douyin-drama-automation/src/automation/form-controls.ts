@@ -105,7 +105,6 @@ export async function installDouyinPageMessageCapture(page: Page) {
     const state = window;
     state.__douyinDramaCapturedPageMessages ??= [];
     if (state.__douyinDramaPageMessageCaptureInstalled) return;
-    state.__douyinDramaPageMessageCaptureInstalled = true;
 
     const selector = selectors.join(",");
     const captureElement = (element) => {
@@ -136,13 +135,14 @@ export async function installDouyinPageMessageCapture(page: Page) {
         mutation.addedNodes.forEach(captureNode);
       });
     });
-    state.__douyinDramaPageMessageObserver.observe(document.body, {
+    state.__douyinDramaPageMessageObserver.observe(document, {
       attributes: true,
       attributeFilter: ["class", "style"],
       characterData: true,
       childList: true,
       subtree: true,
     });
+    state.__douyinDramaPageMessageCaptureInstalled = true;
   })()`);
 }
 

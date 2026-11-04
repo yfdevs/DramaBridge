@@ -62,6 +62,7 @@ export class KuaishouTaskPages {
     this.assertConnected();
     this.log("任务页已失效，正在新建页面恢复查询");
     try {
+      await this.queryPage.close().catch(() => undefined);
       const next = await this.context.newPage();
       this.replacements.add(next);
       this.watch(next);
