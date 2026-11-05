@@ -4,12 +4,11 @@
   type ConfigSectionDefinition,
   usePlatformConfig,
 } from "@/pages/shared/configuration-page";
-import {
-  kuaishouDramaService,
-  type KuaishouDramaConfig,
-} from "@/platforms/kuaishou-drama/service";
+import { kuaishouDramaService, type KuaishouDramaConfig } from "@/platforms/kuaishou-drama/service";
 
 const emptyConfig: KuaishouDramaConfig = {
+  recreationSheetName: "快手二创",
+  recreationPollSeconds: "30",
   accountProfileName: "default",
   apiBaseUrl: "http://180.184.76.232:19090",
   localEpisodeVideoRoot: "",
@@ -23,6 +22,25 @@ const emptyConfig: KuaishouDramaConfig = {
 };
 
 const configSections: ConfigSectionDefinition<KuaishouDramaConfig>[] = [
+  {
+    title: "二创任务",
+    description: "飞书连接在全局配置中设置。",
+    fields: [
+      {
+        key: "recreationSheetName",
+        label: "二创工作表名称",
+        description: "与飞书中的工作表名一致。",
+      },
+      {
+        key: "recreationPollSeconds",
+        label: "检查间隔",
+        type: "number",
+        min: 10,
+        max: 3600,
+        suffix: "秒",
+      },
+    ],
+  },
   {
     title: "任务接口",
     description: "按账号领取任务并提交结果。",
@@ -124,7 +142,6 @@ export function KuaishouDramaConfigurationPage() {
           onChange={updateConfig}
         />
       ))}
-
     </ConfigurationPageFrame>
   );
 }

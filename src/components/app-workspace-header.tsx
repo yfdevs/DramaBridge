@@ -6,6 +6,7 @@ import {
   navigationGroups,
   platformForPath,
   routePath,
+  toolNavigation,
 } from "@/config/navigation";
 import { cn } from "@/lib/utils";
 
@@ -15,10 +16,12 @@ export function AppWorkspaceHeader() {
   const route = isAppRoute(path) ? path : defaultRoute;
   const platform = platformForPath(route);
   const pages = navigationGroups.find((group) => group.title === platform.title)?.items ?? [];
+  const tool = toolNavigation.find((item) => item.route === route);
   if (route === "app/updates") return null;
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-      {!route.startsWith("app/") && (
+      {tool && <h1 className="px-2 text-sm font-medium">{tool.title}</h1>}
+      {!route.startsWith("app/") && !tool && (
         <nav aria-label="当前平台页面" className="flex shrink-0 items-center gap-0.5">
           {pages.map((page) => (
             <NavLink

@@ -91,7 +91,7 @@ test('秋晴裁梦 has 64 parenthesized episodes in both variants; choose only t
   assert.equal(matchBaiduEpisodeIndex('秋晴裁梦.mp4'), undefined);
 });
 
-test('shares only verified videos, excludes sibling folders, and includes the extraction code', async () => {
+test('does not share a task folder containing unrelated siblings', async () => {
   const f = fixture(); const rename = f.options.request;
   f.options.sharePassword = 'a1b2';
   f.own.push({ isdir: 1, path: '/测试剧/无字幕版', server_filename: '无字幕版', fs_id: 'old-directory' });
@@ -100,14 +100,53 @@ test('shares only verified videos, excludes sibling folders, and includes the ex
     if (!url.startsWith('/share/set?')) return rename(url, init);
     sharedIds = JSON.parse(init.body.get('fid_list'));
     assert.equal(init.body.get('pwd'), 'a1b2');
-    assert.equal(sharedIds.length, 2);
-    assert.ok(sharedIds.every(id => id.startsWith('own-')));
     return { errno: 0, shareid: '123', link: 'https://pan.baidu.com/s/1result' };
   };
-  const result = await transferNormalizedEpisodeVideos(f.options);
-  assert.equal(result.shareUrl, 'https://pan.baidu.com/s/1result?pwd=a1b2');
-  assert.ok(!sharedIds.includes('old-directory'));
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /本次任务以外/);
+  assert.deepEqual(sharedIds, []);
 });
+
+for (const recreation of [false, true]) {
+  test(`${recreation ? 'recreation' : 'TikTok'} shares one task folder and preserves its hierarchy`, async () => {
+    const f = fixture();
+    f.options.recreation = recreation;
+    f.options.versionTitle = recreation ? '新版本' : undefined;
+    f.options.sharePassword = 'a1b2';
+    const directories: any[] = [];
+    f.options.createDirectory = async (parent, name) => {
+      const path = parent.replace(/\/$/, '') + '/' + name;
+      const entry = { path, server_filename: name, fs_id: path, isdir: 1 };
+      directories.push(entry);
+      return entry;
+    };
+    f.options.listOwn = async path => [...directories, ...f.own].filter(e => e.path.slice(0, e.path.lastIndexOf('/')) === path);
+    f.options.listShare = async path => [...[1, 2].map(n => f.source(n, path)), { server_filename: '海报.jpg', path: path + '/海报.jpg', fs_id: 'cover-' + path, size: 1, md5: 'cover-hash' }];
+    let shared: string[] = [];
+    f.options.request = async (url, init: any) => {
+      if (url.startsWith('/share/set?')) {
+        shared = JSON.parse(init.body.get('fid_list'));
+        return { errno: 0, shareid: '123', link: 'https://pan.baidu.com/s/1result' };
+      }
+      const file = JSON.parse(init.body.get('filelist'))[0];
+      const target = f.own.find(e => e.path === file.path);
+      target.server_filename = file.newname;
+      target.path = target.path.slice(0, target.path.lastIndexOf('/') + 1) + file.newname;
+      return { errno: 0 };
+    };
+    const result = await runInNewContext('(' + transferNormalizedEpisodeVideos.toString() + ')(o)', {
+      o: f.options, URL, URLSearchParams, console, setTimeout, __name: (value: unknown) => value,
+    });
+    const expected = recreation ? '/测试剧/新版本-60%' : '/测试剧';
+    assert.deepEqual(shared, [expected]);
+    assert.equal(result.resourceRootPath, expected);
+    assert.equal(result.shareUrl, 'https://pan.baidu.com/s/1result?pwd=a1b2');
+    if (recreation) {
+      assert.ok(f.own.some(e => e.path.startsWith(expected + '/封面/')));
+      assert.ok(f.own.some(e => e.path.startsWith(expected + '/成片60%/')));
+      assert.ok(f.own.every(e => e.path.startsWith(expected + '/封面/') || e.path.startsWith(expected + '/成片60%/')));
+    }
+  });
+}
 
 test('cloud recreation keeps only first 60 percent and uses each version title', async () => {
   const f = fixture();

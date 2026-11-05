@@ -21,6 +21,8 @@ export type WechatVideoServiceStatus = {
 }
 
 export type WechatVideoConfig = {
+  recreationSheetName: string;
+  recreationPollSeconds: string;
   apiBaseUrl: string
   selectedVideoAccountIds: string
   videoAccountContractSubjects: string

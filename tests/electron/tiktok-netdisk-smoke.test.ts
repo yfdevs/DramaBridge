@@ -1,103 +1,163 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
-import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
-import ExcelJS from 'exceljs';
-import { _electron } from 'playwright';
+import assert from "node:assert/strict";
+import test from "node:test";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
+import { _electron } from "playwright";
 
 const require = createRequire(import.meta.url);
-test('TikTok netdisk imports, persists, filters dates and exports all statuses in the original format', { timeout: 60000 }, async () => {
-  const cache = path.join(process.cwd(), '.cache'); await mkdir(cache, { recursive: true });
-  const directory = await mkdtemp(path.join(cache, 'tiktok-netdisk-smoke-'));
-  const file = path.join(directory, '输入.xlsx'), output = path.join(directory, '导出.xlsx');
-  const book = new ExcelJS.Workbook(), sheet = book.addWorksheet('Sheet1');
-  sheet.addRow([null, null, null, null, null, null, '版权方', '制作类型', '集数', '题材', '类型', '剧名', '简介', '全集链接(100%)', '单层文件夹链接']);
-  for (const title of ['春日归人', '星河归途']) sheet.addRow([null, null, null, null, null, null, '示例版权方', '横屏', 2, '逆袭', '动漫', title, '测试简介', 'https://pan.baidu.com/s/1test?pwd=abcd', '']);
-  await book.xlsx.writeFile(file);
-  const bootstrap = path.join(directory, 'bootstrap.mjs');
-  await writeFile(bootstrap, `
-    import {app, dialog} from 'electron';
-    import {mkdirSync} from 'node:fs';
-    mkdirSync(${JSON.stringify(directory + '/profile')}, {recursive:true});
-    app.setPath('userData',${JSON.stringify(directory + '/profile')});
-    app.on('browser-window-created',(_event,win)=>win.hide());
-    const Store=(await import('electron-store')).default;
-    const config=new Store({name:'global-app-config'});
-    config.set('config.runDataRoot',${JSON.stringify(directory + '/runs')});
-    config.set('config.localMaterialRoot',${JSON.stringify(directory + '/materials')});
-    config.set('config.theme','light');
-    new Store({name:'baidu-netdisk-config'}).set('config.debugPort','65534');
-    new Store({name:'baidu-netdisk-config'}).set('config.executablePath',${JSON.stringify(directory + '/missing.exe')});
-    dialog.showOpenDialog=async()=>({canceled:false,filePaths:[${JSON.stringify(file)}]});
-    dialog.showSaveDialog=async()=>({canceled:false,filePath:${JSON.stringify(output)}});
-    await import(${JSON.stringify(pathToFileURL(path.join(process.cwd(), 'dist-electron/main.js')).href)});
-  `);
-  const env = Object.fromEntries(Object.entries(process.env).filter((pair): pair is [string, string] => typeof pair[1] === 'string' && pair[0] !== 'ELECTRON_RUN_AS_NODE'));
-  const app = await _electron.launch({ executablePath: require('electron'), args: [bootstrap], env });
-  try {
-    const page = await app.firstWindow(); const errors: string[] = [];
-    page.on('pageerror', error => errors.push(error.message));
-    await page.waitForSelector('.app-workspace');
-    await page.evaluate(() => { location.hash = '/tiktok-drama/netdisk'; });
-    await page.getByRole('toolbar', { name: '转存网盘操作' }).waitFor();
-    assert.equal(await page.getByRole('checkbox').count(), 0);
-    assert.ok((await page.getByRole('button', { name: '导入', exact: true }).boundingBox())!.height <= 28);
-    const links = await page.locator('nav[aria-label="当前平台页面"] a').allTextContents();
-    assert.equal(links[links.indexOf('实例') + 1], '转存网盘');
-    await page.getByRole('button', { name: '导入', exact: true }).click();
-    await page.getByText('春日归人', { exact: true }).waitFor();
-    assert.equal(await page.getByRole('columnheader', { name: '版权方' }).count(), 0);
-    assert.equal(await page.getByRole('columnheader', { name: '制作 / 类型' }).count(), 0);
-    await app.evaluate((_electron, directory) => {
-      const Database = globalThis.require('better-sqlite3'), db = new Database(directory + '/profile/automation.sqlite');
-      db.prepare("UPDATE tiktok_netdisk_dramas SET status='failed',error='测试失败',progress=1,progress_stage='转存视频' WHERE title=?").run('春日归人');
-      db.close();
-    }, directory);
-    await page.getByText('测试失败', { exact: true }).waitFor();
-    assert.equal(await page.getByRole('progressbar', { name: '春日归人转存进度' }).getAttribute('aria-valuenow'), '1');
-    assert.equal(await page.getByRole('columnheader', { name: '失败原因', exact: true }).count(), 1);
-    const reasonRow = page.getByRole('row').filter({ has: page.getByText('春日归人', { exact: true }) });
-    assert.equal(await reasonRow.getByRole('cell').nth(5).innerText(), '失败');
-    assert.equal(await reasonRow.getByRole('cell').nth(6).innerText(), '测试失败');
-    await page.getByRole('button', { name: '导入日期', exact: true }).click();
-    await page.locator('[data-slot="popover-content"] [data-slot="calendar"]').waitFor().catch(() => undefined);
-    await page.keyboard.press('Escape');
-    await page.getByRole('combobox', { name: '转存状态' }).click();
-    await page.getByRole('option', { name: '待转存', exact: true }).click();
-    await page.getByText('春日归人', { exact: true }).waitFor({ state: 'hidden' });
-    await page.getByRole('button', { name: '导出', exact: true }).click();
-    await page.getByText('已导出 2 条剧目（含失败记录）', { exact: true }).waitFor();
-    const exported = new ExcelJS.Workbook(); await exported.xlsx.readFile(output);
-    assert.equal(exported.worksheets[0].getRow(1).getCell(14).value, '全集链接(100%)');
-    assert.equal(exported.worksheets[0].actualRowCount, 3);
-    await app.evaluate((_electron, directory) => {
-      const Database = globalThis.require('better-sqlite3'), db = new Database(directory + '/profile/automation.sqlite');
-      db.prepare("UPDATE tiktok_netdisk_dramas SET imported_at='2000-01-01T00:00:00.000Z' WHERE title=?").run('星河归途');
-      db.close();
-    }, directory);
-    const today = new Date(); const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-    const dated = await page.evaluate(date => window.ipcRenderer.invoke('tiktok-drama:netdisk:export', { from: date, to: date }), date);
-    assert.equal(dated.count, 1, 'export only the selected import day, including its failed row');
-    const datedBook = new ExcelJS.Workbook(); await datedBook.xlsx.readFile(output);
-    assert.equal(datedBook.worksheets[0].getRow(2).getCell(12).value, '春日归人');
-    const result = await page.evaluate(() => window.ipcRenderer.invoke('tiktok-drama:netdisk:list', { from: '2099-01-01' }));
-    assert.equal(result.total, 0);
-    await page.getByRole('button', { name: '重置', exact: true }).click();
-    await page.getByText('春日归人', { exact: true }).waitFor();
-    await page.screenshot({ path: path.join(cache, 'tiktok-netdisk-desktop.png') });
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 700));
-    await page.screenshot({ path: path.join(cache, 'tiktok-netdisk-compact.png') });
-    const failed = page.getByRole('row').filter({ has: page.getByText('春日归人', { exact: true }) });
-    await failed.getByRole('button', { name: '重试', exact: true }).click();
-    await page.waitForFunction(async () => {
-      const result = await window.ipcRenderer.invoke('tiktok-drama:netdisk:list', {});
-      return !result.running && result.records.some((row: any) => row.title === '春日归人' && row.status === 'failed' && row.error !== '测试失败');
+test(
+  "Wechat and TikTok restore Feishu checkpoints, write links and show compact ring cards",
+  { timeout: 60000 },
+  async () => {
+    const root = process.cwd(),
+      cache = path.join(root, ".cache");
+    await mkdir(cache, { recursive: true });
+    const directory = await mkdtemp(path.join(cache, "feishu-platform-smoke-"));
+    const bootstrap = path.join(directory, "bootstrap.mjs");
+    await writeFile(
+      bootstrap,
+      `
+    import { app, safeStorage } from 'electron';
+    import { mkdirSync } from 'node:fs';
+    import { createHash } from 'node:crypto';
+    import Database from 'better-sqlite3';
+    const directory = ${JSON.stringify(directory)};
+    mkdirSync(directory + '/profile', { recursive: true });
+    app.setPath('userData', directory + '/profile');
+    app.on('browser-window-created', (_event, window) => window.hide());
+    const Store = (await import('electron-store')).default;
+    new Store({ name: 'global-app-config' }).set('config', {
+      runDataRoot: directory + '/runs', localMaterialRoot: directory + '/materials', theme: 'light',
+      aiApiKeyCiphertext: '', aiBaseURL: 'https://example.com', aiModel: 'test-model',
     });
-    await failed.getByRole('button', { name: '删除春日归人' }).click();
-    await page.getByText('春日归人', { exact: true }).waitFor({ state: 'hidden' });
-    assert.equal((await page.evaluate(() => window.ipcRenderer.invoke('tiktok-drama:netdisk:list', {}))).total, 1);
-    assert.deepEqual(errors, []);
-  } finally { await app.close(); await rm(directory, { recursive: true, force: true }); }
-});
+    new Store({ name: 'baidu-netdisk-config' }).set('config.executablePath', directory + '/missing.exe');
+    const feishu = new Store({ name: 'feishu-tables' });
+    feishu.store = { appId: 'cli_smoketest', secretCiphertext: '', tableUrl: 'https://example.feishu.cn/wiki/test' };
+    app.once('ready', () => feishu.set('secretCiphertext', safeStorage.encryptString('test-secret').toString('base64')));
+    const db = new Database(directory + '/profile/automation.sqlite');
+    db.exec('CREATE TABLE feishu_task_checkpoints (platform TEXT NOT NULL, source_key TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(platform, source_key))');
+    const input = { originalTitle: '飞书转存测试', episodeCount: 80, shareText: 'https://pan.baidu.com/s/1test', versions: [] };
+    for (const [platform, sheet] of [['wechat-drama', 'wechat'], ['tiktok-drama', 'tiktok']]) {
+      const id = createHash('sha256').update(JSON.stringify(['book', sheet, input])).digest('hex');
+      const task = { ...input, id, state: 'completed', results: [{ title: input.originalTitle, shareLayout: 'directory', shareUrl: 'https://pan.baidu.com/s/1result?pwd=1234' }], downloadCount: platform === 'wechat-drama' ? 48 : 80, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      db.prepare('INSERT INTO feishu_task_checkpoints VALUES (?, ?, ?)').run(platform, id, JSON.stringify(task));
+    }
+    db.close();
+    const data = {
+      wechat: [['剧名','集数','原百度链接','二创百度链接','备注'], [input.originalTitle, '80', input.shareText, '', '']],
+      tiktok: [['剧名','集数','原百度链接','单层文件夹链接','备注'], [input.originalTitle, '80', input.shareText, '', '']],
+    };
+    globalThis.__feishuSmoke = { writes: [], reads: [] };
+    const nativeFetch = globalThis.fetch;
+    globalThis.fetch = async (request, init) => {
+      const url = new URL(typeof request === 'string' ? request : request.url ?? request);
+      if (!['accounts.feishu.cn', 'open.feishu.cn'].includes(url.hostname)) return nativeFetch(request, init);
+      const reply = (data) => new Response(JSON.stringify({ code: 0, data }), { headers: { 'content-type': 'application/json' } });
+      if (url.hostname === 'accounts.feishu.cn') return new Response(JSON.stringify({ code: 0, access_token: 'fake-token', expires_in: 3600 }));
+      if (url.pathname.includes('get_node')) return reply({ node: { obj_type: 'sheet', obj_token: 'book' } });
+      if (url.pathname.endsWith('/sheets/query')) return reply({ sheets: [['wechat', '微信二创'], ['tiktok', 'tiktok转存']].map(([sheet_id, title]) => ({ sheet_id, title, grid_properties: { row_count: 2, column_count: 5 } })) });
+      if (url.pathname.endsWith('/styles_batch_update')) return reply({});
+      if (url.pathname.endsWith('/values_batch_update')) {
+        for (const range of JSON.parse(init.body).valueRanges) {
+          const [sheet, cell] = range.range.split('!');
+          const column = cell.charCodeAt(0) - 65;
+          data[sheet][1][column] = range.values[0][0];
+          globalThis.__feishuSmoke.writes.push({ sheet, column, value: range.values[0][0] });
+        }
+        return reply({});
+      }
+      if (url.pathname.includes('/values/')) {
+        const sheet = decodeURIComponent(url.pathname.split('/').at(-1)).split('!')[0];
+        globalThis.__feishuSmoke.reads.push(sheet);
+        return reply({ valueRange: { values: data[sheet] } });
+      }
+      throw new Error('Unexpected Feishu request: ' + url.pathname);
+    };
+    await import(${JSON.stringify(pathToFileURL(path.join(root, "dist-electron/main.js")).href)});
+  `,
+    );
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        (pair): pair is [string, string] =>
+          typeof pair[1] === "string" && pair[0] !== "ELECTRON_RUN_AS_NODE",
+      ),
+    );
+    const app = await _electron.launch({
+      executablePath: require("electron"),
+      args: [bootstrap],
+      env,
+      timeout: 15000,
+    });
+    try {
+      const page = await app.firstWindow();
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await page.waitForSelector(".app-workspace");
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.setSize(1100, 760),
+      );
+      for (const [route, channel] of [
+        ["/wechat-drama/recreation", "wechat-drama:recreation"],
+        ["/tiktok-drama/netdisk", "tiktok-drama:netdisk"],
+      ]) {
+        await page.evaluate((route) => {
+          location.hash = route;
+        }, route);
+        const start = page.getByRole("button", { name: "开始处理", exact: true });
+        await start.waitFor();
+        assert.ok((await start.boundingBox())!.height <= 28);
+        await start.click();
+        await page.waitForFunction(
+          async (channel) =>
+            (await window.ipcRenderer.invoke(channel + ":workspace")).completed === 1,
+          channel,
+        );
+        const ring = page.getByRole("progressbar", { name: "飞书转存测试处理进度" });
+        await ring.waitFor();
+        assert.equal(await ring.getAttribute("aria-valuenow"), "100");
+        assert.equal(await page.getByRole("table").count(), 0);
+        assert.equal(await page.locator("main:visible details").count(), 0);
+        assert.ok(
+          (await page.getByRole("region", { name: "当前剧目进度" }).boundingBox())!.height < 140,
+        );
+        await page.screenshot({
+          path: path.join(
+            cache,
+            channel.startsWith("wechat")
+              ? "wechat-feishu-monitor.png"
+              : "tiktok-feishu-monitor.png",
+          ),
+        });
+      }
+      await assert.rejects(
+        page.evaluate(() => window.ipcRenderer.invoke("feishu:tables:save", {})),
+        /停止各平台/,
+      );
+      const snapshot = await app.evaluate(() => (globalThis as any).__feishuSmoke);
+      for (const sheet of ["wechat", "tiktok"]) {
+        assert.ok(snapshot.reads.includes(sheet));
+        assert.ok(
+          snapshot.writes.some(
+            (write: any) =>
+              write.sheet === sheet &&
+              write.column === 3 &&
+              write.value === "https://pan.baidu.com/s/1result?pwd=1234",
+          ),
+        );
+        const channel = sheet === "wechat" ? "wechat-drama:recreation" : "tiktok-drama:netdisk";
+        const stopped = await page.evaluate(
+          (channel) => window.ipcRenderer.invoke(channel + ":pause"),
+          channel,
+        );
+        assert.equal(stopped.running, false);
+        assert.equal(stopped.stopping, false);
+      }
+      assert.deepEqual(errors, []);
+    } finally {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

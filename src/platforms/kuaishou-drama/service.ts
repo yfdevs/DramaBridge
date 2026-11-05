@@ -19,6 +19,8 @@ export type KuaishouExecutionAttention = {
 export type KuaishouDramaLoginState = "login-required" | "logged-in" | "unknown";
 
 export type KuaishouDramaConfig = {
+  recreationSheetName: string;
+  recreationPollSeconds: string;
   accountProfileName: string;
   apiBaseUrl: string;
   localEpisodeVideoRoot: string;

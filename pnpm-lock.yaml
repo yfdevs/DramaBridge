@@ -55,6 +55,9 @@ importers:
       '@dramabridge/douyin-drama-automation':
         specifier: workspace:*
         version: link:packages/douyin-drama-automation
+      '@dramabridge/feishu':
+        specifier: workspace:*
+        version: link:packages/feishu
       '@dramabridge/file-utils':
         specifier: workspace:*
         version: link:packages/file-utils
@@ -534,6 +537,22 @@ importers:
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
         version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+
+  packages/feishu:
+    devDependencies:
+      '@types/node':
+        specifier: latest
+        version: 26.6.5
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.15
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vite:
+        specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+
 
   packages/file-utils:
     dependencies:

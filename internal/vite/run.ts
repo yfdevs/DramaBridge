@@ -180,9 +180,13 @@ export const runConfig = {
       input: packageBuildInputs("baidu-netdisk-automation"),
       output: ["packages/baidu-netdisk-automation/dist/**"],
     },
+    "pkg:feishu:build": {
+      command: "vp pack", cwd: "packages/feishu", input: packageBuildInputs("feishu"), output: ["packages/feishu/dist/**"],
+    },
     "packages:build": {
       command: "node -e \"console.log('workspace packages built')\"",
       dependsOn: [
+        "pkg:feishu:build",
         "pkg:ai:build",
         "pkg:file-utils:build",
         "pkg:logging:build",

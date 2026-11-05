@@ -1,6 +1,8 @@
 ﻿export type TiktokDramaCenterLoginState = "login-required" | "logged-in" | "unknown"
 
 export type TiktokDramaCenterConfig = {
+  netdiskSheetName: string;
+  netdiskPollSeconds: string;
   headless: string
   localEpisodeVideoRoot: string
   operationDelaySeconds: string

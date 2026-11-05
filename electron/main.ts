@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu } from "electron";
+import { registerFeishuTableHandlers } from "./integrations/feishu";
 
 import { registerAppRuntimeHandlers } from "./app-runtime";
 import { registerAppUpdaterHandlers } from "./app-updater";
@@ -65,6 +66,7 @@ function startApplication() {
       Menu.setApplicationMenu(null);
       initializeSystemTray(appIconPath(environment));
       initializeTrpcIpc();
+      registerFeishuTableHandlers();
       registerAppRuntimeHandlers();
       registerGlobalAppConfigHandlers({
         getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,

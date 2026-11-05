@@ -57,18 +57,25 @@ export async function transferNormalizedEpisodeVideos(o: {
   const parentPath = parent ? String(parent.path || '/' + o.parentDirectoryName) : '/';
   const root = await o.createDirectory(parentPath, o.recreation && !o.versionTitle ? o.title + '60%素材' : o.title);
   let rootPath = String(root.path || parentPath.replace(/\/$/, '') + '/' + o.title);
+  let shareRoot = root;
+  let shareRootPath = rootPath;
+  const shareChildren: Entry[] = [];
   if (o.recreation) {
     if (o.versionTitle) {
       const version = await o.createDirectory(rootPath, o.versionTitle + '-60%');
       rootPath = String(version.path);
+      shareRoot = version;
+      shareRootPath = rootPath;
     }
     const cover = await o.createDirectory(rootPath, '封面');
+    shareChildren.push(cover);
     for (const image of covers) {
       const copied = await o.transferOne(image, String(cover.path), "cover");
       if (!o.identical(image, copied.item)) throw new Error('封面转存文件身份未确认：' + name(image));
       coverIds.push(id(copied.item));
     }
     const videos = await o.createDirectory(rootPath, '成片60%');
+    shareChildren.push(videos);
     rootPath = String(videos.path);
     selected.files = selected.files.slice(0, Math.ceil(o.episodeCount * 0.6));
   }
@@ -110,10 +117,22 @@ export async function transferNormalizedEpisodeVideos(o: {
   let shareUrl = '';
   if (o.sharePassword) {
     progress(results.length, '生成分享链接');
-    // Share only verified video IDs: pre-existing sibling directories and
-    // unrelated files in the reused target folder must never enter this link.
-    const ids = [...results.map(file => file.fsId), ...coverIds];
-    if (ids.some(value => !value)) throw new Error('视频缺少文件 ID，无法创建分享');
+    // Sharing individual file IDs flattens covers and videos in the public link.
+    // Share the task directory only after verifying its entire contents.
+    const assertContents = async (path: string, expected: string[]) => {
+      if (expected.some(value => !value)) throw new Error('文件缺少 ID，无法创建分享');
+      const wanted = new Set(expected);
+      const actual = await o.listOwn(path, true);
+      if (actual.length !== wanted.size || actual.some(entry => !wanted.has(id(entry))))
+        throw new Error('任务目录含有本次任务以外的内容，未创建分享：' + path);
+    };
+    if (o.recreation) {
+      await assertContents(shareRootPath, shareChildren.map(id));
+      await assertContents(String(shareChildren[0].path), coverIds);
+    }
+    await assertContents(rootPath, results.map(file => file.fsId));
+    const ids = [id(shareRoot)];
+    if (!ids[0]) throw new Error('任务文件夹缺少 ID，无法创建分享');
     const params = new URLSearchParams({ channel: 'chunlei', web: '1', app_id: '250528', clienttype: '0', bdstoken: o.token });
     const shared = await o.request('/share/set?' + params, { method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
@@ -123,7 +142,7 @@ export async function transferNormalizedEpisodeVideos(o: {
     if (url.hostname !== 'pan.baidu.com' || !/^https?:$/.test(url.protocol) || !url.pathname.startsWith('/s/')) throw new Error('百度网盘返回的分享链接无效');
     url.protocol = 'https:'; url.searchParams.set('pwd', o.sharePassword); shareUrl = url.toString();
   }
-  return { resourceRootPath: rootPath, resourceRootName: o.title, resourceRootFsId: id(root),
-    savedPath: rootPath, fileName: o.title, fsId: id(root), transferredItemCount, shareUrl,
+  return { resourceRootPath: shareRootPath, resourceRootName: o.versionTitle || o.title, resourceRootFsId: id(shareRoot),
+    savedPath: shareRootPath, fileName: o.versionTitle || o.title, fsId: id(shareRoot), transferredItemCount, shareUrl,
     remoteVideos: { rootPath, files: results } };
 }

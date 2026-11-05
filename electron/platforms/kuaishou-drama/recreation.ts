@@ -1,164 +1,73 @@
-import { dialog } from "electron";
-import { stat } from "node:fs/promises";
 import { emitIpcEvent, trpcIpc as ipcMain } from "../../ipc";
 import { openAutomationDatabase } from "../../storage/database";
-import { KuaishouRecreationRepository } from "../../storage/kuaishou-recreation";
-import { createRecreationTemplate, readRecreationExcel } from "./recreation-excel";
+import { KuaishouFeishuRepository } from "../../storage/kuaishou-feishu";
 import {
-  transferKuaishouRecreationVideos,
-} from "../baidu-netdisk";
-import type {
-  RecreationTask,
-  RecreationWorkspace,
-} from "../../../src/platforms/kuaishou-drama/recreation-types";
-import { openExistingPath } from "../shared";
+  configuredFeishuTables,
+  lockFeishuSettings,
+  readFeishuSettings,
+} from "../../integrations/feishu";
+import { transferKuaishouRecreationVideos } from "../baidu-netdisk";
+import { KuaishouFeishuRunner } from "./recreation-feishu";
 
-export function registerKuaishouRecreationHandlers() {
-  // Lazy initialization avoids creating a second connection until the page is used.
-  let repository: KuaishouRecreationRepository | undefined;
-  const repo = () =>
-    (repository ??= new KuaishouRecreationRepository(openAutomationDatabase().database));
-  let running = false;
-  let activeId: string | undefined;
-  let controller: AbortController | undefined;
+let runner: KuaishouFeishuRunner | undefined;
+let stopping: Promise<void> | undefined;
+export async function stopKuaishouRecreation() {
+  if (stopping) return stopping;
+  stopping = (async () => {
+    try {
+      await runner?.stop();
+    } finally {
+      lockFeishuSettings("kuaishou-recreation", false);
+    }
+  })();
+  try {
+    await stopping;
+  } finally {
+    stopping = undefined;
+  }
+}
+export function registerKuaishouRecreationHandlers(
+  readConfig: () => { recreationSheetName: string; recreationPollSeconds: string },
+) {
   let notification: ReturnType<typeof setTimeout> | undefined;
   const notify = () => {
     if (notification) return;
     notification = setTimeout(() => {
       notification = undefined;
       emitIpcEvent("kuaishou-drama:recreation:changed");
-    }, 100);
+    }, 150);
   };
-  const pendingProgress = new Map<string, ReturnType<typeof setTimeout>>();
-  const workspace = (): RecreationWorkspace => ({ running, tasks: repo().list().map(task => ({
-    ...task,
-    results: task.results.map(version => {
-      const summary = { ...version };
-      delete summary.localFiles; // File checkpoints belong to the runtime, not renderer IPC payloads.
-      delete summary.verifiedFiles;
-      return summary;
-    }),
-  })) });
-  const update = (task: RecreationTask, fields: Partial<RecreationTask>) => {
-    Object.assign(task, fields);
-    if (Object.keys(fields).every(key => key === "message")) {
-      if (!pendingProgress.has(task.id)) pendingProgress.set(task.id, setTimeout(() => {
-        pendingProgress.delete(task.id);
-        repo().save(task);
-        notify();
-      }, 500));
-      return;
-    }
-    clearTimeout(pendingProgress.get(task.id));
-    pendingProgress.delete(task.id);
-    repo().save(task);
-    notify();
-  };
-  const execute = async (task: RecreationTask, signal: AbortSignal) => {
-    update(task, { state: "checking", message: "检查已完成版本，准备直接转存视频与原封面" });
-    for (const version of task.results) {
-      signal.throwIfAborted();
-      if (version.shareUrl) continue;
-      update(task, { state: "uploading", message: `云端转存前 ${task.downloadCount} 集与原封面：${version.title}` });
-      const result = await transferKuaishouRecreationVideos({ title: task.originalTitle, versionTitle: version.title,
-        shareText: task.shareText, episodeCount: task.episodeCount,
-        onProgress: progress => update(task, { message: `${version.title}：${progress.stage} ${progress.completed}/${task.downloadCount}` }),
-      });
-      const extractionCode = new URL(result.shareUrl).searchParams.get("pwd") || "";
-      Object.assign(version, { remotePath: result.path, shareUrl: result.shareUrl, extractionCode });
-      update(task, { results: task.results });
-    }
-    update(task, { state: "completed", message: "所有版本已直接转存视频与原封面，并生成分享链接" });
-  };
-
-  const pump = async () => {
-    try {
-      while (running) {
-        const task = repo().nextQueued();
-        if (!task) break;
-        activeId = task.id;
-        controller = new AbortController();
-        try {
-          await execute(task, controller.signal);
-        } catch (error) {
-          update(task, {
-            state: controller.signal.aborted ? "interrupted" : "failed",
-            message: error instanceof Error ? error.message : String(error),
-          });
-        } finally {
-          activeId = undefined;
-          controller = undefined;
-        }
-      }
-    } finally {
-      running = false;
-      notify();
-    }
-  };
+  const workspace = () =>
+    runner?.status() ?? {
+      running: false,
+      stopping: false,
+      phase: "idle",
+      message: "点击开始处理，读取飞书中的待处理剧目",
+      completed: 0,
+      failed: 0,
+    };
   ipcMain.handle("kuaishou-drama:recreation:workspace", workspace);
-  ipcMain.handle("kuaishou-drama:recreation:template", async () => {
-    const result = await dialog.showSaveDialog({
-      title: "下载二创导入模板",
-      defaultPath: "快手二创导入模板.xlsx",
-      filters: [{ name: "Excel", extensions: ["xlsx"] }],
-    });
-    if (result.canceled || !result.filePath) return false;
-    await createRecreationTemplate(result.filePath);
-    return true;
-  });
-  ipcMain.handle("kuaishou-drama:recreation:import", async () => {
-    const result = await dialog.showOpenDialog({
-      title: "导入二创任务",
-      properties: ["openFile"],
-      filters: [{ name: "Excel", extensions: ["xlsx"] }],
-    });
-    if (result.canceled) return { count: 0, workspace: workspace() };
-    if ((await stat(result.filePaths[0])).size > 20 * 1024 * 1024)
-      throw new Error("Excel 文件不能超过 20 MB");
-    const inputs = await readRecreationExcel(result.filePaths[0]);
-    repo().import(inputs);
-    notify();
-    return { count: inputs.length, workspace: workspace() };
-  });
   ipcMain.handle("kuaishou-drama:recreation:start", () => {
-    if (!running && !activeId) {
-      running = true;
-      notify();
-      void pump();
-    }
+    if (stopping) throw new Error("正在停止，请等待当前剧目完成");
+    if (runner?.status().running) return workspace();
+    const settings = readFeishuSettings();
+    const tables = configuredFeishuTables();
+    const config = readConfig();
+    runner = new KuaishouFeishuRunner({
+      tables,
+      url: settings.tableUrl,
+      sheet: config.recreationSheetName,
+      pollSeconds: Number(config.recreationPollSeconds),
+      journal: new KuaishouFeishuRepository(openAutomationDatabase().database),
+      transfer: transferKuaishouRecreationVideos,
+      changed: notify,
+    });
+    lockFeishuSettings("kuaishou-recreation", true);
+    runner.start();
     return workspace();
   });
-  ipcMain.handle("kuaishou-drama:recreation:pause", () => {
-    running = false;
-    notify();
+  ipcMain.handle("kuaishou-drama:recreation:pause", async () => {
+    await stopKuaishouRecreation();
     return workspace();
-  });
-  ipcMain.handle("kuaishou-drama:recreation:cancel", () => {
-    running = false;
-    controller?.abort(new Error("用户停止任务，已完成的版本分享链接会保留"));
-    notify();
-    return workspace();
-  });
-  ipcMain.handle("kuaishou-drama:recreation:retry", (_event, id: string) => {
-    const task = repo()
-      .list()
-      .find((task) => task.id === id);
-    if (!task || !["failed", "interrupted"].includes(task.state))
-      throw new Error("仅失败或中断任务可以重试");
-    update(task, { state: "queued", message: "等待重试，保留已完成版本" });
-    return workspace();
-  });
-  ipcMain.handle("kuaishou-drama:recreation:delete", (_event, id: string) => {
-    if (activeId === id) throw new Error("请先停止当前任务再删除");
-    repo().delete(id);
-    notify();
-    return workspace();
-  });
-  ipcMain.handle("kuaishou-drama:recreation:open", async (_event, id: string) => {
-    const task = repo()
-      .list()
-      .find((task) => task.id === id);
-    if (!task?.localPath) throw new Error("尚未生成本地版本目录");
-    return openExistingPath(task.localPath);
   });
 }

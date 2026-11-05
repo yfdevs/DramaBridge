@@ -16,6 +16,7 @@ import {
   type PlatformId,
 } from "@/config/navigation";
 import { GlobalConfigurationPage } from "@/pages/app-config/configuration";
+import { VideoSeparationPage } from "@/pages/tools/video-separation";
 import { KuaishouAnalyticsPage } from "@/pages/kuaishou-drama/analytics";
 import { KuaishouRecreationPage } from "@/pages/kuaishou-drama/recreation";
 import { KuaishouDramaConfigurationPage } from "@/pages/kuaishou-drama/configuration";
@@ -50,13 +51,11 @@ import { TiktokDramaCenterConfigurationPage } from "@/pages/tiktok-drama/configu
 import { TiktokDramaCenterServiceControlPage } from "@/pages/tiktok-drama/service-control";
 
 const platformLogRouteComponents = Object.fromEntries(
-  platformNavigation.map(({ id }) => [
-    `${id}/logs`,
-    () => <PlatformLogPage platform={id} />,
-  ]),
+  platformNavigation.map(({ id }) => [`${id}/logs`, () => <PlatformLogPage platform={id} />]),
 ) as unknown as Record<`${PlatformId}/logs`, ComponentType>;
 
 const appRouteComponents: Record<AppRoute, ComponentType> = {
+  "tools/video-separation": VideoSeparationPage,
   "app/config": GlobalConfigurationPage,
   "app/updates": () => <AppUpdateControl page />,
   "wechat-drama/publish": WechatPublishTasksPage,

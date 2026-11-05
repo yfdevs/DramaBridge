@@ -1,5 +1,5 @@
 import { ExternalLink } from "@mynaui/icons-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -13,6 +13,8 @@ import {
 } from "@/pages/shared/configuration-page";
 import { globalAppConfigService, type GlobalAppConfig } from "@/platforms/app-config/service";
 import { ExternalApiConfiguration } from "./external-api";
+import { FeishuGlobalConfiguration, type FeishuConfigFields } from "@/pages/feishu/tables";
+import { feishuService } from "@/platforms/feishu/service";
 
 const emptyConfig: GlobalAppConfig = {
   theme: "system",
@@ -91,14 +93,16 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   {
     title: "本机图片识别",
     description: "用于区分剪映和 AI 剧创工程截图",
-    fields: [{
-      kind: "switch",
-      key: "ownershipLocalOcrEnabled",
-      label: "优先使用本机识别",
-      description: "需要识别截图内容时先在电脑上处理，无法确认时自动使用 AI。",
-      activeLabel: "已开启",
-      inactiveLabel: "已关闭",
-    }],
+    fields: [
+      {
+        kind: "switch",
+        key: "ownershipLocalOcrEnabled",
+        label: "优先使用本机识别",
+        description: "需要识别截图内容时先在电脑上处理，无法确认时自动使用 AI。",
+        activeLabel: "已开启",
+        inactiveLabel: "已关闭",
+      },
+    ],
   },
   {
     title: "AI 服务",
@@ -161,13 +165,82 @@ export function GlobalConfigurationPage() {
       setOcrMessage(result.message);
     } catch {
       setOcrMessage("测试未完成，请稍后重试。任务会自动使用 AI。");
-    } finally { setTestingOcr(false); }
+    } finally {
+      setTestingOcr(false);
+    }
   };
   const returnRoute = returnRouteFromLocationState(location.state);
+  const savedConfig = useRef<GlobalAppConfig & FeishuConfigFields>({
+    ...emptyConfig,
+    feishuAppId: "",
+    feishuAppSecret: "",
+    feishuTableUrl: "",
+    feishuHasSecret: false,
+  });
   const configState = usePlatformConfig({
-    emptyConfig,
-    getConfig: globalAppConfigService.getConfig,
-    saveConfig: globalAppConfigService.saveConfig,
+    emptyConfig: {
+      ...emptyConfig,
+      feishuAppId: "",
+      feishuAppSecret: "",
+      feishuTableUrl: "",
+      feishuHasSecret: false,
+    } as GlobalAppConfig & FeishuConfigFields,
+    getConfig: async () => {
+      const [result, feishu] = await Promise.all([
+        globalAppConfigService.getConfig(),
+        feishuService.settings(),
+      ]);
+      return {
+        ...result,
+        config: {
+          ...result.config,
+          feishuAppId: feishu.appId,
+          feishuAppSecret: "",
+          feishuTableUrl: feishu.tableUrl,
+          feishuHasSecret: feishu.hasSecret,
+        },
+      };
+    },
+    saveConfig: async (config: GlobalAppConfig & FeishuConfigFields) => {
+      const {
+        feishuAppId,
+        feishuAppSecret,
+        feishuTableUrl,
+        feishuHasSecret: _hasSecret,
+        ...globalConfig
+      } = config;
+      const saved = savedConfig.current;
+      const feishuChanged =
+        feishuAppId !== saved.feishuAppId ||
+        feishuTableUrl !== saved.feishuTableUrl ||
+        !!feishuAppSecret;
+      const feishu = feishuChanged
+        ? await feishuService.save({
+            appId: feishuAppId,
+            appSecret: feishuAppSecret || undefined,
+            tableUrl: feishuTableUrl,
+          })
+        : { appId: feishuAppId, tableUrl: feishuTableUrl, hasSecret: saved.feishuHasSecret };
+      const globalChanged = (Object.keys(globalConfig) as Array<keyof GlobalAppConfig>).some(
+        (key) => globalConfig[key] !== saved[key],
+      );
+      const result = globalChanged
+        ? await globalAppConfigService.saveConfig(globalConfig)
+        : await globalAppConfigService.getConfig();
+      return {
+        ...result,
+        config: {
+          ...result.config,
+          feishuAppId: feishu.appId,
+          feishuAppSecret: "",
+          feishuTableUrl: feishu.tableUrl,
+          feishuHasSecret: feishu.hasSecret,
+        },
+      };
+    },
+    onApplyResult: (result) => {
+      savedConfig.current = result.config;
+    },
   });
   const testConnection = async () => {
     setTesting(true);
@@ -185,7 +258,7 @@ export function GlobalConfigurationPage() {
     }
   };
 
-  const selectDirectory = async (key: keyof GlobalAppConfig) => {
+  const selectDirectory = async (key: keyof GlobalAppConfig | keyof FeishuConfigFields) => {
     if (key !== "runDataRoot" && key !== "localMaterialRoot") return;
 
     try {
@@ -243,9 +316,17 @@ export function GlobalConfigurationPage() {
               </div>
             ) : section.title === "本机图片识别" ? (
               <div className="flex flex-wrap items-center justify-end gap-3">
-                <p role="status" className="text-sm text-muted-foreground">{ocrMessage}</p>
-                <Button size="sm" variant="outline" disabled={configState.loading || testingOcr}
-                  onClick={() => { void testLocalOcr(); }}>
+                <p role="status" className="text-sm text-muted-foreground">
+                  {ocrMessage}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={configState.loading || testingOcr}
+                  onClick={() => {
+                    void testLocalOcr();
+                  }}
+                >
                   {testingOcr ? "测试中…" : "测试是否可用"}
                 </Button>
               </div>
@@ -257,6 +338,12 @@ export function GlobalConfigurationPage() {
         />
       ))}
       <ExternalApiConfiguration />
+      <FeishuGlobalConfiguration
+        config={configState.config}
+        onChange={configState.updateConfig}
+        disabled={configState.loading}
+        hasChanges={configState.hasChanges}
+      />
     </ConfigurationPageFrame>
   );
 }

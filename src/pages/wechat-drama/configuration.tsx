@@ -34,6 +34,8 @@ import {
 } from "@/platforms/wechat-drama/service";
 
 const emptyConfig: WechatVideoConfig = {
+  recreationSheetName: "微信二创",
+  recreationPollSeconds: "30",
   apiBaseUrl: "http://180.184.76.232:19090",
   selectedVideoAccountIds: "",
   videoAccountContractSubjects:
@@ -101,6 +103,14 @@ const sections: Array<{
   description: string;
   fields: ConfigField[];
 }> = [
+  {
+    title: "二创任务",
+    description: "飞书任务表",
+    fields: [
+      { key: "recreationSheetName", label: "二创工作表名称" },
+      { key: "recreationPollSeconds", label: "检查间隔", type: "number", min: 10, suffix: "秒" },
+    ],
+  },
   {
     title: "接口连接",
     description: "后台连接与任务来源",
@@ -440,7 +450,7 @@ function ConfigFieldControl({
     return (
       <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
         <FieldContent>
-          <FieldLabel className="text-[13px]" htmlFor={field.key}>
+          <FieldLabel className="text-[13px]" htmlFor={`wechat-${field.key}`}>
             {field.label}
           </FieldLabel>
           {field.description ? (
@@ -452,7 +462,7 @@ function ConfigFieldControl({
             {checked ? field.activeLabel : field.inactiveLabel}
           </span>
           <Switch
-            id={field.key}
+            id={`wechat-${field.key}`}
             checked={checked}
             onCheckedChange={(nextChecked) => onChange(field.key, nextChecked ? "true" : "false")}
           />
@@ -464,7 +474,7 @@ function ConfigFieldControl({
   return (
     <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
       <FieldContent>
-        <FieldLabel className="text-[13px]" htmlFor={field.key}>
+        <FieldLabel className="text-[13px]" htmlFor={`wechat-${field.key}`}>
           {field.label}
         </FieldLabel>
         {field.description ? (
@@ -478,7 +488,7 @@ function ConfigFieldControl({
             onValueChange={(nextValue) => onChange(field.key, String(nextValue ?? ""))}
           >
             <SelectTrigger
-              id={field.key}
+              id={`wechat-${field.key}`}
               className="w-full bg-background text-[13px]"
               size="default"
             >
@@ -498,7 +508,7 @@ function ConfigFieldControl({
           <InputGroup>
             <InputGroupInput
               className="text-[13px] md:text-[13px]"
-              id={field.key}
+              id={`wechat-${field.key}`}
               min={field.type === "number" ? (field.min ?? 0) : undefined}
               step={field.type === "number" ? field.step : undefined}
               type={field.type ?? "text"}

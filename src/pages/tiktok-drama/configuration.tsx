@@ -10,6 +10,8 @@ import {
 } from "@/platforms/tiktok-drama/service"
 
 const emptyConfig: TiktokDramaCenterConfig = {
+  netdiskSheetName: "tiktok转存",
+  netdiskPollSeconds: "30",
   headless: "false",
   localEpisodeVideoRoot: "",
   operationDelaySeconds: "0.02",
@@ -17,6 +19,14 @@ const emptyConfig: TiktokDramaCenterConfig = {
 }
 
 const sections: ConfigSectionDefinition<TiktokDramaCenterConfig>[] = [
+  {
+    title: "转存任务",
+    description: "飞书任务表",
+    fields: [
+      { key: "netdiskSheetName", label: "转存工作表名称" },
+      { key: "netdiskPollSeconds", label: "检查间隔", type: "number", min: 10, suffix: "秒" },
+    ],
+  },
   {
     title: "浏览器",
     description: "账号登录信息独立保存，共享目录在全局配置中设置。",

@@ -1,7 +1,6 @@
 import { useEffect, useState, type ComponentProps } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Circle, Cog, Folder, GitBranch, Refresh } from "@mynaui/icons-react";
-import { toast } from "sonner";
+import { Circle, Cog, GitBranch, Refresh, Scissors } from "@mynaui/icons-react";
 import { version as bundledVersion } from "../../package.json";
 import {
   getAppUpdateStatus,
@@ -16,6 +15,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
@@ -28,10 +28,11 @@ import {
   platformContextRoute,
   platformForPath,
   platformNavigation,
+  toolNavigation,
+  returnRouteFromLocationState,
   routePath,
 } from "@/config/navigation";
 import { formatRuntimeDuration, useAppRuntime } from "@/platforms/app-runtime/context";
-import { openAppPlatformLogs } from "@/platforms/app-runtime/service";
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const location = useLocation();
@@ -39,9 +40,8 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   const path = location.pathname.replace(/^\/+/, "");
   const route = isAppRoute(path) ? path : defaultRoute;
   const platform = platformForPath(platformContextRoute(route, location.state));
+  const toolContext = platformContextRoute(route, location.state).startsWith("tools/");
   const { entries, now } = useAppRuntime();
-  const [openingLogs, setOpeningLogs] = useState(false);
-  const connected = Boolean(window.ipcRenderer);
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null);
   useEffect(() => {
     let disposed = false;
@@ -64,19 +64,9 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
   );
   const version =
     updateStatus?.currentVersion ?? entries[platform.id]?.result?.appVersion ?? bundledVersion;
-  const returnRoute = route.startsWith("app/") ? platform.serviceRoute : route;
-  const openLogs = async () => {
-    setOpeningLogs(true);
-    try {
-      await openAppPlatformLogs(platform.id);
-    } catch (error) {
-      toast.error("无法打开日志目录", {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      setOpeningLogs(false);
-    }
-  };
+  const returnRoute = route.startsWith("app/")
+    ? returnRouteFromLocationState(location.state)
+    : route;
   return (
     <Sidebar collapsible="none" className="shrink-0 border-none" {...props}>
       <SidebarHeader className="app-sidebar-brand h-14 justify-center px-6 py-0">
@@ -89,6 +79,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent className="app-sidebar-content gap-0 px-3 pb-4">
         <SidebarGroup className="p-0">
+          <SidebarGroupLabel className="h-7 px-3 text-[11px]">平台自动化</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
               {platformNavigation.map((item) => {
@@ -98,7 +89,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
-                      isActive={active && !route.startsWith("app/")}
+                      isActive={active && !toolContext && !route.startsWith("app/")}
                       render={<NavLink to={routePath(item.serviceRoute)} />}
                       className="platform-menu-row h-8 gap-2 rounded-lg px-3"
                     >
@@ -135,6 +126,25 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <SidebarGroup className="mt-4 p-0">
+          <SidebarGroupLabel className="h-7 px-3 text-[11px]">工具</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-0.5">
+              {toolNavigation.map((item) => (
+                <SidebarMenuItem key={item.route}>
+                  <SidebarMenuButton
+                    isActive={route === item.route}
+                    render={<NavLink to={routePath(item.route)} />}
+                    className="h-8 gap-2 rounded-lg px-3"
+                  >
+                    <Scissors className="size-4" aria-hidden="true" />
+                    <span className="text-[13px]">{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="px-3 py-2">
         <div className="flex h-7 items-center justify-between gap-1">
@@ -157,24 +167,11 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
             </span>
             <span className="truncate tabular-nums">v{version ?? "—"}</span>
           </Button>
-          <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="工作空间工具">
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="app-chrome-control size-7 rounded-lg"
-                    aria-label={`打开${platform.title}日志目录`}
-                    disabled={!connected || openingLogs}
-                    onClick={() => void openLogs()}
-                  />
-                }
-              >
-                <Folder className="size-3.5" />
-              </TooltipTrigger>
-              <TooltipContent>当前平台日志</TooltipContent>
-            </Tooltip>
+          <div
+            className="flex shrink-0 items-center gap-0.5"
+            role="group"
+            aria-label="工作空间工具"
+          >
             <Tooltip>
               <TooltipTrigger
                 render={

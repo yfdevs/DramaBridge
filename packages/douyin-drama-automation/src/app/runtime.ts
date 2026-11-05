@@ -440,12 +440,11 @@ export async function startDouyinDramaRuntime(
   const context = await launchDouyinDramaBrowserContext(userDataDir, options);
   const page = context.pages()[0] ?? (await context.newPage());
   let running = true;
+  let loginReady = false;
   const runtimeAbortController = new AbortController();
   let lastTask: DouyinDramaRuntimeStatus["lastTask"];
   try {
     await openDouyinDramaCreatePage(page);
-    await waitForDouyinDramaLogin(page, context, options);
-    await ensureDouyinDramaCreatePage(page, options);
   } catch (error) {
     errorLog(options, `[douyin-drama] 运行时启动失败：${errorMessage(error)}`, { error });
     await context.close().catch(() => undefined);
@@ -488,7 +487,25 @@ export async function startDouyinDramaRuntime(
       );
     }
   };
-  const pollLoopPromise = pollLoop();
+  // Return the account runtime as soon as its window is open. Login belongs
+  // to this account's background loop, so it cannot block other accounts.
+  const pollLoopPromise = (async () => {
+    try {
+      await waitForDouyinDramaLogin(page, context, options);
+      if (!running) return;
+      await ensureDouyinDramaCreatePage(page, options);
+      if (!running) return;
+      loginReady = true;
+      await pollLoop();
+    } catch (error) {
+      if (running) {
+        errorLog(options, `[douyin-drama] 账号登录或运行失败：${errorMessage(error)}`, { error });
+        running = false;
+        await context.close().catch(() => undefined);
+        await flushDouyinDramaLogs(options);
+      }
+    }
+  })();
 
   return {
     getStatus() {
@@ -507,6 +524,8 @@ export async function startDouyinDramaRuntime(
       running = false;
       runtimeAbortController.abort(new Error("DOUYIN_DRAMA_RUNTIME_STOPPED"));
       log(options, "[douyin-drama] 运行时停止。", undefined, "runtime");
+      // Release a pending login wait; active tasks retain their normal stop grace period.
+      if (!loginReady) await context.close().catch(() => undefined);
       await Promise.race([
         pollLoopPromise,
         new Promise<void>((resolve) => setTimeout(resolve, 15_000)),

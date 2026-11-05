@@ -9,7 +9,7 @@ import { KuaishouExecutionRepository } from "../../storage/kuaishou-drama/execut
 import { getKuaishouWorkerId } from "./worker-identity";
 import { selectKuaishouAccounts } from "./account-selection";
 import { app } from "electron";
-import { registerKuaishouRecreationHandlers } from "./recreation";
+import { registerKuaishouRecreationHandlers, stopKuaishouRecreation } from "./recreation";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
@@ -88,6 +88,8 @@ type KuaishouDramaRuntime = {
 };
 
 export type KuaishouDramaConfig = {
+  recreationSheetName: string;
+  recreationPollSeconds: string;
   accountProfileName: string;
   apiBaseUrl: string;
   localEpisodeVideoRoot: string;
@@ -130,6 +132,8 @@ type KuaishouDramaStore = {
 };
 
 const defaultKuaishouDramaConfig: KuaishouDramaConfig = {
+  recreationSheetName: "快手二创",
+  recreationPollSeconds: "30",
   accountProfileName: "default",
   apiBaseUrl: "http://180.184.76.232:19090",
   localEpisodeVideoRoot: "",
@@ -218,6 +222,8 @@ function normalizeConfig(
   config: Partial<KuaishouDramaConfig> & Record<string, string | undefined>,
 ): KuaishouDramaConfig {
   return {
+    recreationSheetName: config.recreationSheetName?.trim() || defaultKuaishouDramaConfig.recreationSheetName,
+    recreationPollSeconds: Number.isInteger(Number(config.recreationPollSeconds)) && Number(config.recreationPollSeconds) >= 10 && Number(config.recreationPollSeconds) <= 3600 ? String(Number(config.recreationPollSeconds)) : "30",
     accountProfileName:
       config.accountProfileName?.trim() || defaultKuaishouDramaConfig.accountProfileName,
     apiBaseUrl: config.apiBaseUrl?.trim() || defaultKuaishouDramaConfig.apiBaseUrl,
@@ -648,7 +654,7 @@ async function startRuntime(selectedAccountIds: unknown) {
 export function registerKuaishouDramaPlatformHandlers() {
   taskMonitor();
   ipcMain.handle("kuaishou-drama:tasks:cleanup", () => taskMonitor().sweep());
-  registerKuaishouRecreationHandlers();
+  registerKuaishouRecreationHandlers(readConfig);
   registerTaskAnalyticsHandler({
     platform: "kuaishou-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,
@@ -797,6 +803,7 @@ export function stopKuaishouDramaPlatformRuntime() {
   runtimeController.stopInBackground();
 }
 
-export function stopKuaishouDramaPlatformService() {
-  return runtimeController.stop();
+export async function stopKuaishouDramaPlatformService() {
+  await stopKuaishouRecreation();
+  await runtimeController.stop();
 }

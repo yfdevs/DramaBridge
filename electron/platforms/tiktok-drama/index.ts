@@ -1,4 +1,5 @@
-import { registerTiktokNetdiskHandlers } from "./netdisk";
+import { normalizeFeishuPollSeconds } from "../../integrations/feishu/task-handlers";
+import { registerTiktokNetdiskHandlers, stopTiktokNetdiskTransfer } from "./netdisk";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -35,6 +36,8 @@ type TiktokDramaCenterRuntime = {
 };
 
 export type TiktokDramaCenterConfig = {
+  netdiskSheetName: string;
+  netdiskPollSeconds: string;
   headless: string;
   localEpisodeVideoRoot: string;
   operationDelaySeconds: string;
@@ -56,6 +59,8 @@ type TiktokDramaCenterStore = {
 };
 
 const defaultTiktokDramaCenterConfig: TiktokDramaCenterConfig = {
+  netdiskSheetName: "tiktok转存",
+  netdiskPollSeconds: "30",
   headless: "false",
   localEpisodeVideoRoot: "",
   operationDelaySeconds: "0.02",
@@ -117,6 +122,8 @@ function normalizeConfig(
   config: Partial<TiktokDramaCenterConfig> & Record<string, string | undefined>,
 ): TiktokDramaCenterConfig {
   return {
+    netdiskSheetName: config.netdiskSheetName?.trim() || "tiktok转存",
+    netdiskPollSeconds: normalizeFeishuPollSeconds(config.netdiskPollSeconds),
     headless: config.headless ?? defaultTiktokDramaCenterConfig.headless,
     localEpisodeVideoRoot:
       config.localEpisodeVideoRoot ?? defaultTiktokDramaCenterConfig.localEpisodeVideoRoot,
@@ -227,7 +234,7 @@ async function startRuntime() {
 }
 
 export function registerTiktokDramaCenterPlatformHandlers() {
-  registerTiktokNetdiskHandlers();
+  registerTiktokNetdiskHandlers(readConfig);
   registerTaskAnalyticsHandler({
     platform: "tiktok-drama",
     unsupportedReason: "TikTok 任务日志接口尚未接入",
@@ -295,9 +302,11 @@ export function registerTiktokDramaCenterPlatformHandlers() {
 }
 
 export function stopTiktokDramaCenterPlatformRuntime() {
+  void stopTiktokNetdiskTransfer().catch((error) => console.error("停止飞书任务失败", error));
   runtimeController.stopInBackground();
 }
 
-export function stopTiktokDramaCenterPlatformService() {
+export async function stopTiktokDramaCenterPlatformService() {
+  await stopTiktokNetdiskTransfer();
   return runtimeController.stop();
 }

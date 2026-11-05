@@ -47,6 +47,7 @@ export function createElectronPlugin(rootDir: string) {
         },
         resolve: {
           alias: [
+            { find: /^@dramabridge\/feishu$/, replacement: path.join(rootDir, "packages/feishu/src/index.ts") },
             {
               find: /^@dramabridge\/browser-window$/,
               replacement: path.join(rootDir, "packages/browser-window/src/index.ts"),

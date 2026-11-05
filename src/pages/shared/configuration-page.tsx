@@ -44,6 +44,7 @@ export type ConfigTextField<TConfig> = {
   key: ConfigFieldKey<TConfig>;
   label: string;
   description?: string;
+  placeholder?: string;
   type?: "text" | "number" | "password" | "url";
   suffix?: string;
   directory?: boolean;
@@ -475,6 +476,7 @@ function ConfigFieldControl<TConfig extends object>({
           <InputGroupInput
             className="text-[13px] md:text-[13px]"
             id={field.key}
+            placeholder={field.placeholder}
             min={field.min ?? (field.type === "number" ? 0 : undefined)}
             max={field.max}
             step={field.step}

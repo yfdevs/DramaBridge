@@ -17,6 +17,7 @@ export type PlatformId =
   | "pinduoduo-drama";
 
 export type AppRoute =
+  | "tools/video-separation"
   | `${PlatformId}/statistics`
   | `${PlatformId}/logs`
   | "app/updates"
@@ -57,6 +58,7 @@ export type AppRoute =
   | "pinduoduo-drama/config";
 
 const appRoutes = [
+  "tools/video-separation",
   "app/updates",
   "app/config",
   "wechat-drama/publish",
@@ -141,6 +143,10 @@ export type PlatformNavigationItem = {
 
 export const defaultRoute: AppRoute = "wechat-drama/service";
 export const globalConfigRoute: AppRoute = "app/config";
+
+export const toolNavigation = [
+  { title: "视频分离", route: "tools/video-separation" },
+] as const satisfies ReadonlyArray<{ title: string; route: AppRoute }>;
 
 export function routePath(route: AppRoute) {
   return `/${route}`;
@@ -517,19 +523,17 @@ const platformNavigationGroups: NavigationGroup[] = [
   },
 ];
 
-export const navigationGroups: NavigationGroup[] = platformNavigationGroups.map(
-  (group, index) => ({
-    ...group,
-    items: [
-      ...group.items,
-      {
-        title: "实时日志",
-        route: `${platformNavigation[index].id}/logs`,
-        icon: List,
-      },
-    ],
-  }),
-);
+export const navigationGroups: NavigationGroup[] = platformNavigationGroups.map((group, index) => ({
+  ...group,
+  items: [
+    ...group.items,
+    {
+      title: "实时日志",
+      route: `${platformNavigation[index].id}/logs`,
+      icon: List,
+    },
+  ],
+}));
 
 export function isAppRoute(route: string): route is AppRoute {
   return appRoutes.includes(route as AppRoute);

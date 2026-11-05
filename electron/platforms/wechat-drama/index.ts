@@ -1,4 +1,5 @@
-import { registerWechatRecreationHandlers } from "./netdisk";
+import { normalizeFeishuPollSeconds } from "../../integrations/feishu/task-handlers";
+import { registerWechatRecreationHandlers, stopWechatRecreation } from "./netdisk";
 import { staleTaskMonitor } from "../shared/stale-task-monitor"
 import type { WechatPendingReport } from "@dramabridge/wechat-drama-automation"
 import { app } from 'electron'
@@ -57,6 +58,8 @@ export type WechatVideoServiceStatus = {
 }
 
 export type WechatVideoConfig = {
+  recreationSheetName: string;
+  recreationPollSeconds: string;
   apiBaseUrl: string
   selectedVideoAccountIds: string
   videoAccountContractSubjects: string
@@ -100,6 +103,8 @@ type WechatVideoStore = {
 }
 
 const defaultWechatVideoConfig: WechatVideoConfig = {
+  recreationSheetName: "微信二创",
+  recreationPollSeconds: "30",
   apiBaseUrl: 'http://180.184.76.232:19090',
   selectedVideoAccountIds: '',
   videoAccountContractSubjects: 'MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU,YOUDIANNIU,ZHENCUIYIHAO,RUIXIAODOU,YUANMAN,YUNQIMANYING,MENGDONG,CHONGBAO,DOURAN',
@@ -302,6 +307,8 @@ function normalizeConfig(
   }
 
   return {
+    recreationSheetName: config.recreationSheetName?.trim() || "微信二创",
+    recreationPollSeconds: normalizeFeishuPollSeconds(config.recreationPollSeconds),
     apiBaseUrl: config.apiBaseUrl ?? defaultWechatVideoConfig.apiBaseUrl,
     selectedVideoAccountIds: config.selectedVideoAccountIds ?? '',
     videoAccountContractSubjects: contractSubjectOptions
@@ -563,7 +570,7 @@ async function startRuntime() {
 }
 
 export function registerWechatVideoPlatformHandlers() {
-  registerWechatRecreationHandlers();
+  registerWechatRecreationHandlers(readConfig);
   ipcMain.handle("wechat-drama:tasks:cleanup", () => staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl }).sweep());
   staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl });
   registerTaskAnalyticsHandler({
@@ -667,9 +674,11 @@ export function registerWechatVideoPlatformHandlers() {
 }
 
 export function stopWechatVideoPlatformRuntime() {
+  void stopWechatRecreation().catch((error) => console.error("停止飞书任务失败", error));
   runtimeController.stopInBackground()
 }
 
-export function stopWechatVideoPlatformService() {
+export async function stopWechatVideoPlatformService() {
+  await stopWechatRecreation();
   return runtimeController.stop()
 }
