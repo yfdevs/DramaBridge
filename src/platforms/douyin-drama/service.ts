@@ -83,6 +83,7 @@ export const douyinDramaService = {
       currentPath,
     ),
   status: () => invokeDouyinDrama<DouyinDramaServiceStatus>("douyin-drama:service:status"),
-  start: () => invokeDouyinDrama<DouyinDramaServiceStatus>("douyin-drama:service:start"),
+  listAccounts: () => invokeDouyinDrama<Array<{ accountId: string; accountName: string }>>("douyin-drama:accounts:list"),
+  start: (ids: string[]) => invokeDouyinDrama<DouyinDramaServiceStatus>("douyin-drama:service:start", ids),
   stop: () => invokeDouyinDrama<DouyinDramaServiceStatus>("douyin-drama:service:stop"),
 }

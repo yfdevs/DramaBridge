@@ -97,6 +97,7 @@ function readableMeituanCreationError(message: string) {
 }
 
 export const meituanCreationService = {
+  listAccounts: () => invokeMeituanCreation<Array<{ accountId: string; accountName: string }>>("meituan-drama:accounts:list"),
   getConfig() {
     return invokeMeituanCreation<MeituanCreationConfigResult>("meituan-drama:config:get")
   },
@@ -123,9 +124,9 @@ export const meituanCreationService = {
       "meituan-drama:service:status"
     )
   },
-  start() {
+  start(ids: string[]) {
     return invokeMeituanCreation<MeituanCreationServiceStatus>(
-      "meituan-drama:service:start"
+      "meituan-drama:service:start", ids
     )
   },
   stop() {

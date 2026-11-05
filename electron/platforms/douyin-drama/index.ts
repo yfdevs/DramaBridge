@@ -266,7 +266,7 @@ async function status(): Promise<DouyinDramaServiceStatus> {
   return { ...current, pid: process.pid };
 }
 
-async function startRuntime() {
+async function startRuntime(selectedAccountIds: unknown) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const configuredVideoRoot = config.localEpisodeVideoRoot.trim();
@@ -284,7 +284,11 @@ async function startRuntime() {
     fetchDouyinDramaAccounts: (apiBaseUrl: string) => Promise<DouyinDramaAccount[]>;
     startDouyinDramaRuntime: (options: Record<string, unknown>) => Promise<DouyinDramaAccountRuntime>;
   };
-  const accounts = await fetchDouyinDramaAccounts(config.apiBaseUrl);
+  const availableAccounts = await fetchDouyinDramaAccounts(config.apiBaseUrl);
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  const ids = new Set(selectedAccountIds);
+  const accounts = availableAccounts.filter(account => ids.has(account.accountId));
+  if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
   if (accounts.length === 0) throw new Error("DOUYIN_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
 
   const runtimes: Array<{ account: DouyinDramaAccount; runtime: DouyinDramaAccountRuntime }> = [];
@@ -433,9 +437,13 @@ export function registerDouyinDramaPlatformHandlers() {
     }),
   );
   ipcMain.handle("douyin-drama:service:status", () => status());
-  ipcMain.handle("douyin-drama:service:start", async () => {
+  ipcMain.handle("douyin-drama:accounts:list", async () => {
+    const { fetchDouyinDramaAccounts } = await import("@dramabridge/douyin-drama-automation");
+    return (await fetchDouyinDramaAccounts(readConfig().apiBaseUrl)).map(account => ({ accountId: account.accountId, accountName: account.accountName }));
+  });
+  ipcMain.handle("douyin-drama:service:start", async (_event, selectedAccountIds: unknown) => {
     assertGlobalDirectoriesConfigured();
-    await runtimeController.start(startRuntime);
+    await runtimeController.start(() => startRuntime(selectedAccountIds));
     return status();
   });
   ipcMain.handle("douyin-drama:service:stop", async () => {

@@ -62,10 +62,11 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
 }
 
 export const tencentHuolongDramaService = {
+  listAccounts: () => invoke<Array<{ accountId: string; accountName: string }>>("tencent-huolong-drama:accounts:list"),
   getConfig: () => invoke<TencentHuolongDramaConfigResult>("tencent-huolong-drama:config:get"),
   saveConfig: (config: TencentHuolongDramaConfig) =>
     invoke<TencentHuolongDramaConfigResult>("tencent-huolong-drama:config:save", config),
   status: () => invoke<TencentHuolongDramaServiceStatus>("tencent-huolong-drama:service:status"),
-  start: () => invoke<TencentHuolongDramaServiceStatus>("tencent-huolong-drama:service:start"),
+  start: (ids: string[]) => invoke<TencentHuolongDramaServiceStatus>("tencent-huolong-drama:service:start", ids),
   stop: () => invoke<TencentHuolongDramaServiceStatus>("tencent-huolong-drama:service:stop"),
 }

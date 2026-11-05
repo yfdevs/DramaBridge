@@ -479,13 +479,22 @@ async function startRuntime(selectedAccountIds: string[]) {
       });
       return { account, runtime };
     }));
-    for (const result of startupResults) {
+    for (const [index, result] of startupResults.entries()) {
       if (result.status === "fulfilled") accountRuntimes.push(result.value);
+      else {
+        baiduDramaPlatformLogger("browser").error("账号启动失败，其他账号继续运行", {
+          accountId: accounts[index]!.accountId,
+          accountName: accounts[index]!.accountName,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
     }
     const startupFailure = startupResults.find(
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
-    if (startupFailure) {
+    // A failed login/browser belongs to this account only. Successful runtimes
+    // may already be uploading; never roll them back for a sibling failure.
+    if (startupFailure && accountRuntimes.length === 0) {
       throw startupFailure.reason;
     }
   } catch (error) {

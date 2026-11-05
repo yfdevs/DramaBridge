@@ -76,6 +76,7 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
 }
 
 export const iqiyiDramaService = {
+  listAccounts: () => invoke<Array<{ accountId: string; accountName: string }>>("iqiyi-drama:accounts:list"),
   getConfig: () => invoke<IqiyiDramaConfigResult>("iqiyi-drama:config:get"),
   saveConfig: (config: IqiyiDramaConfig) =>
     invoke<IqiyiDramaConfigResult>("iqiyi-drama:config:save", config),
@@ -84,6 +85,6 @@ export const iqiyiDramaService = {
   selectLocalMaterialRoot: (current?: string) =>
     invoke<string | null>("iqiyi-drama:config:select-local-material-root", current),
   status: () => invoke<IqiyiDramaServiceStatus>("iqiyi-drama:service:status"),
-  start: () => invoke<IqiyiDramaServiceStatus>("iqiyi-drama:service:start"),
+  start: (ids: string[]) => invoke<IqiyiDramaServiceStatus>("iqiyi-drama:service:start", ids),
   stop: () => invoke<IqiyiDramaServiceStatus>("iqiyi-drama:service:stop"),
 }

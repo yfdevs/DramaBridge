@@ -98,6 +98,7 @@ function readableQqDramaError(message: string) {
 }
 
 export const qqDramaService = {
+  listAccounts: () => invokeQqDrama<Array<{ accountId: string; accountName: string }>>("qq-drama:accounts:list"),
   getConfig() {
     return invokeQqDrama<QqDramaConfigResult>("qq-drama:config:get")
   },
@@ -119,8 +120,8 @@ export const qqDramaService = {
   status() {
     return invokeQqDrama<QqDramaServiceStatus>("qq-drama:service:status")
   },
-  start() {
-    return invokeQqDrama<QqDramaServiceStatus>("qq-drama:service:start")
+  start(ids: string[]) {
+    return invokeQqDrama<QqDramaServiceStatus>("qq-drama:service:start", ids)
   },
   stop() {
     return invokeQqDrama<QqDramaServiceStatus>("qq-drama:service:stop")

@@ -1,3 +1,4 @@
+import { useAccountSelection, AccountSelection } from "@/pages/shared/account-selection"
 import {
   ServiceControlButtonPage,
   useServiceControl,
@@ -24,6 +25,8 @@ function successMessage(status: QqDramaServiceStatus) {
 }
 
 export function QqDramaServiceControlPage() {
+  const selection = useAccountSelection(qqDramaService)
+
   const {
     loading,
     pendingAction,
@@ -31,13 +34,15 @@ export function QqDramaServiceControlPage() {
     toggleService,
   } = useServiceControl({
     initialStatus,
-    service: qqDramaService,
+    service: selection.service,
     successMessage,
   })
 
   return (
     <ServiceControlButtonPage
       analyticsPlatform="qq-drama"
+      startDisabled={selection.startDisabled}
+      beforeBrowserInstances={<AccountSelection runtimes={status.accounts} selection={selection} locked={loading || status.running} />}
       loading={loading}
       pendingAction={pendingAction}
       running={status.running}

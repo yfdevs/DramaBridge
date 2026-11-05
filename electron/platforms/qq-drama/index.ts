@@ -507,7 +507,7 @@ async function status(): Promise<QqDramaServiceStatus> {
   };
 }
 
-async function startRuntime() {
+async function startRuntime(selectedAccountIds: unknown) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
 
   const config = readConfig();
@@ -530,7 +530,11 @@ async function startRuntime() {
     fetchQqDramaAccounts,
     startQqDramaRuntime,
   } = await importQqDramaRuntimePackage();
-  const accounts = await fetchQqDramaAccounts(config.apiBaseUrl);
+  const availableAccounts = await fetchQqDramaAccounts(config.apiBaseUrl);
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  const ids = new Set(selectedAccountIds);
+  const accounts = availableAccounts.filter(account => ids.has(account.accountId));
+  if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
   if (!accounts.length) {
     throw new Error("QQ_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
   }
@@ -690,14 +694,18 @@ export function registerQqDramaPlatformHandlers() {
 
   ipcMain.handle("qq-drama:service:status", () => status());
 
-  ipcMain.handle("qq-drama:service:start", async () => {
+  ipcMain.handle("qq-drama:accounts:list", async () => {
+    const { fetchQqDramaAccounts } = await importQqDramaRuntimePackage();
+    return (await fetchQqDramaAccounts(readConfig().apiBaseUrl)).map(account => ({ accountId: account.accountId, accountName: account.accountName }));
+  });
+  ipcMain.handle("qq-drama:service:start", async (_event, selectedAccountIds: unknown) => {
     assertGlobalDirectoriesConfigured();
     const runtime = runtimeController.current;
     if (runtime && !runtime.getStatus().running) {
       await runtimeController.stop();
     }
 
-    await runtimeController.start(startRuntime);
+    await runtimeController.start(() => startRuntime(selectedAccountIds));
     return status();
   });
 

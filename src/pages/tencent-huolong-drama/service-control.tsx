@@ -1,3 +1,4 @@
+import { useAccountSelection, AccountSelection } from "@/pages/shared/account-selection"
 import { ServiceControlButtonPage, useServiceControl } from "@/pages/shared/service-control"
 import {
   tencentHuolongDramaService,
@@ -14,9 +15,11 @@ const initialStatus: TencentHuolongDramaServiceStatus = {
 }
 
 export function TencentHuolongDramaServiceControlPage() {
+  const selection = useAccountSelection(tencentHuolongDramaService)
+
   const state = useServiceControl({
     initialStatus,
-    service: tencentHuolongDramaService,
+    service: selection.service,
     successMessage: (status) => status.running
       ? `腾讯火龙漫剧服务已启动 ${status.accounts.filter((account) => account.launched).length} 个账号浏览器`
       : "腾讯火龙漫剧服务已停止",
@@ -24,6 +27,8 @@ export function TencentHuolongDramaServiceControlPage() {
   return (
     <ServiceControlButtonPage
       analyticsPlatform="tencent-huolong-drama"
+      startDisabled={selection.startDisabled}
+      beforeBrowserInstances={<AccountSelection runtimes={state.status.accounts} selection={selection} locked={state.loading || state.status.running} />}
       loading={state.loading}
       pendingAction={state.pendingAction}
       running={state.status.running}

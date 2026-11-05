@@ -1,15 +1,11 @@
+import { AccountSelection } from "@/pages/shared/account-selection";
 import { ManualTaskCleanupButton } from "@/pages/shared/manual-task-cleanup-button";
-import { AccountEnabledIcon } from "@/pages/shared/account-enabled-icon";
 import { ServiceControlButtonPage, useServiceControl } from "@/pages/shared/service-control";
 import {
   kuaishouDramaService,
   type KuaishouDramaAccount,
   type KuaishouDramaServiceStatus,
 } from "@/platforms/kuaishou-drama/service";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const initialStatus: KuaishouDramaServiceStatus = {
@@ -57,10 +53,6 @@ export function KuaishouDramaServiceControlPage() {
   useEffect(() => {
     void loadAccounts();
   }, [loadAccounts]);
-  const selectionLocked = state.status.running || state.loading || accountsLoading;
-  const enabledIds = accounts
-    .filter((account) => account.status === "ON")
-    .map((account) => account.accountId);
   return (
     <ServiceControlButtonPage
       analyticsPlatform="kuaishou-drama"
@@ -70,130 +62,21 @@ export function KuaishouDramaServiceControlPage() {
       startDisabled={accountsLoading || accountsError !== null || selectedIds.length === 0}
       onToggle={() => void state.toggleService()}
       beforeBrowserInstances={
-        <section
-          aria-label="快手账号选择"
-          aria-busy={accountsLoading}
-          className="mt-10 min-w-0 space-y-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-[13px] font-medium">
-              快手账号{" "}
-              <span className="ml-2 font-normal text-muted-foreground">
-                已选 {selectedIds.length} / {accounts.length}
-              </span>
-            </h2>
-            <div className="flex max-w-full flex-wrap items-center gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={selectionLocked || !!accountsError || !enabledIds.length}
-                onClick={() => setSelectedIds(enabledIds)}
-              >
-                全选
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={selectionLocked || !selectedIds.length}
-                onClick={() => setSelectedIds([])}
-              >
-                清空
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={selectionLocked}
-                onClick={() => void loadAccounts()}
-              >
-                刷新账号
-              </Button>
-              <ManualTaskCleanupButton
-                disabled={state.loading}
-                onCleanup={kuaishouDramaService.cleanupTasks}
-                onComplete={() => state.refreshStatus(true)}
-              />
-            </div>
-          </div>
-          {accountsLoading ? (
-            <div
-              className="grid max-h-[min(50vh,28rem)] min-w-0 auto-rows-max grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-1.5 [scrollbar-gutter:stable] sm:grid-cols-2"
-              aria-label="正在加载账号"
-            >
-              {[0, 1].map((key) => (
-                <Skeleton key={key} className="h-24 rounded-lg" />
-              ))}
-            </div>
-          ) : accountsError ? (
-            <p role="alert" className="text-sm text-destructive">
-              账号加载失败：{accountsError}。请检查配置后刷新账号。
-            </p>
-          ) : accounts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              暂无快手账号，请先在后台添加账号，再刷新列表。
-            </p>
-          ) : (
-            <div className="grid max-h-[min(50vh,28rem)] min-w-0 auto-rows-max grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-1.5 [scrollbar-gutter:stable] sm:grid-cols-2">
-              {accounts.map((account) => {
-                const selected = selectedIds.includes(account.accountId);
-                const disabled = account.status !== "ON";
-                const runtime = state.status.accounts.find(
-                  (item) => item.accountId === account.accountId,
-                );
-                return (
-                  <label
-                    key={account.accountId}
-                    className={cn(
-                      "flex h-fit min-w-0 items-start gap-3 rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring",
-                      selected ? "border-primary bg-accent/50" : "border-border",
-                      selectionLocked || disabled
-                        ? "cursor-default"
-                        : "cursor-pointer hover:bg-accent/40",
-                    )}
-                  >
-                    <Checkbox
-                      className="mt-0.5"
-                      checked={selected}
-                      disabled={selectionLocked || disabled}
-                      aria-label={`选择 ${account.accountName}`}
-                      onCheckedChange={(checked) =>
-                        setSelectedIds((ids) =>
-                          checked
-                            ? [...new Set([...ids, account.accountId])]
-                            : ids.filter((id) => id !== account.accountId),
-                        )
-                      }
-                    />
-                    <span className="min-w-0 flex-1 space-y-1">
-                      <span className="flex min-w-0 items-start justify-between gap-2 text-[13px] font-medium">
-                        <span className="min-w-0 flex-1 whitespace-normal break-all">
-                          {account.accountName}
-                        </span>
-                        <AccountEnabledIcon enabled={!disabled} />
-                      </span>
-                      <span className="block break-all text-xs text-muted-foreground">
-                        账号 ID：{account.accountId}
-                      </span>
-                      {account.loginAccount && (
-                        <span className="block break-all text-xs text-muted-foreground">
-                          登录账号：{account.loginAccount}
-                        </span>
-                      )}
-                      {runtime?.launched && (
-                        <span className="block text-xs">
-                          {runtime.loginState === "logged-in"
-                            ? "已登录"
-                            : runtime.loginState === "login-required"
-                              ? "等待登录"
-                              : "浏览器已打开"}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        <AccountSelection runtimes={state.status.accounts}
+          locked={state.loading || state.status.running}
+          selection={{
+            accounts: accounts.map(account => {
+            const runtime = state.status.accounts.find(item => item.accountId === account.accountId);
+            return { ...account, runtimeLabel: runtime?.launched ? (runtime.loginState === "logged-in" ? "已登录" : runtime.loginState === "login-required" ? "等待登录" : "浏览器已打开") : undefined };
+          }),
+            selected: selectedIds,
+            setSelected: setSelectedIds,
+            fetching: accountsLoading,
+            error: accountsError ?? "",
+            refresh: loadAccounts,
+          }}
+          actions={<ManualTaskCleanupButton disabled={state.loading} onCleanup={kuaishouDramaService.cleanupTasks} onComplete={() => state.refreshStatus(true)} />}
+        />
       }
     >
       {state.status.accounts

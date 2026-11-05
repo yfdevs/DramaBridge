@@ -222,11 +222,15 @@ async function status(): Promise<TencentHuolongDramaServiceStatus> {
   return { ...current, pid: process.pid };
 }
 
-async function startRuntime(): Promise<PlatformRuntime> {
+async function startRuntime(selectedAccountIds: unknown): Promise<PlatformRuntime> {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const { fetchTencentHuolongDramaAccounts, startTencentHuolongDramaRuntime } = await importRuntimePackage();
-  const accounts = await fetchTencentHuolongDramaAccounts(config.apiBaseUrl);
+  const availableAccounts = await fetchTencentHuolongDramaAccounts(config.apiBaseUrl);
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  const ids = new Set(selectedAccountIds);
+  const accounts = availableAccounts.filter(account => ids.has(account.accountId));
+  if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
   if (accounts.length === 0) throw new Error("TENCENT_HUOLONG_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
   const aiClient = createConfiguredAiClient();
   const aiImageModel = getConfiguredAiImageModel();
@@ -376,9 +380,13 @@ export function registerTencentHuolongDramaPlatformHandlers() {
     return openExistingPath(paths[key]);
   });
   ipcMain.handle("tencent-huolong-drama:service:status", () => status());
-  ipcMain.handle("tencent-huolong-drama:service:start", async () => {
+  ipcMain.handle("tencent-huolong-drama:accounts:list", async () => {
+    const { fetchTencentHuolongDramaAccounts } = await importRuntimePackage();
+    return (await fetchTencentHuolongDramaAccounts(readConfig().apiBaseUrl)).map(account => ({ accountId: account.accountId, accountName: account.accountName }));
+  });
+  ipcMain.handle("tencent-huolong-drama:service:start", async (_event, selectedAccountIds: unknown) => {
     assertGlobalDirectoriesConfigured();
-    await controller.start(startRuntime);
+    await controller.start(() => startRuntime(selectedAccountIds));
     platformLogger().info("Tencent Huolong drama service started");
     return status();
   });

@@ -333,14 +333,18 @@ async function status(): Promise<IqiyiDramaServiceStatus> {
   return { ...current, pid: process.pid };
 }
 
-async function startRuntime() {
+async function startRuntime(selectedAccountIds: unknown) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const {
     fetchIqiyiDramaAccounts,
     startIqiyiDramaRuntime,
   } = await importRuntimePackage();
-  const accounts = await fetchIqiyiDramaAccounts(config.apiBaseUrl);
+  const availableAccounts = await fetchIqiyiDramaAccounts(config.apiBaseUrl);
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  const ids = new Set(selectedAccountIds);
+  const accounts = availableAccounts.filter(account => ids.has(account.accountId));
+  if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
   if (accounts.length === 0) throw new Error("IQIYI_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
 
   const aiClient = createConfiguredAiClient();
@@ -478,11 +482,15 @@ export function registerIqiyiDramaPlatformHandlers() {
     },
   );
   ipcMain.handle("iqiyi-drama:service:status", () => status());
-  ipcMain.handle("iqiyi-drama:service:start", async () => {
+  ipcMain.handle("iqiyi-drama:accounts:list", async () => {
+    const { fetchIqiyiDramaAccounts } = await importRuntimePackage();
+    return (await fetchIqiyiDramaAccounts(readConfig().apiBaseUrl)).map(account => ({ accountId: account.accountId, accountName: account.accountName }));
+  });
+  ipcMain.handle("iqiyi-drama:service:start", async (_event, selectedAccountIds: unknown) => {
     assertGlobalDirectoriesConfigured();
     const runtime = runtimeController.current;
     if (runtime && !runtime.getStatus().running) await runtimeController.stop();
-    await runtimeController.start(startRuntime);
+    await runtimeController.start(() => startRuntime(selectedAccountIds));
     return status();
   });
   ipcMain.handle("iqiyi-drama:service:stop", async () => {

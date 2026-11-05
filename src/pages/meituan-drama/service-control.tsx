@@ -1,3 +1,4 @@
+import { useAccountSelection, AccountSelection } from "@/pages/shared/account-selection"
 import {
   ServiceControlButtonPage,
   useServiceControl,
@@ -24,6 +25,8 @@ function successMessage(status: MeituanCreationServiceStatus) {
 }
 
 export function MeituanCreationServiceControlPage() {
+  const selection = useAccountSelection(meituanCreationService)
+
   const {
     loading,
     pendingAction,
@@ -31,13 +34,15 @@ export function MeituanCreationServiceControlPage() {
     toggleService,
   } = useServiceControl({
     initialStatus,
-    service: meituanCreationService,
+    service: selection.service,
     successMessage,
   })
 
   return (
     <ServiceControlButtonPage
       analyticsPlatform="meituan-drama"
+      startDisabled={selection.startDisabled}
+      beforeBrowserInstances={<AccountSelection runtimes={status.accounts} selection={selection} locked={loading || status.running} />}
       loading={loading}
       pendingAction={pendingAction}
       running={status.running}

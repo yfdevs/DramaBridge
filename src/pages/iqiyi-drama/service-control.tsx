@@ -1,3 +1,4 @@
+import { useAccountSelection, AccountSelection } from "@/pages/shared/account-selection"
 import {
   ServiceControlButtonPage,
   useServiceControl,
@@ -25,15 +26,19 @@ function successMessage(status: IqiyiDramaServiceStatus) {
 }
 
 export function IqiyiDramaServiceControlPage() {
+  const selection = useAccountSelection(iqiyiDramaService)
+
   const control = useServiceControl({
     initialStatus,
-    service: iqiyiDramaService,
+    service: selection.service,
     successMessage,
   })
 
   return (
     <ServiceControlButtonPage
       analyticsPlatform="iqiyi-drama"
+      startDisabled={selection.startDisabled}
+      beforeBrowserInstances={<AccountSelection runtimes={control.status.accounts} selection={selection} locked={control.loading || control.status.running} />}
       loading={control.loading}
       pendingAction={control.pendingAction}
       running={control.status.running}
