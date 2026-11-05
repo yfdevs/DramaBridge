@@ -1583,14 +1583,10 @@ async function createEpisodeUploadHardLink(source: string, target: string) {
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "EXDEV") {
-      throw Object.assign(
-        new Error(
-          `[local-video-invalid] 无法为剧集视频创建硬链接，源文件和临时上传目录不在同一磁盘分区: ${source} -> ${target}; cause=${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        ),
-        { cause: error },
-      );
+      // Hard links cannot cross volumes. The upload lease owns this copy and
+      // the existing cleanup path removes it without touching the source.
+      await copyFile(source, target);
+      return;
     }
     throw error;
   }

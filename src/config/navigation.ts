@@ -32,6 +32,7 @@ export type AppRoute =
   | "taobao-drama/service"
   | "taobao-drama/config"
   | "kuaishou-drama/service"
+  | "wechat-drama/recreation"
   | "kuaishou-drama/recreation"
   | "kuaishou-drama/config"
   | "kuaishou-drama/projects"
@@ -77,6 +78,7 @@ const appRoutes = [
   "taobao-drama/statistics",
   "taobao-drama/logs",
   "kuaishou-drama/service",
+  "wechat-drama/recreation",
   "kuaishou-drama/recreation",
   "kuaishou-drama/config",
   "kuaishou-drama/statistics",
@@ -269,6 +271,7 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "wechat-drama/service",
         icon: Terminal,
       },
+      { title: "二创", route: "wechat-drama/recreation", icon: CloudUpload },
       {
         title: "配置管理",
         route: "wechat-drama/config",

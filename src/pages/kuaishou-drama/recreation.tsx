@@ -108,6 +108,13 @@ export function KuaishouRecreationPage() {
   const pages = Math.max(1, Math.ceil(tasks.length / 50));
   const currentPage = Math.min(page, pages);
   const visibleTasks = tasks.slice((currentPage - 1) * 50, currentPage * 50);
+  const counts = {
+    all: workspace.tasks.length,
+    queued: workspace.tasks.filter(task => task.state === "queued").length,
+    active: workspace.tasks.filter(active).length,
+    completed: workspace.tasks.filter(task => task.state === "completed").length,
+    failed: workspace.tasks.filter(task => ["failed", "interrupted"].includes(task.state)).length,
+  };
   const hasActive = workspace.tasks.some(active);
   return (
     <main aria-label="二创" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -149,22 +156,17 @@ export function KuaishouRecreationPage() {
             停止当前任务
           </Button>
         )}
-      </WorkspaceActions>
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col">
-        <header className="shrink-0 space-y-3 border-b px-6 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
                 variant="outline"
                 disabled={busy}
                 onClick={() =>
                   void action(async () => {
-                    if (await service.template()) toast.success("Excel 模板已保存");
+                    if (await service.template()) toast.success("模板已保存");
                   })
                 }
               >
-                下载 Excel 模板
+                下载模板
               </Button>
               <Button
                 size="sm"
@@ -177,10 +179,12 @@ export function KuaishouRecreationPage() {
                   })
                 }
               >
-                导入 Excel
+                导入
               </Button>
-            </div>
-          </div>
+      </WorkspaceActions>
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-none flex-col">
+        <header className="shrink-0 space-y-3 border-b px-6 py-3">
+          <p className="text-xs leading-5 text-muted-foreground">按原剧总集数取前 60%，每个版本单独生成封面与分享链接。失败重试会保留已完成版本。</p>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-1" aria-label="任务状态筛选">
               {[
@@ -197,7 +201,7 @@ export function KuaishouRecreationPage() {
                   aria-pressed={filter === value}
                   onClick={() => { setFilter(value); setPage(1); }}
                 >
-                  {label}
+                  {label} <span className="ml-1 tabular-nums text-muted-foreground">{counts[value as keyof typeof counts]}</span>
                 </Button>
               ))}
             </div>
@@ -221,15 +225,15 @@ export function KuaishouRecreationPage() {
           )}
         </header>
         <div className="min-h-0 flex-1 overflow-auto px-6 pb-4">
-          <Table className="min-w-[1000px] table-fixed text-xs">
+          <Table className="min-w-[900px] table-fixed text-xs">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-40">原剧名</TableHead>
                 <TableHead className="w-28">集数</TableHead>
                 <TableHead className="w-24">状态</TableHead>
                 <TableHead>进度</TableHead>
-                <TableHead className="w-24">版本</TableHead>
-                <TableHead className="sticky right-0 z-20 w-80 border-l bg-background text-right">操作</TableHead>
+                <TableHead className="w-32">版本</TableHead>
+                <TableHead className="sticky right-0 z-20 w-64 border-l bg-background text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -247,7 +251,7 @@ export function KuaishouRecreationPage() {
                   >
                     {workspace.tasks.length
                       ? "没有符合筛选条件的任务"
-                      : "先下载 Excel 模板，填写后导入。一行一个任务，导入后点击“开始处理”。"}
+                      : "先下载模板，填写后导入。一行一个任务，导入后点击“开始处理”。"}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -305,7 +309,7 @@ export function KuaishouRecreationPage() {
                               />
                             }
                           >
-                            {completedVersions} / {task.results.length} · 查看
+                            已完成 {completedVersions}/{task.results.length}
                           </PopoverTrigger>
                           <PopoverContent
                             align="end"
@@ -388,7 +392,7 @@ export function KuaishouRecreationPage() {
                           {!active(task) && (
                             <Button
                               size="sm"
-                              variant="destructive"
+                              variant="ghost"
                               className="h-7 px-2 text-xs"
                               disabled={busy}
                               onClick={() => {

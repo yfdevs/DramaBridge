@@ -1,3 +1,4 @@
+import { registerWechatRecreationHandlers } from "./netdisk";
 import { staleTaskMonitor } from "../shared/stale-task-monitor"
 import type { WechatPendingReport } from "@dramabridge/wechat-drama-automation"
 import { app } from 'electron'
@@ -562,6 +563,7 @@ async function startRuntime() {
 }
 
 export function registerWechatVideoPlatformHandlers() {
+  registerWechatRecreationHandlers();
   ipcMain.handle("wechat-drama:tasks:cleanup", () => staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl }).sweep());
   staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl });
   registerTaskAnalyticsHandler({

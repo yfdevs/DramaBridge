@@ -206,7 +206,13 @@ export function readGlobalAppConfig(): GlobalAppConfig {
     !config.aiModel.trim() &&
     config.aiBaseURL === LEGACY_DEFAULT_AI_BASE_URL
   ) {
-    config = defaultStoredConfig;
+    // Reset legacy AI defaults without discarding user-selected storage paths
+    // or unrelated application preferences.
+    config = { ...config,
+      aiBaseURL: defaultStoredConfig.aiBaseURL,
+      aiModel: defaultStoredConfig.aiModel,
+      aiApiKeyCiphertext: defaultStoredConfig.aiApiKeyCiphertext,
+    };
     getStore().set("config", config);
   }
 
@@ -301,6 +307,16 @@ function portableDirectory(value: string | undefined, fallback: string) {
   return selected;
 }
 
+function configuredDirectory(value: string) {
+  // Never substitute a different profile/material directory for an explicit
+  // global selection: a disconnected drive must be reported, not look logged out.
+  if (process.platform === "win32" && path.isAbsolute(value)
+    && !existsSync(path.parse(value).root)) {
+    throw new Error(`配置的目录所在磁盘不可用：${value}。请连接该磁盘或在配置中重新选择目录。`);
+  }
+  return value;
+}
+
 export function resolveGlobalPlatformDirectories(
   platformDirectoryName: string,
   fallback: { runDataDir: string; localMaterialRoot: string },
@@ -311,9 +327,9 @@ export function resolveGlobalPlatformDirectories(
 
   return {
     runDataDir: runDataRoot
-      ? path.join(portableDirectory(runDataRoot, path.join(app.getPath("userData"), ".drama-runs")), platformDirectoryName)
+      ? path.join(configuredDirectory(runDataRoot), platformDirectoryName)
       : resolveFromAppRoot(portableDirectory(fallback.runDataDir, path.join(app.getPath("userData"), ".drama-runs", platformDirectoryName))),
-    localMaterialRoot: portableDirectory(localMaterialRoot || fallback.localMaterialRoot, path.join(app.getPath("downloads"), "DramaBridge")),
+    localMaterialRoot: localMaterialRoot ? configuredDirectory(localMaterialRoot) : portableDirectory(fallback.localMaterialRoot, path.join(app.getPath("downloads"), "DramaBridge")),
   };
 }
 

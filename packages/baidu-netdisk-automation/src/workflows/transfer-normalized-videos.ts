@@ -2,7 +2,7 @@ type Entry = Record<string, any>;
 
 /** Serialized into the authenticated share page. No module-scope dependencies. */
 export async function transferNormalizedEpisodeVideos(o: {
-  parentDirectoryName?: string; title: string; episodeCount: number; roots: Entry[]; sharePassword?: string;
+  recreation?: boolean; parentDirectoryName?: string; title: string; episodeCount: number; roots: Entry[]; sharePassword?: string;
   listShare: (path: string) => Promise<Entry[]>;
   listOwn: (path: string, refresh?: boolean) => Promise<Entry[]>;
   createDirectory: (parent: string, name: string) => Promise<Entry>;
@@ -22,11 +22,13 @@ export async function transferNormalizedEpisodeVideos(o: {
   const queue = [{ path: '/', entries: o.roots, depth: 0 }];
   const visited = new Set<string>();
   const candidates: any[] = [];
+  const covers: Entry[] = [];
   while (queue.length) {
     const current = queue.shift()!;
     if (visited.has(current.path)) continue;
     visited.add(current.path);
     if (visited.size > 300 || current.depth > 10) throw new Error('分享目录过深或过多，已停止转存');
+    if (o.recreation) covers.push(...current.entries.filter(e => !isDir(e) && /\.(png|jpg|jpeg|webp)$/i.test(name(e)) && /封面|海报|poster|cover/i.test(current.path + "/" + name(e))));
     const videos = current.entries.filter(e => !isDir(e) && /\.(mp4|mov)$/i.test(name(e)));
     const files = o.collapseAliases(videos.map(e => ({ ...e, index: o.episodeIndex(name(e)) ?? 0, name: name(e),
       path: String(e.path), fsId: id(e), contentHash: e.md5 || e.server_md5 }))).files;
@@ -51,8 +53,15 @@ export async function transferNormalizedEpisodeVideos(o: {
   progress(0, '转存视频');
   const parent = o.parentDirectoryName ? await o.createDirectory('/', o.parentDirectoryName) : undefined;
   const parentPath = parent ? String(parent.path || '/' + o.parentDirectoryName) : '/';
-  const root = await o.createDirectory(parentPath, o.title);
-  const rootPath = String(root.path || parentPath.replace(/\/$/, '') + '/' + o.title);
+  const root = await o.createDirectory(parentPath, o.recreation ? o.title + '60%素材' : o.title);
+  let rootPath = String(root.path || parentPath.replace(/\/$/, '') + '/' + o.title);
+  if (o.recreation) {
+    const cover = await o.createDirectory(rootPath, '封面');
+    for (const image of covers) await o.transferOne(image, String(cover.path));
+    const videos = await o.createDirectory(rootPath, '成片60%');
+    rootPath = String(videos.path);
+    selected.files = selected.files.slice(0, Math.ceil(o.episodeCount * 0.6));
+  }
   let transferredItemCount = 0;
   const results: Entry[] = [];
   // Validate every target before the first write. Never overwrite another drama's file.

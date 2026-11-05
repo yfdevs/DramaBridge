@@ -1,3 +1,4 @@
+import { WechatRecreationTransferPage } from "@/pages/wechat-drama/netdisk-transfer";
 import { TiktokNetdiskTransferPage } from "@/pages/tiktok-drama/netdisk-transfer";
 import { AppUpdateControl } from "@/components/app-update-control";
 import { TaskStatisticsPage } from "@/pages/shared/task-statistics-page";
@@ -59,6 +60,7 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "app/config": GlobalConfigurationPage,
   "app/updates": () => <AppUpdateControl page />,
   "wechat-drama/publish": WechatPublishTasksPage,
+  "wechat-drama/recreation": WechatRecreationTransferPage,
   "wechat-drama/config": WechatConfigurationPage,
   "wechat-drama/accounts": WechatAccountsPage,
   "wechat-drama/service": WechatServiceControlPage,

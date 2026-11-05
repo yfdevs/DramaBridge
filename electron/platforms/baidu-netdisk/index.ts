@@ -1807,3 +1807,8 @@ export async function transferTiktokDramaNetdiskVideos(options: { title: string;
     ...options, parentDirectoryName: "TikTok短剧", port: cdpPort(readConfig()),
   }));
 }
+
+export async function transferWechatRecreationVideos(options: { title: string; shareText: string; episodeCount: number; onProgress?: (progress: { completed: number; total: number; stage: string }) => void }) {
+ const { transferBaiduDramaVideos } = await import("@dramabridge/baidu-netdisk-automation");
+ return runBaiduCdpOperationExclusive("视频号二创转存", () => transferBaiduDramaVideos({ ...options, recreation: true, parentDirectoryName: "微信视频号60%素材汇总", port: cdpPort(readConfig()) }));
+}

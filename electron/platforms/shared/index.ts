@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { app, BrowserWindow, dialog, type IpcMainInvokeEvent, type OpenDialogOptions } from 'electron'
 import path from 'node:path'
 import { fsSize, mem } from 'systeminformation'
@@ -108,21 +109,19 @@ export function normalizePlatformRunDataDir(selectedPath: string | null, platfor
 }
 
 export function resolveFromAppRoot(value: string) {
+  // Persisted absolute paths belong to the user, including legacy D: roots.
+  if (path.isAbsolute(value)) return value;
   const normalized = value.replace(/\\/g, '/');
-  if (normalized === '.drama-runs' || normalized.startsWith('.drama-runs/')) {
-    return path.join(app.getPath('userData'), normalized);
-  }
-  if (/^[a-z]:\/\.drama-runs(?:\/|$)/i.test(normalized)) {
-    return path.join(app.getPath('userData'), normalized.slice(3));
-  }
-  if (path.isAbsolute(value)) {
-    return value
-  }
-
   const relativePathRoot = app.isPackaged
     ? path.dirname(process.execPath)
-    : process.env.APP_ROOT
-  return path.join(relativePathRoot, value)
+    : process.env.APP_ROOT || process.cwd();
+  const legacyPath = path.join(relativePathRoot, value);
+  if (normalized === '.drama-runs' || normalized.startsWith('.drama-runs/')) {
+    // Reuse profiles created beside older app versions before choosing a new default.
+    if (existsSync(legacyPath)) return legacyPath;
+    return path.join(app.getPath('userData'), normalized);
+  }
+  return legacyPath;
 }
 
 export function playwrightBrowsersPath() {

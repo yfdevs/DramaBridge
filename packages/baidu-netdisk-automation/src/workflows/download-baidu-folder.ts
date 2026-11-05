@@ -923,6 +923,7 @@ type SavedShareResult = {
 };
 
 type SaveShareOptions = {
+  videoRecreation?: boolean;
   normalizedVideoEpisodeCount?: number;
   videoParentDirectoryName?: string;
   videoSharePassword?: string;
@@ -1733,6 +1734,7 @@ export async function saveShareToOwnNetdisk(
     // tsx development transforms may retain function-name helpers in serialized code.
     const __name = (value) => value;
     return await (${transferNormalizedEpisodeVideos.toString()})({
+      recreation: ${JSON.stringify(options.videoRecreation ?? false)},
       parentDirectoryName: ${JSON.stringify(options.videoParentDirectoryName)},
       sharePassword: ${JSON.stringify(options.videoSharePassword)},
       title: safeExpectedName, episodeCount: ${JSON.stringify(options.normalizedVideoEpisodeCount ?? 0)},
