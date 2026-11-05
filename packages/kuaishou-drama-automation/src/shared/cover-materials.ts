@@ -9,6 +9,7 @@ import {
   type LocalPosterImageFile,
 } from "@dramabridge/media-assets";
 
+import { downloadRemoteAsset } from "../automation/upload/remote-assets.js";
 import { log } from "../automation/browser-session.js";
 import type {
   KuaishouDramaPublishType,
@@ -365,27 +366,37 @@ export async function prepareKuaishouDramaCoverFiles(
   posters: readonly LocalPosterImageFile[],
   options: KuaishouDramaRuntimeOptions,
 ) {
+  const uploaded = async (version: number, kind: KuaishouCoverKind) => {
+    const cover = task.uploadedCovers?.find((item) => item.version === version && item.kind === kind);
+    if (!cover) return undefined;
+    if (!options.assetDownloadDir) throw new Error("KUAISHOU_DRAMA_ASSET_DOWNLOAD_DIR_REQUIRED");
+    const key = createHash("sha256").update(cover.url).digest("hex");
+    const file = await downloadRemoteAsset(cover.url, { ...options, assetDownloadDir: path.join(options.assetDownloadDir, "uploaded-covers", key) }, key, `version ${version} ${kind} cover`);
+    return prepareExistingCover(file, kind, options);
+  };
+  const [uploadedDrama, uploadedEpisode] = await Promise.all([uploaded(1, "drama"), uploaded(1, "episode")]);
   const selected = selectKuaishouCoverSources(posters);
-  if (!selected.fallback) throw new Error("KUAISHOU_DRAMA_COVER_SOURCE_REQUIRED");
+  const fallbackSource = selected.fallback?.file ?? uploadedDrama ?? uploadedEpisode;
+  if (!fallbackSource) throw new Error("KUAISHOU_DRAMA_COVER_SOURCE_REQUIRED");
 
-  const dramaCoverPromise = selected.landscape
+  const dramaCoverPromise = uploadedDrama ?? (selected.landscape
     ? prepareExistingCover(selected.landscape.file, "drama", options)
     : generateMissingCover({
-        sourceFile: selected.portrait?.file ?? selected.fallback.file,
+        sourceFile: selected.portrait?.file ?? fallbackSource,
         sourceKind: selected.portrait ? "portrait" : "generic",
         kind: "drama",
         title: task.title,
         runtime: options,
-      });
-  const episodeCoverPromise = selected.portrait
+      }));
+  const episodeCoverPromise = uploadedEpisode ?? (selected.portrait
     ? prepareExistingCover(selected.portrait.file, "episode", options)
     : generateMissingCover({
-        sourceFile: selected.landscape?.file ?? selected.fallback.file,
+        sourceFile: selected.landscape?.file ?? fallbackSource,
         sourceKind: selected.landscape ? "landscape" : "generic",
         kind: "episode",
         title: task.title,
         runtime: options,
-      });
+      }));
   const [dramaCover, episodeCover] = await Promise.all([
     dramaCoverPromise,
     episodeCoverPromise,
@@ -403,9 +414,10 @@ export async function prepareKuaishouDramaCoverFiles(
       if (!title) {
         throw new Error(`KUAISHOU_DRAMA_AD_VARIANT_TITLE_REQUIRED: version=${variant}`);
       }
+      const [customDrama, customEpisode] = await Promise.all([uploaded(variant, "drama"), uploaded(variant, "episode")]);
       const generated = await Promise.allSettled([
-        generateMissingCover({
-          sourceFile: selected.landscape?.file ?? selected.fallback.file,
+        customDrama ? Promise.resolve(customDrama) : generateMissingCover({
+          sourceFile: selected.landscape?.file ?? fallbackSource,
           sourceKind: selected.landscape ? "landscape" : "generic",
           kind: "drama",
           title,
@@ -413,8 +425,8 @@ export async function prepareKuaishouDramaCoverFiles(
           summary: task.summary,
           runtime: options,
         }),
-        generateMissingCover({
-          sourceFile: selected.portrait?.file ?? selected.fallback.file,
+        customEpisode ? Promise.resolve(customEpisode) : generateMissingCover({
+          sourceFile: selected.portrait?.file ?? fallbackSource,
           sourceKind: selected.portrait ? "portrait" : "generic",
           kind: "episode",
           title,

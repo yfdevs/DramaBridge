@@ -362,7 +362,17 @@ async function claimById(
         payloadJson: mergeLatestDramaPayload(claimedData.payloadJson, latest),
       };
   }
-  return normalizeClaimedTask(claimedData, listedTask, options.runtimeOptions, executionId);
+  const normalized = normalizeClaimedTask(claimedData, listedTask, options.runtimeOptions, executionId);
+  if (listedTask.dramaId && httpClient.get) {
+    const response = responseBaseSchema.extend({ data: z.object({ imagesJson: z.array(z.unknown()).nullish() }).nullish() }).parse(
+      await httpClient.get(`/dramaAiRpa/kuaishou/dramaExtraInfo/images/detailByDramaId?dramaId=${listedTask.dramaId}`));
+    assertSuccess(response, "KUAISHOU_DRAMA_IMAGES_FAILED");
+    normalized.task.uploadedCovers = (response.data?.imagesJson ?? []).flatMap((image) => {
+      const parsed = z.object({ version: z.number().int().min(1), kind: z.enum(["drama", "episode"]), url: z.string().url() }).safeParse(image);
+      return parsed.success ? [parsed.data] : [];
+    });
+  }
+  return normalized;
 }
 
 export async function claimNextKuaishouDramaTaskApi(

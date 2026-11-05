@@ -197,6 +197,7 @@ const kuaishouDramaTaskBaseSchema = z.object({
     .describe("百度网盘分享文本，包含分享链接和提取码；存在时上剧前必须下载并校验全部剧集视频"),
   publishType: optionalPublishTypeSchema
     .describe("发布模式；广告版本数量由 adVersionCount 动态控制"),
+  uploadedCovers: z.array(z.object({ version: z.number().int().min(1), kind: z.enum(["drama", "episode"]), url: z.string().url() })).optional(),
   adVersionCount: z.coerce.number().int().min(1).optional()
     .describe("需要发布的广告版本总数；第一个广告版使用主标题"),
   adVersionTitles: z.array(z.string().trim().min(1).max(28)).optional()

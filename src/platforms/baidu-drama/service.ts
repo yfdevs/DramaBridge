@@ -84,6 +84,7 @@ export const baiduDramaService = {
   selectLocalEpisodeVideoRoot: (currentPath?: string) =>
     invokeBaiduDrama<string | null>("baidu-drama:config:select-local-episode-video-root", currentPath),
   status: () => invokeBaiduDrama<BaiduDramaServiceStatus>("baidu-drama:service:status"),
-  start: () => invokeBaiduDrama<BaiduDramaServiceStatus>("baidu-drama:service:start"),
+  listAccounts: () => invokeBaiduDrama<Array<{ accountId: string; accountName: string }>>("baidu-drama:accounts:list"),
+  start: (accountIds: string[]) => invokeBaiduDrama<BaiduDramaServiceStatus>("baidu-drama:service:start", accountIds),
   stop: () => invokeBaiduDrama<BaiduDramaServiceStatus>("baidu-drama:service:stop"),
 }

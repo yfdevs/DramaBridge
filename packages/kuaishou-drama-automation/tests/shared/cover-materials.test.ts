@@ -368,3 +368,18 @@ void test("generates separate textless landscape and portrait covers for ad vers
     await rm(temporaryRoot, { recursive: true, force: true });
   }
 });
+
+void test("uploaded version covers bypass AI and a missing orientation still generates", async () => {
+  const fixture = await generatedCoverFixture();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(svg(1600, 1000, "#112233"), { headers: { "content-type": "image/svg+xml" } });
+  try {
+    fixture.task.uploadedCovers = [{ version: 2, kind: "drama", url: "https://example.com/custom.svg" }];
+    await fixture.run();
+    assert.equal(fixture.requests.length, 1);
+    assert.ok(fixture.task.localVariantCoverFiles?.["ad-unlock-2"]?.drama);
+    fixture.task.uploadedCovers.push({ version: 2, kind: "episode", url: "https://example.com/portrait.svg" });
+    await fixture.run();
+    assert.equal(fixture.requests.length, 1);
+  } finally { globalThis.fetch = originalFetch; await fixture.close(); }
+});

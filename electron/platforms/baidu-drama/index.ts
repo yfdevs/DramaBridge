@@ -405,7 +405,7 @@ async function status(): Promise<BaiduDramaServiceStatus> {
   return { ...runtimeStatus, pid: process.pid };
 }
 
-async function startRuntime() {
+async function startRuntime(selectedAccountIds: string[]) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const configuredVideoRoot = config.localEpisodeVideoRoot.trim();
@@ -420,7 +420,9 @@ async function startRuntime() {
     fetchBaiduDramaAccounts: (apiBaseUrl: string) => Promise<BaiduDramaAccount[]>;
     startBaiduDramaRuntime: (options: Record<string, unknown>) => Promise<BaiduDramaAccountRuntime>;
   };
-  const accounts = await fetchBaiduDramaAccounts(config.apiBaseUrl);
+  const availableAccounts = await fetchBaiduDramaAccounts(config.apiBaseUrl);
+  const accounts = availableAccounts.filter(account => selectedAccountIds.includes(account.accountId));
+  if (accounts.length !== selectedAccountIds.length) throw new Error("所选百度账号已失效，请刷新账号列表后重试");
   if (!accounts.length) throw new Error("BAIDU_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
 
   const accountRuntimes: Array<{
@@ -597,9 +599,17 @@ export function registerBaiduDramaPlatformHandlers() {
     }),
   );
   ipcMain.handle("baidu-drama:service:status", () => status());
-  ipcMain.handle("baidu-drama:service:start", async () => {
+  ipcMain.handle("baidu-drama:accounts:list", async () => {
+    const { fetchBaiduDramaAccounts } = await import("@dramabridge/baidu-drama-automation");
+    return (await fetchBaiduDramaAccounts(readConfig().apiBaseUrl)).map(account => ({ accountId: account.accountId, accountName: account.accountName }));
+  });
+  ipcMain.handle("baidu-drama:service:start", async (_event, input: unknown) => {
+    if (!Array.isArray(input) || !input.length || input.some(id => typeof id !== "string" || !id.trim())) {
+      throw new Error("请先选择要启动的百度账号");
+    }
+    const selectedAccountIds = [...new Set(input as string[])];
     assertGlobalDirectoriesConfigured();
-    await runtimeController.start(startRuntime);
+    await runtimeController.start(() => startRuntime(selectedAccountIds));
     return status();
   });
   ipcMain.handle("baidu-drama:service:stop", async () => {

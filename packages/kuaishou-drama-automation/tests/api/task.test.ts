@@ -200,7 +200,7 @@ test("keeps exact dynamic ad-version titles when claiming a backend task", async
     calls.map(({ path }) => path),
     ["/dramaAiRpa/kuaishou/accountTask/page", "/dramaAiRpa/kuaishou/rpa/claim"],
   );
-  assert.deepEqual(getCalls, ["/dramaAiRpa/detail/901"]);
+  assert.deepEqual(getCalls, ["/dramaAiRpa/detail/901", "/dramaAiRpa/kuaishou/dramaExtraInfo/images/detailByDramaId?dramaId=901"]);
 });
 
 test("fills missing backend ad-version titles with distinct safe titles", async () => {

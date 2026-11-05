@@ -86,3 +86,9 @@ node scripts/kuaishou-drama-reset-uploading.mjs --dry-run --skip-ids 1498
 脚本不修改本机 SQLite；若客户端仍显示“需要核实”，请先停止服务，点击该任务的“已在后台处理，重新检查”。新一轮执行会查询并跳过平台上已提交的版本。
 
 小时阈值按任务最后更新时间 `updateTime` 判断，支持小数，如 `--older-than-hours 1.5`。缺失或无效的更新时间会跳过。`--claimed-before` 仍是额外的领取时间筛选。
+
+### 用户上传的版本封面
+
+领取任务后通过 `GET /dramaAiRpa/kuaishou/dramaExtraInfo/images/detailByDramaId?dramaId=...` 读取最新的 `imagesJson`。图片对象保留上传接口返回的元数据，增加 `version`（从 1 开始，1 表示首个广告版及付费版）和 `kind`（`drama` 横版剧封面 / `episode` 竖版分集封面）。后台通过 `POST /dramaAiRpa/kuaishou/dramaExtraInfo/images/save` 保存完整列表。
+
+每个版本、每个方向独立选择用户上传图片；缺项沿用原有封面准备 / AI 生成逻辑。旧数据没有列表或版本元数据时保持原有行为。上传图片下载或处理失败会报错，不会静默替换为 AI 图片。后台封面上传、替换、删除立即保存；新建剧目先保存获得 dramaId 再上传。
