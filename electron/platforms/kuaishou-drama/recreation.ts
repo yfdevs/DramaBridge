@@ -3,21 +3,15 @@ import { stat } from "node:fs/promises";
 import { emitIpcEvent, trpcIpc as ipcMain } from "../../ipc";
 import { openAutomationDatabase } from "../../storage/database";
 import { KuaishouRecreationRepository } from "../../storage/kuaishou-recreation";
-import { executeRecreationTask } from "./recreation-workflow";
-import { prepareRecreationPoster } from "./recreation-poster";
-import { createConfiguredAiClient, getConfiguredAiImageModel, getConfiguredAiCoverGenerationRetryAttempts } from "../../global-app-config";
 import { createRecreationTemplate, readRecreationExcel } from "./recreation-excel";
 import {
-  ensureBaiduNetdiskShareDownloaded,
-  findKuaishouRecreationDownloadedSource,
-  kuaishouRecreationMaterialRoot,
-  uploadKuaishouRecreationVersion,
+  transferKuaishouRecreationVideos,
 } from "../baidu-netdisk";
 import type {
   RecreationTask,
   RecreationWorkspace,
 } from "../../../src/platforms/kuaishou-drama/recreation-types";
-import { openExistingPath, playwrightBrowsersPath } from "../shared";
+import { openExistingPath } from "../shared";
 
 export function registerKuaishouRecreationHandlers() {
   // Lazy initialization avoids creating a second connection until the page is used.
@@ -61,35 +55,22 @@ export function registerKuaishouRecreationHandlers() {
     notify();
   };
   const execute = async (task: RecreationTask, signal: AbortSignal) => {
-    process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
-    const runtime = await import("@dramabridge/kuaishou-drama-automation");
-    return executeRecreationTask(task, {
-      materialRoot: kuaishouRecreationMaterialRoot(), runtime, signal,
-      legacySourcePath: findKuaishouRecreationDownloadedSource(task),
-      update: fields => update(task, fields),
-      generatePoster: input => prepareRecreationPoster({ ...input, signal,
-        client: createConfiguredAiClient, model: getConfiguredAiImageModel, retryAttempts: getConfiguredAiCoverGenerationRetryAttempts,
-        normalize: runtime.normalizeKuaishouRecreationCover, onLog: message => update(task, { message }),
-      }),
-      download: async targetRoot => {
-        const downloaded = await ensureBaiduNetdiskShareDownloaded({
-          requesterPlatform: "kuaishou-drama-recreation", shareText: task.shareText,
-          resourceName: task.originalTitle, episodeCount: task.downloadCount,
-          episodeDownloadLimit: task.downloadCount, requiredPosterImages: 1,
-          localEpisodeVideoRoot: targetRoot, downloadEpisodeVideos: true,
-          downloadAssetMaterials: true, mergeOwnershipMaterials: false,
-          requireAllDiscoveredAssets: false, signal,
-        });
-        if (downloaded.state !== "completed" || !downloaded.localPath) throw new Error("素材下载未完成");
-        return downloaded.localPath;
-      },
-      upload: (localDirectory, title, onProgress, preferredRemoteDirectory, onRemoteDirectorySelected, verification) => uploadKuaishouRecreationVersion({
-        localDirectory, remoteDirectory: `/快手_二创集合/${task.originalTitle}/${title}-60%`, signal, onProgress,
-        preferredRemoteDirectory, onRemoteDirectorySelected,
-        ...verification,
-      }),
-    });
+    update(task, { state: "checking", message: "检查已完成版本，准备直接转存视频与原封面" });
+    for (const version of task.results) {
+      signal.throwIfAborted();
+      if (version.shareUrl) continue;
+      update(task, { state: "uploading", message: `云端转存前 ${task.downloadCount} 集与原封面：${version.title}` });
+      const result = await transferKuaishouRecreationVideos({ title: task.originalTitle, versionTitle: version.title,
+        shareText: task.shareText, episodeCount: task.episodeCount,
+        onProgress: progress => update(task, { message: `${version.title}：${progress.stage} ${progress.completed}/${task.downloadCount}` }),
+      });
+      const extractionCode = new URL(result.shareUrl).searchParams.get("pwd") || "";
+      Object.assign(version, { remotePath: result.path, shareUrl: result.shareUrl, extractionCode });
+      update(task, { results: task.results });
+    }
+    update(task, { state: "completed", message: "所有版本已直接转存视频与原封面，并生成分享链接" });
   };
+
   const pump = async () => {
     try {
       while (running) {

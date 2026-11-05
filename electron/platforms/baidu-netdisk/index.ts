@@ -1812,3 +1812,8 @@ export async function transferWechatRecreationVideos(options: { title: string; s
  const { transferBaiduDramaVideos } = await import("@dramabridge/baidu-netdisk-automation");
  return runBaiduCdpOperationExclusive("视频号二创转存", () => transferBaiduDramaVideos({ ...options, recreation: true, parentDirectoryName: "微信视频号60%素材汇总", port: cdpPort(readConfig()) }));
 }
+
+export async function transferKuaishouRecreationVideos(options: { title: string; versionTitle: string; shareText: string; episodeCount: number; onProgress?: (progress: { completed: number; total: number; stage: string }) => void }) {
+ const { transferBaiduDramaVideos } = await import("@dramabridge/baidu-netdisk-automation");
+ return runBaiduCdpOperationExclusive("快手二创云端转存", () => transferBaiduDramaVideos({ ...options, recreation: true, parentDirectoryName: "快手_二创集合", port: cdpPort(readConfig()) }));
+}

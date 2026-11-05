@@ -923,6 +923,7 @@ type SavedShareResult = {
 };
 
 type SaveShareOptions = {
+  videoVersionTitle?: string;
   videoRecreation?: boolean;
   normalizedVideoEpisodeCount?: number;
   videoParentDirectoryName?: string;
@@ -965,7 +966,7 @@ export async function saveShareToOwnNetdisk(
         try {
           const progress = JSON.parse(message.slice("[baidu-video-progress] ".length));
           if (Number.isInteger(progress.completed) && Number.isInteger(progress.total)
-            && progress.total === options.normalizedVideoEpisodeCount
+            && progress.total === (options.videoRecreation ? Math.ceil((options.normalizedVideoEpisodeCount ?? 0) * 0.6) : options.normalizedVideoEpisodeCount)
             && progress.completed >= 0 && progress.completed <= progress.total && typeof progress.stage === "string") {
             options.onVideoProgress?.(progress);
           }
@@ -1499,9 +1500,13 @@ export async function saveShareToOwnNetdisk(
     }
     return undefined;
   };
-  const transferOne = async (source, destinationDir) => {
+  const transferOne = async (source, destinationDir, materialKind = "video") => {
     const name = fileNameOf(source);
-    if (${JSON.stringify(options.normalizedVideoEpisodeCount ?? 0)} > 0 && (itemIsDir(source) || !/\\.mp4$/i.test(name))) {
+    const allowedCover = ${JSON.stringify(options.videoRecreation ?? false)}
+      && materialKind === "cover" && destinationDir.endsWith("/封面")
+      && /\\.(png|jpg|jpeg|webp)$/i.test(name);
+    if (${JSON.stringify(options.normalizedVideoEpisodeCount ?? 0)} > 0
+      && (itemIsDir(source) || (!/\\.mp4$/i.test(name) && !allowedCover))) {
       throw new Error("视频转存模式禁止转存目录或非 MP4 文件：" + name);
     }
     const existing = await findOwnItem(destinationDir, name);
@@ -1734,6 +1739,7 @@ export async function saveShareToOwnNetdisk(
     // tsx development transforms may retain function-name helpers in serialized code.
     const __name = (value) => value;
     return await (${transferNormalizedEpisodeVideos.toString()})({
+      versionTitle: ${JSON.stringify(options.videoVersionTitle)},
       recreation: ${JSON.stringify(options.videoRecreation ?? false)},
       parentDirectoryName: ${JSON.stringify(options.videoParentDirectoryName)},
       sharePassword: ${JSON.stringify(options.videoSharePassword)},

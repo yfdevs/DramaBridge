@@ -29,12 +29,32 @@ export async function readNetdiskDramaWorkbook(file: string) {
     if (!headerRow) continue;
     for (let row = headerRow + 1; row <= sheet.rowCount; row++) {
       const text = (key: string) => columns.has(key) ? excelCellText(sheet.getRow(row).getCell(columns.get(key)!).value) : '';
-      const title = text('剧名'); const shareText = text('全集链接(100%)');
+      const title = text('剧名'); let shareText = text('全集链接(100%)');
       if (!title && !shareText) continue;
       const episodeCount = Number(text('集数').replace(/集$/, ''));
-      const link = shareText.match(/https?:\/\/pan\.baidu\.com\/s\/[^\s"'<>]+/)?.[0];
-      if (!title || title.length > 120 || !Number.isInteger(episodeCount) || episodeCount < 1 || !link) {
-        errors.push(`${sheet.name} 第${row}行：剧名、集数或全集链接无效`); continue;
+      const rawLink = shareText.match(/https?:\/\/pan\.baidu\.com\/[^\s"'<>]+/)?.[0];
+      let validLink = false;
+      if (rawLink) {
+        try {
+          const url = new URL(rawLink);
+          if (url.pathname === '/share/init') {
+            const surl = url.searchParams.get('surl');
+            if (surl && /^[a-zA-Z0-9_-]+$/.test(surl)) {
+              url.pathname = '/s/1' + surl;
+              url.searchParams.delete('surl');
+            }
+          }
+          validLink = /^\/s\/[a-zA-Z0-9_-]+$/.test(url.pathname);
+          if (validLink) shareText = shareText.replace(rawLink, url.toString());
+        } catch { /* Report the field below. */ }
+      }
+      const invalid = [
+        !title || title.length > 120 ? '剧名不能为空且不能超过 120 字' : '',
+        !Number.isInteger(episodeCount) || episodeCount < 1 ? '集数必须为正整数（填写原剧总集数）' : '',
+        !validLink ? '全集链接须为百度网盘 /s/ 或 /share/init?surl= 分享地址' : '',
+      ].filter(Boolean);
+      if (invalid.length) {
+        errors.push(`${sheet.name} 第${row}行：${invalid.join('；')}`); continue;
       }
       const key = title + '\n' + shareText;
       if (seen.has(key)) { errors.push(`${sheet.name} 第${row}行：重复剧目，已跳过`); continue; }

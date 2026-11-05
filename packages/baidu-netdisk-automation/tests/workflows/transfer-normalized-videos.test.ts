@@ -108,3 +108,22 @@ test('shares only verified videos, excludes sibling folders, and includes the ex
   assert.equal(result.shareUrl, 'https://pan.baidu.com/s/1result?pwd=a1b2');
   assert.ok(!sharedIds.includes('old-directory'));
 });
+
+test('cloud recreation keeps only first 60 percent and uses each version title', async () => {
+  const f = fixture();
+  f.options.recreation = true;
+  f.options.versionTitle = '新版本';
+  f.options.episodeCount = 5;
+  f.options.listShare = async path => Array.from({length: 5}, (_, i) => f.source(i + 1, path));
+  const created: string[] = [];
+  f.options.createDirectory = async (parent, name) => {
+    created.push(name);
+    return { path: '/测试剧', fs_id: name, isdir: 1 };
+  };
+  const result = await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(result.remoteVideos.files.length, 3);
+  assert.ok(created.includes('新版本-60%'));
+  assert.ok(created.includes('封面'));
+  assert.ok(created.includes('成片60%'));
+  assert.deepEqual(result.remoteVideos.files.map((e: any) => e.name), ['新版本-第1集.mp4', '新版本-第2集.mp4', '新版本-第3集.mp4']);
+});

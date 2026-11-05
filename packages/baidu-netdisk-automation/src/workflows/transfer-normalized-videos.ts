@@ -2,11 +2,11 @@ type Entry = Record<string, any>;
 
 /** Serialized into the authenticated share page. No module-scope dependencies. */
 export async function transferNormalizedEpisodeVideos(o: {
-  recreation?: boolean; parentDirectoryName?: string; title: string; episodeCount: number; roots: Entry[]; sharePassword?: string;
+  versionTitle?: string; recreation?: boolean; parentDirectoryName?: string; title: string; episodeCount: number; roots: Entry[]; sharePassword?: string;
   listShare: (path: string) => Promise<Entry[]>;
   listOwn: (path: string, refresh?: boolean) => Promise<Entry[]>;
   createDirectory: (parent: string, name: string) => Promise<Entry>;
-  transferOne: (source: Entry, dest: string) => Promise<{ item: Entry; transferred: boolean }>;
+  transferOne: (source: Entry, dest: string, materialKind?: "video" | "cover") => Promise<{ item: Entry; transferred: boolean }>;
   request: (url: string, init: unknown) => Promise<Entry>; token: string;
   identical: (a: Entry, b: Entry) => boolean;
   compare: (a: any, b: any) => number;
@@ -17,7 +17,8 @@ export async function transferNormalizedEpisodeVideos(o: {
   const name = (e: Entry) => String(e.server_filename || e.filename || e.path?.split('/').pop() || '');
   const isDir = (e: Entry) => Number(e.isdir ?? e.is_dir ?? 0) === 1;
   const id = (e: Entry) => String(e.fs_id || e.fsid || e.id || '');
-  const progress = (completed: number, stage: string) => console.log('[baidu-video-progress] ' + JSON.stringify({ completed, total: o.episodeCount, stage }));
+  const total = o.recreation ? Math.ceil(o.episodeCount * 0.6) : o.episodeCount;
+  const progress = (completed: number, stage: string) => console.log('[baidu-video-progress] ' + JSON.stringify({ completed, total, stage }));
   progress(0, '扫描视频');
   const queue = [{ path: '/', entries: o.roots, depth: 0 }];
   const visited = new Set<string>();
@@ -50,14 +51,23 @@ export async function transferNormalizedEpisodeVideos(o: {
   if (selected.files.some((e: Entry) => !/\.mp4$/i.test(e.name))) {
     throw new Error('选中的全集包含 MOV 文件，云端改名不能转换视频格式，已停止转存');
   }
+  const coverIds: string[] = [];
   progress(0, '转存视频');
   const parent = o.parentDirectoryName ? await o.createDirectory('/', o.parentDirectoryName) : undefined;
   const parentPath = parent ? String(parent.path || '/' + o.parentDirectoryName) : '/';
-  const root = await o.createDirectory(parentPath, o.recreation ? o.title + '60%素材' : o.title);
+  const root = await o.createDirectory(parentPath, o.recreation && !o.versionTitle ? o.title + '60%素材' : o.title);
   let rootPath = String(root.path || parentPath.replace(/\/$/, '') + '/' + o.title);
   if (o.recreation) {
+    if (o.versionTitle) {
+      const version = await o.createDirectory(rootPath, o.versionTitle + '-60%');
+      rootPath = String(version.path);
+    }
     const cover = await o.createDirectory(rootPath, '封面');
-    for (const image of covers) await o.transferOne(image, String(cover.path));
+    for (const image of covers) {
+      const copied = await o.transferOne(image, String(cover.path), "cover");
+      if (!o.identical(image, copied.item)) throw new Error('封面转存文件身份未确认：' + name(image));
+      coverIds.push(id(copied.item));
+    }
     const videos = await o.createDirectory(rootPath, '成片60%');
     rootPath = String(videos.path);
     selected.files = selected.files.slice(0, Math.ceil(o.episodeCount * 0.6));
@@ -67,12 +77,12 @@ export async function transferNormalizedEpisodeVideos(o: {
   // Validate every target before the first write. Never overwrite another drama's file.
   const existing = await o.listOwn(rootPath, true);
   for (const file of selected.files) {
-    const targetName = `${o.title}-第${file.index}集.mp4`;
+    const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
     const collision = existing.find(e => name(e) === targetName);
     if (collision && !o.identical(file, collision)) throw new Error('目标文件内容冲突：' + rootPath + '/' + targetName);
   }
   for (const file of selected.files) {
-    const targetName = `${o.title}-第${file.index}集.mp4`;
+    const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
     let target = (await o.listOwn(rootPath, true)).find(e => name(e) === targetName);
     if (!target) {
       const copied = await o.transferOne(file, rootPath);
@@ -102,7 +112,7 @@ export async function transferNormalizedEpisodeVideos(o: {
     progress(results.length, '生成分享链接');
     // Share only verified video IDs: pre-existing sibling directories and
     // unrelated files in the reused target folder must never enter this link.
-    const ids = results.map(file => file.fsId);
+    const ids = [...results.map(file => file.fsId), ...coverIds];
     if (ids.some(value => !value)) throw new Error('视频缺少文件 ID，无法创建分享');
     const params = new URLSearchParams({ channel: 'chunlei', web: '1', app_id: '250528', clienttype: '0', bdstoken: o.token });
     const shared = await o.request('/share/set?' + params, { method: 'POST',

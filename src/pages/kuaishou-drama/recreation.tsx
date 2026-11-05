@@ -24,7 +24,7 @@ const labels: Record<RecreationTask["state"], string> = {
   checking: "检查本地",
   downloading: "下载中",
   processing: "整理中",
-  uploading: "上传分享中",
+  uploading: "转存分享中",
   completed: "已完成",
   failed: "失败",
   interrupted: "已中断",
@@ -184,7 +184,7 @@ export function KuaishouRecreationPage() {
       </WorkspaceActions>
       <div className="mx-auto flex h-full min-h-0 w-full max-w-none flex-col">
         <header className="shrink-0 space-y-3 border-b px-6 py-3">
-          <p className="text-xs leading-5 text-muted-foreground">按原剧总集数取前 60%，每个版本单独生成封面与分享链接。失败重试会保留已完成版本。</p>
+          <p className="text-xs leading-5 text-muted-foreground">视频前 60% 与原封面直接云端转存，每个版本独立目录与分享链接，无需下载。失败重试会保留已完成版本。</p>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-1" aria-label="任务状态筛选">
               {[
