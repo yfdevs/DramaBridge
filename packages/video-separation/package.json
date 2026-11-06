@@ -1,0 +1,19 @@
+{
+  "name": "@dramabridge/video-separation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dramabridge/media-assets": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "latest"
+  }
+}

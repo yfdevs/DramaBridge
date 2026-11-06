@@ -2,7 +2,6 @@ import type { OwnershipProjectProofKind } from "@dramabridge/media-assets";
 import { z } from "zod";
 import {
   DOUYIN_DRAMA_AIGC_TOOL,
-  DOUYIN_DRAMA_CONTRACT_NAMES,
   DOUYIN_DRAMA_CREATOR_NAME,
   DOUYIN_DRAMA_PRODUCTION_COST_RANGE,
   DOUYIN_DRAMA_PRODUCTION_TEAM,
@@ -116,8 +115,8 @@ export const douyinDramaTaskPayloadSchema = z
     }).default(1),
     contractName: z.preprocess(
       (value) => typeof value === "string" && !value.trim() ? undefined : value,
-      z.enum(DOUYIN_DRAMA_CONTRACT_NAMES, {
-        error: "必须选择后台配置的抖音绑定合同",
+      z.string().trim().regex(/^CT\d+(?:\s|$)/u, {
+        message: "抖音绑定合同必须以 CT 合同编号开头",
       }).optional(),
     ),
     brandAccountName: optionalText,

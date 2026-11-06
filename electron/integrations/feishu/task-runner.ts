@@ -5,7 +5,7 @@ import type {
   RecreationTask,
   FeishuRunnerState,
 } from "../../../src/platforms/feishu/task-types";
-import { validateRecreationInput } from "./task-validation";
+import { normalizeRecreationTitle, validateRecreationInput } from "./task-validation";
 
 export type TaskTableOptions = {
   resultColumn?: string;
@@ -44,10 +44,10 @@ export function sourceInput(
 ): RecreationInput {
   const columns = tableColumns(table, options);
   return {
-    originalTitle: values[columns.title] || "",
+    originalTitle: normalizeRecreationTitle(values[columns.title] || ""),
     episodeCount: Number(values[columns.count]),
     shareText: values[columns.source] || "",
-    versions: columns.versions.map((index) => values[index] || "").filter(Boolean),
+    versions: columns.versions.map((index) => normalizeRecreationTitle(values[index] || "")).filter(Boolean),
   };
 }
 export function sourceKey(table: TableSnapshot, values: string[], options: TaskTableOptions = {}) {

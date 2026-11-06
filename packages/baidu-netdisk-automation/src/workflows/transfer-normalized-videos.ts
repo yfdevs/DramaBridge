@@ -67,6 +67,23 @@ export async function transferNormalizedEpisodeVideos(o: {
       shareRoot = version;
       shareRootPath = rootPath;
     }
+    // Older runs may leave full sets, original filenames or unrelated materials.
+    // Preserve them and build a separate, clean task folder instead of sharing them.
+    const taskEntries = await o.listOwn(rootPath, true);
+    const videoDirectory = taskEntries.find(entry => name(entry) === '成片60%' && isDir(entry));
+    const previousVideos = videoDirectory ? await o.listOwn(String(videoDirectory.path), true) : [];
+    const wantedNames = new Set(selected.files.slice(0, total).map((file: Entry) => `${o.versionTitle || o.title}-第${file.index}集.mp4`));
+    const dirty = taskEntries.some(entry => !isDir(entry) || !['封面', '成片60%'].includes(name(entry)))
+      || previousVideos.some(entry => isDir(entry) || !wantedNames.has(name(entry))
+        || !o.identical(selected.files.find((file: Entry) => `${o.versionTitle || o.title}-第${file.index}集.mp4` === name(entry))!, entry));
+    if (dirty) {
+      const clean = await o.createDirectory(rootPath.slice(0, rootPath.lastIndexOf('/')) || '/',
+        (name(shareRoot) || o.versionTitle || o.title) + '-重新整理-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
+      rootPath = String(clean.path);
+      shareRoot = clean;
+      shareRootPath = rootPath;
+      console.log('[baidu-transfer] 原任务目录存在残留，保留原文件并改用独立目录：' + rootPath);
+    }
     const cover = await o.createDirectory(rootPath, '封面');
     shareChildren.push(cover);
     for (const image of covers) {
@@ -78,6 +95,18 @@ export async function transferNormalizedEpisodeVideos(o: {
     shareChildren.push(videos);
     rootPath = String(videos.path);
     selected.files = selected.files.slice(0, Math.ceil(o.episodeCount * 0.6));
+  }
+  if (!o.recreation) {
+    const previous = await o.listOwn(rootPath, true);
+    const expected = new Map<string, Entry>(selected.files.map((file: Entry) => [`${o.versionTitle || o.title}-第${file.index}集.mp4`, file]));
+    if (previous.some(entry => isDir(entry) || !expected.has(name(entry)) || !o.identical(expected.get(name(entry))!, entry))) {
+      const clean = await o.createDirectory(parentPath,
+        o.title + '-重新整理-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
+      rootPath = String(clean.path);
+      shareRoot = clean;
+      shareRootPath = rootPath;
+      console.log('[baidu-transfer] 原任务目录存在残留，保留原文件并改用独立目录：' + rootPath);
+    }
   }
   let transferredItemCount = 0;
   const results: Entry[] = [];
@@ -122,9 +151,11 @@ export async function transferNormalizedEpisodeVideos(o: {
     const assertContents = async (path: string, expected: string[]) => {
       if (expected.some(value => !value)) throw new Error('文件缺少 ID，无法创建分享');
       const wanted = new Set(expected);
-      const actual = await o.listOwn(path, true);
+      const actual = [...new Map((await o.listOwn(path, true)).map(entry => [id(entry) || String(entry.path), entry])).values()];
       if (actual.length !== wanted.size || actual.some(entry => !wanted.has(id(entry))))
-        throw new Error('任务目录含有本次任务以外的内容，未创建分享：' + path);
+        throw new Error('任务目录含有本次任务以外或缺失的内容，未创建分享：' + path + '；预期=' + wanted.size + '，实际=' + actual.length
+          + '；多余=' + (actual.filter(entry => !wanted.has(id(entry))).map(name).join('、') || '无')
+          + '；缺少ID=' + ([...wanted].filter(value => !actual.some(entry => id(entry) === value)).join('、') || '无'));
     };
     if (o.recreation) {
       await assertContents(shareRootPath, shareChildren.map(id));
@@ -134,10 +165,17 @@ export async function transferNormalizedEpisodeVideos(o: {
     const ids = [id(shareRoot)];
     if (!ids[0]) throw new Error('任务文件夹缺少 ID，无法创建分享');
     const params = new URLSearchParams({ channel: 'chunlei', web: '1', app_id: '250528', clienttype: '0', bdstoken: o.token });
-    const shared = await o.request('/share/set?' + params, { method: 'POST',
+    const shared = await o.request('https://pan.baidu.com/share/set?' + params, { method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       body: new URLSearchParams({ fid_list: JSON.stringify(ids), schannel: '4', channel_list: '[]', period: '0', pwd: o.sharePassword }) });
-    if (Number(shared.errno) !== 0 || !shared.shareid || typeof shared.link !== 'string') throw new Error('视频已转存，生成分享链接失败；请重试核验已有文件后补建链接');
+    if (Number(shared.errno) !== 0 || typeof shared.link !== 'string' || !shared.link.trim()) {
+      const code = String(shared.errno ?? shared.error_code ?? '缺失');
+      const message = String(shared.show_msg || shared.errmsg || shared.message || '接口未返回有效分享链接').slice(0, 300);
+      const requestId = String(shared.request_id || shared.requestid || '').replace(/[^\w-]/g, '').slice(0, 100);
+      throw new Error('视频已转存，生成分享链接失败；errno=' + code + '；原因=' + message
+        + (requestId ? '；request_id=' + requestId : '')
+        + '；目录=' + shareRootPath + '；重试将核验并复用已转存视频');
+    }
     const url = new URL(shared.link);
     if (url.hostname !== 'pan.baidu.com' || !/^https?:$/.test(url.protocol) || !url.pathname.startsWith('/s/')) throw new Error('百度网盘返回的分享链接无效');
     url.protocol = 'https:'; url.searchParams.set('pwd', o.sharePassword); shareUrl = url.toString();

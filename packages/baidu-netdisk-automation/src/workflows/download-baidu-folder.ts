@@ -1530,7 +1530,7 @@ export async function saveShareToOwnNetdisk(
           name +
           (transferAttempt > 1 ? "（第" + transferAttempt + "次尝试）" : ""),
       );
-      const transferred = await jsonFetch("/share/transfer?" + transferParams.toString(), {
+      const transferred = await jsonFetch("https://pan.baidu.com/share/transfer?" + transferParams.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: transferBody,

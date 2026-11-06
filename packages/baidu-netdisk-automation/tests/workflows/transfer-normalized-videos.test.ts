@@ -91,19 +91,23 @@ test('秋晴裁梦 has 64 parenthesized episodes in both variants; choose only t
   assert.equal(matchBaiduEpisodeIndex('秋晴裁梦.mp4'), undefined);
 });
 
-test('does not share a task folder containing unrelated siblings', async () => {
-  const f = fixture(); const rename = f.options.request;
-  f.options.sharePassword = 'a1b2';
+test('isolates a normal task folder containing unrelated siblings', async () => {
+  const f = fixture();
   f.own.push({ isdir: 1, path: '/测试剧/无字幕版', server_filename: '无字幕版', fs_id: 'old-directory' });
-  let sharedIds: string[] = [];
-  f.options.request = async (url, init: any) => {
-    if (!url.startsWith('/share/set?')) return rename(url, init);
-    sharedIds = JSON.parse(init.body.get('fid_list'));
-    assert.equal(init.body.get('pwd'), 'a1b2');
-    return { errno: 0, shareid: '123', link: 'https://pan.baidu.com/s/1result' };
+  const created: string[] = [];
+  f.options.createDirectory = async (parent, name) => {
+    const path = parent.replace(/\/$/, '') + '/' + name;
+    created.push(path);
+    return { path, server_filename: name, fs_id: path, isdir: 1 };
   };
-  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /本次任务以外/);
-  assert.deepEqual(sharedIds, []);
+  f.options.listOwn = async path => f.own.filter(entry => entry.path.slice(0, entry.path.lastIndexOf('/')) === path);
+  f.options.transferOne = async (_source, destination) => {
+    assert.match(destination, /测试剧-重新整理-/);
+    assert.equal(f.own[0].fs_id, 'old-directory');
+    throw new Error('confirmed clean normal destination');
+  };
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /confirmed clean normal destination/);
+  assert.equal(created.length, 2);
 });
 
 for (const recreation of [false, true]) {
@@ -123,7 +127,7 @@ for (const recreation of [false, true]) {
     f.options.listShare = async path => [...[1, 2].map(n => f.source(n, path)), { server_filename: '海报.jpg', path: path + '/海报.jpg', fs_id: 'cover-' + path, size: 1, md5: 'cover-hash' }];
     let shared: string[] = [];
     f.options.request = async (url, init: any) => {
-      if (url.startsWith('/share/set?')) {
+      if (new URL(url, 'https://pan.baidu.com').pathname === '/share/set') {
         shared = JSON.parse(init.body.get('fid_list'));
         return { errno: 0, shareid: '123', link: 'https://pan.baidu.com/s/1result' };
       }
@@ -165,4 +169,69 @@ test('cloud recreation keeps only first 60 percent and uses each version title',
   assert.ok(created.includes('封面'));
   assert.ok(created.includes('成片60%'));
   assert.deepEqual(result.remoteVideos.files.map((e: any) => e.name), ['新版本-第1集.mp4', '新版本-第2集.mp4', '新版本-第3集.mp4']);
+});
+
+ test('matches episode prefixes without mistaking years or embedded title numbers for episodes', () => {
+  for (const filename of ['01-墙根那片薄荷.mp4', '01 墙根那片薄荷.mp4', '01墙根那片薄荷.mp4', 'EP01_墙根那片薄荷.mp4', '第01集-墙根那片薄荷.mp4']) {
+    assert.equal(matchBaiduEpisodeIndex(filename), 1, filename);
+  }
+  for (const filename of ['2026墙根那片薄荷.mp4', '墙根71那片薄荷.mp4', '00 墙根那片薄荷.mp4']) {
+    assert.equal(matchBaiduEpisodeIndex(filename), undefined, filename);
+  }
+});
+
+test('selects a complete 71 episode set named with episode prefixes', async () => {
+  const f = fixture();
+  f.options.title = '墙根那片薄荷';
+  f.options.episodeCount = 71;
+  f.options.listShare = async path => Array.from({ length: 71 }, (_, i) => ({
+    ...f.source(i + 1, path), server_filename: `${String(i + 1).padStart(2, '0')} 墙根那片薄荷.mp4`,
+  }));
+  f.options.transferOne = async source => {
+    assert.equal(source.index, 1);
+    assert.ok(source.path.startsWith('/剧/有字幕/'));
+    throw new Error('confirmed prefix selection');
+  };
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /confirmed prefix selection/);
+});
+
+test('recreation isolates stale extra episodes without deleting the previous task', async () => {
+  const f = fixture();
+  f.options.recreation = true;
+  const directories: any[] = [
+    { path: '/测试剧60%素材/成片60%', server_filename: '成片60%', fs_id: 'old-videos', isdir: 1 },
+  ];
+  f.own.push({ path: '/测试剧60%素材/成片60%/多余.mp4', server_filename: '多余.mp4', fs_id: 'extra' });
+  f.options.createDirectory = async (parent, name) => {
+    const path = parent.replace(/\/$/, '') + '/' + name;
+    const entry = { path, server_filename: name, fs_id: path, isdir: 1 };
+    if (!directories.some(item => item.path === path)) directories.push(entry);
+    return entry;
+  };
+  f.options.listOwn = async path => [...directories, ...f.own].filter(item => item.path.slice(0, item.path.lastIndexOf('/')) === path);
+  f.options.listShare = async path => [f.source(1, path), f.source(2, path)];
+  f.options.transferOne = async (_source, dest) => {
+    assert.match(dest, /重新整理-.*\/成片60%$/);
+    assert.ok(f.own.some(item => item.fs_id === 'extra'));
+    throw new Error('confirmed isolated task');
+  };
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /confirmed isolated task/);
+});
+
+test('share failures preserve the API code and reason for diagnosis', async () => {
+  const f = fixture();
+  f.options.sharePassword = 'abcd';
+  const rename = f.options.request;
+  f.options.request = async (url, init) => new URL(url, 'https://pan.baidu.com').pathname === '/share/set'
+    ? { errno: 115, show_msg: '分享数量超限', request_id: 'req-123' } : rename(url, init);
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /errno=115.*分享数量超限.*req-123/);
+  assert.equal(f.transferred.length, 2);
+});
+test('a successful share link does not require an unused shareid field', async () => {
+  const f = fixture();
+  f.options.sharePassword = 'abcd';
+  const rename = f.options.request;
+  f.options.request = async (url, init) => new URL(url, 'https://pan.baidu.com').pathname === '/share/set'
+    ? { errno: 0, link: 'https://pan.baidu.com/s/1test' } : rename(url, init);
+  assert.equal((await transferNormalizedEpisodeVideos(f.options)).shareUrl, 'https://pan.baidu.com/s/1test?pwd=abcd');
 });

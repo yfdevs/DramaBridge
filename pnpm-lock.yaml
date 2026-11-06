@@ -88,6 +88,9 @@ importers:
       '@dramabridge/tiktok-drama-automation':
         specifier: workspace:*
         version: link:packages/tiktok-drama-automation
+      '@dramabridge/video-separation':
+        specifier: workspace:*
+        version: link:packages/video-separation
       '@dramabridge/wechat-drama-automation':
         specifier: workspace:*
         version: link:packages/wechat-drama-automation
@@ -347,7 +350,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -356,7 +359,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/automation-logging:
     dependencies:
@@ -369,7 +372,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -378,7 +381,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/axios:
     dependencies:
@@ -419,7 +422,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -428,7 +431,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/baidu-netdisk-automation:
     dependencies:
@@ -453,7 +456,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.2
@@ -465,7 +468,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/browser-window:
     dependencies:
@@ -475,7 +478,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.15
@@ -484,7 +487,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
 
   packages/douyin-drama-automation:
     dependencies:
@@ -520,14 +523,14 @@ importers:
         version: 1.61.1
       sharp:
         specifier: ^0.35.3
-        version: 0.35.4(@types/node@26.6.5)
+        version: 0.35.4(@types/node@26.6.6)
       zod:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -536,13 +539,13 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/feishu:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.15
@@ -551,8 +554,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
-
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
 
   packages/file-utils:
     dependencies:
@@ -580,7 +582,7 @@ importers:
         version: 11.0.4
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       '@types/proper-lockfile':
         specifier: ^4.1.4
         version: 4.1.4
@@ -595,7 +597,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
 
   packages/iqiyi-drama-automation:
     dependencies:
@@ -619,14 +621,14 @@ importers:
         version: 1.61.1
       sharp:
         specifier: ^0.35.3
-        version: 0.35.4(@types/node@26.6.5)
+        version: 0.35.4(@types/node@26.6.6)
       zod:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -635,7 +637,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/kuaishou-drama-automation:
     dependencies:
@@ -663,7 +665,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -672,7 +674,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/media-assets:
     dependencies:
@@ -696,14 +698,14 @@ importers:
         version: 9.3.3
       sharp:
         specifier: ^0.35.3
-        version: 0.35.4(@types/node@26.6.5)
+        version: 0.35.4(@types/node@26.6.6)
     devDependencies:
       '@types/ffprobe-static':
         specifier: 2.0.3
         version: 2.0.3
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -712,7 +714,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/meituan-drama-automation:
     dependencies:
@@ -740,7 +742,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -749,7 +751,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/pinduoduo-drama-automation:
     dependencies:
@@ -780,13 +782,13 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       typescript:
         specifier: 7.0.2
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
 
   packages/qq-drama-automation:
     dependencies:
@@ -814,7 +816,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -823,7 +825,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/taobao-drama-automation:
     dependencies:
@@ -856,14 +858,14 @@ importers:
         version: 1.61.1
       sharp:
         specifier: ^0.35.3
-        version: 0.35.4(@types/node@26.6.5)
+        version: 0.35.4(@types/node@26.6.6)
       zod:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -872,7 +874,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/tencent-huolong-drama-automation:
     dependencies:
@@ -900,7 +902,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: ^4.23.12
         version: 4.23.13
@@ -909,7 +911,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)'
 
   packages/tiktok-drama-automation:
     dependencies:
@@ -934,7 +936,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: latest
         version: 4.23.15
@@ -943,7 +945,20 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+
+  packages/video-separation:
+    dependencies:
+      '@dramabridge/media-assets':
+        specifier: workspace:*
+        version: link:../media-assets
+    devDependencies:
+      '@types/node':
+        specifier: latest
+        version: 26.6.6
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
 
   packages/wechat-drama-automation:
     dependencies:
@@ -971,7 +986,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: latest
         version: 4.23.15
@@ -980,7 +995,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
 
   packages/wechat-miniprogram-drama-automation:
     dependencies:
@@ -1008,7 +1023,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.5
+        version: 26.6.6
       tsx:
         specifier: latest
         version: 4.23.15
@@ -1017,7 +1032,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.6
-        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
+        version: '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)'
 
 packages:
 
@@ -2538,6 +2553,9 @@ packages:
 
   '@types/node@26.6.5':
     resolution: {integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==}
+
+  '@types/node@26.6.6':
+    resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
@@ -5658,16 +5676,16 @@ packages:
   semver-compare@1.0.0:
     resolution: {integrity: sha512-YM3/ITh2MJ5MtzaM429anh+x2jiLVjqILF4m4oyQB18W7Ggea7BfqdH/wGMK7dDiMghv/6WG7znWMwUDzJiXow==}
 
-  semver@5.5.0:
-    resolution: {integrity: sha512-4SJ3dm0WAwWy/NVeioZh5AntkdJoWKxHxcmyP622fOkgHa4z3R0TdBJICINyaSDE6uNwVc8gZr+ZinwZAH4xIA==}
-    hasBin: true
-
-  semver@6.2.0:
-    resolution: {integrity: sha512-jdFC1VdUGT/2Scgbimf7FSx9iJLXoqfglSF+gJeuNWVpiE37OIbc1jywR/GJyFdz3mnkz2/id0L0J/cr0izR5A==}
+  semver@5.7.3:
+    resolution: {integrity: sha512-kM18BPOqTi0+TB68703/GJRpAML5Me+IDQsR1J26YB3EFKKNEyHIVZuWDX7+WKQB3tHwDwgk24BfhdpWUbytvQ==}
     hasBin: true
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
+    hasBin: true
+
+  semver@6.3.2:
+    resolution: {integrity: sha512-GYrCADwpu6yV5OAvchkQ27Z5wwMxWAEMg5NNWjyHh/5DboFFqbdbvYNIvZouQpxXyeMPoTOh0vdPYKlf0ZswdQ==}
     hasBin: true
 
   semver@7.7.3:
@@ -6043,6 +6061,9 @@ packages:
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+
+  tslib@2.9.1:
+    resolution: {integrity: sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==}
 
   tsx@4.23.13:
     resolution: {integrity: sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw==}
@@ -6758,7 +6779,7 @@ snapshots:
       fs-extra: 8.1.0
       got: 11.8.5
       progress: 2.0.3
-      semver: 6.2.0
+      semver: 6.3.2
       sumchecker: 3.0.1
     optionalDependencies:
       global-agent: 3.0.0
@@ -7354,22 +7375,22 @@ snapshots:
     dependencies:
       '@peculiar/utils': 2.0.3
       asn1js: 3.1.0
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   '@peculiar/json-schema@1.1.12':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   '@peculiar/utils@2.0.3':
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   '@peculiar/webcrypto@1.7.1':
     dependencies:
       '@peculiar/asn1-schema': 2.11.0
       '@peculiar/json-schema': 1.1.12
       '@peculiar/utils': 2.0.3
-      tslib: 2.8.1
+      tslib: 2.9.1
       webcrypto-core: 1.9.2
 
   '@polka/url@1.0.0-next.29': {}
@@ -7729,7 +7750,7 @@ snapshots:
   '@types/fs-extra@11.0.4':
     dependencies:
       '@types/jsonfile': 6.1.4
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
   '@types/fs-extra@9.0.13':
     dependencies:
@@ -7751,7 +7772,7 @@ snapshots:
 
   '@types/jsonfile@6.1.4':
     dependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
   '@types/keyv@3.1.4':
     dependencies:
@@ -7776,6 +7797,10 @@ snapshots:
       undici-types: 8.3.0
 
   '@types/node@26.6.5':
+    dependencies:
+      undici-types: 8.9.0
+
+  '@types/node@26.6.6':
     dependencies:
       undici-types: 8.9.0
 
@@ -7821,11 +7846,11 @@ snapshots:
 
   '@types/write-file-atomic@4.0.3':
     dependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
   '@types/ws@8.18.2':
     dependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -8037,7 +8062,7 @@ snapshots:
       tsx: 4.23.13
       typescript: 7.0.2
 
-  '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)':
+  '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)':
     dependencies:
       '@oxc-project/runtime': 0.141.0
       '@oxc-project/types': 0.141.0
@@ -8046,14 +8071,14 @@ snapshots:
       yuku-codegen: 0.5.48
       yuku-parser: 0.5.48
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
       esbuild: 0.28.2
       fsevents: 2.3.3
       jiti: 2.7.0
       tsx: 4.23.13
       typescript: 7.0.2
 
-  '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)':
+  '@voidzero-dev/vite-plus-core@0.2.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)':
     dependencies:
       '@oxc-project/runtime': 0.141.0
       '@oxc-project/types': 0.141.0
@@ -8062,7 +8087,7 @@ snapshots:
       yuku-codegen: 0.5.48
       yuku-parser: 0.5.48
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
       esbuild: 0.28.2
       fsevents: 2.3.3
       jiti: 2.7.0
@@ -8318,7 +8343,7 @@ snapshots:
     dependencies:
       pvtsutils: 1.3.6
       pvutils: 1.2.0
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   assertion-error@2.0.1: {}
 
@@ -10561,7 +10586,7 @@ snapshots:
       bytestreamjs: 2.0.1
       pvtsutils: 1.3.6
       pvutils: 1.2.0
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   playwright-core@1.61.1: {}
 
@@ -10681,7 +10706,7 @@ snapshots:
 
   pvtsutils@1.3.6:
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   pvutils@1.2.0: {}
 
@@ -10982,11 +11007,11 @@ snapshots:
   semver-compare@1.0.0:
     optional: true
 
-  semver@5.5.0: {}
-
-  semver@6.2.0: {}
+  semver@5.7.3: {}
 
   semver@6.3.1: {}
+
+  semver@6.3.2: {}
 
   semver@7.7.3: {}
 
@@ -11126,7 +11151,7 @@ snapshots:
       '@img/sharp-win32-x64': 0.35.4
       '@types/node': 26.4.1
 
-  sharp@0.35.4(@types/node@26.6.5):
+  sharp@0.35.4(@types/node@26.6.6):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -11157,7 +11182,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.4
       '@img/sharp-win32-ia32': 0.35.4
       '@img/sharp-win32-x64': 0.35.4
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
 
   shebang-command@2.0.0:
     dependencies:
@@ -11409,7 +11434,7 @@ snapshots:
 
   tiny-async-pool@1.3.0:
     dependencies:
-      semver: 5.5.0
+      semver: 5.7.3
 
   tiny-invariant@1.3.3: {}
 
@@ -11472,6 +11497,8 @@ snapshots:
   tslib@2.3.0: {}
 
   tslib@2.8.1: {}
+
+  tslib@2.9.1: {}
 
   tsx@4.23.13:
     dependencies:
@@ -11885,7 +11912,7 @@ snapshots:
       '@peculiar/json-schema': 1.1.12
       '@peculiar/utils': 2.0.3
       asn1js: 3.1.0
-      tslib: 2.8.1
+      tslib: 2.9.1
 
   when-exit@2.1.5: {}
 

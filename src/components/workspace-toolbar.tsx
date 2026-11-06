@@ -24,9 +24,9 @@ export function WorkspaceToolbarProvider({ children }: { children: ReactNode }) 
   );
 }
 
-export function WorkspaceActionHost() {
+export function WorkspaceActionHost({ fullWidth = false }: { fullWidth?: boolean }) {
   const context = useContext(WorkspaceToolbarContext);
-  return <div ref={context?.setHost} className="ml-auto flex shrink-0 items-center empty:hidden" />;
+  return <div ref={context?.setHost} className={fullWidth ? "flex min-w-0 flex-1 items-center [&>div]:w-full empty:hidden" : "ml-auto flex shrink-0 items-center empty:hidden"} />;
 }
 
 export function WorkspacePageActivity({

@@ -339,3 +339,25 @@ test("uses the same READY -> claim -> report protocol as other platform adapters
     resultJson: { platformDramaId: "dy-91" },
   });
 });
+
+
+test("accepts new backend contracts without a client allowlist", () => {
+  for (const contractName of ["CT20261106123456 新增合同（新版）", "CT20261106123456"]) {
+    const task = normalizeClaimedDouyinDramaTask({
+      accountTaskId: 92,
+      originalTitle: "新增合同测试剧",
+      payloadJson: {
+        name: "新增合同测试剧", episodeCount: 2,
+        douyinPlaylet: {
+          categories: ["剧情"], audience: "通用",
+          ...requiredMaterialReferences,
+          contractName: `  ${contractName}  `,
+        },
+      },
+    });
+    assert.equal(task.playlet.contractName, contractName);
+    assert.equal(douyinDramaTaskPayloadSchema.safeParse({
+      ...task.playlet, contractName: "没有编号的合同",
+    }).success, false);
+  }
+});

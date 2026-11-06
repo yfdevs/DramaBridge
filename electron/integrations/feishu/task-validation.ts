@@ -1,5 +1,13 @@
 import type { RecreationInput } from "../../../src/platforms/feishu/task-types";
 
+// Spreadsheet titles may contain formatting line breaks and platform notes.
+export function normalizeRecreationTitle(value: string) {
+  return value
+    .replace(/[（(]\s*抖音上架剧名\s*[）)]\s*$/, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .trim();
+}
+
 // Names are used unchanged on Windows and in Baidu Netdisk, so reject lossy names.
 export function validateRecreationTitle(value: string) {
   if (

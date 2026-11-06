@@ -20,7 +20,7 @@ export function AppWorkspaceHeader() {
   if (route === "app/updates") return null;
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-      {tool && <h1 className="px-2 text-sm font-medium">{tool.title}</h1>}
+      {tool && route !== "tools/video-separation" && <h1 className="px-2 text-sm font-medium">{tool.title}</h1>}
       {!route.startsWith("app/") && !tool && (
         <nav aria-label="当前平台页面" className="flex shrink-0 items-center gap-0.5">
           {pages.map((page) => (
@@ -39,7 +39,7 @@ export function AppWorkspaceHeader() {
           ))}
         </nav>
       )}
-      <WorkspaceActionHost />
+      <WorkspaceActionHost fullWidth={route === "tools/video-separation"} />
     </header>
   );
 }

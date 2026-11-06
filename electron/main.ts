@@ -1,3 +1,4 @@
+import { registerVideoSeparationHandlers } from "./tools/video-separation";
 import { app, BrowserWindow, Menu } from "electron";
 import { registerFeishuTableHandlers } from "./integrations/feishu";
 
@@ -67,6 +68,7 @@ function startApplication() {
       initializeSystemTray(appIconPath(environment));
       initializeTrpcIpc();
       registerFeishuTableHandlers();
+      registerVideoSeparationHandlers();
       registerAppRuntimeHandlers();
       registerGlobalAppConfigHandlers({
         getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,
