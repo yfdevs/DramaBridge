@@ -129,19 +129,21 @@ export class FeishuTaskRunner {
         }
       });
   }
-  private async currentRow(key: string) {
+  private async currentRow(key: string, occurrence = 0) {
     const table = await this.options.tables.read(this.options.url, this.options.sheet);
-    const matches = table.rows.filter((row) => sourceKey(table, row.values, this.options) === key);
-    if (matches.length !== 1)
-      throw new Error("来源行已被修改、删除或重复，已停止本次回写，请恢复唯一的原始任务行");
-    return { table, row: matches[0], columns: tableColumns(table, this.options) };
+    const matches = table.rows
+      .filter((row) => sourceKey(table, row.values, this.options) === key)
+      .sort((a, b) => a.number - b.number);
+    if (!matches[occurrence])
+      throw new Error("来源行已被修改或删除，已停止本次回写，请恢复原始任务行");
+    return { table, row: matches[occurrence], columns: tableColumns(table, this.options) };
   }
-  private async writeBack(key: string, link: string | undefined, failure?: string) {
-    const { table, row, columns } = await this.currentRow(key);
+  private async writeBack(key: string, link: string | undefined, failure?: string, occurrence = 0) {
+    const { table, row, columns } = await this.currentRow(key, occurrence);
     if (row.values[columns.result]) return; // Never overwrite a human or another worker's result.
     await this.options.tables.markError(table, row.number, columns.note, !!failure);
     // Re-resolve after styling, rather than assuming the row stayed in the same position.
-    const fresh = await this.currentRow(key);
+    const fresh = await this.currentRow(key, occurrence);
     if (fresh.row.values[fresh.columns.result]) return;
     await this.options.tables.writeCells(fresh.table, fresh.row.number, [
       ...(link === undefined ? [] : [{ column: fresh.columns.result, value: link }]),
@@ -158,13 +160,14 @@ export class FeishuTaskRunner {
     const table = await this.options.tables.read(this.options.url, this.options.sheet);
     const columns = tableColumns(table, this.options);
     this.update({ lastReadAt: new Date().toISOString() });
-    const counts = new Map<string, number>();
-    for (const row of table.rows) {
-      const key = sourceKey(table, row.values, this.options);
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-    for (const row of table.rows) {
+    const occurrences = new Map<string, number>();
+    // Sheets have no stable row IDs. Keep the first matching source row as the
+    // checkpoint owner; later occurrences only receive a duplicate error.
+    for (const row of [...table.rows].sort((a, b) => a.number - b.number)) {
       if (!this.state.running) break;
+      const key = sourceKey(table, row.values, this.options);
+      const occurrence = occurrences.get(key) ?? 0;
+      occurrences.set(key, occurrence + 1);
       if (!row.values.some(Boolean) || row.values[columns.result]) continue;
       // A row may be observed while the user is still entering it cell by cell.
       if (
@@ -173,9 +176,22 @@ export class FeishuTaskRunner {
         continue;
       const input = sourceInput(table, row.values, this.options);
       if (!input.originalTitle && !input.shareText) continue;
-      const key = sourceKey(table, row.values, this.options);
-      if (counts.get(key) !== 1)
-        throw new Error(`“${input.originalTitle}”存在重复任务行，请删除重复行后重试`);
+      if (occurrence > 0) {
+        if (row.values[columns.note]) continue;
+        try {
+          await this.writeBack(
+            key,
+            undefined,
+            `“${input.originalTitle}”存在重复任务行，已跳过此新增行，请保留最早的任务行`,
+            occurrence,
+          );
+          this.update({ failed: this.state.failed + 1 });
+        } catch (error) {
+          // Retry reporting on the next poll without blocking unrelated tasks.
+          this.update({ error: error instanceof Error ? error.message : String(error) });
+        }
+        continue;
+      }
       let task = this.options.journal.get(key);
       if (task?.state === "failed" && task.feishuWritebackPending) {
         await this.writeBack(key, undefined, task.message);
