@@ -1279,23 +1279,8 @@ export async function saveShareToOwnNetdisk(
       bdstoken: token,
       clienttype: "0",
     });
-    let lastData;
-    for (const retryDelay of [0, 800, 1800]) {
-      if (retryDelay > 0) await sleep(retryDelay);
-      const data = await jsonFetch("/api/list?" + params.toString());
-      lastData = data;
-      if (data.errno === 0 || (data.errno !== 1 && data.errno !== 4)) return data;
-      console.log(
-        "[baidu-transfer] 读取我的网盘目录临时失败，准备重试：" +
-          normalizedDir +
-          " page=" +
-          page +
-          " errno=" +
-          data.errno +
-          (data.request_id ? " request_id=" + String(data.request_id) : ""),
-      );
-    }
-    return lastData;
+    // Read retries (three total attempts) are centralized in jsonFetch.
+    return await jsonFetch("/api/list?" + params.toString());
   };
   const ownDirectoryCache = createDirectoryCache(async (normalizedDir) => {
     const results = [];
@@ -1531,17 +1516,26 @@ export async function saveShareToOwnNetdisk(
       path: normalizeDir(destinationDir),
     });
     const timeoutRequestIds = [];
-    for (let transferAttempt = 1; transferAttempt <= 2; transferAttempt += 1) {
+    for (let transferAttempt = 1; transferAttempt <= 3; transferAttempt += 1) {
       console.log(
         "[baidu-transfer] 提交网盘转存：" +
           name +
           (transferAttempt > 1 ? "（第" + transferAttempt + "次尝试）" : ""),
       );
-      const transferred = await jsonFetch("https://pan.baidu.com/share/transfer?" + transferParams.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest" },
-        body: transferBody,
-      });
+      let transferred;
+      try {
+        transferred = await jsonFetch("https://pan.baidu.com/share/transfer?" + transferParams.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest" },
+          body: transferBody,
+        });
+      } catch (error) {
+        const detail = String(error?.message || error);
+        if (/BAIDU_NETDISK_(?:RISK|IDENTITY)/.test(detail)
+          || !/HTTP (?:404|408|5\\d\\d)|接口请求超时|网络请求失败|Failed to fetch|fetch failed|NetworkError/i.test(detail)) throw error;
+        // Verify uncertain writes before replaying: a lost response may hide success.
+        transferred = { errno: 4, requestFailure: detail };
+      }
       // Both successful and uncertain writes invalidate prior negative searches.
       ownDirectoryCache.invalidate(normalizeDir(destinationDir));
       ownSearchCache.invalidate();
@@ -1552,7 +1546,7 @@ export async function saveShareToOwnNetdisk(
       if (transferred.errno === 4) {
         if (transferred.request_id) timeoutRequestIds.push(String(transferred.request_id));
         console.log(
-          "[baidu-transfer] 百度转存接口超时，正在回查后台结果：" +
+          "[baidu-transfer] 百度转存请求异常或超时，正在回查后台结果：" +
             name +
             (transferred.request_id ? "，request_id=" + String(transferred.request_id) : ""),
         );
@@ -1561,7 +1555,7 @@ export async function saveShareToOwnNetdisk(
           console.log("[baidu-transfer] 已确认后台转存完成：" + name);
           return { item: locatedAfterTimeout, transferred: true };
         }
-        if (transferAttempt < 2) {
+        if (transferAttempt < 3) {
           console.log("[baidu-transfer] 后台暂未发现素材，准备安全重试：" + name);
           await sleep(5000);
           const locatedBeforeRetry = await findOwnItem(destinationDir, name, true);
@@ -1576,7 +1570,8 @@ export async function saveShareToOwnNetdisk(
           continue;
         }
         throw new Error(
-          "保存分享到网盘失败：百度接口连续超时，且目标目录未发现素材；errno=4" +
+          "保存分享到网盘失败：已尝试3次，回查目标目录仍未发现素材" +
+            (transferred.requestFailure ? "；最后请求错误=" + transferred.requestFailure : "；errno=4") +
             (timeoutRequestIds.length > 0 ? "；request_id=" + timeoutRequestIds.join(",") : "") +
             "；目标=" +
             joinPath(destinationDir, name),

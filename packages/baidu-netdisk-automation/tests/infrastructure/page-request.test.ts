@@ -21,6 +21,51 @@ test("serialized page request preserves cookies, method and JSON body", async ()
   assert.equal((await request<{ errno: number }>("/api/list", { method: "POST", body: "payload" })).errno, 0);
 });
 
+test("directory HTTP 500 retries exactly three times, with no credential leakage", async () => {
+  let calls = 0;
+  const request = requestInPage(async () => {
+    calls++;
+    return new Response('server error', { status: 500 });
+  });
+  await assert.rejects(request('/api/list?bdstoken=secret'), error => {
+    assert.match(String(error), /HTTP 500/);
+    assert.doesNotMatch(String(error), /secret/);
+    return true;
+  });
+  assert.equal(calls, 3);
+});
+
+test("directory retry succeeds on the third attempt", async () => {
+  let calls = 0;
+  const request = requestInPage(async () => ++calls < 3
+    ? new Response('unavailable', { status: 503 }) : new Response('{"errno":0,"list":[]}'));
+  assert.deepEqual(JSON.parse(JSON.stringify(await request('/api/list'))), { errno: 0, list: [] });
+  assert.equal(calls, 3);
+});
+
+test("mixed directory errno and HTTP errors share one three-attempt budget", async () => {
+  let calls = 0;
+  const request = requestInPage(async () => ++calls === 1
+    ? new Response('{"errno":4}') : new Response('unavailable', { status: 500 }));
+  await assert.rejects(request('/api/list'), /HTTP 500/);
+  assert.equal(calls, 3);
+});
+
+test("read timeout retries three times but caller cancellation is never retried", async () => {
+  let calls = 0;
+  const request = requestInPage(async (_, init) => {
+    calls++;
+    return new Promise((_, reject) => init!.signal!.addEventListener('abort', () => reject(new Error('aborted'))));
+  });
+  await assert.rejects(request('/api/list', {}, 'json', 10), /接口请求超时/);
+  assert.equal(calls, 3);
+  const controller = new AbortController();
+  const pending = request('/api/list', { signal: controller.signal });
+  setTimeout(() => controller.abort(new Error('user stopped')), 500);
+  await assert.rejects(pending, /user stopped/);
+  assert.equal(calls, 4);
+});
+
 test("page request aborts a stalled connection without replaying the operation", async () => {
   let calls = 0;
   let signal: AbortSignal | undefined;

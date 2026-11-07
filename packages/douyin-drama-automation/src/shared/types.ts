@@ -249,7 +249,6 @@ export type DouyinDramaRuntimeOptions = {
   logRetentionDays?: number;
   localEpisodeVideoRoot?: string;
   baiduNetdiskDownloadRetryAttempts?: number;
-  baiduNetdiskDownloadStallTimeoutMs?: number;
   baiduNetdiskProgressLogIntervalMs?: number;
   episodeUploadReplaceAttempts?: number;
   episodeUploadBatchSize?: number;

@@ -523,6 +523,14 @@ function shareKeyFromText(shareText: string) {
   }
 }
 
+function baiduTemporaryDownloadRoot() {
+  const { localMaterialRoot } = resolveGlobalPlatformDirectories("baidu-netdisk", {
+    runDataDir: resolveFromAppRoot(".drama-runs/baidu-netdisk"),
+    localMaterialRoot: defaultBaiduNetdiskDownloadDir,
+  });
+  return localMaterialRoot;
+}
+
 function uniqueBaiduDownloadDir(resourceName: string, shareKey: string) {
   const safeName = Array.from(
     resourceName,
@@ -533,7 +541,7 @@ function uniqueBaiduDownloadDir(resourceName: string, shareKey: string) {
     .join("")
     .trim() || "资源";
   const suffix = createHash("sha1").update(shareKey).digest("hex").slice(0, 10);
-  return path.join(defaultBaiduNetdiskDownloadDir, `${safeName}__${suffix}`);
+  return path.join(baiduTemporaryDownloadRoot(), `${safeName}__${suffix}`);
 }
 
 export function kuaishouRecreationMaterialRoot() {
@@ -572,14 +580,16 @@ export async function uploadKuaishouRecreationVersion(options: {
 }
 
 function assertDisposableBaiduDownloadDir(downloadDir: string) {
-  const root = path.resolve(defaultBaiduNetdiskDownloadDir);
   const target = path.resolve(downloadDir);
-  const relative = path.relative(root, target);
+  // Keep legacy Downloads tasks cleanable while new tasks stage beside materials.
+  const withinTemporaryRoot = [defaultBaiduNetdiskDownloadDir, baiduTemporaryDownloadRoot(),
+    path.join(baiduTemporaryDownloadRoot(), ".baidu-downloads")].some(root => {
+    const relative = path.relative(path.resolve(root), target);
+    return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+  });
 
   if (
-    !relative
-    || relative.startsWith("..")
-    || path.isAbsolute(relative)
+    !withinTemporaryRoot
     || !/__[\da-f]{10}$/i.test(path.basename(target))
   ) {
     throw new Error(`拒绝清理非独立百度下载目录：${target}`);

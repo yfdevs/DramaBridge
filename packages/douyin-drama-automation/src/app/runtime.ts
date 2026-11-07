@@ -50,7 +50,6 @@ export const douyinNetdiskOwnershipDownloadRequirements = {
   minimumImages: 4,
 } as const;
 
-const defaultNetdiskStallTimeoutMs = 10 * 60_000;
 const defaultNetdiskProgressLogIntervalMs = 30_000;
 
 function errorMessage(error: unknown) {
@@ -90,22 +89,17 @@ export async function ensureDouyinNetdiskResource(
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       signal?.throwIfAborted();
       const attemptController = new AbortController();
-      const stallTimeoutMs = Math.max(
-        1,
-        options.baiduNetdiskDownloadStallTimeoutMs ?? defaultNetdiskStallTimeoutMs,
-      );
       const progressLogIntervalMs = Math.max(
         1,
         options.baiduNetdiskProgressLogIntervalMs ?? defaultNetdiskProgressLogIntervalMs,
       );
       const startedAt = Date.now();
-      let lastProgressAt = startedAt;
       let stableEpisodeCount = 0;
+      const stableEpisodeIndexes = new Set<number>();
       const forwardAbort = () => attemptController.abort(signal?.reason);
       signal?.addEventListener("abort", forwardAbort, { once: true });
       const heartbeat = setInterval(() => {
         const now = Date.now();
-        const stalledMs = now - lastProgressAt;
         log(
           options,
           `[douyin-drama] 百度网盘资源仍在准备：attempt=${attempt}/${maxAttempts}，`
@@ -117,23 +111,14 @@ export async function ensureDouyinNetdiskResource(
             maxAttempts,
             stableEpisodeCount,
             expectedEpisodeCount: task.playlet.episodeCount,
-            stalledSeconds: Math.round(stalledMs / 1_000),
           },
           "download",
         );
-        if (stalledMs >= stallTimeoutMs && !attemptController.signal.aborted) {
-          attemptController.abort(new Error(
-            `DOUYIN_DRAMA_NETDISK_DOWNLOAD_STALLED: `
-              + `${Math.round(stalledMs / 1_000)}秒没有识别到新的完整剧集；`
-              + `stable=${stableEpisodeCount}/${task.playlet.episodeCount}`,
-          ));
-        }
       }, progressLogIntervalMs);
       heartbeat.unref();
       log(
         options,
-        `[douyin-drama] 开始准备百度网盘资源：attempt=${attempt}/${maxAttempts}，`
-          + `无进度超时=${Math.round(stallTimeoutMs / 1_000)}秒`,
+        `[douyin-drama] 开始准备百度网盘资源：attempt=${attempt}/${maxAttempts}，由共享网盘服务检查下载状态`,
         {
           accountTaskId: task.accountTaskId,
           resourceName: request.resourceName,
@@ -148,8 +133,13 @@ export async function ensureDouyinNetdiskResource(
           ...request,
           signal: attemptController.signal,
           onStableEpisodeFiles: (files) => {
-            const nextCount = files.length;
-            if (nextCount > stableEpisodeCount) lastProgressAt = Date.now();
+            // The downloader emits newly stable batches, not cumulative snapshots.
+            for (const file of files) {
+              if (Number.isInteger(file.index) && file.index >= 1 && file.index <= task.playlet.episodeCount) {
+                stableEpisodeIndexes.add(file.index);
+              }
+            }
+            const nextCount = stableEpisodeIndexes.size;
             stableEpisodeCount = Math.max(stableEpisodeCount, nextCount);
             request.onStableEpisodeFiles?.(files);
           },
@@ -160,7 +150,6 @@ export async function ensureDouyinNetdiskResource(
         lastError = error;
         if (
           signal?.aborted
-          || errorMessage(error).includes("DOUYIN_DRAMA_NETDISK_DOWNLOAD_STALLED")
           || isNonRetryableBaiduNetdiskResourceError(error)
           || attempt === maxAttempts
         ) break;

@@ -70,34 +70,35 @@ test("maps an empty publish-account list to the form stage for backend reporting
   );
 });
 
-test("fails a netdisk task after a bounded period without episode progress", async () => {
+test("waits for the shared download service even without stable episode callbacks", async () => {
+  const task = { ...netdiskTask, playlet: { ...netdiskTask.playlet,
+    summary: "简介".repeat(60), roles: [{ name: "主角", intro: "人物简介" }] } };
+  const originalNow = Date.now;
   let calls = 0;
-  await assert.rejects(
-    ensureDouyinNetdiskResource(netdiskTask, {
+  try {
+    let now = originalNow();
+    Date.now = () => now;
+    await ensureDouyinNetdiskResource(task, {
       localEpisodeVideoRoot: "D:\\BaiduNetdiskDownload",
-      baiduNetdiskDownloadRetryAttempts: 3,
-      baiduNetdiskDownloadStallTimeoutMs: 20,
       baiduNetdiskProgressLogIntervalMs: 5,
-      ensureBaiduNetdiskResource: async (request) => {
-        calls += 1;
-        return await new Promise((resolve, reject) => {
-          request.signal?.addEventListener("abort", () => reject(request.signal?.reason), {
-            once: true,
-          });
-          void resolve;
-        });
+      ensureBaiduNetdiskResource: async request => {
+        calls++;
+        now += 11 * 60_000;
+        await new Promise(resolve => setTimeout(resolve, 30));
+        request.signal?.throwIfAborted();
+        return {};
       },
-    }),
-    /DOUYIN_DRAMA_NETDISK_DOWNLOAD_STALLED/,
-  );
-  assert.equal(calls, 1, "a stalled download must not silently retry for another full timeout");
+    });
+    assert.equal(calls, 1);
+  } finally {
+    Date.now = originalNow;
+  }
 });
 
 test("aborts an in-flight netdisk task when the runtime stops", async () => {
   const controller = new AbortController();
   const pending = ensureDouyinNetdiskResource(netdiskTask, {
     localEpisodeVideoRoot: "D:\\BaiduNetdiskDownload",
-    baiduNetdiskDownloadStallTimeoutMs: 60_000,
     baiduNetdiskProgressLogIntervalMs: 60_000,
     ensureBaiduNetdiskResource: async (request) => await new Promise((resolve, reject) => {
       request.signal?.addEventListener("abort", () => reject(request.signal?.reason), {
