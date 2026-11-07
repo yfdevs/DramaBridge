@@ -1352,6 +1352,13 @@ export async function saveShareToOwnNetdisk(
     clienttype: "0",
   });
 
+  // Match the request context used by Baidu's current share-v2 client.
+  const baiduid = (document.cookie.match(/(?:^|; )BAIDUID=([^;]+)/) || [])[1] || "";
+  if (baiduid && typeof globalThis.btoa === "function") {
+    try { transferParams.set("logid", globalThis.btoa(decodeURI(baiduid))); } catch {}
+  }
+  if (/msg=132|devuid/.test(location.search || "")) transferParams.set("clienttype", "8");
+
   const findOwnItem = async (dir, name, forceRefresh = false) =>
     (await listOwnDir(dir, forceRefresh)).find((item) => itemName(item) === name);
   const ownSearchCache = createDirectoryCache(async (name) => {
@@ -1532,7 +1539,7 @@ export async function saveShareToOwnNetdisk(
       );
       const transferred = await jsonFetch("https://pan.baidu.com/share/transfer?" + transferParams.toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest" },
         body: transferBody,
       });
       // Both successful and uncertain writes invalidate prior negative searches.

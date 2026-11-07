@@ -23,6 +23,7 @@ export async function transferNormalizedEpisodeVideos(o: {
   const queue = [{ path: '/', entries: o.roots, depth: 0 }];
   const visited = new Set<string>();
   const candidates: any[] = [];
+  const diagnostics: { path: string; count: number; missing: number[]; duplicates: number[]; unknown: string[] }[] = [];
   const covers: Entry[] = [];
   while (queue.length) {
     const current = queue.shift()!;
@@ -31,10 +32,22 @@ export async function transferNormalizedEpisodeVideos(o: {
     if (visited.size > 300 || current.depth > 10) throw new Error('分享目录过深或过多，已停止转存');
     if (o.recreation) covers.push(...current.entries.filter(e => !isDir(e) && /\.(png|jpg|jpeg|webp)$/i.test(name(e)) && /封面|海报|poster|cover/i.test(current.path + "/" + name(e))));
     const videos = current.entries.filter(e => !isDir(e) && /\.(mp4|mov)$/i.test(name(e)));
-    const files = o.collapseAliases(videos.map(e => ({ ...e, index: o.episodeIndex(name(e)) ?? 0, name: name(e),
-      path: String(e.path), fsId: id(e), contentHash: e.md5 || e.server_md5 }))).files;
+    // Recreation needs only the leading 60%; later missing or duplicate episodes
+    // must not invalidate the files that will actually be transferred.
+    const indexed = videos.map(e => ({ ...e, index: o.episodeIndex(name(e)) ?? 0, name: name(e),
+      path: String(e.path), fsId: id(e), contentHash: e.md5 || e.server_md5 }));
+    const files = o.collapseAliases(o.recreation
+      ? indexed.filter(e => e.index >= 1 && e.index <= total) : indexed).files;
     const ordered = files.sort((a, b) => a.index - b.index);
-    const valid = ordered.length === o.episodeCount && ordered.every((e, i) => e.index === i + 1);
+    const valid = ordered.length === total && ordered.every((e, i) => e.index === i + 1);
+    if (videos.length) {
+      const counts = new Map<number, number>();
+      for (const file of files) counts.set(file.index, (counts.get(file.index) || 0) + 1);
+      diagnostics.push({ path: current.path, count: videos.length,
+        missing: Array.from({ length: total }, (_, i) => i + 1).filter(index => !counts.has(index)),
+        duplicates: [...counts].filter(([index, count]) => index > 0 && count > 1).map(([index]) => index),
+        unknown: indexed.filter(file => !file.index).map(file => file.name) });
+    }
     if (valid) candidates.push({ path: current.path, files: ordered, validEpisodeSequence: true,
       materialDirectory: /权属|版权|工程|素材|花絮|预告/.test(current.path),
       subtitlePreference: o.subtitlePreference(current.path), preferredEpisodeDirectory: /视频|成片|正片/.test(current.path),
@@ -43,11 +56,22 @@ export async function transferNormalizedEpisodeVideos(o: {
     for (const entry of current.entries.filter(isDir)) queue.push({ path: String(entry.path),
       entries: await o.listShare(String(entry.path)), depth: current.depth + 1 });
   }
-  // Subtitle choice takes priority among complete episode sets, even if a
+  // Subtitle choice takes priority among sets covering the required episodes, even if a
   // publisher nests its subtitled version deeper than its clean version.
   candidates.sort((a, b) => b.subtitlePreference - a.subtitlePreference || o.compare(a, b));
   const selected = candidates[0];
-  if (!selected) throw new Error(`未找到完整且集号唯一的 ${o.episodeCount} 集视频目录，未转存任何文件`);
+  if (!selected) {
+    const summarize = (values: (string | number)[]) => values.slice(0, 12).join('、')
+      + (values.length > 12 ? `等共${values.length}项` : '') || '无';
+    const details = diagnostics.sort((a, b) => a.missing.length - b.missing.length || b.count - a.count)
+      .slice(0, 5).map(d => `目录=${d.path}；视频=${d.count}；缺失集号=${summarize(d.missing)}`
+        + `；重复集号=${summarize(d.duplicates)}；未识别文件名=${summarize(d.unknown)}`).join('\n');
+    throw new Error((o.recreation
+      ? `未找到前 ${total} 集完整且集号唯一的视频目录（全剧 ${o.episodeCount} 集，二创仅需前 60%），未转存任何文件`
+      : `未找到完整且集号唯一的 ${o.episodeCount} 集视频目录，未转存任何文件`)
+      + `；模式=${o.recreation ? '二创60%' : '全集'}；已扫描目录=${visited.size}\n`
+      + (details || '未发现 MP4/MOV 视频文件'));
+  }
   if (selected.files.some((e: Entry) => !/\.mp4$/i.test(e.name))) {
     throw new Error('选中的全集包含 MOV 文件，云端改名不能转换视频格式，已停止转存');
   }

@@ -53,6 +53,17 @@ test('incomplete episodes, conflicting targets and MOV never transfer files', as
     assert.equal(f.transferred.length, 0);
   }
 });
+test('scan failures report mode, missing episodes, duplicates and unrecognized filenames', async () => {
+  const f = fixture();
+  f.options.episodeCount = 3;
+  f.options.listShare = async path => [f.source(1, path),
+    { ...f.source(1, path), server_filename: '第1集.mp4', md5: 'other' },
+    { ...f.source(2, path), server_filename: '正片.mp4' }];
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options),
+    /模式=全集.*已扫描目录=3\n目录=.*视频=3；缺失集号=2、3；重复集号=1；未识别文件名=正片.mp4/);
+  assert.equal(f.transferred.length, 0);
+});
+
 test('a rename rejection is a failure and a retry reuses the transferred original', async () => {
   const f = fixture(); const rename = f.options.request;
   f.options.request = async () => ({ errno: 12 });
@@ -149,6 +160,37 @@ for (const recreation of [false, true]) {
       assert.ok(f.own.some(e => e.path.startsWith(expected + '/成片60%/')));
       assert.ok(f.own.every(e => e.path.startsWith(expected + '/封面/') || e.path.startsWith(expected + '/成片60%/')));
     }
+  });
+}
+
+test('recreation accepts missing or conflicting later episodes and transfers only episodes 1–60', async () => {
+  const f = fixture();
+  f.options.recreation = true;
+  f.options.episodeCount = 100;
+  f.options.listShare = async path => [
+    ...Array.from({ length: 100 }, (_, i) => i + 1).filter(n => n !== 71).map(n => f.source(n, path)),
+    { ...f.source(80, path), server_filename: '第80集.mov', md5: 'different-version' },
+  ];
+  const result = await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(result.remoteVideos.files.length, 60);
+  assert.deepEqual(f.transferred.map(e => e.index), Array.from({ length: 60 }, (_, i) => i + 1));
+  assert.ok(f.transferred.every(e => e.path.startsWith('/剧/有字幕/')));
+});
+
+for (const reason of ['missing', 'duplicate', 'normal'] as const) {
+  test(`required episodes remain strict before any cloud writes: ${reason}`, async () => {
+    const f = fixture();
+    f.options.recreation = reason !== 'normal';
+    f.options.episodeCount = 100;
+    f.options.listShare = async path => [
+      ...Array.from({ length: 100 }, (_, i) => i + 1)
+        .filter(n => n !== (reason === 'normal' ? 71 : reason === 'missing' ? 60 : 0))
+        .map(n => f.source(n, path)),
+      ...(reason === 'duplicate' ? [{ ...f.source(60, path), server_filename: '第60集.mp4', md5: 'different-version' }] : []),
+    ];
+    f.options.createDirectory = async () => { assert.fail('invalid episodes must not create cloud folders'); };
+    await assert.rejects(transferNormalizedEpisodeVideos(f.options), reason === 'normal' ? /未找到完整/ : /前 60 集完整且集号唯一/);
+    assert.equal(f.transferred.length, 0);
   });
 }
 

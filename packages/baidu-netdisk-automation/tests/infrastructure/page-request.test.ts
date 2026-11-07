@@ -74,3 +74,22 @@ test("filemanager 132 never replays the delete or blocks a subsequent directory 
   assert.equal((await request<{ errno: number }>("/api/list")).errno, 0);
   assert.equal(calls, 2);
 });
+
+test("transfer uses official XHR transport once, preserving body and credentials", async () => {
+  let sent = 0;
+  class Xhr {
+    status = 200; responseURL = 'https://pan.baidu.com/share/transfer'; responseText = '{"errno":0}';
+    withCredentials = false; onload = () => {}; headers: Record<string,string> = {};
+    open(method: string, url: string) { assert.equal(method,'POST'); assert.match(url,/pan.baidu.com\/share\/transfer/); }
+    setRequestHeader(key: string,value: string) { this.headers[key] = value; }
+    getResponseHeader() { return 'application/json'; }
+    send(body: string) { sent++; assert.equal(body,'fsidlist=%5B1%5D'); assert.equal(this.withCredentials,true); assert.equal(this.headers['x-requested-with'],'XMLHttpRequest'); this.onload(); }
+    abort() {}
+  }
+  const request = runInNewContext(`(${baiduPageRequest.toString()})`, {
+    __name: (value: unknown) => value, XMLHttpRequest:Xhr, Headers, AbortController, setTimeout, clearTimeout, URL,
+    location:{href:'https://pan.baidu.com/s/1example'}, fetch:()=>{throw new Error('must not fetch transfer');},
+  }) as typeof baiduPageRequest;
+  assert.equal((await request<{errno:number}>('/share/transfer',{method:'POST',body:'fsidlist=%5B1%5D'})).errno,0);
+  assert.equal(sent,1);
+});

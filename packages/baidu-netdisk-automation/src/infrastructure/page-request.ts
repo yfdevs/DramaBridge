@@ -24,12 +24,48 @@ export async function baiduPageRequest<T>(
   if (init.signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, { credentials: "include", ...init, signal: controller.signal });
+    // The official share client uses XHR. Keep the transfer on that transport
+    // so the embedded client's request hooks see the same request as its UI.
+    const response = endpoint === "/share/transfer" && typeof XMLHttpRequest !== "undefined"
+      ? await new Promise<Response>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const cancel = () => xhr.abort();
+          const cleanup = () => controller.signal.removeEventListener("abort", cancel);
+          xhr.open(init.method || "GET", new URL(url, location.href).href, true);
+          xhr.withCredentials = true;
+          const headers = new Headers(init.headers);
+          if (!headers.has("X-Requested-With")) headers.set("X-Requested-With", "XMLHttpRequest");
+          headers.forEach((value, key) => xhr.setRequestHeader(key, value));
+          xhr.onload = () => {
+            cleanup();
+            resolve({
+              ok: xhr.status >= 200 && xhr.status < 300,
+              status: xhr.status,
+              url: xhr.responseURL,
+              redirected: Boolean(xhr.responseURL && xhr.responseURL !== new URL(url, location.href).href),
+              headers: {get: (name: string) => xhr.getResponseHeader(name)},
+              text: async () => xhr.responseText,
+              json: async () => JSON.parse(xhr.responseText),
+            } as Response);
+          };
+          xhr.onerror = () => { cleanup(); reject(new Error("百度网盘转存网络请求失败，请核对目标目录后重试")); };
+          xhr.onabort = () => { cleanup(); reject(new Error("转存请求已中止")); };
+          controller.signal.addEventListener("abort", cancel, {once:true});
+          if (controller.signal.aborted) { cleanup(); reject(new Error("转存请求已中止")); return; }
+          xhr.send(init.body == null ? null : String(init.body));
+        })
+      : await fetch(url, { credentials: "include", ...init, signal: controller.signal });
     if (response.status === 429) {
       policy.blockedUntil = Date.now() + 60_000;
       throw new Error(`${riskMessage} HTTP 429 endpoint=${endpoint}`);
     }
-    if (!response.ok) throw new Error(`百度网盘接口 HTTP ${response.status}：${endpoint}`);
+    if (!response.ok) {
+      // Do not expose signed URLs, credentials, or response HTML in logs.
+      let finalPath = endpoint;
+      try { finalPath = new URL(response.url || url, location.href).pathname; } catch {}
+      const contentType = response.headers?.get?.("content-type") || "unknown";
+      throw new Error(`百度网盘接口 HTTP ${response.status}：${endpoint}；method=${init.method || "GET"}；redirected=${Boolean(response.redirected)}；finalPath=${finalPath}；contentType=${contentType}`);
+    }
     // Reading the body must share the timeout: headers alone do not mean completion.
     const result = await (format === "text" ? response.text() : response.json());
     if (format === "json" && result && typeof result === "object") {
