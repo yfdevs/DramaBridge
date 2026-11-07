@@ -136,36 +136,67 @@ export async function transferNormalizedEpisodeVideos(o: {
   const results: Entry[] = [];
   // Validate every target before the first write. Never overwrite another drama's file.
   const existing = await o.listOwn(rootPath, true);
+  const confirmedTargets = new Map(existing.map(entry => [name(entry), entry]));
   for (const file of selected.files) {
     const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
     const collision = existing.find(e => name(e) === targetName);
     if (collision && !o.identical(file, collision)) throw new Error('目标文件内容冲突：' + rootPath + '/' + targetName);
   }
-  for (const file of selected.files) {
-    const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
-    let target = (await o.listOwn(rootPath, true)).find(e => name(e) === targetName);
-    if (!target) {
-      const copied = await o.transferOne(file, rootPath);
-      if (!o.identical(file, copied.item)) throw new Error('转存文件身份未确认：' + file.name);
-      if (copied.transferred) transferredItemCount++;
-      if (name(copied.item) !== targetName) {
-        const params = new URLSearchParams({ opera: 'rename', async: '0', ondup: 'fail',
-          channel: 'chunlei', web: '1', app_id: '250528', clienttype: '0', bdstoken: o.token });
-        const response = await o.request('/api/filemanager?' + params, { method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-          body: new URLSearchParams({ filelist: JSON.stringify([{ path: copied.item.path, newname: targetName }]) }) });
-        if (Number(response.errno) !== 0) throw new Error('视频改名失败：' + targetName + '；errno=' + response.errno);
+  // Keep transfers sequential, but amortize rename and directory verification
+  // over small batches. This bounds recovery work if one request fails.
+  const batchSize = 10;
+  for (let offset = 0; offset < selected.files.length; offset += batchSize) {
+    const batch = selected.files.slice(offset, offset + batchSize);
+    const pending: { file: Entry; item: Entry; targetName: string }[] = [];
+    for (const file of batch) {
+      const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
+      let target = confirmedTargets.get(targetName);
+      if (!target) {
+        const copied = await o.transferOne(file, rootPath);
+        if (!o.identical(file, copied.item)) throw new Error('转存文件身份未确认：' + file.name);
+        if (copied.transferred) transferredItemCount++;
+        if (name(copied.item) !== targetName) {
+          pending.push({ file, item: copied.item, targetName });
+        } else {
+          target = copied.item;
+        }
       }
+      if (target) {
+        if (!o.identical(file, target)) throw new Error('目标视频未通过内容核验：' + targetName);
+        confirmedTargets.set(targetName, target);
+      }
+      progress(results.length, `转存视频（本批 ${pending.length} 集待整理）`);
+    }
+    if (pending.length) {
+      const params = new URLSearchParams({ opera: 'rename', async: '0', ondup: 'fail',
+        channel: 'chunlei', web: '1', app_id: '250528', clienttype: '0', bdstoken: o.token });
+      const response = await o.request('/api/filemanager?' + params, { method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+        body: new URLSearchParams({ filelist: JSON.stringify(pending.map(({ item, targetName }) =>
+          ({ path: item.path, newname: targetName }))) }) });
+      if (Number(response.errno) !== 0) throw new Error('视频批量改名失败：'
+        + pending.map(entry => entry.targetName).join('、') + '；errno=' + response.errno);
       for (let attempt = 0; attempt < 20; attempt++) {
-        target = (await o.listOwn(rootPath, true)).find(e => name(e) === targetName);
-        if (target) break;
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const snapshot = new Map((await o.listOwn(rootPath, true)).map(entry => [name(entry), entry]));
+        let complete = true;
+        for (const { file, targetName } of pending) {
+          const target = snapshot.get(targetName);
+          if (!target) { complete = false; continue; }
+          if (!o.identical(file, target)) throw new Error('目标视频未通过内容核验：' + targetName);
+          confirmedTargets.set(targetName, target);
+        }
+        if (complete) break;
+        if (attempt < 19) await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
-    if (!target || !o.identical(file, target)) throw new Error('目标视频未通过内容核验：' + targetName);
-    results.push({ index: file.index, name: targetName, path: target.path, fsId: id(target), size: target.size });
-    progress(results.length, '转存视频');
-    console.log(`[baidu-transfer] 已确认第${file.index}/${o.episodeCount}集：${targetName}`);
+    for (const file of batch) {
+      const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
+      const target = confirmedTargets.get(targetName);
+      if (!target || !o.identical(file, target)) throw new Error('目标视频未通过内容核验：' + targetName);
+      results.push({ index: file.index, name: targetName, path: target.path, fsId: id(target), size: target.size });
+      progress(results.length, '转存视频');
+      console.log(`[baidu-transfer] 已确认第${file.index}/${total}集：${targetName}`);
+    }
   }
   let shareUrl = '';
   if (o.sharePassword) {

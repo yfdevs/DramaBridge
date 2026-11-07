@@ -22,8 +22,9 @@ function fixture() {
       own.push(item); return { item, transferred: true };
     },
     request: async (_url, init: any) => {
-      const file = JSON.parse(init.body.get('filelist'))[0];
-      const item = own.find(e => e.path === file.path); item.server_filename = file.newname; item.path = '/测试剧/' + file.newname;
+      for (const file of JSON.parse(init.body.get('filelist'))) {
+        const item = own.find(e => e.path === file.path); item.server_filename = file.newname; item.path = '/测试剧/' + file.newname;
+      }
       return { errno: 0 };
     }, token: 'test', identical: areBaiduNetdiskFilesStrictlyIdentical,
     compare: compareRemoteVideoDirectoryCandidates, subtitlePreference: baiduVideoSubtitleDirectoryPreference,
@@ -43,6 +44,107 @@ test('transfers only the preferred complete video set, flattens and renames, and
   await transferNormalizedEpisodeVideos(f.options);
   assert.equal(f.transferred.length, 2, 'retry reuses content-verified final filenames');
 });
+test('reuses verified directory entries on resume instead of rereading for every episode', async () => {
+  const f = fixture();
+  f.options.episodeCount = 100;
+  f.options.listShare = async path => Array.from({ length: 100 }, (_, i) => f.source(i + 1, path));
+  let reads = 0;
+  let renames = 0;
+  const rename = f.options.request;
+  f.options.request = async (url, init: any) => {
+    renames++;
+    assert.equal(JSON.parse(init.body.get('filelist')).length, 10);
+    return rename(url, init);
+  };
+  f.options.listOwn = async () => { reads++; return f.own; };
+  await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(reads, 12, 'two preflight reads plus one verification per ten-episode rename batch');
+  assert.equal(renames, 10);
+  reads = 0;
+  const result = await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(reads, 2, 'resuming a verified complete directory uses only preflight reads');
+  assert.equal(result.remoteVideos.files.length, 100);
+  assert.equal(f.transferred.length, 100);
+  assert.equal(renames, 10, 'resume does not rename verified files');
+});
+
+test('batch verification waits for all renamed episodes and handles a final short batch', async () => {
+  const f = fixture();
+  f.options.episodeCount = 23;
+  f.options.listShare = async path => Array.from({ length: 23 }, (_, i) => f.source(i + 1, path));
+  const rename = f.options.request;
+  const sizes: number[] = [];
+  let hideOne = false;
+  f.options.request = async (url, init: any) => {
+    sizes.push(JSON.parse(init.body.get('filelist')).length);
+    await rename(url, init);
+    hideOne = true;
+    return { errno: 0 };
+  };
+  f.options.listOwn = async () => {
+    if (hideOne) { hideOne = false; return f.own.slice(0, -1); }
+    return f.own;
+  };
+  const result = await transferNormalizedEpisodeVideos(f.options);
+  assert.deepEqual(sizes, [10, 10, 3]);
+  assert.deepEqual(result.remoteVideos.files.map((file: any) => file.index), Array.from({ length: 23 }, (_, i) => i + 1));
+});
+
+test('a partially rejected rename batch stops before sharing and preserves transferred files', async () => {
+  const f = fixture();
+  f.options.sharePassword = 'a1b2';
+  let shares = 0;
+  f.options.request = async (url, init: any) => {
+    if (url.includes('/share/set')) { shares++; return { errno: 0 }; }
+    const file = JSON.parse(init.body.get('filelist'))[0];
+    const item = f.own.find(e => e.path === file.path);
+    item.server_filename = file.newname;
+    item.path = '/测试剧/' + file.newname;
+    return { errno: 12 };
+  };
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /批量改名失败/);
+  assert.equal(shares, 0);
+  assert.equal(f.own.length, 2, 'partial batch keeps both transferred files for recovery');
+});
+
+test('batch rename success cannot bypass per-episode content verification', async () => {
+  const f = fixture();
+  const rename = f.options.request;
+  f.options.request = async (url, init) => {
+    await rename(url, init);
+    f.own[1].md5 = 'different-content';
+    return { errno: 0 };
+  };
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /目标视频未通过内容核验/);
+});
+
+test('already normalized source names reuse transfer readback and still verify final shared contents', async () => {
+  const f = fixture();
+  f.options.listShare = async path => [1, 2].map(n => ({ ...f.source(n, path), server_filename: `测试剧-第${n}集.mp4` }));
+  f.options.sharePassword = 'a1b2';
+  let reads = 0;
+  f.options.listOwn = async () => { reads++; return f.own; };
+  f.options.request = async url => {
+    assert.match(url, /share\/set/);
+    return { errno: 0, link: 'https://pan.baidu.com/s/1result' };
+  };
+  await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(reads, 3, 'two preflight reads plus a mandatory final contents read');
+  assert.equal(f.transferred.length, 2);
+});
+
+test('final sharing validation catches unrelated files added after preflight', async () => {
+  const f = fixture();
+  f.options.sharePassword = 'a1b2';
+  const transfer = f.options.transferOne;
+  f.options.transferOne = async (entry, dest, kind) => {
+    const result = await transfer(entry, dest, kind);
+    if (f.transferred.length === 2) f.own.push({ server_filename: '其他剧.mp4', fs_id: 'unrelated', path: dest + '/其他剧.mp4' });
+    return result;
+  };
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /任务目录含有本次任务以外/);
+});
+
 test('incomplete episodes, conflicting targets and MOV never transfer files', async () => {
   for (const reason of ['missing', 'conflict', 'mov']) {
     const f = fixture();
@@ -142,10 +244,11 @@ for (const recreation of [false, true]) {
         shared = JSON.parse(init.body.get('fid_list'));
         return { errno: 0, shareid: '123', link: 'https://pan.baidu.com/s/1result' };
       }
-      const file = JSON.parse(init.body.get('filelist'))[0];
-      const target = f.own.find(e => e.path === file.path);
-      target.server_filename = file.newname;
-      target.path = target.path.slice(0, target.path.lastIndexOf('/') + 1) + file.newname;
+      for (const file of JSON.parse(init.body.get('filelist'))) {
+        const target = f.own.find(e => e.path === file.path);
+        target.server_filename = file.newname;
+        target.path = target.path.slice(0, target.path.lastIndexOf('/') + 1) + file.newname;
+      }
       return { errno: 0 };
     };
     const result = await runInNewContext('(' + transferNormalizedEpisodeVideos.toString() + ')(o)', {

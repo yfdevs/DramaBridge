@@ -3,6 +3,7 @@ import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { createBaiduShareDirectoryReader } from "../../src/workflows/share-directory-reader.js";
 import { createBaiduDirectoryCache } from "../../src/workflows/download-directory-cache.js";
+import { matchBaiduEpisodeIndex } from "../../src/workflows/episode-index.js";
 
 const factory = runInNewContext(`(${createBaiduShareDirectoryReader.toString()})`, {
   URLSearchParams,
@@ -110,4 +111,40 @@ test("malformed and over-budget listings fail; risk responses propagate without 
   });
   await assert.rejects(reader.load("/"), /BAIDU_NETDISK_RISK_CONTROL/);
   assert.equal(calls, 1);
+});
+
+test("reads all 105 episodes when share/list caps pages at 100 and omits has_more", async () => {
+  const files = Array.from({ length: 105 }, (_, i) => ({ fs_id: String(i + 1),
+    path: `/成片/一碗甜粥暖余生-${i + 1}.mp4` }))
+    .sort((a, b) => a.path < b.path ? 1 : a.path > b.path ? -1 : 0);
+  assert.deepEqual(files.slice(100).map(file => matchBaiduEpisodeIndex(file.path)), [102, 101, 100, 10, 1]);
+  const pages: number[] = [];
+  const reader = factory({ shareId: '123', shareUk: '456', token: '', maxPages: 3, fallbackRoots: [],
+    request: async url => {
+      const params = new URL(url, 'https://pan.baidu.com').searchParams;
+      assert.equal(params.get('num'), '100');
+      const page = Number(params.get('page'));
+      pages.push(page);
+      return { errno: 0, list: files.slice((page - 1) * 100, page * 100) };
+    },
+  });
+  const actual = await reader.load('/成片');
+  assert.equal(actual.length, 105);
+  assert.equal(new Set(actual.map(file => file.fs_id)).size, 105);
+  assert.deepEqual(Array.from(actual, file => matchBaiduEpisodeIndex(String(file.path)))
+    .sort((a, b) => a! - b!), Array.from({ length: 105 }, (_, i) => i + 1));
+  assert.deepEqual(pages, [1, 2]);
+});
+
+test("a full final page is followed by an empty-page check; repeated pages fail safely", async () => {
+  const files = Array.from({ length: 100 }, (_, i) => ({ fs_id: String(i + 1), path: `/成片/${i + 1}.mp4` }));
+  for (const repeats of [false, true]) {
+    let calls = 0;
+    const reader = factory({ shareId: '123', shareUk: '456', token: '', maxPages: 3, fallbackRoots: [],
+      request: async () => ({ errno: 0, list: ++calls === 1 || repeats ? files : [] }),
+    });
+    if (repeats) await assert.rejects(reader.load('/成片'), /分页重复/);
+    else assert.equal((await reader.load('/成片')).length, 100);
+    assert.equal(calls, 2);
+  }
 });

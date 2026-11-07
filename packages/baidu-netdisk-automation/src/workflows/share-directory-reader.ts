@@ -63,7 +63,11 @@ export function createBaiduShareDirectoryReader(options: {
         );
       }
       const results: ShareEntry[] = [];
-      const pageSize = 1000;
+      // /share/list can cap a response at 100 even when num=1000 is requested,
+      // and omit has_more. Request the supported size so a full page cannot be
+      // mistaken for the end of a directory (e.g. 105 episodes read as 100).
+      const pageSize = 100;
+      const seen = new Set<string>();
       for (let page = 1; page <= options.maxPages; page++) {
         const params = new URLSearchParams({
           uk: options.shareUk,
@@ -101,8 +105,17 @@ export function createBaiduShareDirectoryReader(options: {
         // Never cache a partial/malformed listing as an empty source directory.
         if (!Array.isArray(data.list)) throw new Error("分享目录返回了不完整的文件列表：" + dir);
         const list = data.list as ShareEntry[];
-        results.push(...list);
-        if (list.length < pageSize && !data.has_more) {
+        const fresh = list.filter(item => {
+          const key = utils.fsId(item) || String(item.path || "");
+          if (!key) throw new Error("分享目录条目缺少文件身份：" + dir);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        if (list.length && !fresh.length) throw new Error("分享目录分页重复，无法确认完整文件列表：" + dir);
+        results.push(...fresh);
+        const hasMore = data.has_more === true || Number(data.has_more) === 1;
+        if (list.length < pageSize && !hasMore) {
           reader.remember(results, dir === "/");
           return results;
         }
