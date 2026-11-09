@@ -208,7 +208,7 @@ export function BaiduNetdiskPanel() {
                   actionPending !== null ||
                   installPathPending !== null ||
                   installPath !== savedInstallPath ||
-                  status.isWindows === false
+                  status.supported === false
                 }
                 onClick={() => handleStart(shouldRestart)}
               >
@@ -218,6 +218,9 @@ export function BaiduNetdiskPanel() {
           </div>
         </div>
 
+        {status?.os === "darwin" ? (
+          <p className="text-xs text-muted-foreground">首次连接需联网准备组件；客户端打开后，如提示登录，请先完成登录。</p>
+        ) : null}
         {statusError ? (
           <div className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs leading-5 break-words text-destructive">
             {statusError}
@@ -240,7 +243,7 @@ export function BaiduNetdiskPanel() {
                 }}
                 disabled={installPathPending !== null || actionPending !== null}
                 title={installPath || undefined}
-                placeholder="自动查找，或填写 D:\BaiduNetdisk"
+                placeholder={status?.os === "darwin" ? "自动查找，或填写 /Applications/BaiduNetdisk.app" : "自动查找，或填写 D:\\BaiduNetdisk"}
                 className="text-xs md:text-xs"
                 aria-invalid={Boolean(installPathError)}
                 aria-describedby="baidu-netdisk-install-help"

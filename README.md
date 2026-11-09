@@ -6,14 +6,14 @@ macOS 适配范围、实施顺序和验收标准见 [macOS 适配修复方案](M
 
 ## Scripts
 
-Pushes to `master` run the Windows release workflow in GitHub Actions. It selects
+Pushes to `master` run **Build and release desktop** in GitHub Actions. It selects
 the next patch version above `package.json` and existing stable `v*` tags, checks
-types, builds the NSIS installer, then commits the version and tag back to
+types, builds the Windows x64 NSIS installer and Apple Silicon Mac DMG/ZIP, then commits the version and tag back to
 `master`. The bot commit does not trigger another release. Each release includes
-the installer, its `.blockmap`, and `latest.yml` for the desktop updater. Files
+the Windows installer, its `.blockmap`, `latest.yml` for the Windows updater, and the Mac arm64 DMG/ZIP. Files
 are uploaded to a draft before the release becomes public, and retained as an
 Actions artifact for 14 days. You can also start it from Actions → Build and
-release Windows → Run workflow on `master`.
+release desktop → Run workflow on `master`.
 
 The workflow uses the built-in `GITHUB_TOKEN`; no personal token is needed. The
 repository must allow Actions to write contents and push to `master` (branch
@@ -26,8 +26,45 @@ next local change. Local `pnpm release:win` remains available.
 - `pnpm dev` starts the Vite+ dev server and Electron.
 - `pnpm build:app` builds workspace packages, checks types, verifies the shared Playwright browser, and builds the renderer and Electron with Vite+ task caching.
 - `pnpm build` runs `build:app` and packages Electron. Installer packaging and its runtime checks run each time.
+- `pnpm build:mac` builds and packages the Apple Silicon version on an M-series Mac using arm64 Node.js.
+- `pnpm build:mac --dir` produces the unpacked Mac app for local verification.
+- `pnpm package:mac` packages existing `dist` and `dist-electron` outputs for arm64 without rebuilding the application.
 - `pnpm lint` runs Vite+ linting through Oxlint.
 - `vp check --no-fmt` runs Vite+ linting and type checks without rewriting existing formatting.
+
+## Mac builds
+
+Mac packages support **Apple Silicon (M-series) only**. Intel, Rosetta/x64 Node.js,
+universal packages and cross-platform Mac packaging are rejected before staging
+native dependencies. Use an arm64 Node.js installation and run `pnpm install`
+before `pnpm build:mac`.
+
+The output directory is `release/<version>/`:
+
+- `DramaBridge-Mac-<version>-arm64.dmg`
+- `DramaBridge-Mac-<version>-arm64.zip`
+- `mac-arm64/DramaBridge.app`
+
+The build bundles the matching Apple Silicon Playwright browser and verifies
+SQLite, Sharp, canvas, atomic writes and FFmpeg inside the packaged app.
+The Mac build does not enable the Windows-only in-app updater.
+
+**Build macOS Apple Silicon** can also run independently from Actions → Run
+workflow. It builds the selected commit at its existing package version and
+retains DMG/ZIP artifacts for 14 days; it does not commit, tag or publish.
+
+For automatic desktop releases, the Windows job prepares the version and shares
+its exact source commit and package manifest with the reusable Mac workflow.
+Mac runs natively on `macos-15` (arm64). The final release job commits/tags and
+publishes only after both platforms succeed, so there is only one version bump
+and one complete GitHub Release. A failed Mac build leaves the version unpushed
+and preserves the completed Windows artifact for inspection.
+
+Default Mac builds use an ad-hoc signature and do not require Apple secrets.
+They are not Developer ID signed or notarized. Public distribution that passes
+Gatekeeper verification requires an Apple Developer ID certificate and Apple
+notarization configured for the release; see the
+[electron-builder 26 signing documentation](https://www.electron.build/v26/docs/mac/).
 
 ## Build cache
 

@@ -28,7 +28,13 @@ export function selectNativeDownloadStatus(list: NativeTask[], options: {
     normalized(value: unknown) { return String(value || "").replace(/\s+/g, " ").trim(); },
     nameFromPath(value: unknown) { return String(value || "").split(/[\\/]/).filter(Boolean).pop() || ""; },
     normalizeServerPath(value: unknown) { return "/" + String(value || "").split("/").filter(Boolean).join("/"); },
-    normalizeLocalPath(value: unknown) { return String(value || "").replace(/\//g, "\\").replace(/\\+$/g, "").toLowerCase(); },
+    normalizeLocalPath(value: unknown) {
+      const raw = String(value || "");
+      const normalized = raw.replace(/\\/g, "/").replace(/\/+$/g, "");
+      // POSIX paths can be case-sensitive. Only Windows drive and UNC paths
+      // use case-insensitive matching, independent of the automation host OS.
+      return /^(?:[a-z]:[\\/]|\\\\)/i.test(raw) ? normalized.toLowerCase() : normalized;
+    },
     complete(task: NativeTask) {
       const size = Number(task.size), finished = Number(task.finish_size);
       return (size > 0 && finished === size) || /完成|success|finished|complete|done|已下载/i.test(String(task.status || ""));
@@ -42,7 +48,7 @@ export function selectNativeDownloadStatus(list: NativeTask[], options: {
     if (options.expectedServerPath && helpers.normalizeServerPath(task.server_path) !== helpers.normalizeServerPath(options.expectedServerPath)) return false;
     if (options.expectedDownloadRoot) {
       const local = helpers.normalizeLocalPath(task.local_path), root = helpers.normalizeLocalPath(options.expectedDownloadRoot);
-      if (local !== root && !local.startsWith(root + "\\")) return false;
+      if (local !== root && !local.startsWith(root + "/")) return false;
     }
     return true;
   });

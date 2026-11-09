@@ -112,7 +112,7 @@ export function classifyBaiduNetdiskAutomationError(
   const message = errorMessage(error);
   const details = { message, cause: error };
 
-  if (/只支持 Windows|当前不是 Windows/.test(message)) {
+  if (/只支持 Windows|当前支持 Windows 和 macOS|当前不是 Windows/.test(message)) {
     return new UnsupportedPlatformError({
       ...details,
       platform: process.platform,

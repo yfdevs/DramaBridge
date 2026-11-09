@@ -82,6 +82,7 @@ test("isolates generic asset directories under each drama download root", () => 
   assert.equal(first, "D:\\短剧素材\\剧目甲");
   assert.equal(second, "D:\\短剧素材\\剧目乙");
   assert.notEqual(first, second);
+  assert.equal(resolveBaiduAssetDownloadRoot("/Users/test/Downloads", "剧目甲"), "/Users/test/Downloads/剧目甲");
 });
 
 test("downloads a poster as an individual file when it shares the video root in asset-only mode", () => {

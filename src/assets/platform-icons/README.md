@@ -11,10 +11,12 @@ ICO/JPEG files are converted to PNG for consistent browser rendering. Original c
 | `meituan-drama.png` | [Official page](https://czz.meituan.com/new/login) | [Original image](https://s3.meituan.net/static-prod01/com.sankuai.mttouchweb.cms.www-files/favicon.ico) |
 | `taobao-drama.png` | [Official page](https://www.taobao.com/) | [Original image](https://img.alicdn.com/tps/i3/T1OjaVFl4dXXa.JOZB-114-114.png) |
 | `kuaishou-drama.png` | [Official page](https://cp.kuaishou.com/) | [Original image](https://p66-plat.wskwai.com/udata/pkg/fe/favicon.70ff1fcc.ico) |
-| `qq-drama.png` | [Official page](https://im.qq.com/) | [Original image](https://im.qq.com/favicon.ico) |
+| `qq-drama.png` | [Official page](https://im.qq.com/) | [Original image](https://static-res.qq.com/static-res/imqq/qq-logo.png) |
 | `tencent-huolong-drama.png` | [Official page](https://apps.apple.com/cn/app/id6756595533) | [Original image](https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/a7/65/7e/a7657e7b-994f-e57d-3362-217b1acc3535/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg) |
 | `iqiyi-drama.png` | [Official page](https://www.iqiyi.com/) | [Original image](https://www.iqiyi.com/favicon.ico) |
 | `baidu-drama.png` | [Official page](https://www.baidu.com/) | [Original image](https://www.baidu.com/favicon.ico) |
 | `douyin-drama.png` | [Official page](https://creator.douyin.com/) | [Original image](https://lf3-static.bytednsdoc.com/obj/eden-cn/yvahlyj_upfbvk_zlp/ljhwZthlaukjlkulzlp/pc_creator/favicon_v2_7145ff0.ico) |
 | `tiktok-drama.png` | [Official page](https://developers.tiktok.com/) | [Original image](https://lf16-tiktok-common.ttwstatic.com/obj/tiktok-web-common-sg/mtact/static/images/logo_144c91a.png?v=2) |
 | `pinduoduo-drama.png` | [Official page](https://mcn.pinduoduo.com/) | [Original image](https://mms-static.pddpic.com/home/favicon.ico) |
+
+QQ icon refreshed on 2026-11-09 from the official homepage’s linked 62×62 transparent PNG, replacing the 16×16 favicon for sharper Retina rendering.

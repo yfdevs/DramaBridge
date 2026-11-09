@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { createPackage } from "@electron/asar";
+import { prepareMacBaiduCdpLauncher } from "../../src/runtime/mac-cdp-launcher.js";
 import { baiduLauncherSources, prepareBaiduCdpLauncher } from "../../src/runtime/cdp-launcher.js";
 
 async function fixture(root: string, name = "client", main = "dist/electron/entry.js", version = "8.9.7") {
@@ -30,7 +31,7 @@ const digest = (buffer: Buffer) => createHash("sha256").update(buffer).digest("h
 
 async function removeFixture(root: string) {
   const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(root));
-  assert.ok(relative && !relative.startsWith("..") && !path.isAbsolute(relative) && /^baidu-cdp-/.test(path.basename(root)));
+  assert.ok(relative && !relative.startsWith("..") && !path.isAbsolute(relative) && path.basename(root).startsWith('baidu-cdp-'));
   await rm(root, { recursive: true, force: true });
 }
 
@@ -133,4 +134,72 @@ test("the launcher preserves native paths and existing preloads, and restores co
   runInNewContext(preload, { process: { env: process.env }, require: () => ({ Module: { _initPaths: () => { pathsInitialized = true; } } }) });
   assert.equal(pathsInitialized, true);
   assert.equal(process.env.NODE_PATH, path.join(options.sourceApp, "node_modules"));
+});
+
+test("Mac launcher leaves the vendor bundle intact and loads an external entry with the matching runtime", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "baidu-cdp-mac-"));
+  try {
+    const contents = path.join(root, "安装位置", "BaiduNetdisk.app", "Contents");
+    const executable = path.join(contents, "MacOS", "BaiduNetdisk");
+    const app = path.join(root, "source-app");
+    const resources = path.join(contents, "Resources");
+    const framework = path.join(contents, "Frameworks", "Electron Framework.framework", "Electron Framework");
+    for (const dir of [path.dirname(executable), path.dirname(framework), resources, app]) await mkdir(dir, { recursive: true });
+    await writeFile(executable, "signed executable");
+    await writeFile(framework, "signed framework");
+    await writeFile(path.join(contents, "Info.plist"), "original signed plist");
+    await writeFile(path.join(resources, "core.asar"), "native core");
+    await writeFile(path.join(resources, "icon.icns"), "icon");
+    await writeFile(path.join(app, "package.json"), JSON.stringify({ name: "baidunetdisk", version: "8.9.7", main: "entry.js" }));
+    await writeFile(path.join(app, "entry.js"), "module.exports = 'client';");
+    await createPackage(app, path.join(resources, "app.asar"));
+    const cache = path.join(root, "cache");
+    const runtimePath = path.join(root, "runtime", "Electron.app", "Contents", "MacOS", "Electron");
+    const versions: string[] = [];
+    const dependencies = {
+      version: async () => "26.2.0",
+      runtime: async (version: string) => { versions.push(version); return runtimePath; },
+    };
+    const prepare = (target = cache) => prepareMacBaiduCdpLauncher(executable, target, options => baiduLauncherSources({ ...options, cdpPort: 9440 }), dependencies);
+    const first = await prepare();
+    assert.equal(first.executable, runtimePath);
+    assert.deepEqual(versions, ["26.2.0"]);
+    assert.equal(first.args[1], "--dramabridge-baidu-netdisk");
+    const externalApp = first.args[0]!;
+    assert.ok(externalApp.startsWith(cache + path.sep));
+    const main = await readFile(path.join(externalApp, "main.cjs"), "utf8");
+    assert.ok(main.includes("const port = 9440"));
+    assert.ok(main.includes("mac-profile"));
+    await assert.rejects(readFile(path.join(externalApp, "Contents", "MacOS", "BaiduNetdisk")), /ENOENT/);
+    assert.deepEqual(await prepare(), first);
+    await writeFile(path.join(externalApp, "main.cjs"), "corrupted");
+    assert.notEqual((await prepare()).args[0], externalApp);
+    await assert.rejects(prepare(path.join(contents, "cache")), /CACHE_INVALID/);
+    await writeFile(path.join(resources, "core.asar"), "updated native core");
+    assert.notEqual((await prepare()).args[0], externalApp);
+    assert.equal(await readFile(executable, "utf8"), "signed executable");
+    assert.equal(await readFile(framework, "utf8"), "signed framework");
+  } finally { await removeFixture(root); }
+});
+
+test("Mac entry enables configured loopback CDP without depending on stripped argv", () => {
+  const options = { sourceExecutable: "/Applications/BaiduNetdisk.app/Contents/MacOS/BaiduNetdisk", sourceApp: "/client/app.asar", sourceEntry: "/client/app.asar/main.js", preloadPath: "/cache/preload.cjs", cdpPort: 9440 };
+  const switches: Array<[string, string]> = [];
+  let loaded = false;
+  const app = {
+    commandLine: { appendSwitch: (name: string, value: string) => switches.push([name, value]), removeSwitch: () => {} },
+    setPath: () => {}, setAppPath: () => {}, on: () => {},
+  };
+  const run = (cdpPort: number) => runInNewContext(baiduLauncherSources({ ...options, cdpPort }).main, {
+    process: { platform: "darwin", argv: [] },
+    require: (name: string) => {
+      if (name === "electron") return { app };
+      assert.deepEqual(switches, [["remote-debugging-port", "9440"], ["remote-debugging-address", "127.0.0.1"]]);
+      loaded = true;
+    },
+  });
+  run(9440);
+  assert.equal(loaded, true);
+  assert.throws(() => run(0), /PORT_INVALID/);
+  assert.throws(() => run(65536), /PORT_INVALID/);
 });

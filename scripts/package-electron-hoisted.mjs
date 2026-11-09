@@ -1,4 +1,6 @@
 import console from "node:console";
+import { createRequire } from "node:module";
+import { packagingTarget, packagedApplication } from "./packaging-target.mjs";
 import { access, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -13,6 +15,8 @@ const rootDir = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const stagingDir = path.join(rootDir, ".cache", "electron-builder-hoisted-app");
 const outputDir = path.join(rootDir, "release", "${version}");
 const packageJsonPath = path.join(rootDir, "package.json");
+const targetPlatform = packagingTarget(process.argv.slice(2));
+process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(rootDir, ".cache", "playwright-browsers");
 // Keep this aligned with Electron externals and dependencies loaded through dynamic require.
 const runtimeDependencyNames = [
   "@napi-rs/canvas",
@@ -139,24 +143,15 @@ async function stageValidatedFfmpeg(sourceFile) {
 }
 
 async function validatePackagedFfmpeg(version) {
-  if (process.platform !== "win32" && !process.argv.includes("--win")) return;
-  const packagedFile = path.join(
-    rootDir,
-    "release",
-    version,
-    "win-unpacked",
-    "resources",
-    "app.asar.unpacked",
-    "node_modules",
-    "ffmpeg-static",
-    "ffmpeg.exe",
-  );
-  await validateFfmpegExecutable(packagedFile, "packaged FFmpeg");
+  const packaged = packagedApplication(rootDir, version, targetPlatform.platform, targetPlatform.arch);
+  if (!packaged) return;
+  await validateFfmpegExecutable(path.join(packaged.resources, "app.asar.unpacked", "node_modules", "ffmpeg-static",
+    targetPlatform.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"), "packaged FFmpeg");
 }
 
 async function validatePackagedNativeModules(version) {
-  if (process.platform !== "win32") return;
-  const packagedDir = path.join(rootDir, "release", version, "win-unpacked");
+  const packaged = packagedApplication(rootDir, version, targetPlatform.platform, targetPlatform.arch);
+  if (!packaged || targetPlatform.platform !== process.platform) return;
   const source = [
     '(async () => {',
     'const path = require("node:path")',
@@ -177,8 +172,8 @@ async function validatePackagedNativeModules(version) {
     'process.exit(0)',
     '})().catch(error => { console.error(error); process.exit(1) })',
   ].join(";\n");
-  await runExecutable(path.join(packagedDir, "DramaBridge.exe"), [
-    "-e", source, path.join(packagedDir, "resources", "app.asar"),
+  await runExecutable(packaged.executable, [
+    "-e", source, path.join(packaged.resources, "app.asar"),
   ], { env: { ELECTRON_RUN_AS_NODE: "1" }, timeoutMs: 60_000 });
   console.log("Validated packaged SQLite, Sharp, canvas and atomic writes from ASAR.");
 }
@@ -266,9 +261,8 @@ async function validatePackagedPlaywrightInputs() {
     `chromium-${stagingRevision}`,
   );
   await access(path.join(browserDir, "INSTALLATION_COMPLETE"));
-  if (process.platform === "win32" || process.argv.includes("--win")) {
-    await access(path.join(browserDir, "chrome-win64", "chrome.exe"));
-  }
+  const stagedRequire = createRequire(path.join(stagingDir, "package.json"));
+  await access(stagedRequire("playwright").chromium.executablePath());
   console.log(
     `Validated packaged Playwright: version/revision aligned, chromium-${stagingRevision} present.`,
   );
@@ -373,7 +367,7 @@ async function main() {
       npm_config_runtime: "electron",
       npm_config_target: target,
       npm_config_disturl: "https://electronjs.org/headers",
-      npm_config_arch: process.argv.includes("--arm64") ? "arm64" : "x64",
+      npm_config_arch: targetPlatform.arch,
       FFMPEG_BIN: sourceFfmpeg,
     },
   });

@@ -6,6 +6,9 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { _electron } from "playwright";
+import type { BaseWindow, IpcRenderer, OpenDialogOptions } from "electron";
+
+type IpcWindow = Window & { ipcRenderer: IpcRenderer };
 
 const root = process.cwd();
 const entry = path.join(root, "dist-electron/main.js");
@@ -21,10 +24,13 @@ test(
     const cache = path.join(root, ".cache");
     await mkdir(cache, { recursive: true });
     const directory = await mkdtemp(path.join(cache, "baidu-folder-smoke-"));
-    const installation = path.join(directory, "百度网盘", "BaiduNetdisk");
-    await mkdir(path.join(installation, "module", "BrowserEngine"), { recursive: true });
+    const installation = path.join(directory, "百度网盘", process.platform === "darwin" ? "BaiduNetdisk.app" : "BaiduNetdisk");
+    const executable = process.platform === "darwin"
+      ? path.join(installation, "Contents", "MacOS", "BaiduNetdisk")
+      : path.join(installation, "module", "BrowserEngine", "BaiduNetdiskUnite.exe");
+    await mkdir(path.dirname(executable), { recursive: true });
     await writeFile(
-      path.join(installation, "module", "BrowserEngine", "BaiduNetdiskUnite.exe"),
+      executable,
       "test fixture, do not launch",
     );
     const bootstrap = path.join(directory, "bootstrap.mjs");
@@ -66,9 +72,14 @@ test(
       await page.getByRole("button", { name: /打开百度网盘 CDP 控制/ }).click();
       const field = page.getByRole("textbox", { name: "百度网盘安装目录" });
       await field.waitFor();
+      // Wait for the initial configuration request before editing the field.
+      await page.waitForFunction(expected =>
+        document.querySelector<HTMLInputElement>('#baidu-netdisk-install-path')?.value === expected,
+      path.join(directory, "missing.exe"));
       await app.evaluate(({ dialog }, installation) => {
-        dialog.showOpenDialog = async (_window, options) => {
-          if (!options.properties?.includes("openDirectory"))
+        dialog.showOpenDialog = async (windowOrOptions: BaseWindow | OpenDialogOptions, options?: OpenDialogOptions) => {
+          const selectionOptions = options ?? windowOrOptions as OpenDialogOptions;
+          if (!selectionOptions.properties?.includes("openDirectory"))
             throw new Error("Expected an installation folder picker");
           return { canceled: false, filePaths: [installation] };
         };
@@ -77,14 +88,20 @@ test(
       await page.getByText("安装目录已保存，启动文件将自动识别。", { exact: true }).waitFor();
       assert.equal(await field.inputValue(), installation);
       const config = await page.evaluate(() =>
-        window.ipcRenderer.invoke("baidu-netdisk:config:get"),
+        (window as unknown as IpcWindow).ipcRenderer.invoke("baidu-netdisk:config:get"),
       );
       assert.equal(config.config.executablePath, installation);
+      const status = await page.evaluate(() => (window as unknown as IpcWindow).ipcRenderer.invoke("baidu-netdisk:service:status"));
+      assert.equal(status.supported, process.platform === "darwin" || process.platform === "win32");
+      if (process.platform === "darwin") {
+        assert.equal(status.os, "darwin");
+        assert.match(await field.getAttribute("placeholder") || "", /BaiduNetdisk\.app/);
+      }
       await field.fill(path.join(directory, "不存在"));
       await page.getByRole("button", { name: "保存", exact: true }).click();
       await page.getByText(/百度网盘安装目录或启动文件不存在/).waitFor();
       const after = await page.evaluate(() =>
-        window.ipcRenderer.invoke("baidu-netdisk:config:get"),
+        (window as unknown as IpcWindow).ipcRenderer.invoke("baidu-netdisk:config:get"),
       );
       assert.equal(after.config.executablePath, installation);
       await field.fill(`"${installation}"`);

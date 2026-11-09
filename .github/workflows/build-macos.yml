@@ -1,0 +1,89 @@
+name: Build macOS Apple Silicon
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Version prepared by the desktop release workflow
+        type: string
+        required: true
+      source_sha:
+        description: Exact source commit used by the Windows build
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      npm_config_electron_mirror: https://github.com/electron/electron/releases/download/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Use the shared release manifest
+        if: inputs.version != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: release-package-manifest
+          path: .cache/release-manifest
+
+      - name: Select version and verify Apple Silicon runner
+        id: version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile, writeFile, appendFile } from 'node:fs/promises';
+          if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Apple Silicon arm64 runner required');
+          if (process.env.RELEASE_VERSION) {
+            const source = await readFile('.cache/release-manifest/package.json', 'utf8');
+            if (JSON.parse(source).version !== process.env.RELEASE_VERSION) throw new Error('Release manifest version mismatch');
+            await writeFile('package.json', source);
+          }
+          const {version} = JSON.parse(await readFile('package.json', 'utf8'));
+          if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid release version');
+          await appendFile(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          JS
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Cache shared Chromium runtime
+        uses: actions/cache@v4
+        with:
+          path: .cache/playwright-browsers
+          key: playwright-macos-arm64-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Build Apple Silicon DMG and ZIP
+        run: pnpm build:mac
+
+      - name: Preserve Mac release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: DramaBridge-Mac-arm64-${{ steps.version.outputs.version }}
+          path: |
+            release/${{ steps.version.outputs.version }}/*-arm64.dmg
+            release/${{ steps.version.outputs.version }}/*-arm64.zip
+          if-no-files-found: error
+          retention-days: 14

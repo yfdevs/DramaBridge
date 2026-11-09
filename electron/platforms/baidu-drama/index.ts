@@ -118,7 +118,7 @@ const defaultConfig: BaiduDramaConfig = {
   headless: "false",
   operationDelaySeconds: "0",
   taskPollIntervalSeconds: "10",
-  runDataDir: "D:\\.drama-runs\\baidu-drama",
+  runDataDir: (process.platform === "win32" ? "D:\\.drama-runs\\baidu-drama" : ".drama-runs/baidu-drama"),
   logRetentionDays: "3",
 };
 

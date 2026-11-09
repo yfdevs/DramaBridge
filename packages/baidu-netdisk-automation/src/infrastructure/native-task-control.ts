@@ -9,17 +9,25 @@ export function selectNativeTasksForControl(list: NativeTask[], options: {
   matchAllInDownloadRoot?: boolean;
 }) {
   const helpers = {
-    normalize(value: unknown) { return String(value || "").replace(/\//g, "\\").replace(/\\+$/g, "").toLowerCase(); },
+    normalize(value: unknown) {
+      const raw = String(value || "");
+      const normalized = raw.replace(/\\/g, "/").replace(/\/+$/g, "");
+      // POSIX paths can be case-sensitive. Only Windows drive and UNC paths
+      // use case-insensitive matching, independent of the automation host OS.
+      return /^(?:[a-z]:[\\/]|\\\\)/i.test(raw) ? normalized.toLowerCase() : normalized;
+    },
   };
   const root = helpers.normalize(options.expectedDownloadRoot);
-  if (options.matchAllInDownloadRoot && (!/^(?:[a-z]:\\.+|\\\\[^\\]+\\[^\\]+\\.+)/i.test(root)
-    || root.split("\\").some(part => part === "." || part === ".."))) {
+  const absoluteScope = /^(?:[a-z]:\/.+|\/\/[^/]+\/[^/]+\/.+)/i.test(root)
+    || (/^\/[^/]+\/[^/]+/.test(root) && !/^\/(?:Users|Volumes)\/[^/]+$/.test(root));
+  if (options.matchAllInDownloadRoot && (!absoluteScope
+    || root.split("/").some(part => part === "." || part === ".."))) {
     throw new Error("批量下载任务操作必须指定独立的完整下载目录");
   }
   if (!options.matchAllInDownloadRoot && !options.targetName.trim()) throw new Error("下载任务名称不能为空");
   return list.filter(task => {
     const local = helpers.normalize(task.local_path);
-    if (root && local !== root && !local.startsWith(root + "\\")) return false;
+    if (root && local !== root && !local.startsWith(root + "/")) return false;
     return options.matchAllInDownloadRoot || String(task.name || task.server_path || "").includes(options.targetName);
   });
 }

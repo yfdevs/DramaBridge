@@ -138,7 +138,7 @@ const defaultQqDramaConfig: QqDramaConfig = {
   headless: "false",
   operationDelaySeconds: "0",
   taskPollIntervalSeconds: "10",
-  runDataDir: "D:\\.drama-runs\\qq-drama",
+  runDataDir: (process.platform === "win32" ? "D:\\.drama-runs\\qq-drama" : ".drama-runs/qq-drama"),
   logRetentionDays: "3",
 };
 

@@ -19,6 +19,22 @@ test("automatic search includes D drive and user AppData installation roots", ()
   assert.equal(new Set(roots).size, roots.length);
 });
 
+test("Mac discovery resolves application packages, Applications directories and executable paths", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "baidu-mac-install-"));
+  try {
+    const bundle = path.join(root, "BaiduNetdisk.app");
+    const executable = path.join(bundle, "Contents", "MacOS", "BaiduNetdisk");
+    await mkdir(path.dirname(executable), { recursive: true });
+    await writeFile(executable, "Mac fixture");
+    assert.equal(await findBaiduNetdiskExecutable(bundle), executable);
+    assert.equal(await findBaiduNetdiskExecutable(root), executable);
+    assert.equal(await findBaiduNetdiskExecutable(executable), executable);
+    assert.deepEqual(defaultBaiduInstallRoots({ platform: "darwin", homeDir: "/Users/test" }), [
+      "/Applications/BaiduNetdisk.app", "/Users/test/Applications/BaiduNetdisk.app",
+    ]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("installation root resolves nested engine, supports quoted paths and legacy executable selection", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "baidu-install-"));
   try {

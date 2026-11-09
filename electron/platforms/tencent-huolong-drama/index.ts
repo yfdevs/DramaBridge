@@ -108,7 +108,7 @@ const defaults: TencentHuolongDramaConfig = {
   operationDelaySeconds: "0",
   taskPollIntervalSeconds: "10",
   closeFailedTaskPages: "false",
-  runDataDir: "D:\\.drama-runs\\tencent-huolong-drama",
+  runDataDir: (process.platform === "win32" ? "D:\\.drama-runs\\tencent-huolong-drama" : ".drama-runs/tencent-huolong-drama"),
   logRetentionDays: "3",
 };
 

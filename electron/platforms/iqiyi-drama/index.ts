@@ -129,7 +129,7 @@ const defaultConfig: IqiyiDramaConfig = {
   operationDelaySeconds: "0",
   taskPollIntervalSeconds: "10",
   closeFailedTaskPages: "false",
-  runDataDir: "D:\\.drama-runs\\iqiyi-drama",
+  runDataDir: (process.platform === "win32" ? "D:\\.drama-runs\\iqiyi-drama" : ".drama-runs/iqiyi-drama"),
   logRetentionDays: "3",
 };
 

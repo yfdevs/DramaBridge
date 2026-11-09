@@ -52,7 +52,7 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   },
   {
     title: "文件存储",
-    description: "所有平台共用，两个目录需在同一磁盘",
+    description: "所有平台共用，两个目录需在同一磁盘。灰色路径为默认位置；已有平台可能沿用各自配置，选择并保存后统一使用全局目录。",
     fields: [
       {
         key: "runDataRoot",
@@ -152,6 +152,9 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
 ];
 
 export function GlobalConfigurationPage() {
+  const [defaultDirectories, setDefaultDirectories] = useState<
+    Pick<GlobalAppConfig, "runDataRoot" | "localMaterialRoot">
+  >({ runDataRoot: "", localMaterialRoot: "" });
   const location = useLocation();
   const navigate = useNavigate();
   const [testing, setTesting] = useState(false);
@@ -239,6 +242,7 @@ export function GlobalConfigurationPage() {
       };
     },
     onApplyResult: (result) => {
+      setDefaultDirectories(result.defaultDirectories);
       savedConfig.current = result.config;
     },
   });
@@ -287,7 +291,11 @@ export function GlobalConfigurationPage() {
         <ConfigSection
           key={section.title}
           config={configState.config}
-          fields={section.fields}
+          fields={section.fields.map((field) =>
+            field.key === "runDataRoot" || field.key === "localMaterialRoot"
+              ? { ...field, placeholder: defaultDirectories[field.key] }
+              : field,
+          )}
           footer={
             section.title === "AI 服务" ? (
               <div className="flex flex-wrap justify-end gap-2">

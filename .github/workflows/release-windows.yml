@@ -1,4 +1,4 @@
-name: Build and release Windows
+name: Build and release desktop
 
 on:
   push:
@@ -9,11 +9,17 @@ permissions:
   contents: write
 
 concurrency:
-  group: windows-release
+  group: desktop-release
   cancel-in-progress: false
 
 jobs:
-  release:
+  windows:
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      source_sha: ${{ steps.source.outputs.sha }}
     if: github.ref == 'refs/heads/master'
     runs-on: windows-latest
     timeout-minutes: 90
@@ -30,6 +36,10 @@ jobs:
         with:
           ref: master
           fetch-depth: 0
+
+      - name: Record source commit
+        id: source
+        run: '"sha=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT'
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -72,40 +82,75 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Commit version and tag
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+      - name: Preserve the shared release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package-manifest
+          path: package.json
+          retention-days: 14
+
+  mac:
+    needs: windows
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-macos.yml
+    with:
+      version: ${{ needs.windows.outputs.version }}
+      source_sha: ${{ needs.windows.outputs.source_sha }}
+
+  release:
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RELEASE_VERSION: ${{ needs.windows.outputs.version }}
+      RELEASE_TAG: ${{ needs.windows.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.windows.outputs.source_sha }}
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package-manifest
+          path: .cache/release-manifest
+
+      - name: Collect platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: DramaBridge-*
+          path: .cache/release-assets
+          merge-multiple: true
+
+      - name: Validate complete release files
         run: |
+          for file in \
+            "DramaBridge-Windows-$RELEASE_VERSION-Setup.exe" \
+            "DramaBridge-Windows-$RELEASE_VERSION-Setup.exe.blockmap" \
+            "latest.yml" \
+            "DramaBridge-Mac-$RELEASE_VERSION-arm64.dmg" \
+            "DramaBridge-Mac-$RELEASE_VERSION-arm64.zip"; do
+            test -s ".cache/release-assets/$file" || { echo "Missing release file: $file"; exit 1; }
+          done
+
+      - name: Commit shared version and tag
+        run: |
+          cp .cache/release-manifest/package.json package.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json
-          git commit -m "chore: release v$env:RELEASE_VERSION [skip ci]"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git tag "$env:RELEASE_TAG"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git push --atomic origin HEAD:master "refs/tags/$env:RELEASE_TAG"
+          git commit -m "chore: release v$RELEASE_VERSION [skip ci]"
+          git tag "$RELEASE_TAG"
+          git push --atomic origin HEAD:master "refs/tags/$RELEASE_TAG"
 
-      - name: Publish GitHub Release
+      - name: Publish complete GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
-          $releaseDir = "release/$env:RELEASE_VERSION"
-          $installer = "$releaseDir/DramaBridge-Windows-$env:RELEASE_VERSION-Setup.exe"
-          $blockmap = "$installer.blockmap"
-          $metadata = "$releaseDir/latest.yml"
-          foreach ($file in @($installer, $blockmap, $metadata)) {
-            if (!(Test-Path -LiteralPath $file)) { throw "Missing release file: $file" }
-          }
-          # Keep incomplete releases out of the updater's latest-release feed.
-          gh release view "$env:RELEASE_TAG" *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create "$env:RELEASE_TAG" --draft --title "$env:RELEASE_TAG" --generate-notes
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-          gh release upload "$env:RELEASE_TAG" "$installer" "$blockmap" "$metadata" --clobber
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          gh release edit "$env:RELEASE_TAG" --draft=false --latest
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --draft --title "$RELEASE_TAG" --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" .cache/release-assets/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest

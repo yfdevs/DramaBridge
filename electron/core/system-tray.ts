@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, nativeImage, Tray } from "electron";
+import path from "node:path";
 
 import { logMain } from "../main-logger";
 
@@ -15,7 +16,11 @@ export function showMainWindow() {
 
 export function initializeSystemTray(iconPath: string) {
   if (tray) return;
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  // Keep the macOS menu bar asset separate from the padded Dock artwork.
+  // createFromPath also loads the adjacent @2x representation for Retina displays.
+  const icon = process.platform === "darwin"
+    ? nativeImage.createFromPath(path.join(path.dirname(iconPath), "mac-tray.png"))
+    : nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   tray = new Tray(icon);
   tray.setToolTip("DramaBridge · 右键菜单可退出");
   tray.setContextMenu(Menu.buildFromTemplate([

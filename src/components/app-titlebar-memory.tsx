@@ -21,8 +21,8 @@ type AppRuntimeStatus = {
   runningPlatformCount: number;
   totalPlatformCount: number;
   disk?: {
-    dDrive: {
-      mount: string;
+    storageDrive: {
+      directory: string;
       usedBytes: number;
       totalBytes: number;
       availableBytes: number;
@@ -305,9 +305,9 @@ export function AppTitlebarMemory() {
   const memory = runtimeStatus?.memory ?? null;
   const percent = memory?.systemUsedPercent ?? null;
   const percentText = formatPercent(percent);
-  const dDrive = runtimeStatus?.disk?.dDrive ?? null;
-  const dDrivePercent = dDrive?.usedPercent ?? null;
-  const dDrivePercentText = formatPercent(dDrivePercent);
+  const storageDrive = runtimeStatus?.disk?.storageDrive ?? null;
+  const storageDrivePercent = storageDrive?.usedPercent ?? null;
+  const storageDrivePercentText = formatPercent(storageDrivePercent);
   const browserInstanceCount = runtimeStatus?.browserInstanceCount ?? 0;
   const runningPlatformCount = runtimeStatus?.runningPlatformCount ?? 0;
   const totalPlatformCount = runtimeStatus?.totalPlatformCount ?? 5;
@@ -315,10 +315,10 @@ export function AppTitlebarMemory() {
   const memoryText = memory
     ? `${formatBytes(memory.systemUsedBytes)} / ${formatBytes(memory.systemTotalBytes)}（${percentText}）`
     : "读取中";
-  const dDriveText = dDrive
-    ? `可用 ${formatBytes(dDrive.availableBytes)} / 总量 ${formatBytes(dDrive.totalBytes)}（已用 ${formatPercent(dDrivePercent)}）`
+  const storageDriveText = storageDrive
+    ? `${storageDrive.directory}：可用 ${formatBytes(storageDrive.availableBytes)} / 总量 ${formatBytes(storageDrive.totalBytes)}（已用 ${formatPercent(storageDrivePercent)}）`
     : runtimeStatus
-      ? "未找到 D 盘"
+      ? "无法读取素材目录所在磁盘"
       : "读取中";
   const baiduSummary = baiduNetdiskSummary(baiduStatus, baiduError);
 
@@ -337,15 +337,15 @@ export function AppTitlebarMemory() {
           value={percentText}
         />
         <TitlebarMetric
-          ariaLabel={`D 盘容量：${dDriveText}`}
+          ariaLabel={`素材盘容量：${storageDriveText}`}
           icon={
             <HardDrive
-              className={`size-3.5 shrink-0 ${diskIconClass(dDrivePercent)}`}
+              className={`size-3.5 shrink-0 ${diskIconClass(storageDrivePercent)}`}
               aria-hidden="true"
             />
           }
-          label="D盘"
-          value={dDrivePercentText}
+          label="素材盘"
+          value={storageDrivePercentText}
         />
         <TitlebarMetric
           ariaLabel={`运行平台：${runningPlatformText}`}

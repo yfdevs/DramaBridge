@@ -33,7 +33,7 @@ async function isBaiduCdpPort(port: number) {
 export async function ensureBaiduCdpPort(port: number) {
   if (await isBaiduCdpPort(port)) return;
   throw new Error(
-    `端口 ${port} 不是可用百度网盘 CDP。请先退出百度网盘，再手动启动 module\\BrowserEngine\\BaiduNetdiskUnite.exe --remote-debugging-port=${port}。`,
+    `端口 ${port} 不是可用百度网盘 CDP。请在百度网盘服务页点击“启动并连接”或“重启连接”。`,
   );
 }
 

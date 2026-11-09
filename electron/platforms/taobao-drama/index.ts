@@ -79,7 +79,7 @@ function defaultBrowserPath() {
 const defaults: TaobaoDramaConfig = {
   accountProfileName: "default", apiBaseUrl: "http://180.184.76.232:19090", browserExecutablePath: defaultBrowserPath(),
   headless: "false", operationDelaySeconds: "0", taskPollIntervalSeconds: "10", baiduNetdiskDownloadRetryAttempts: "3",
-  episodeUploadWaitTimeoutMinutes: "120", closeFailedTaskPages: "false", runDataDir: "D:\\.drama-runs\\taobao-drama", logRetentionDays: "3",
+  episodeUploadWaitTimeoutMinutes: "120", closeFailedTaskPages: "false", runDataDir: (process.platform === "win32" ? "D:\\.drama-runs\\taobao-drama" : ".drama-runs/taobao-drama"), logRetentionDays: "3",
 };
 const controller = new RuntimeController<Runtime>();
 type StoredConfig = { config: TaobaoDramaConfig; installationId: string; selectedAccountIds: string[] };

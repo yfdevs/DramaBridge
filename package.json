@@ -9,6 +9,8 @@
     "electron:native:rebuild": "node scripts/rebuild-electron-native.mjs",
     "build:app": "node scripts/clean-build-output.mjs && vp run app:build",
     "build": "pnpm build:app && node scripts/package-electron-hoisted.mjs",
+    "build:mac": "node scripts/build-mac.mjs",
+    "package:mac": "node scripts/package-electron-hoisted.mjs --mac --arm64 --publish never",
     "lint": "vp lint",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && pnpm -r exec tsc --noEmit",
     "preview": "vp preview",

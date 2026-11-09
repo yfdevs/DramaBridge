@@ -1,16 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
 import { copyFile, cp, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { prepareMacBaiduCdpLauncher } from "./mac-cdp-launcher.js";
 import { extractFile, uncache } from "@electron/asar";
 
 const launcherRevision = 1;
 const preparations = new Map<string, Promise<string>>();
+const macPreparations = new Map<string, ReturnType<typeof prepareMacBaiduCdpLauncher>>();
 
 export function baiduLauncherSources(options: {
   sourceExecutable: string;
   sourceApp: string;
   sourceEntry: string;
   preloadPath: string;
+  cdpPort?: number;
+  userDataPath?: string;
+  startupErrorPath?: string;
 }) {
   const resources = path.dirname(options.sourceApp);
   const preload = `Object.defineProperty(process, 'resourcesPath', { value: ${JSON.stringify(resources)} });
@@ -18,6 +23,19 @@ process.env.NODE_PATH = ${JSON.stringify(path.join(options.sourceApp, "node_modu
 require('module').Module._initPaths();
 `;
   const main = `const { app } = require('electron');
+${options.userDataPath ? `app.setPath('userData', ${JSON.stringify(options.userDataPath)});` : ''}
+${options.startupErrorPath ? `process.on('uncaughtException', error => {
+  try { require('fs').writeFileSync(${JSON.stringify(options.startupErrorPath)}, String(error?.message || error).slice(0, 2000)); } catch {}
+  app.exit(1);
+});` : ''}
+// The Mac client may discard Chromium switches during bootstrap. Set them
+// through Electron before loading the installed entry, keeping CDP loopback-only.
+if (process.platform === 'darwin') {
+  const port = ${JSON.stringify(options.cdpPort ?? 9337)};
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('BAIDU_CDP_PORT_INVALID');
+  app.commandLine.appendSwitch('remote-debugging-port', String(port));
+  app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+}
 // Keep native helpers, login data and update paths on the installed client.
 app.setPath('exe', ${JSON.stringify(options.sourceExecutable)});
 Object.defineProperty(process, 'execPath', { value: ${JSON.stringify(options.sourceExecutable)} });
@@ -123,13 +141,24 @@ async function prepare(sourceExecutable: string, cacheRoot: string) {
   return path.join(directory, executableName);
 }
 
-export function prepareBaiduCdpLauncher(sourceExecutable: string, cacheRoot: string): Promise<string> {
+export function prepareBaiduCdpLauncher(sourceExecutable: string, cacheRoot: string, cdpPort = 9337): Promise<string> {
+  if (!Number.isInteger(cdpPort) || cdpPort < 1 || cdpPort > 65535) return Promise.reject(new Error("BAIDU_CDP_PORT_INVALID"));
   const source = path.resolve(sourceExecutable);
   const root = path.resolve(cacheRoot);
-  const key = `${source}\n${root}`;
+  const key = `${source}\n${root}\n${cdpPort}`;
   const existing = preparations.get(key);
   if (existing) return existing;
   const pending = prepare(source, root).finally(() => preparations.delete(key));
   preparations.set(key, pending);
+  return pending;
+}
+
+export function prepareMacBaiduNetdiskLaunch(source: string, root: string, cdpPort: number) {
+  if (!Number.isInteger(cdpPort) || cdpPort < 1 || cdpPort > 65535) return Promise.reject(new Error("BAIDU_CDP_PORT_INVALID"));
+  const key = `${path.resolve(source)}\n${path.resolve(root)}\n${cdpPort}`;
+  const existing = macPreparations.get(key);
+  if (existing) return existing;
+  const pending = prepareMacBaiduCdpLauncher(source, root, options => baiduLauncherSources({ ...options, cdpPort })).finally(() => macPreparations.delete(key));
+  macPreparations.set(key, pending);
   return pending;
 }

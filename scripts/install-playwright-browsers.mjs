@@ -28,9 +28,10 @@ const browsers = JSON.parse(readFileSync(path.join(playwrightCoreRoot, "browsers
 const chromium = browsers.browsers?.find((browser) => browser.name === "chromium");
 if (!chromium?.revision) throw new Error("Cannot resolve the Playwright Chromium revision.");
 const installedBrowserDirectory = path.join(browserPath, `chromium-${chromium.revision}`);
-const installedBrowserExecutable = process.platform === "win32"
-  ? path.join(installedBrowserDirectory, "chrome-win64", "chrome.exe")
-  : path.join(installedBrowserDirectory, "chrome-linux", "chrome");
+// Resolve the real executable layout from this installed Playwright version,
+// including the Apple Silicon Chrome for Testing app bundle.
+process.env.PLAYWRIGHT_BROWSERS_PATH = browserPath;
+const installedBrowserExecutable = wechatDramaRequire("playwright").chromium.executablePath();
 
 mkdirSync(browserPath, { recursive: true });
 

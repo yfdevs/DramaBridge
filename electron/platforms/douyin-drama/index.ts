@@ -112,7 +112,7 @@ const defaultConfig: DouyinDramaConfig = {
   headless: "false",
   operationDelaySeconds: "0",
   taskPollIntervalSeconds: "10",
-  runDataDir: "D:\\.drama-runs\\douyin-drama",
+  runDataDir: (process.platform === "win32" ? "D:\\.drama-runs\\douyin-drama" : ".drama-runs/douyin-drama"),
   logRetentionDays: "3",
   closeFailedTaskPages: "false",
 };

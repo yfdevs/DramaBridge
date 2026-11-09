@@ -17,10 +17,21 @@ test("scoped cleanup includes all individual episodes and materials but excludes
 });
 
 test("scope-wide operations never fall back to a broad name match", () => {
-  for (const root of [undefined, "", "D:/", "../任务", "D:/下载/../任务"])
+  for (const root of [undefined, "", "D:/", "../任务", "D:/下载/../任务", "/", "/Users", "/Users/test", "/Volumes/Data", "/tmp/../任务", "//server/share"])
     assert.throws(() => selectNativeTasksForControl([], {
       targetName: "本剧", expectedDownloadRoot: root, matchAllInDownloadRoot: true,
     }), /完整下载目录/);
+});
+
+test("Mac controls respect POSIX case and task boundaries after serialization", () => {
+  const list = [
+    { id: 1, name: "1.mp4", local_path: "/Users/test/Downloads/Task/1.mp4" },
+    { id: 2, name: "1.mp4", local_path: "/Users/test/Downloads/task/1.mp4" },
+    { id: 3, name: "1.mp4", local_path: "/Users/test/Downloads/Task-other/1.mp4" },
+  ];
+  const options = { targetName: "Task", expectedDownloadRoot: "/Users/test/Downloads/Task/", matchAllInDownloadRoot: true };
+  const select = runInNewContext(`(${selectNativeTasksForControl.toString()})`) as typeof selectNativeTasksForControl;
+  assert.deepEqual(Array.from(select(list, options), item => item.id), [1]);
 });
 
 test("ordinary named task controls keep their name and root filter", () => {

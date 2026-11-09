@@ -202,7 +202,7 @@ export function isBaiduAssetRootCovered(
 }
 
 export function resolveBaiduAssetDownloadRoot(downloadDir: string, resourceRootName: string) {
-  return path.join(downloadDir, resourceRootName);
+  return (/^(?:[a-z]:[\\/]|\\\\)/i.test(downloadDir) ? path.win32 : path).join(downloadDir, resourceRootName);
 }
 
 export function matchBaiduLeadingEpisodeIndex(fileName: string) {
@@ -3807,8 +3807,8 @@ async function downloadBaiduNetdiskSharePromise(
   options: BaiduNetdiskShareDownloadOptions,
 ): Promise<BaiduNetdiskShareDownloadResult> {
   options.signal?.throwIfAborted();
-  if (process.platform !== "win32") {
-    throw new Error("当前脚本实现的是 Windows 百度网盘 CDP 下载流程。");
+  if (process.platform !== "win32" && process.platform !== "darwin") {
+    throw new Error("百度网盘 CDP 下载当前支持 Windows 和 macOS。");
   }
 
   const port = options.port ?? 9337;

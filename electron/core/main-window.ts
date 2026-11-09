@@ -17,7 +17,7 @@ export function initializeMainWindowIntegration() {
 }
 
 export function appIconPath(environment: AppEnvironment) {
-  return path.join(environment.publicDir, "icon.png");
+  return path.join(environment.publicDir, process.platform === "darwin" ? "icons/mac-dock.png" : "icon.png");
 }
 
 export function createMainWindow(environment: AppEnvironment) {

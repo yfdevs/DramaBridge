@@ -13,6 +13,8 @@ export type BaiduNetdiskConfigResult = {
 export type BaiduNetdiskCdpStatus = {
   platform: "baidu-netdisk";
   isWindows: boolean;
+  supported: boolean;
+  os: string;
   port: number;
   appRunning: boolean;
   cdpRunning: boolean;

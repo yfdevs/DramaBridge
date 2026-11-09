@@ -1,3 +1,6 @@
+import os from "node:os";
+import path from "node:path";
+
 // 百度网盘客户端 CDP 调试服务监听地址。
 export const debugHost = "127.0.0.1";
 
@@ -5,7 +8,9 @@ export const debugHost = "127.0.0.1";
 export const requestTimeoutMs = 2500;
 
 // 未显式传入下载目录时使用的本地默认下载目录。
-export const DEFAULT_BAIDU_NETDISK_DOWNLOAD_DIR = "D:\\BaiduNetdiskDownload";
+export const DEFAULT_BAIDU_NETDISK_DOWNLOAD_DIR = process.platform === "win32"
+  ? "D:\\BaiduNetdiskDownload"
+  : path.join(os.homedir(), "Downloads", "DramaBridge");
 
 // 分享文本未解析到标题时使用的兜底分享名称。
 export const DEFAULT_BAIDU_NETDISK_SHARE_NAME = "百度网盘分享";

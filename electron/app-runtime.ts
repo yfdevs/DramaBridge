@@ -1,4 +1,7 @@
 import { app } from "electron";
+import path from "node:path";
+import { readStorageDiskStatus } from "./core/storage-disk";
+import { getGlobalMaterialDirectory } from "./global-app-config";
 
 import { trpcIpc as ipcMain } from "./ipc";
 import { openMainLogDir } from "./main-logger";
@@ -9,7 +12,7 @@ import {
   openPlatformLogDir,
   type PlatformId,
 } from "./platforms/registry";
-import { readDriveStatus, readMemoryStatus } from "./platforms/shared";
+import { readMemoryStatus } from "./platforms/shared";
 
 let registered = false;
 
@@ -19,8 +22,11 @@ export function registerAppRuntimeHandlers() {
 
   ipcMain.handle("app:runtime:status", async () => {
     const runningPlatformStatus = getGlobalRunningPlatformStatus();
-    const [dDrive, memory] = await Promise.all([
-      readDriveStatus("D:"),
+    const materialDirectory = getGlobalMaterialDirectory();
+    const [storageDrive, memory] = await Promise.all([
+      process.platform !== "win32" && !path.isAbsolute(materialDirectory) && path.win32.isAbsolute(materialDirectory)
+        ? null
+        : readStorageDiskStatus(materialDirectory),
       readMemoryStatus(),
     ]);
 
@@ -30,7 +36,7 @@ export function registerAppRuntimeHandlers() {
       runningPlatformCount: runningPlatformStatus.running,
       totalPlatformCount: runningPlatformStatus.total,
       disk: {
-        dDrive,
+        storageDrive,
       },
       memory,
     };

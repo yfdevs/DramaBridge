@@ -3,6 +3,19 @@ import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { decodeNativeDownloadTasks, selectNativeDownloadStatus } from "../../src/infrastructure/native-download-status.js";
 
+test("Mac status preserves case-sensitive download roots and ignores sibling tasks", () => {
+  const list = [
+    { name: "1.mp4", local_path: "/Users/test/Downloads/Task/1.mp4", size: 100, finish_size: 20 },
+    { name: "1.mp4", local_path: "/Users/test/Downloads/task/1.mp4", size: 999, finish_size: 999 },
+    { name: "1.mp4", local_path: "/Users/test/Downloads/Task-copy/1.mp4", size: 999, finish_size: 999 },
+  ];
+  const select = runInNewContext(`(${selectNativeDownloadStatus.toString()})`) as typeof selectNativeDownloadStatus;
+  const result = select(list, { targetName: "1.mp4", expectedDownloadRoot: "/Users/test/Downloads/Task/" });
+  assert.equal(result.matched?.size, "100");
+  assert.equal(result.matched?.finishSize, "20");
+  assert.equal(result.matched?.completed, false);
+});
+
 test("empty client lists and JSON task lists are decoded without treating read errors as missing tasks", () => {
   assert.deepEqual(decodeNativeDownloadTasks({ errorNo: 0, items: { tasks: "" }, count: 0 }), []);
   const payload = { errorNo: 0, items: { tasks: JSON.stringify([{ name: "第31集.mp4" }]) }, count: 1 };

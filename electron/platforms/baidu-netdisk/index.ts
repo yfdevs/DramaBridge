@@ -46,6 +46,8 @@ type BaiduNetdiskStore = {
 type BaiduNetdiskCdpStatus = {
   platform: "baidu-netdisk";
   isWindows: boolean;
+  supported: boolean;
+  os: string;
   port: number;
   appRunning: boolean;
   cdpRunning: boolean;
@@ -1035,7 +1037,8 @@ async function startCdp(restart: boolean) {
     port: cdpPort(config),
     executablePath: config.executablePath || undefined,
     restart,
-    launcherCacheDir: path.join(baiduNetdiskRunDataDir(), "cdp-launchers"),
+    // Keep the Mac client profile stable across task/run-data directory changes.
+    launcherCacheDir: process.platform === "darwin" ? undefined : path.join(baiduNetdiskRunDataDir(), "cdp-launchers"),
   }).finally(() => { cachedStatus = undefined; });
 }
 
@@ -1049,7 +1052,7 @@ export async function ensureBaiduNetdiskCdpReadyOnStartup() {
     };
   }
 
-  if (!currentStatus.isWindows) {
+  if (!currentStatus.supported) {
     return {
       action: "unsupported" as const,
       status: currentStatus,
@@ -1751,13 +1754,13 @@ export function registerBaiduNetdiskPlatformHandlers() {
     const currentPath = currentConfig.executablePath.replace(
       /[\\/]module[\\/]BrowserEngine[\\/]BaiduNetdiskUnite\.exe$/i,
       "",
-    );
+    ).replace(process.platform === "darwin" ? /\/Contents\/MacOS\/BaiduNetdisk$/ : /$^/, "");
     const selectedPath = await selectDirectory(event, {
-      title: "选择百度网盘安装目录（BaiduNetdisk 文件夹）",
+      title: process.platform === "darwin" ? "选择百度网盘应用（BaiduNetdisk.app）" : "选择百度网盘安装目录（BaiduNetdisk 文件夹）",
       defaultPath: currentPath
         ? /\.exe$/i.test(currentPath) ? path.dirname(currentPath) : currentPath
-        : undefined,
-      properties: ["openDirectory"],
+        : process.platform === "darwin" ? "/Applications" : undefined,
+      properties: process.platform === "darwin" ? ["openFile", "openDirectory"] : ["openDirectory"],
     });
 
     if (!selectedPath) return null;

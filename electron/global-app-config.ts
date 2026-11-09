@@ -295,6 +295,10 @@ function configResult(config = readGlobalAppConfig(), restartRequired = false) {
     config,
     path: getStore().path,
     restartRequired,
+    defaultDirectories: {
+      runDataRoot: path.join(app.getPath("userData"), ".drama-runs"),
+      localMaterialRoot: path.join(app.getPath("downloads"), "DramaBridge"),
+    },
   };
 }
 
@@ -308,6 +312,9 @@ function portableDirectory(value: string | undefined, fallback: string) {
 }
 
 function configuredDirectory(value: string) {
+  if (process.platform !== "win32" && !path.isAbsolute(value) && path.win32.isAbsolute(value)) {
+    throw new Error(`当前系统无法使用 Windows 目录：${value}。请在配置中重新选择目录。`);
+  }
   // Never substitute a different profile/material directory for an explicit
   // global selection: a disconnected drive must be reported, not look logged out.
   if (process.platform === "win32" && path.isAbsolute(value)
@@ -345,6 +352,10 @@ export function assertGlobalDirectoriesConfigured() {
       `${GLOBAL_DIRECTORIES_REQUIRED_ERROR_CODE}: 请先在“全局配置 → 文件存储”中设置${missingDirectories.join("、")}。`,
     );
   }
+}
+
+export function getGlobalMaterialDirectory() {
+  return getStore().get("config").localMaterialRoot?.trim() || path.join(app.getPath("downloads"), "DramaBridge");
 }
 
 async function selectGlobalDirectory(

@@ -12,6 +12,9 @@ export function normalizeBaiduInstallPath(value: string) {
 
 export function baiduDirectoryExecutableCandidates(directory: string) {
   return [
+    path.join(directory, "Contents", "MacOS", "BaiduNetdisk"),
+    path.join(directory, "BaiduNetdisk.app", "Contents", "MacOS", "BaiduNetdisk"),
+    path.join(directory, "BaiduNetdisk"),
     path.join(directory, "module", "BrowserEngine", "BaiduNetdiskUnite.exe"),
     path.join(directory, "BaiduNetdiskUnite.exe"),
     path.join(directory, "BaiduNetdisk.exe"),
@@ -22,7 +25,11 @@ export function defaultBaiduInstallRoots(options: {
   appData?: string;
   localAppData?: string;
   homeDir: string;
+  platform?: NodeJS.Platform;
 }) {
+  if (options.platform === "darwin") {
+    return ["/Applications/BaiduNetdisk.app", path.join(options.homeDir, "Applications", "BaiduNetdisk.app")];
+  }
   const join = path.win32.join;
   const roots = [
     options.appData ? join(options.appData, "baidu", "BaiduNetdisk") : undefined,
@@ -110,7 +117,7 @@ export async function findBaiduNetdiskExecutable(explicitPath?: string) {
     if (explicitKind === "directory") {
       const executable = await executableInDirectory(explicit);
       if (executable) return executable;
-      throw new Error(`所选目录中没有找到百度网盘，请选择 BaiduNetdisk 安装文件夹：${explicit}`);
+      throw new Error(`所选目录中没有找到百度网盘，请选择 BaiduNetdisk 安装文件夹或 BaiduNetdisk.app：${explicit}`);
     }
     throw new Error(`百度网盘安装目录或启动文件不存在：${explicit}`);
   }
@@ -119,6 +126,7 @@ export async function findBaiduNetdiskExecutable(explicitPath?: string) {
     appData: process.env.APPDATA,
     localAppData: process.env.LOCALAPPDATA,
     homeDir: os.homedir(),
+    platform: process.platform,
   });
   // Check common roots first so routine status checks need no registry subprocess.
   for (const root of defaults) {
@@ -131,6 +139,8 @@ export async function findBaiduNetdiskExecutable(explicitPath?: string) {
     if (executable) return executable;
   }
   throw new Error(
-    "没有找到百度网盘，请选择安装文件夹，例如 D:\\BaiduNetdisk，无需查找里面的 exe 文件。",
+    process.platform === "darwin"
+      ? "没有找到百度网盘，请选择 /Applications/BaiduNetdisk.app，或先安装百度网盘 Mac 客户端。"
+      : "没有找到百度网盘，请选择安装文件夹，例如 D:\\BaiduNetdisk，无需查找里面的 exe 文件。",
   );
 }

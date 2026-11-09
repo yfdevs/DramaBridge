@@ -22,6 +22,7 @@ export type GlobalAppConfigResult = {
   config: GlobalAppConfig;
   path: string;
   restartRequired: boolean;
+  defaultDirectories: Pick<GlobalAppConfig, "runDataRoot" | "localMaterialRoot">;
 };
 
 export type AiConfigTestResult = {

@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog, type IpcMainInvokeEvent, type OpenDialogOpt
 import path from 'node:path'
 import { fsSize, mem } from 'systeminformation'
 import { createAsyncCache } from '../../core/async-cache'
+import { normalizeRuntimeDirectory } from './directory-path'
 
 export { RuntimeController } from './runtime-controller'
 export { ensureDirectories, findLatestFile, openExistingPath, openPathOrParent } from './storage'
@@ -109,6 +110,7 @@ export function normalizePlatformRunDataDir(selectedPath: string | null, platfor
 }
 
 export function resolveFromAppRoot(value: string) {
+  value = normalizeRuntimeDirectory(value);
   // Persisted absolute paths belong to the user, including legacy D: roots.
   if (path.isAbsolute(value)) return value;
   const normalized = value.replace(/\\/g, '/');

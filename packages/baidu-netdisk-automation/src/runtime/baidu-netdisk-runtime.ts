@@ -1,9 +1,10 @@
+import { readFile, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { Effect } from "effect";
 import { execa } from "execa";
-import { prepareBaiduCdpLauncher } from "./cdp-launcher.js";
+import { prepareBaiduCdpLauncher, prepareMacBaiduNetdiskLaunch } from "./cdp-launcher.js";
 import { findBaiduNetdiskExecutable } from "./executable-discovery.js";
 export { findBaiduNetdiskExecutable } from "./executable-discovery.js";
 import { assertBaiduNativeDownloaderReady } from "../infrastructure/native-downloader.js";
@@ -43,6 +44,8 @@ export type BaiduNetdiskCdpTarget = {
 export type BaiduNetdiskCdpStatus = {
   platform: "baidu-netdisk";
   isWindows: boolean;
+  supported: boolean;
+  os: NodeJS.Platform;
   port: number;
   appRunning: boolean;
   cdpRunning: boolean;
@@ -115,7 +118,42 @@ async function execText(file: string, args: string[]) {
   return stdout;
 }
 
+export function parseMacBaiduProcesses(output: string) {
+  return output.split(/\r?\n/).flatMap(line => {
+    const match = /^\s*(\d+)\s+(.+)$/.exec(line);
+    if (!match) return [];
+    const original = /^(.+\.app\/Contents\/MacOS\/BaiduNetdisk)(?=\s+(?:--|-psn_)|$)/.exec(match[2]!);
+    const managed = /^(.+\/Electron\.app\/Contents\/MacOS\/Electron)\s/.exec(match[2]!);
+    if (!original && !(managed && /(?:^|\s)--dramabridge-baidu-netdisk(?:\s|$)/.test(match[2]!) && !/(?:^|\s)--type=/.test(match[2]!))) return [];
+    return [{ pid: Number(match[1]), executable: (original ?? managed)![1]! }];
+  });
+}
+
+async function getMacBaiduProcesses() {
+  return parseMacBaiduProcesses(await execText("/bin/ps", ["-axo", "pid=,command="]));
+}
+
+export async function stopMacBaiduNetdiskProcesses(dependencies = {
+  list: getMacBaiduProcesses,
+  terminate: (pid: number) => { process.kill(pid, "SIGTERM"); },
+  wait: () => new Promise<void>(resolve => setTimeout(resolve, 200)),
+}, timeoutMs = 10_000) {
+  let lastError: unknown;
+  for (const item of await dependencies.list()) {
+    try { dependencies.terminate(item.pid); }
+    catch (error) { lastError = error; }
+  }
+  const started = Date.now();
+  let remaining = await dependencies.list();
+  while (remaining.length && Date.now() - started < timeoutMs) {
+    await dependencies.wait();
+    remaining = await dependencies.list();
+  }
+  if (remaining.length) throw Object.assign(new Error("百度网盘未能退出，请先在 Mac 上退出百度网盘后再重启连接。"), { cause: lastError });
+}
+
 async function getRunningBaiduProcesses() {
+  if (process.platform === "darwin") return (await getMacBaiduProcesses()).map(item => String(item.pid));
   if (process.platform !== "win32") return [];
 
   const output = await execText("powershell.exe", ["-NoProfile", "-Command", baiduProcessQueryCommand]);
@@ -126,10 +164,14 @@ async function getRunningBaiduProcesses() {
     .filter((item) => item.length > 0);
 }
 
-export async function stopBaiduNetdiskProcesses(dependencies = {
+const windowsProcessDependencies = {
   getRunningProcesses: getRunningBaiduProcesses,
   killProcess: (name: string) => execText("taskkill.exe", ["/IM", `${name}.exe`, "/T", "/F"]),
-}) {
+};
+
+export async function stopBaiduNetdiskProcesses(dependencies?: typeof windowsProcessDependencies) {
+  if (!dependencies && process.platform === "darwin") return stopMacBaiduNetdiskProcesses();
+  dependencies ??= windowsProcessDependencies;
   let lastKillError: unknown;
   for (const name of baiduProcessNames) {
     // Killing the parent tree can also remove the engine process. Never reuse
@@ -170,19 +212,23 @@ async function checkBaiduNetdiskCdpStatusPromise(
 ): Promise<BaiduNetdiskCdpStatus> {
   const port = options.port ?? DEFAULT_BAIDU_NETDISK_CDP_PORT;
   const isWindows = process.platform === "win32";
+  const supported = isWindows || process.platform === "darwin";
+  const os = process.platform;
   const checkedAt = new Date().toISOString();
 
-  if (!isWindows) {
+  if (!supported) {
     return {
       platform: "baidu-netdisk",
       isWindows,
+      supported,
+      os,
       port,
       appRunning: false,
       cdpRunning: false,
       ready: false,
       targetCount: 0,
       checkedAt,
-      message: "百度网盘 CDP 自动化当前只支持 Windows。",
+      message: "百度网盘 CDP 自动化当前支持 Windows 和 macOS。",
     };
   }
 
@@ -205,6 +251,8 @@ async function checkBaiduNetdiskCdpStatusPromise(
   return {
     platform: "baidu-netdisk",
     isWindows,
+    supported,
+    os,
     port,
     appRunning,
     cdpRunning,
@@ -214,9 +262,9 @@ async function checkBaiduNetdiskCdpStatusPromise(
     checkedAt,
     message: ready
       ? `百度网盘 CDP 已连接，端口 ${port}。`
-      : componentError || (appRunning
+      : componentError || (cdpRunning ? "百度网盘调试端口已开启，正在等待客户端主窗口和下载组件就绪。" : (appRunning
         ? `百度网盘已启动，但端口 ${port} 未开启 CDP。`
-        : "百度网盘未启动。"),
+        : "百度网盘未启动。")),
   };
 }
 
@@ -234,10 +282,11 @@ async function startBaiduNetdiskCdpPromise(
   options: StartBaiduNetdiskCdpOptions = {},
 ): Promise<BaiduNetdiskLaunchResult> {
   const port = options.port ?? DEFAULT_BAIDU_NETDISK_CDP_PORT;
-  const waitMs = options.waitMs ?? 12000;
+  const waitMs = options.waitMs ?? (process.platform === "darwin" ? 20_000 : 12_000);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("百度网盘 CDP 端口必须为 1 到 65535 的整数。");
 
-  if (process.platform !== "win32") {
-    throw new Error("百度网盘 CDP 启动当前只支持 Windows。");
+  if (process.platform !== "win32" && process.platform !== "darwin") {
+    throw new Error("百度网盘 CDP 启动当前支持 Windows 和 macOS。");
   }
 
   const currentStatus = await checkBaiduNetdiskCdpStatus({ ...options, port });
@@ -257,14 +306,17 @@ async function startBaiduNetdiskCdpPromise(
 
   const executablePath = await findBaiduNetdiskExecutable(options.executablePath);
   const shouldRestart = Boolean(options.restart);
+  const macLauncher = process.platform === "darwin"
+    ? await prepareMacBaiduNetdiskLaunch(executablePath, options.launcherCacheDir ?? path.join(os.homedir(), "Library", "Application Support", "DramaBridge", "baidu-netdisk-cdp"), port)
+    : undefined;
 
   if (shouldRestart) {
     await stopBaiduNetdiskProcesses();
     await new Promise((resolve) => setTimeout(resolve, 800));
   }
 
-  const launch = async (executable: string) => {
-    const child = spawn(executable, [`--remote-debugging-port=${port}`, `--remote-debugging-address=${debugHost}`], {
+  const launch = async (executable: string, args: string[] = []) => {
+    const child = spawn(executable, [...args, `--remote-debugging-port=${port}`, `--remote-debugging-address=${debugHost}`], {
       cwd: path.dirname(executablePath), detached: true, stdio: "ignore", windowsHide: true,
     });
     await new Promise<void>((resolve, reject) => {
@@ -273,15 +325,16 @@ async function startBaiduNetdiskCdpPromise(
     });
     child.unref();
   };
-  await launch(executablePath);
+  if (macLauncher) await rm(macLauncher.startupErrorPath, { force: true });
+  await launch(macLauncher?.executable ?? executablePath, macLauncher?.args);
   let status = await waitForCdpStatus({ port, executablePath }, waitMs);
-  let launchMode: "direct" | "managed" = "direct";
-  if (!status.ready && !status.cdpRunning) {
+  let launchMode: "direct" | "managed" = macLauncher ? "managed" : "direct";
+  if (!macLauncher && !status.ready && !status.cdpRunning) {
     // Older clients accept the switch directly. Newer clients may remove it
     // during bootstrap; adapt in our own cache without changing their files.
     log("百度网盘未保留调试端口，准备独立启动适配", { executablePath });
     const launcher = await prepareBaiduCdpLauncher(executablePath,
-      options.launcherCacheDir ?? path.join(os.tmpdir(), "dramabridge-baidu-cdp-launchers"));
+      options.launcherCacheDir ?? path.join(os.tmpdir(), "dramabridge-baidu-cdp-launchers"), port);
     await stopBaiduNetdiskProcesses();
     await launch(launcher);
     status = await waitForCdpStatus({ port, executablePath }, waitMs);
@@ -289,7 +342,8 @@ async function startBaiduNetdiskCdpPromise(
   }
 
   if (!status.ready) {
-    throw new Error(status.message);
+    const startupError = macLauncher ? await readFile(macLauncher.startupErrorPath, "utf8").catch(() => "") : "";
+    throw new Error(startupError ? `百度网盘 Mac 启动失败：${startupError}` : status.message);
   }
 
   return {
@@ -303,9 +357,9 @@ async function startBaiduNetdiskCdpPromise(
 export function startBaiduNetdiskCdpEffect(
   options: StartBaiduNetdiskCdpOptions = {},
 ): Effect.Effect<BaiduNetdiskLaunchResult, CdpConnectionError | UnsupportedPlatformError> {
-  if (process.platform !== "win32") {
+  if (process.platform !== "win32" && process.platform !== "darwin") {
     return Effect.fail(new UnsupportedPlatformError({
-      message: "百度网盘 CDP 启动当前只支持 Windows。",
+      message: "百度网盘 CDP 启动当前支持 Windows 和 macOS。",
       platform: process.platform,
     }));
   }
