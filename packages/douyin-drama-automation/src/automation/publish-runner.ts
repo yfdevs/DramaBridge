@@ -43,7 +43,6 @@ import {
   selectDropdownByPlaceholder,
   selectDropdownValues,
   selectDouyinChargeEpisodes,
-  selectFirstDropdownByPlaceholder,
   selectRadio,
   selectRequiredDropdownByContractName,
   selectRequiredDropdownByStableId,
@@ -476,15 +475,7 @@ async function fillPublishConfiguration(
         recorder,
       ));
   } else {
-    await runAction("未指定红果厂牌账号，选择第一个可用厂牌账号并记录下拉", async () => {
-      const selected = await selectFirstDropdownByPlaceholder(
-        page,
-        brandAccountPlaceholder,
-        "brandAccount",
-        recorder,
-      );
-      return selected;
-    });
+    throw new Error("DOUYIN_DRAMA_FORM_ERROR: 请在后台任务中选择红果发布账号（brandAccountName）");
   }
   await runAction(`选择发布方式=${data.publishMode}`, () =>
     selectVisibleRadio(page, data.publishMode));
@@ -500,15 +491,7 @@ async function fillPublishConfiguration(
           recorder,
         ));
     } else {
-      await runAction("未指定发布账号，选择第一个可用账号并记录下拉", async () => {
-        const selected = await selectFirstDropdownByPlaceholder(
-          page,
-          placeholder,
-          "publishAccount",
-          recorder,
-        );
-        return selected;
-      });
+      throw new Error("DOUYIN_DRAMA_FORM_ERROR: 请在后台任务中选择抖音发布账号（publishAccountName）");
     }
   }
   await runAction(`设置发布时间=${logValue(data.scheduledPublishAt)}`, () =>
@@ -582,6 +565,12 @@ export async function runDouyinDramaPublishTask(
     "publish",
   );
   try {
+    if (!task.playlet.brandAccountName?.trim()) {
+      throw new Error("DOUYIN_DRAMA_FORM_ERROR: 请在后台任务中选择红果发布账号（brandAccountName）");
+    }
+    if (task.playlet.publishMode === "自主发布" && !task.playlet.publishAccountName?.trim()) {
+      throw new Error("DOUYIN_DRAMA_FORM_ERROR: 请在后台任务中选择抖音发布账号（publishAccountName）");
+    }
     await runAction(`打开抖音上传漫剧页=${DOUYIN_DRAMA_CREATE_URL}`, async () => {
       await page.goto(DOUYIN_DRAMA_CREATE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
       await waitForDouyinDramaCreatePageReady(page);

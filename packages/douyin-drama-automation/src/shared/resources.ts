@@ -17,6 +17,7 @@ import {
   DOUYIN_DRAMA_HONGGUO_COVER,
 } from "./constants.js";
 import { log } from "./logger.js";
+import { appendDouyinRelationshipProof } from "./relationship-proof.js";
 import type { ClaimedDouyinDramaTask, DouyinDramaRuntimeOptions } from "./types.js";
 
 const supportedMaterialExtensions = new Set([
@@ -375,7 +376,9 @@ export async function prepareDouyinDramaResources(
   assertMaterialCount("工程文件截图", projectScreenshotFiles, 4, 4);
   task.playlet.costConfigurationFiles = costConfigurationFiles;
   task.playlet.payCommitmentFiles = payCommitmentFiles;
-  task.playlet.ownershipProofFiles = ownershipProofFiles;
+  task.playlet.ownershipProofFiles = await appendDouyinRelationshipProof(
+    ownershipProofFiles, options, materialUploadRoot,
+  );
   task.playlet.nonInfringementCommitmentFiles = nonInfringementCommitmentFiles;
   task.playlet.projectScreenshotFiles = projectScreenshotFiles;
 
