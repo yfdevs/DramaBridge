@@ -13,6 +13,14 @@ export default defineConfig({
   staged: stagedConfig,
   fmt: fmtConfig,
   lint: lintConfig,
+  build: {
+    rolldownOptions: {
+      input: {
+        app: path.resolve(__dirname, "index.html"),
+        youtube: path.resolve(__dirname, "youtube-web.html"),
+      },
+    },
+  },
   server: {
     watch: {
       ignored: [...developmentWatchIgnored],

@@ -1,3 +1,7 @@
+import { YoutubeWorkspacePage } from "@/pages/youtube-drama/workspace";
+import { YoutubeConfigurationPage } from "@/pages/youtube-drama/configuration";
+import { YoutubeAccountsPage } from "@/pages/youtube-drama/accounts";
+import { YoutubeCreateTaskPage } from "@/pages/youtube-drama/create-task";
 import { WechatRecreationTransferPage } from "@/pages/wechat-drama/netdisk-transfer";
 import { TiktokNetdiskTransferPage } from "@/pages/tiktok-drama/netdisk-transfer";
 import { AppUpdateControl } from "@/components/app-update-control";
@@ -86,6 +90,11 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "baidu-drama/config": BaiduDramaConfigurationPage,
   "douyin-drama/service": DouyinDramaServiceControlPage,
   "douyin-drama/config": DouyinDramaConfigurationPage,
+  "youtube-drama/service": YoutubeWorkspacePage,
+  "youtube-drama/create": YoutubeCreateTaskPage,
+  "youtube-drama/accounts": YoutubeAccountsPage,
+  "youtube-drama/config": YoutubeConfigurationPage,
+  "youtube-drama/statistics": YoutubeWorkspacePage,
   "tiktok-drama/service": TiktokDramaCenterServiceControlPage,
   "tiktok-drama/netdisk": TiktokNetdiskTransferPage,
   "tiktok-drama/config": TiktokDramaCenterConfigurationPage,

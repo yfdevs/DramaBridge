@@ -1,3 +1,4 @@
+import youtube from "./youtube.svg";
 import icon0 from "./wechat-drama.png";
 import icon1 from "./wechat-miniprogram-drama.png";
 import icon2 from "./meituan-drama.png";
@@ -12,6 +13,7 @@ import icon10 from "./tiktok-drama.png";
 import icon11 from "./pinduoduo-drama.png";
 
 export const platformIcons = {
+  "youtube-drama": youtube,
   "wechat-drama": icon0,
   "wechat-miniprogram-drama": icon1,
   "meituan-drama": icon2,

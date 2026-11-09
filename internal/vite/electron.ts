@@ -134,6 +134,10 @@ export function createElectronPlugin(rootDir: string) {
               ),
             },
             {
+              find: /^@dramabridge\/youtube-automation$/,
+              replacement: path.join(rootDir, "packages/youtube-automation/src/index.ts"),
+            },
+            {
               find: /^@dramabridge\/tiktok-drama-automation$/,
               replacement: path.join(rootDir, "packages/tiktok-drama-automation/src/index.ts"),
             },

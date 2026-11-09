@@ -1,0 +1,5 @@
+demucs>=4.1,<5
+numpy
+google-api-python-client
+google-auth-oauthlib
+PySocks  # httplib2 的代理功能依赖它：缺失时 --proxy 会被静默忽略（isgood 返回 None）

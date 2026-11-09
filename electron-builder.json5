@@ -6,6 +6,7 @@
     "node_modules/better-sqlite3/**/*.node",
     "node_modules/ffmpeg-static/**/*",
     "node_modules/ffprobe-static/**/*",
+    "node_modules/@ffprobe-installer/**/*",
     "node_modules/sharp/**/*",
     "node_modules/is-url/**/*",
     "node_modules/node-fetch/**/*",
@@ -26,6 +27,11 @@
   },
   files: ["dist", "dist-electron"],
   extraResources: [
+    {
+      from: "packages/youtube-automation/python",
+      to: "youtube-automation",
+      filter: ["**/*", "!**/__pycache__/**", "!**/*.pyc"],
+    },
     {
       from: ".cache/playwright-browsers",
       to: "playwright-browsers",

@@ -21,7 +21,10 @@
     "postinstall": "node scripts/rebuild-electron-native.mjs",
     "prepare": "vp config",
     "test:packages": "node scripts/test-packages.mjs",
-    "test:electron": "tsx --test tests/electron/*.test.ts"
+    "test:electron": "tsx --test tests/electron/*.test.ts",
+    "youtube-drama:check": "pnpm --filter @dramabridge/youtube-automation check",
+    "youtube-drama:build": "pnpm --filter @dramabridge/youtube-automation build",
+    "youtube-drama:test": "pnpm --filter @dramabridge/youtube-automation test"
   },
   "dependencies": {
     "@dramabridge/feishu": "workspace:*",
@@ -109,7 +112,8 @@
     "vaul": "^1.1.2",
     "write-file-atomic": "8.0.0",
     "zod": "4.6.7",
-    "@dramabridge/video-separation": "workspace:*"
+    "@dramabridge/video-separation": "workspace:*",
+    "@dramabridge/youtube-automation": "workspace:*"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -131,5 +135,8 @@
     "vite-plugin-electron-renderer": "^1.0.0",
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@11.8.0"
+  "packageManager": "pnpm@11.8.0",
+  "optionalDependencies": {
+    "@ffprobe-installer/darwin-arm64": "5.0.1"
+  }
 }

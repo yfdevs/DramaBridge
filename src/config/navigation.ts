@@ -14,7 +14,8 @@ export type PlatformId =
   | "baidu-drama"
   | "douyin-drama"
   | "tiktok-drama"
-  | "pinduoduo-drama";
+  | "pinduoduo-drama"
+  | "youtube-drama";
 
 export type AppRoute =
   | "tools/video-separation"
@@ -55,9 +56,19 @@ export type AppRoute =
   | "tiktok-drama/config"
   | "pinduoduo-drama/service"
   | "pinduoduo-drama/records"
-  | "pinduoduo-drama/config";
+  | "pinduoduo-drama/config"
+  | "youtube-drama/service"
+  | "youtube-drama/config"
+  | "youtube-drama/create"
+  | "youtube-drama/accounts";
 
 const appRoutes = [
+  "youtube-drama/create",
+  "youtube-drama/accounts",
+  "youtube-drama/service",
+  "youtube-drama/config",
+  "youtube-drama/statistics",
+  "youtube-drama/logs",
   "tools/video-separation",
   "app/updates",
   "app/config",
@@ -265,6 +276,14 @@ export const platformNavigation: PlatformNavigationItem[] = [
     serviceRoute: "pinduoduo-drama/service",
     configRoute: "pinduoduo-drama/config",
     logoSrc: platformIcons["pinduoduo-drama"],
+  },
+  {
+    id: "youtube-drama",
+    title: "YouTube",
+    routePrefix: "youtube-drama",
+    serviceRoute: "youtube-drama/service",
+    configRoute: "youtube-drama/config",
+    logoSrc: platformIcons["youtube-drama"],
   },
 ];
 
@@ -519,6 +538,15 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "pinduoduo-drama/statistics",
         icon: ChartBar,
       },
+    ],
+  },
+  {
+    title: "YouTube",
+    items: [
+      { title: "任务列表", route: "youtube-drama/service", icon: Terminal },
+      { title: "添加任务", route: "youtube-drama/create", icon: CloudUpload },
+      { title: "账号管理", route: "youtube-drama/accounts", icon: List },
+      { title: "配置管理", route: "youtube-drama/config", icon: FineTune },
     ],
   },
 ];

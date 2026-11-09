@@ -3,9 +3,14 @@ import { readExternalApiConfig } from "../global-app-config";
 import { logMain } from "../main-logger";
 import { createBaiduNetdiskHttpApi } from "../platforms/baidu-netdisk/http-api";
 import { LocalApiServer } from "./http-server";
+import type { LocalApiRequest } from "./http-server";
 
 const baiduNetdiskApi = createBaiduNetdiskHttpApi();
 const server = new LocalApiServer(baiduNetdiskApi.handler);
+// Desktop platform bridges reuse the same manager without opening a public
+// socket or changing the user's external API settings.
+export const dispatchInternalBaiduRequest = (request: LocalApiRequest) =>
+  baiduNetdiskApi.handler(request);
 let startupError: string | undefined;
 
 export async function configureLocalApi(config: ExternalApiConfig) {

@@ -1,3 +1,11 @@
+import {
+  registerYoutubeHandlers,
+  stopYoutubeRuntime,
+  stopYoutubeService,
+  youtubeRunningCount,
+  youtubeRuntimeSummary,
+  openYoutubeLogs,
+} from "./youtube-drama";
 import { logMain } from "../main-logger";
 import {
   getBaiduDramaBrowserInstanceCount,
@@ -122,6 +130,17 @@ type PlatformDefinition = {
 };
 
 const platformDefinitions = [
+  {
+    id: "youtube-drama",
+    label: "YouTube",
+    registerHandlers: registerYoutubeHandlers,
+    stopRuntime: stopYoutubeRuntime,
+    stopService: stopYoutubeService,
+    getBrowserInstanceCount: () => 0,
+    getRunningPlatformCount: youtubeRunningCount,
+    getRuntimeSummary: youtubeRuntimeSummary,
+    openLogDir: openYoutubeLogs,
+  },
   {
     id: "wechat-drama",
     label: "微信视频号",

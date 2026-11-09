@@ -15,6 +15,7 @@ export const platformLogIds = [
   "baidu-drama",
   "douyin-drama",
   "tiktok-drama",
+  "youtube-drama",
   "pinduoduo-drama",
 ] as const;
 

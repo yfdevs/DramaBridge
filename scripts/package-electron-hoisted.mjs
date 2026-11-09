@@ -25,6 +25,8 @@ const runtimeDependencyNames = [
   "electron-updater",
   "ffmpeg-static",
   "ffprobe-static",
+  ...(targetPlatform.platform === "darwin" && targetPlatform.arch === "arm64"
+    ? ["@ffprobe-installer/darwin-arm64"] : []),
   "p-queue",
   "pdf-to-img",
   "playwright",
@@ -220,7 +222,7 @@ async function writePackageJson() {
     const version =
       name === "playwright"
         ? installedPlaywrightPackage.version
-        : packageJson.dependencies?.[name];
+        : packageJson.dependencies?.[name] ?? packageJson.optionalDependencies?.[name];
     if (!version) throw new Error(`Runtime dependency is missing from package.json: ${name}`);
     return [name, version];
   }));
@@ -314,6 +316,10 @@ async function writeBuilderConfig(target, electronDist) {
     ? `\n  electronDist: ${toJsonString(electronDist)},`
     : "";
   const config = source
+    .replace(
+      /from:\s*"packages\/youtube-automation\/python"/,
+      `from: ${toJsonString(path.join(rootDir, "packages", "youtube-automation", "python"))}`,
+    )
     .replace(
       "{",
       `{\n  electronVersion: ${toJsonString(target)},${localDistributionConfig}`,

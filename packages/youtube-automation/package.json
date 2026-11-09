@@ -1,0 +1,24 @@
+{
+  "name": "@dramabridge/youtube-automation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "vp pack",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "tsx": "^4.23.12",
+    "typescript": "7.0.2",
+    "vite": "catalog:"
+  }
+}

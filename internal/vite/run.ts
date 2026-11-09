@@ -11,7 +11,7 @@ function packageSourceInputs(directory: string, visited = new Set<string>()): st
     .filter((name) => name.startsWith("@dramabridge/"))
     .flatMap((name) => packageSourceInputs(name.slice("@dramabridge/".length), visited));
   return [
-    ...["src/**", "scripts/**", "native/**", "*.json", "*.ts", "*.mts"].map(
+    ...["src/**", "python/**", "scripts/**", "native/**", "*.json", "*.ts", "*.mts"].map(
       (pattern) => `packages/${directory}/${pattern}`,
     ),
     ...dependencies,
@@ -45,9 +45,11 @@ const appBuildInputs = [
   ...appTypecheckInputs,
   "packages/*/scripts/**",
   "packages/*/native/**",
+  "packages/*/python/**",
   "packages/*/vite.config.*",
   "public/**",
   "index.html",
+  "youtube-web.html",
   "vite.config.*",
   "internal/**",
   "postcss.config.*",
@@ -58,6 +60,12 @@ const appBuildInputs = [
 
 export const runConfig = {
   tasks: {
+    "pkg:youtube:build": {
+      command: "vp pack",
+      cwd: "packages/youtube-automation",
+      input: packageBuildInputs("youtube-automation"),
+      output: ["packages/youtube-automation/dist/**"],
+    },
     "pkg:browser-window:build": {
       command: "vp pack",
       cwd: "packages/browser-window",
@@ -181,12 +189,16 @@ export const runConfig = {
       output: ["packages/baidu-netdisk-automation/dist/**"],
     },
     "pkg:feishu:build": {
-      command: "vp pack", cwd: "packages/feishu", input: packageBuildInputs("feishu"), output: ["packages/feishu/dist/**"],
+      command: "vp pack",
+      cwd: "packages/feishu",
+      input: packageBuildInputs("feishu"),
+      output: ["packages/feishu/dist/**"],
     },
     "packages:build": {
       command: "node -e \"console.log('workspace packages built')\"",
       dependsOn: [
         "pkg:feishu:build",
+        "pkg:youtube:build",
         "pkg:ai:build",
         "pkg:file-utils:build",
         "pkg:logging:build",
