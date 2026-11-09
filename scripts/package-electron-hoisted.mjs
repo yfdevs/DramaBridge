@@ -208,6 +208,7 @@ async function writeHoistedPnpmConfig() {
     "packages: []",
     "",
     "allowBuilds:",
+    "  '@ffprobe-installer/darwin-arm64': true",
     // v13 includes N-API binaries. Avoid pnpm's implicit node-gyp rebuild;
     // verify the shipped binary with the actual Electron runtime below.
     "  better-sqlite3: false",

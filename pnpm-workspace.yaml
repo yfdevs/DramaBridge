@@ -2,6 +2,8 @@ packages:
   - packages/*
 
 allowBuilds:
+  # The bundled Apple Silicon FFprobe only needs its executable bit set.
+  '@ffprobe-installer/darwin-arm64': true
   # v13 ships portable N-API binaries; postinstall verifies them in Electron.
   better-sqlite3: false
   canvas: false
