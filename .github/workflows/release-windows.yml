@@ -47,6 +47,15 @@ jobs:
           node-version: '24'
           cache: pnpm
 
+      - name: Cache FFmpeg binaries and license
+        uses: actions/cache@v4
+        with:
+          path: .cache/ffmpeg-static
+          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-ffmpeg.mjs') }}
+
+      - name: Prepare FFmpeg with download retries
+        run: node scripts/prepare-ci-ffmpeg.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

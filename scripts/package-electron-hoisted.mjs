@@ -141,6 +141,15 @@ async function cacheValidatedFfmpeg(sourceFile) {
 async function stageValidatedFfmpeg(sourceFile) {
   const stagingFile = stagingFfmpegPath();
   await cp(sourceFile, stagingFile, { force: true });
+  // The CI prefetch includes upstream license files; retain them in the app.
+  for (const suffix of [".README", ".LICENSE"]) {
+    const sidecar = `${sourceFile}${suffix}`;
+    if (await stat(sidecar).then(value => value.isFile()).catch(() => false)) {
+      await cp(sidecar, `${stagingFile}${suffix}`, { force: true });
+    } else if (process.env.CI) {
+      throw new Error(`Missing FFmpeg distribution file: ${sidecar}`);
+    }
+  }
   await validateFfmpegExecutable(stagingFile, "staged FFmpeg");
 }
 
