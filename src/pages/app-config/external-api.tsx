@@ -10,13 +10,13 @@ import {
 
 const section: ConfigSectionDefinition<ExternalApiConfig> = {
   title: "本机接口服务",
-  description: "让电脑上的其他程序使用百度网盘下载功能。",
+  description: "供本机其他程序调用网盘下载，设置在此单独生效。",
   fields: [
     {
       kind: "switch",
       key: "enabled",
       label: "开启接口服务",
-      description: "开启后立即生效，并在下次启动应用时自动开启。",
+      description: "开关立即生效；开启后，下次启动应用时自动启动服务。",
       activeLabel: "已开启",
       inactiveLabel: "已关闭",
     },
@@ -95,33 +95,32 @@ export function ExternalApiConfiguration() {
   };
   const hasChanges = JSON.stringify(config) !== JSON.stringify(saved);
   return (
-    <fieldset disabled={busy || Boolean(loadError)} className="min-w-0">
+    <fieldset data-independent-config disabled={busy || Boolean(loadError)} className="min-w-0">
       <ConfigSection
         config={config}
         section={section}
         fields={section.fields}
         onChange={(key, value) => {
-          if (key === "enabled") void save({ ...(value === "true" ? config : saved), enabled: value === "true" });
+          if (key === "enabled")
+            void save({ ...(value === "true" ? config : saved), enabled: value === "true" });
           else setConfig((current) => ({ ...current, [key]: value }));
         }}
         footer={
-          <div className="flex flex-col gap-3">
+          <div className="flex w-full min-w-0 flex-col gap-3">
             <div role="status" aria-live="polite" className="break-words text-sm">
               {loadError ? (
                 `配置读取失败：${loadError}`
               ) : status.error ? (
                 <span className="text-destructive">{status.error}</span>
               ) : status.running ? (
-                `运行中 · ${status.baseUrl}`
+                `运行中：${status.baseUrl}`
               ) : config.enabled ? (
                 "服务未运行"
               ) : (
                 "服务已关闭"
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              关闭服务后，已提交的下载任务继续执行。修改端口后，请点击“应用设置”。
-            </p>
+            <p className="text-sm text-muted-foreground">关闭服务后，已提交的下载任务继续执行。</p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button
                 type="button"
@@ -139,7 +138,7 @@ export function ExternalApiConfiguration() {
                 disabled={!hasChanges && (!config.enabled || status.running)}
                 onClick={() => void save(config)}
               >
-                应用设置
+                应用端口设置
               </Button>
             </div>
           </div>

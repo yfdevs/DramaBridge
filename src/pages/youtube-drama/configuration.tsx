@@ -24,9 +24,9 @@ function ConfigRow({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-3 border-b py-4 last:border-0 sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-6">
+    <div className="grid gap-3 border-b py-4 last:border-0 @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-8">
       <div className="space-y-1">
-        <p className="text-xs font-medium">{title}</p>
+        <p className="text-sm font-medium">{title}</p>
         {description && <p className="text-xs leading-5 text-muted-foreground">{description}</p>}
       </div>
       <div className="min-w-0 space-y-2">{children}</div>
@@ -165,7 +165,7 @@ export function YoutubeConfigurationPage() {
         </div>
       )}
       <ConfigPanelSection title="运行环境" description="">
-        <ConfigRow title="运行环境" description="自动安装和管理，无需选择 Python。">
+        <ConfigRow title="依赖管理" description="自动安装和管理 Python 及所需依赖。">
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -214,9 +214,9 @@ export function YoutubeConfigurationPage() {
             <div aria-label="环境检查结果" className="space-y-3 rounded-lg bg-muted/40 p-3">
               <div className="flex items-center gap-2 text-xs font-medium">
                 {environment.ready ? (
-                  <CheckCircle className="size-4 text-emerald-600" />
+                  <CheckCircle className="size-4 text-[var(--config-success)]" />
                 ) : (
-                  <DangerTriangle className="size-4 text-amber-600" />
+                  <DangerTriangle className="size-4 text-[var(--config-warning)]" />
                 )}
                 {environment.ready ? "环境可用" : "环境未就绪"}
               </div>
@@ -246,9 +246,7 @@ export function YoutubeConfigurationPage() {
                     </span>
                     <Badge
                       variant="secondary"
-                      className={
-                        ready ? "text-[11px]" : "text-[11px] text-amber-700 dark:text-amber-400"
-                      }
+                      className={ready ? "text-xs" : "text-xs text-[var(--config-warning)]"}
                     >
                       {ready ? "可用" : "未检测到"}
                     </Badge>
@@ -256,7 +254,7 @@ export function YoutubeConfigurationPage() {
                 ))}
               </div>
               {environment.executable && (
-                <p className="break-all text-[11px] leading-5 text-muted-foreground">
+                <p className="break-all text-xs leading-5 text-muted-foreground">
                   当前 Python：{environment.executable}
                 </p>
               )}
@@ -303,7 +301,7 @@ export function YoutubeConfigurationPage() {
             <div className="grid gap-2">
               {status.webUrls.map((url) => (
                 <div key={url} className="flex flex-wrap items-center gap-2">
-                  <code className="text-xs">{url}</code>
+                  <code className="break-all text-xs">{url}</code>
                   <Button
                     size="sm"
                     variant="ghost"

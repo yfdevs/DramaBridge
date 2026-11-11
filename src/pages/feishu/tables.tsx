@@ -28,12 +28,12 @@ export function FeishuGlobalConfiguration({
     title: "飞书表格",
     description: "连接各平台共用的任务表。",
     fields: [
-      { key: "feishuAppId", label: "App ID" },
+      { key: "feishuAppId", label: "应用 ID" },
       {
         key: "feishuAppSecret",
-        label: "App Secret",
+        label: "应用密钥",
         type: "password",
-        placeholder: config.feishuHasSecret ? "••••••••" : undefined,
+        placeholder: config.feishuHasSecret ? "已保存，留空保留原密钥" : "输入 App Secret",
       },
       { key: "feishuTableUrl", label: "表格链接", type: "url" },
     ],
@@ -72,6 +72,7 @@ export function FeishuGlobalConfiguration({
                 {message}
               </p>
             )}
+            {hasChanges && <p className="text-xs text-muted-foreground">保存更改后可测试连接</p>}
             <Button
               size="sm"
               variant="outline"

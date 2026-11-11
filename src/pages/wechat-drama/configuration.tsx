@@ -1,37 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-
-import { ConfigurationToolbar } from "@/pages/shared/configuration-page";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-  InputGroupText,
-} from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { routePath } from "@/config/navigation";
-import {
-  wechatVideoService,
-  type WechatVideoConfig,
-  type WechatVideoConfigResult,
-} from "@/platforms/wechat-drama/service";
+  ConfigurationPageFrame,
+  ConfigSection,
+  type ConfigSectionDefinition,
+  usePlatformConfig,
+} from "@/pages/shared/configuration-page";
+import { wechatVideoService, type WechatVideoConfig } from "@/platforms/wechat-drama/service";
 
 const emptyConfig: WechatVideoConfig = {
   recreationSheetName: "微信二创",
@@ -68,52 +41,24 @@ const emptyConfig: WechatVideoConfig = {
   episodeUploadFailedRetryAttempts: "3",
 };
 
-type TextField = {
-  kind?: "text";
-  key: keyof WechatVideoConfig;
-  label: string;
-  description?: string;
-  type?: "text" | "number" | "url";
-  suffix?: string;
-  min?: number;
-  step?: number;
-};
-
-type SelectField = {
-  kind: "select";
-  key: keyof WechatVideoConfig;
-  label: string;
-  description?: string;
-  options: Array<{ value: string; label: string }>;
-};
-
-type SwitchField = {
-  kind: "switch";
-  key: keyof WechatVideoConfig;
-  label: string;
-  description?: string;
-  activeLabel: string;
-  inactiveLabel: string;
-};
-
-type ConfigField = TextField | SelectField | SwitchField;
-
-const sections: Array<{
-  title: string;
-  description: string;
-  fields: ConfigField[];
-}> = [
+const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
   {
     title: "二创任务",
-    description: "飞书任务表",
+    description: "飞书连接在全局配置中设置。",
     fields: [
       { key: "recreationSheetName", label: "二创工作表名称" },
-      { key: "recreationPollSeconds", label: "检查间隔", type: "number", min: 10, suffix: "秒" },
+      {
+        key: "recreationPollSeconds",
+        label: "任务检查间隔",
+        type: "number",
+        min: 10,
+        suffix: "秒",
+      },
     ],
   },
   {
     title: "接口连接",
-    description: "后台连接与任务来源",
+    description: "",
     fields: [
       {
         key: "apiBaseUrl",
@@ -138,7 +83,7 @@ const sections: Array<{
   },
   {
     title: "任务调度",
-    description: "任务检查、账号同步和素材准备",
+    description: "",
     fields: [
       {
         kind: "switch",
@@ -191,7 +136,7 @@ const sections: Array<{
   },
   {
     title: "超时设置",
-    description: "页面操作和素材下载的最长等待时间",
+    description: "",
     fields: [
       {
         key: "idlePageRefreshIntervalSeconds",
@@ -232,7 +177,7 @@ const sections: Array<{
         key: "baiduNetdiskDownloadRetryAttempts",
         label: "网盘下载重试次数",
         type: "number",
-        description: "下载失败后的额外重试次数，耗尽后任务失败。",
+        description: "下载失败后的额外重试次数，填 0 不重试。",
         suffix: "次",
       },
     ],
@@ -262,12 +207,12 @@ const sections: Array<{
     ],
   },
   {
-    title: "上传与通知",
-    description: "压缩大小、上传时限、重试和通知",
+    title: "素材压缩与上传",
+    description: "",
     fields: [
       {
         key: "imageCompressionThresholdMegabytes",
-        label: "图片压缩起点",
+        label: "图片压缩阈值",
         type: "number",
         description: "图片超过此大小时压缩，PDF 等文件不处理。",
         suffix: "MB",
@@ -276,7 +221,7 @@ const sections: Array<{
         key: "imageCompressionTargetMegabytes",
         label: "图片压缩目标",
         type: "number",
-        description: "压缩后的大小上限，需小于图片压缩起点。",
+        description: "压缩后的大小上限，需小于图片压缩阈值。",
         suffix: "MB",
       },
       {
@@ -305,6 +250,12 @@ const sections: Array<{
         type: "number",
         description: "每个压缩任务使用的线程数。",
       },
+    ],
+  },
+  {
+    title: "上传与重试",
+    description: "",
+    fields: [
       {
         key: "episodeUploadWaitTimeoutSeconds",
         label: "上传时限",
@@ -315,7 +266,7 @@ const sections: Array<{
       {
         kind: "select",
         key: "episodeUploadFailedRetryAttempts",
-        label: "上传重试次数",
+        label: "上传失败重试次数",
         description: "单集上传失败时，最多重试多少次。",
         options: [
           { value: "0", label: "不重试" },
@@ -330,199 +281,29 @@ const sections: Array<{
 ];
 
 export function WechatConfigurationPage() {
-  const navigate = useNavigate();
-  const [config, setConfig] = useState<WechatVideoConfig>(emptyConfig);
-  const [savedConfig, setSavedConfig] = useState<WechatVideoConfig>(emptyConfig);
-  const [restartRequired, setRestartRequired] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const applyResult = (result: WechatVideoConfigResult) => {
-    setConfig(result.config);
-    setSavedConfig(result.config);
-    setRestartRequired(result.restartRequired);
-  };
-
-  const hasChanges = useMemo(
-    () => JSON.stringify(config) !== JSON.stringify(savedConfig),
-    [config, savedConfig],
-  );
-
-  useEffect(() => {
-    setLoading(true);
-    wechatVideoService
-      .getConfig()
-      .then(applyResult)
-      .catch((error) => {
-        toast.error("配置读取失败", {
-          description: error instanceof Error ? error.message : String(error),
-        });
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  const updateConfig = (key: keyof WechatVideoConfig, value: string) => {
-    setConfig((current) => ({ ...current, [key]: value }));
-  };
-
-  const discardChanges = () => {
-    setConfig(savedConfig);
-  };
-
-  const cancelConfig = () => {
-    discardChanges();
-    navigate(routePath("wechat-drama/service"));
-  };
-
-  const saveConfig = async () => {
-    setLoading(true);
-    try {
-      const result = await wechatVideoService.saveConfig(config);
-      applyResult(result);
-      if (result.restartRequired) {
-        toast.warning("配置已保存", {
-          description: "服务正在运行，请重启服务后生效。",
-        });
-      } else {
-        toast.success("配置已保存");
-      }
-    } catch (error) {
-      toast.error("配置保存失败", {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const state = usePlatformConfig({
+    emptyConfig,
+    getConfig: wechatVideoService.getConfig,
+    saveConfig: wechatVideoService.saveConfig,
+  });
   return (
-    <main className="flex min-h-svh flex-1 flex-col bg-background">
-      <ConfigurationToolbar
-        title="配置管理"
-        hasChanges={hasChanges}
-        loading={loading}
-        restartRequired={restartRequired}
-        onCancel={cancelConfig}
-        onSave={() => void saveConfig()}
-      />
-
-      <div className="mx-auto flex w-full max-w-190 flex-1 flex-col gap-7 p-6">
-        <div className="flex w-full min-w-0 flex-col gap-4">
-          {sections.map((section) => (
-            <section id={section.title} key={section.title} className="scroll-mt-28 space-y-3">
-              <div className="space-y-1">
-                <h2 className="text-sm font-semibold">{section.title}</h2>
-                <p className="text-xs text-muted-foreground sm:text-sm">{section.description}</p>
-              </div>
-              <Card className="rounded-lg bg-background py-0">
-                <CardContent className="py-0">
-                  <FieldGroup className="gap-0">
-                    {section.fields.map((field, index) => (
-                      <div key={field.key}>
-                        {index > 0 ? <Separator /> : null}
-                        <ConfigFieldControl config={config} field={field} onChange={updateConfig} />
-                      </div>
-                    ))}
-                  </FieldGroup>
-                </CardContent>
-              </Card>
-            </section>
-          ))}
-        </div>
-      </div>
-    </main>
-  );
-}
-
-function ConfigFieldControl({
-  config,
-  field,
-  onChange,
-}: {
-  config: WechatVideoConfig;
-  field: ConfigField;
-  onChange: (key: keyof WechatVideoConfig, value: string) => void;
-}) {
-  const value = config[field.key];
-
-  if (field.kind === "switch") {
-    const checked = value === "true";
-
-    return (
-      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
-        <FieldContent>
-          <FieldLabel className="text-[13px]" htmlFor={`wechat-${field.key}`}>
-            {field.label}
-          </FieldLabel>
-          {field.description ? (
-            <FieldDescription className="text-xs">{field.description}</FieldDescription>
-          ) : null}
-        </FieldContent>
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <span className="text-[13px] text-muted-foreground">
-            {checked ? field.activeLabel : field.inactiveLabel}
-          </span>
-          <Switch
-            id={`wechat-${field.key}`}
-            checked={checked}
-            onCheckedChange={(nextChecked) => onChange(field.key, nextChecked ? "true" : "false")}
-          />
-        </div>
-      </Field>
-    );
-  }
-
-  return (
-    <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
-      <FieldContent>
-        <FieldLabel className="text-[13px]" htmlFor={`wechat-${field.key}`}>
-          {field.label}
-        </FieldLabel>
-        {field.description ? (
-          <FieldDescription className="text-xs">{field.description}</FieldDescription>
-        ) : null}
-      </FieldContent>
-      <div className="w-full min-w-0">
-        {field.kind === "select" ? (
-          <Select
-            value={value}
-            onValueChange={(nextValue) => onChange(field.key, String(nextValue ?? ""))}
-          >
-            <SelectTrigger
-              id={`wechat-${field.key}`}
-              className="w-full bg-background text-[13px]"
-              size="default"
-            >
-              <SelectValue placeholder="请选择">
-                {field.options.find((option) => option.value === value)?.label ?? "请选择"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {field.options.map((option) => (
-                <SelectItem className="text-[13px]" key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <InputGroup>
-            <InputGroupInput
-              className="text-[13px] md:text-[13px]"
-              id={`wechat-${field.key}`}
-              min={field.type === "number" ? (field.min ?? 0) : undefined}
-              step={field.type === "number" ? field.step : undefined}
-              type={field.type ?? "text"}
-              value={value}
-              onChange={(event) => onChange(field.key, event.target.value)}
-            />
-            {field.suffix ? (
-              <InputGroupAddon align="inline-end">
-                <InputGroupText className="text-xs">{field.suffix}</InputGroupText>
-              </InputGroupAddon>
-            ) : null}
-          </InputGroup>
-        )}
-      </div>
-    </Field>
+    <ConfigurationPageFrame
+      title="视频号配置"
+      hasChanges={state.hasChanges}
+      loading={state.loading}
+      restartRequired={state.restartRequired}
+      onDiscard={state.discardChanges}
+      onSave={state.persistConfig}
+    >
+      {sections.map((section) => (
+        <ConfigSection
+          key={section.title}
+          config={state.config}
+          fields={section.fields}
+          section={section}
+          onChange={state.updateConfig}
+        />
+      ))}
+    </ConfigurationPageFrame>
   );
 }

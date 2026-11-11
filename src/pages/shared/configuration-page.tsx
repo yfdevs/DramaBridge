@@ -8,12 +8,20 @@ import {
 import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CheckCircle, DangerTriangle, ExternalLink, Folder } from "@mynaui/icons-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Field,
   FieldContent,
@@ -31,6 +39,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { defaultRoute, isAppRoute, platformForPath, routePath } from "@/config/navigation";
+
+const ConfigurationBusyContext = createContext(false);
 
 type ConfigResult<TConfig> = {
   config: TConfig;
@@ -96,7 +106,7 @@ export function usePlatformConfig<TConfig extends object, TResult extends Config
   const [config, setConfig] = useState<TConfig>(emptyConfig);
   const [savedConfig, setSavedConfig] = useState<TConfig>(emptyConfig);
   const [restartRequired, setRestartRequired] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const hasChanges = useMemo(
     () => JSON.stringify(config) !== JSON.stringify(savedConfig),
@@ -168,7 +178,7 @@ export function ConfigurationPageFrame({
   children,
   hasChanges,
   loading,
-  maxWidth = "max-w-[760px]",
+  maxWidth = "max-w-[920px]",
   onDiscard,
   onClose,
   onSave,
@@ -185,6 +195,26 @@ export function ConfigurationPageFrame({
   restartRequired: boolean;
   title: string;
 }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [sectionLinks, setSectionLinks] = useState<{ id: string; title: string }[]>([]);
+  useEffect(() => {
+    const sections = contentRef.current?.querySelectorAll<HTMLElement>(
+      "section[data-config-title]",
+    );
+    setSectionLinks(
+      Array.from(sections ?? [], (section) => ({
+        id: section.id,
+        title: section.dataset.configTitle ?? "",
+      })),
+    );
+  }, [children]);
+  const save = () => {
+    const inputs = contentRef.current?.querySelectorAll<HTMLInputElement>("input");
+    for (const input of inputs ?? []) {
+      if (!input.closest("[data-independent-config]") && !input.reportValidity()) return;
+    }
+    onSave();
+  };
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname.replace(/^\/+/, "");
@@ -201,17 +231,43 @@ export function ConfigurationPageFrame({
   };
 
   return (
-    <main className="flex min-h-svh flex-1 flex-col bg-background">
+    <main aria-label={title} className="configuration-theme flex min-w-0 flex-1 flex-col bg-background">
       <ConfigurationToolbar
         title={title}
         hasChanges={hasChanges}
         loading={loading}
         restartRequired={restartRequired}
         onCancel={cancelConfig}
-        onSave={onSave}
+        onSave={save}
       />
 
-      <div className={`mx-auto flex w-full ${maxWidth} flex-1 flex-col gap-7 p-6`}>{children}</div>
+      <div
+        className={`@container mx-auto flex w-full ${maxWidth} flex-1 flex-col gap-8 px-5 py-6 sm:px-8`}
+      >
+        {sectionLinks.length > 3 ? (
+          <nav aria-label="配置分组" className="flex flex-wrap gap-x-4 gap-y-2 border-b pb-4">
+            {sectionLinks.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                className="rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                onClick={() =>
+                  contentRef.current
+                    ?.querySelector(`[id="${section.id}"]`)
+                    ?.scrollIntoView({ block: "start" })
+                }
+              >
+                {section.title}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+        <ConfigurationBusyContext.Provider value={loading}>
+          <div ref={contentRef} aria-busy={loading} className="flex min-w-0 flex-col gap-8">
+            {children}
+          </div>
+        </ConfigurationBusyContext.Provider>
+      </div>
     </main>
   );
 }
@@ -233,7 +289,7 @@ export function ConfigurationToolbar({
 }) {
   return (
     <WorkspaceActions label="配置操作">
-      <h1 className="sr-only">{title}</h1>
+      <span className="sr-only">{title}</span>
       <Button
         size="sm"
         className="h-7 min-w-14 px-3 text-xs"
@@ -241,7 +297,7 @@ export function ConfigurationToolbar({
         onClick={onCancel}
         variant="outline"
       >
-        取消
+        {hasChanges ? "放弃更改" : "返回"}
       </Button>
       <Button
         size="sm"
@@ -250,16 +306,18 @@ export function ConfigurationToolbar({
         aria-busy={loading}
         onClick={onSave}
       >
-        保存
+        保存更改
       </Button>
-      <div className="ml-1 flex items-center">
-        {restartRequired ? (
+      <div className="configuration-theme ml-1 flex items-center" role="status" aria-live="polite">
+        {loading ? (
+          <span className="text-xs text-muted-foreground">正在处理…</span>
+        ) : restartRequired ? (
           <span
-            className="inline-flex items-center gap-1.5 text-xs text-orange-800 dark:text-orange-300"
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--config-warning)]"
             title={hasChanges ? "存在未保存更改；保存后需重启服务" : "配置已保存，需重启服务生效"}
           >
             <DangerTriangle className="size-3.5" />
-            {hasChanges ? "未保存" : "需重启"}
+            {hasChanges ? "未保存，保存后需重启服务" : "已保存，需重启服务"}
           </span>
         ) : (
           <ConfigSaveStateBadge hasChanges={hasChanges} />
@@ -274,14 +332,14 @@ function ConfigSaveStateBadge({ hasChanges }: { hasChanges: boolean }) {
     <span
       className={
         hasChanges
-          ? "inline-flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300"
+          ? "inline-flex items-center gap-1.5 text-xs text-[var(--config-warning)]"
           : "inline-flex items-center gap-1.5 text-xs text-muted-foreground"
       }
     >
       {hasChanges ? (
         <DangerTriangle className="size-3.5" />
       ) : (
-        <CheckCircle className="size-3.5 text-emerald-600" />
+        <CheckCircle className="size-3.5 text-muted-foreground" />
       )}
       {hasChanges ? "未保存" : "已保存"}
     </span>
@@ -304,6 +362,7 @@ export function ConfigSection<TConfig extends object>({
   section: Pick<ConfigSectionDefinition<TConfig>, "description" | "layout" | "title">;
 }) {
   const sectionFields = fields ?? [];
+  const busy = useContext(ConfigurationBusyContext);
 
   return (
     <ConfigPanelSection
@@ -311,17 +370,19 @@ export function ConfigSection<TConfig extends object>({
       layout={section.layout}
       title={section.title}
     >
-      {sectionFields.map((field, index) => (
-        <div key={field.key}>
-          {index > 0 ? <Separator /> : null}
-          <ConfigFieldControl
-            config={config}
-            field={field}
-            onChange={onChange}
-            onSelectDirectory={onSelectDirectory}
-          />
-        </div>
-      ))}
+      <fieldset disabled={busy} className="min-w-0">
+        {sectionFields.map((field, index) => (
+          <div key={field.key}>
+            {index > 0 ? <Separator /> : null}
+            <ConfigFieldControl
+              config={config}
+              field={field}
+              onChange={onChange}
+              onSelectDirectory={onSelectDirectory}
+            />
+          </div>
+        ))}
+      </fieldset>
       {footer ? (
         <div>
           <Separator />
@@ -344,23 +405,24 @@ export function ConfigPanelSection({
   title: string;
 }) {
   const compact = layout === "compact";
+  const sectionId = useId();
 
   return (
     <section
-      aria-label={compact ? title : undefined}
-      className={compact ? "scroll-mt-28" : "scroll-mt-28 space-y-3"}
+      id={`config-${sectionId}`}
+      data-config-title={title}
+      aria-label={title}
+      className={compact ? "scroll-mt-6" : "scroll-mt-6 space-y-2 border-t pt-5"}
     >
       {!compact ? (
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">{title}</h2>
-          <p className="text-xs text-muted-foreground">{description}</p>
+          {description ? (
+            <p className="max-w-prose text-xs leading-5 text-muted-foreground">{description}</p>
+          ) : null}
         </div>
       ) : null}
-      <Card className="rounded-none border-0 bg-transparent py-0 shadow-none ring-0">
-        <CardContent className="px-0 py-0">
-          <FieldGroup className="gap-0">{children}</FieldGroup>
-        </CardContent>
-      </Card>
+      <FieldGroup className="gap-0">{children}</FieldGroup>
     </section>
   );
 }
@@ -380,18 +442,21 @@ function ConfigFieldControl<TConfig extends object>({
 
   if (field.kind === "select") {
     return (
-      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
+      <Field className="gap-2.5 py-4 @min-[620px]:grid @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-x-8 @min-[620px]:items-center">
         <FieldContent>
-          <FieldLabel className="text-[13px]" htmlFor={field.key}>
+          <FieldLabel className="text-sm" htmlFor={field.key}>
             {field.label}
           </FieldLabel>
           {field.description && (
-            <FieldDescription className="text-xs">{field.description}</FieldDescription>
+            <FieldDescription id={`${field.key}-description`} className="text-xs leading-5">
+              {field.description}
+            </FieldDescription>
           )}
         </FieldContent>
         {field.options.length <= 3 ? (
           <RadioGroup
             id={field.key}
+            aria-describedby={field.description ? `${field.key}-description` : undefined}
             aria-label={field.label}
             value={value}
             onValueChange={(next) => onChange?.(field.key, String(next))}
@@ -400,7 +465,7 @@ function ConfigFieldControl<TConfig extends object>({
             {field.options.map((option) => (
               <label
                 key={option.value}
-                className="flex h-8 cursor-pointer items-center gap-2 rounded-lg px-1 text-xs hover:bg-muted/60"
+                className="flex h-8 cursor-pointer items-center gap-2 rounded-md px-1 text-sm hover:bg-muted"
               >
                 <RadioGroupItem value={option.value} />
                 {option.label}
@@ -414,7 +479,11 @@ function ConfigFieldControl<TConfig extends object>({
               if (next) onChange?.(field.key, next);
             }}
           >
-            <SelectTrigger id={field.key} className="h-8 w-full text-[13px]">
+            <SelectTrigger
+              id={field.key}
+              aria-describedby={field.description ? `${field.key}-description` : undefined}
+              className="h-8 w-full text-sm"
+            >
               <SelectValue>
                 {field.options.find((option) => option.value === value)?.label}
               </SelectValue>
@@ -436,21 +505,24 @@ function ConfigFieldControl<TConfig extends object>({
     const checked = value === "true";
 
     return (
-      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
+      <Field className="gap-2.5 py-4 @min-[620px]:grid @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-x-8 @min-[620px]:items-center">
         <FieldContent>
-          <FieldLabel className="text-[13px]" htmlFor={field.key}>
+          <FieldLabel className="text-sm" htmlFor={field.key}>
             {field.label}
           </FieldLabel>
           {field.description ? (
-            <FieldDescription className="text-xs">{field.description}</FieldDescription>
+            <FieldDescription id={`${field.key}-description`} className="text-xs leading-5">
+              {field.description}
+            </FieldDescription>
           ) : null}
         </FieldContent>
         <div className="flex min-w-0 items-center justify-between gap-3">
-          <span className="text-[13px] text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {checked ? field.activeLabel : field.inactiveLabel}
           </span>
           <Switch
             id={field.key}
+            aria-describedby={field.description ? `${field.key}-description` : undefined}
             checked={checked}
             onCheckedChange={(nextChecked) => {
               onChange?.(field.key, nextChecked ? "true" : "false");
@@ -462,20 +534,23 @@ function ConfigFieldControl<TConfig extends object>({
   }
 
   return (
-    <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
+    <Field className="gap-2.5 py-4 @min-[620px]:grid @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-x-8 @min-[620px]:items-start">
       <FieldContent>
-        <FieldLabel className="text-[13px]" htmlFor={field.key}>
+        <FieldLabel className="text-sm" htmlFor={field.key}>
           {field.label}
         </FieldLabel>
         {field.description ? (
-          <FieldDescription className="text-xs">{field.description}</FieldDescription>
+          <FieldDescription id={`${field.key}-description`} className="text-xs leading-5">
+            {field.description}
+          </FieldDescription>
         ) : null}
       </FieldContent>
       <div className="w-full min-w-0">
         <InputGroup>
           <InputGroupInput
-            className="text-[13px] md:text-[13px]"
+            className="text-sm md:text-sm"
             id={field.key}
+            aria-describedby={field.description ? `${field.key}-description` : undefined}
             placeholder={field.placeholder}
             min={field.min ?? (field.type === "number" ? 0 : undefined)}
             max={field.max}
@@ -519,17 +594,17 @@ export function StoragePathRow({
   pathText: string;
 }) {
   return (
-    <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_360px] lg:items-start">
+    <Field className="gap-2.5 py-4 @min-[620px]:grid @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-x-8 @min-[620px]:items-start">
       <FieldContent>
-        <FieldLabel className="text-[13px]">{label}</FieldLabel>
-        <FieldDescription className="text-xs">{description}</FieldDescription>
+        <FieldLabel className="text-sm">{label}</FieldLabel>
+        <FieldDescription className="text-xs leading-5">{description}</FieldDescription>
       </FieldContent>
       <div className="flex min-w-0 items-center gap-2">
         <code
           className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1.5 text-xs"
-          title={pathText || "-"}
+          title={pathText || "尚未设置"}
         >
-          {pathText || "-"}
+          {pathText || "尚未设置"}
         </code>
         {onOpen ? (
           <Button aria-label={`打开${label}`} onClick={onOpen} size="icon" variant="outline">

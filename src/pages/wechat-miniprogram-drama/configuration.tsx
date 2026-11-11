@@ -1,36 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-
-import { ConfigurationToolbar } from "@/pages/shared/configuration-page";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-  InputGroupText,
-} from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { routePath } from "@/config/navigation";
+  ConfigurationPageFrame,
+  ConfigSection,
+  type ConfigSectionDefinition,
+  usePlatformConfig,
+} from "@/pages/shared/configuration-page";
 import {
   wechatMiniProgramService,
   type WechatMiniProgramConfig,
-  type WechatMiniProgramConfigResult,
 } from "@/platforms/wechat-miniprogram-drama/service";
 
 const emptyConfig: WechatMiniProgramConfig = {
@@ -64,42 +40,10 @@ const emptyConfig: WechatMiniProgramConfig = {
   episodeUploadFailedRetryAttempts: "5",
 };
 
-type TextField = {
-  kind?: "text";
-  key: keyof WechatMiniProgramConfig;
-  label: string;
-  description?: string;
-  type?: "text" | "number" | "url" | "password";
-  suffix?: string;
-};
-
-type SelectField = {
-  kind: "select";
-  key: keyof WechatMiniProgramConfig;
-  label: string;
-  description?: string;
-  options: Array<{ value: string; label: string }>;
-};
-
-type SwitchField = {
-  kind: "switch";
-  key: keyof WechatMiniProgramConfig;
-  label: string;
-  description?: string;
-  activeLabel: string;
-  inactiveLabel: string;
-};
-
-type ConfigField = TextField | SelectField | SwitchField;
-
-const sections: Array<{
-  title: string;
-  description: string;
-  fields: ConfigField[];
-}> = [
+const sections: ConfigSectionDefinition<WechatMiniProgramConfig>[] = [
   {
     title: "接口连接",
-    description: "后台连接与任务来源",
+    description: "",
     fields: [
       {
         key: "apiBaseUrl",
@@ -135,7 +79,7 @@ const sections: Array<{
   },
   {
     title: "任务调度",
-    description: "任务检查、账号同步和素材准备",
+    description: "",
     fields: [
       {
         kind: "switch",
@@ -201,7 +145,7 @@ const sections: Array<{
   },
   {
     title: "超时设置",
-    description: "页面操作和素材下载的最长等待时间",
+    description: "",
     fields: [
       {
         key: "idlePageRefreshIntervalSeconds",
@@ -242,23 +186,22 @@ const sections: Array<{
         key: "baiduNetdiskDownloadRetryAttempts",
         label: "网盘下载重试次数",
         type: "number",
-        description: "下载失败后的额外重试次数，耗尽后任务失败。",
+        description: "下载失败后的额外重试次数，填 0 不重试。",
         suffix: "次",
       },
       {
         kind: "switch",
         key: "mergeOwnershipMaterials",
         label: "合并权属图片",
-        description:
-          "将全部图片均分为两组，合并为最多两张图片上传。",
+        description: "将全部图片均分为两组，合并为最多两张图片上传。",
         activeLabel: "合并上传",
         inactiveLabel: "分别上传",
       },
     ],
   },
   {
-    title: "上传与通知",
-    description: "压缩大小、上传时限、重试和通知",
+    title: "素材压缩与上传",
+    description: "",
     fields: [
       {
         key: "episodeVideoMaxFileMegabytes",
@@ -278,8 +221,7 @@ const sections: Array<{
         key: "episodeVideoMinimumDurationSeconds",
         label: "单集时长下限",
         type: "number",
-        description:
-          "任一集不超过此时长则失败，填 0 不检查；普通上传和网盘直传均生效。",
+        description: "任一集不超过此时长则失败，填 0 不检查；普通上传和网盘直传均生效。",
         suffix: "秒",
       },
       {
@@ -294,6 +236,12 @@ const sections: Array<{
         type: "number",
         description: "每个压缩任务使用的线程数。",
       },
+    ],
+  },
+  {
+    title: "上传与重试",
+    description: "",
+    fields: [
       {
         key: "episodeUploadWaitTimeoutSeconds",
         label: "上传时限",
@@ -304,7 +252,7 @@ const sections: Array<{
       {
         kind: "select",
         key: "episodeUploadFailedRetryAttempts",
-        label: "上传重试次数",
+        label: "上传失败重试次数",
         description: "单集上传失败时，最多自动重试多少次。",
         options: [
           { value: "0", label: "不重试" },
@@ -319,229 +267,29 @@ const sections: Array<{
 ];
 
 export function WechatMiniProgramConfigurationPage() {
-  const navigate = useNavigate();
-  const [config, setConfig] = useState<WechatMiniProgramConfig>(emptyConfig);
-  const [savedConfig, setSavedConfig] = useState<WechatMiniProgramConfig>(emptyConfig);
-  const [restartRequired, setRestartRequired] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const applyResult = (result: WechatMiniProgramConfigResult) => {
-    setConfig(result.config);
-    setSavedConfig(result.config);
-    setRestartRequired(result.restartRequired);
-  };
-
-  const hasChanges = useMemo(
-    () => JSON.stringify(config) !== JSON.stringify(savedConfig),
-    [config, savedConfig],
-  );
-
-  useEffect(() => {
-    setLoading(true);
-    wechatMiniProgramService
-      .getConfig()
-      .then(applyResult)
-      .catch((error) => {
-        toast.error("配置读取失败", {
-          description: error instanceof Error ? error.message : String(error),
-        });
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  const updateConfig = (key: keyof WechatMiniProgramConfig, value: string) => {
-    setConfig((current) => ({ ...current, [key]: value }));
-  };
-
-  const discardChanges = () => {
-    setConfig(savedConfig);
-  };
-
-  const cancelConfig = () => {
-    discardChanges();
-    void navigate(routePath("wechat-miniprogram-drama/service"));
-  };
-
-  const saveConfig = async () => {
-    setLoading(true);
-    try {
-      const result = await wechatMiniProgramService.saveConfig(config);
-      applyResult(result);
-      if (result.restartRequired) {
-        toast.warning("配置已保存", {
-          description: "服务正在运行，请重启服务后生效。",
-        });
-      } else {
-        toast.success("配置已保存");
-      }
-    } catch (error) {
-      toast.error("配置保存失败", {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const state = usePlatformConfig({
+    emptyConfig,
+    getConfig: wechatMiniProgramService.getConfig,
+    saveConfig: wechatMiniProgramService.saveConfig,
+  });
   return (
-    <main className="flex min-h-svh flex-1 flex-col bg-background">
-      <ConfigurationToolbar
-        title="配置管理"
-        hasChanges={hasChanges}
-        loading={loading}
-        restartRequired={restartRequired}
-        onCancel={cancelConfig}
-        onSave={() => void saveConfig()}
-      />
-
-      <div className="mx-auto flex w-full max-w-190 flex-1 flex-col gap-7 p-6">
-        <div className="flex w-full min-w-0 flex-col gap-4">
-          <section
-            aria-labelledby="miniprogram-workflow-title"
-            className="rounded-lg border bg-muted/35 p-4"
-          >
-            <div className="space-y-1">
-              <h2 id="miniprogram-workflow-title" className="text-sm font-semibold">
-                上传流程
-              </h2>
-              <p className="text-xs leading-5 text-muted-foreground">
-                先下载素材，再上传剧集；仅支持数字真人和漫剧。
-              </p>
-            </div>
-            <ol
-              className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs"
-              aria-label="微信小程序短剧提交流程"
-            >
-              {[
-                "下载校验素材",
-                "批量上传剧集",
-                "填写信息和证明",
-                "选择剧集并提审",
-              ].map((step, index) => (
-                <li key={step} className="flex items-center gap-1.5">
-                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-foreground text-[11px] font-medium text-background">
-                    {index + 1}
-                  </span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
-          {sections.map((section) => (
-            <section id={section.title} key={section.title} className="scroll-mt-28 space-y-3">
-              <div className="space-y-1">
-                <h2 className="text-sm font-semibold">{section.title}</h2>
-                <p className="text-xs text-muted-foreground sm:text-sm">{section.description}</p>
-              </div>
-              <Card className="rounded-lg bg-background py-0">
-                <CardContent className="py-0">
-                  <FieldGroup className="gap-0">
-                    {section.fields.map((field, index) => (
-                      <div key={field.key}>
-                        {index > 0 ? <Separator /> : null}
-                        <ConfigFieldControl config={config} field={field} onChange={updateConfig} />
-                      </div>
-                    ))}
-                  </FieldGroup>
-                </CardContent>
-              </Card>
-            </section>
-          ))}
-        </div>
-      </div>
-    </main>
-  );
-}
-
-function ConfigFieldControl({
-  config,
-  field,
-  onChange,
-}: {
-  config: WechatMiniProgramConfig;
-  field: ConfigField;
-  onChange: (key: keyof WechatMiniProgramConfig, value: string) => void;
-}) {
-  const value = config[field.key];
-
-  if (field.kind === "switch") {
-    const checked = value === "true";
-
-    return (
-      <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-center">
-        <FieldContent>
-          <FieldLabel className="text-[13px]" htmlFor={field.key}>
-            {field.label}
-          </FieldLabel>
-          {field.description ? (
-            <FieldDescription className="text-xs">{field.description}</FieldDescription>
-          ) : null}
-        </FieldContent>
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <span className="text-[13px] text-muted-foreground">
-            {checked ? field.activeLabel : field.inactiveLabel}
-          </span>
-          <Switch
-            id={field.key}
-            checked={checked}
-            onCheckedChange={(nextChecked) => onChange(field.key, nextChecked ? "true" : "false")}
-          />
-        </div>
-      </Field>
-    );
-  }
-
-  return (
-    <Field className="gap-2.5 py-3 lg:grid lg:grid-cols-[minmax(220px,1fr)_280px] lg:items-start">
-      <FieldContent>
-        <FieldLabel className="text-[13px]" htmlFor={field.key}>
-          {field.label}
-        </FieldLabel>
-        {field.description ? (
-          <FieldDescription className="text-xs">{field.description}</FieldDescription>
-        ) : null}
-      </FieldContent>
-      <div className="w-full min-w-0">
-        {field.kind === "select" ? (
-          <Select
-            value={value}
-            onValueChange={(nextValue) => onChange(field.key, String(nextValue ?? ""))}
-          >
-            <SelectTrigger
-              id={field.key}
-              className="w-full bg-background text-[13px]"
-              size="default"
-            >
-              <SelectValue placeholder="请选择">
-                {field.options.find((option) => option.value === value)?.label ?? "请选择"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {field.options.map((option) => (
-                <SelectItem className="text-[13px]" key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <InputGroup>
-            <InputGroupInput
-              className="text-[13px] md:text-[13px]"
-              id={field.key}
-              min={field.type === "number" ? 0 : undefined}
-              type={field.type ?? "text"}
-              value={value}
-              onChange={(event) => onChange(field.key, event.target.value)}
-            />
-            {field.suffix ? (
-              <InputGroupAddon align="inline-end">
-                <InputGroupText className="text-xs">{field.suffix}</InputGroupText>
-              </InputGroupAddon>
-            ) : null}
-          </InputGroup>
-        )}
-      </div>
-    </Field>
+    <ConfigurationPageFrame
+      title="微信小程序配置"
+      hasChanges={state.hasChanges}
+      loading={state.loading}
+      restartRequired={state.restartRequired}
+      onDiscard={state.discardChanges}
+      onSave={state.persistConfig}
+    >
+      {sections.map((section) => (
+        <ConfigSection
+          key={section.title}
+          config={state.config}
+          fields={section.fields}
+          section={section}
+          onChange={state.updateConfig}
+        />
+      ))}
+    </ConfigurationPageFrame>
   );
 }

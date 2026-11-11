@@ -43,7 +43,7 @@ const sections: ConfigSectionDefinition<BaiduDramaConfig>[] = [
       {
         key: "taskPollIntervalSeconds",
         label: "任务检查间隔",
-        description: "无任务或任务结束后，等待多久再领取任务。",
+        description: "暂无任务或当前任务结束后，再次领取任务的等待时间。",
         type: "number",
         suffix: "秒",
         min: 1,
@@ -51,7 +51,7 @@ const sections: ConfigSectionDefinition<BaiduDramaConfig>[] = [
       {
         key: "baiduNetdiskDownloadRetryAttempts",
         label: "网盘下载重试次数",
-        description: "网盘下载失败时，最多重试多少次。",
+        description: "下载失败后的额外重试次数，填 0 不重试。",
         type: "number",
         suffix: "次",
         min: 0,
@@ -81,7 +81,7 @@ const sections: ConfigSectionDefinition<BaiduDramaConfig>[] = [
       {
         key: "operationDelaySeconds",
         label: "操作间隔",
-        description: "每次浏览器操作之间的等待时间。",
+        description: "两次浏览器操作之间的等待时间。",
         type: "number",
         suffix: "秒",
         step: "0.01",
@@ -90,7 +90,7 @@ const sections: ConfigSectionDefinition<BaiduDramaConfig>[] = [
         kind: "switch",
         key: "headless",
         label: "隐藏浏览器窗口",
-        description: "开启后隐藏窗口，登录或排查问题时请关闭。",
+        description: "登录或排查问题时，需显示浏览器窗口。",
         activeLabel: "已隐藏",
         inactiveLabel: "显示窗口",
       },

@@ -34,14 +34,14 @@ const emptyConfig: GlobalAppConfig = {
 const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   {
     title: "外观与主题",
-    description: "保存后立即生效，可随系统自动切换浅色和深色。",
+    description: "保存后生效。",
     layout: "compact",
     fields: [
       {
         kind: "select",
         key: "theme",
-        label: "外观与主题",
-        description: "保存后立即生效，可随系统自动切换浅色和深色。",
+        label: "主题",
+        description: "保存后生效。",
         options: [
           { value: "system", label: "跟随系统" },
           { value: "light", label: "浅色" },
@@ -52,7 +52,7 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   },
   {
     title: "文件存储",
-    description: "所有平台共用，两个目录需在同一磁盘。灰色路径为默认位置；已有平台可能沿用各自配置，选择并保存后统一使用全局目录。",
+    description: "两个目录须位于同一磁盘。选择并保存后统一用于各平台；未设置时，已有平台可能沿用原目录。",
     fields: [
       {
         key: "runDataRoot",
@@ -70,7 +70,7 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   },
   {
     title: "百度网盘",
-    description: "下载时限与网盘文件清理",
+    description: "",
     fields: [
       {
         key: "baiduNetdiskDownloadTimeoutMinutes",
@@ -86,13 +86,13 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
         label: "成功后清理网盘文件",
         description: "任一平台完成任务并保存结果后，清理本次网盘文件，保留本地文件。",
         activeLabel: "自动清理",
-        inactiveLabel: "保留目录",
+        inactiveLabel: "保留文件",
       },
     ],
   },
   {
     title: "本机图片识别",
-    description: "用于区分剪映和 AI 剧创工程截图",
+    description: "用于区分剪映和 AI 剧创工程截图。",
     fields: [
       {
         kind: "switch",
@@ -106,12 +106,18 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   },
   {
     title: "AI 服务",
-    description: "所有平台共用的图片识别与封面生成服务",
+    description: "各平台共用，用于图片识别和封面生成。",
     fields: [
+      {
+        key: "aiBaseURL",
+        label: "接口地址",
+        description: "填写服务商提供的 OpenAI 兼容接口地址。",
+        type: "url",
+      },
       {
         key: "aiApiKey",
         label: "API 密钥",
-        description: "用于连接 AI 服务，加密保存在本机。",
+        description: "密钥加密保存在本机。",
         type: "password",
       },
       {
@@ -140,12 +146,6 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
         suffix: "次",
         min: 0,
         max: 10,
-      },
-      {
-        key: "aiBaseURL",
-        label: "接口地址",
-        description: "填写服务商提供的 OpenAI 兼容接口地址。",
-        type: "url",
       },
     ],
   },
@@ -251,7 +251,7 @@ export function GlobalConfigurationPage() {
     try {
       const result = await globalAppConfigService.testConfig(configState.config);
       toast.success("AI 服务连接成功", {
-        description: `${result.model} · ${result.latencyMs} ms · ${result.responseText}`,
+        description: `${result.model}，${result.latencyMs} ms，${result.responseText}`,
       });
     } catch (error) {
       toast.error("AI 服务连接失败", {
@@ -335,7 +335,7 @@ export function GlobalConfigurationPage() {
                     void testLocalOcr();
                   }}
                 >
-                  {testingOcr ? "测试中…" : "测试是否可用"}
+                  {testingOcr ? "测试中…" : "测试本机识别"}
                 </Button>
               </div>
             ) : undefined

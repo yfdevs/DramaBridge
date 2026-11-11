@@ -21,10 +21,10 @@ const emptyConfig: TiktokDramaCenterConfig = {
 const sections: ConfigSectionDefinition<TiktokDramaCenterConfig>[] = [
   {
     title: "转存任务",
-    description: "飞书任务表",
+    description: "飞书连接在全局配置中设置。",
     fields: [
       { key: "netdiskSheetName", label: "转存工作表名称" },
-      { key: "netdiskPollSeconds", label: "检查间隔", type: "number", min: 10, suffix: "秒" },
+      { key: "netdiskPollSeconds", label: "任务检查间隔", type: "number", min: 10, suffix: "秒" },
     ],
   },
   {
@@ -35,7 +35,7 @@ const sections: ConfigSectionDefinition<TiktokDramaCenterConfig>[] = [
         key: "operationDelaySeconds",
         label: "操作间隔",
         type: "number",
-        description: "每次浏览器操作之间的等待时间。",
+        description: "两次浏览器操作之间的等待时间。",
         suffix: "秒",
         step: "0.01",
       },
@@ -43,7 +43,7 @@ const sections: ConfigSectionDefinition<TiktokDramaCenterConfig>[] = [
         kind: "switch",
         key: "headless",
         label: "隐藏浏览器窗口",
-        description: "开启后隐藏窗口，登录或排查问题时请关闭。",
+        description: "登录或排查问题时，需显示浏览器窗口。",
         activeLabel: "已隐藏",
         inactiveLabel: "显示窗口",
       },
