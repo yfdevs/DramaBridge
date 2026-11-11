@@ -23,6 +23,7 @@ import { GlobalConfigurationPage } from "@/pages/app-config/configuration";
 import { VideoSeparationPage } from "@/pages/tools/video-separation";
 import { KuaishouAnalyticsPage } from "@/pages/kuaishou-drama/analytics";
 import { KuaishouRecreationPage } from "@/pages/kuaishou-drama/recreation";
+import { KuaishouAccountSyncPage } from "@/pages/kuaishou-drama/account-sync";
 import { KuaishouDramaConfigurationPage } from "@/pages/kuaishou-drama/configuration";
 import { KuaishouDramaServiceControlPage } from "@/pages/kuaishou-drama/service-control";
 import { KuaishouProjectsPage } from "@/pages/kuaishou-drama/projects";
@@ -75,6 +76,7 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "taobao-drama/config": TaobaoDramaConfigurationPage,
   "kuaishou-drama/service": KuaishouDramaServiceControlPage,
   "kuaishou-drama/recreation": KuaishouRecreationPage,
+  "kuaishou-drama/account-sync": KuaishouAccountSyncPage,
   "kuaishou-drama/config": KuaishouDramaConfigurationPage,
   "kuaishou-drama/projects": KuaishouProjectsPage,
   "kuaishou-drama/schedule": KuaishouSchedulePage,

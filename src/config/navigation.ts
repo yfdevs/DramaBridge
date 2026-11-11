@@ -36,6 +36,7 @@ export type AppRoute =
   | "kuaishou-drama/service"
   | "wechat-drama/recreation"
   | "kuaishou-drama/recreation"
+  | "kuaishou-drama/account-sync"
   | "kuaishou-drama/config"
   | "kuaishou-drama/projects"
   | "kuaishou-drama/schedule"
@@ -93,6 +94,7 @@ const appRoutes = [
   "kuaishou-drama/service",
   "wechat-drama/recreation",
   "kuaishou-drama/recreation",
+  "kuaishou-drama/account-sync",
   "kuaishou-drama/config",
   "kuaishou-drama/statistics",
   "kuaishou-drama/logs",
@@ -382,6 +384,7 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "kuaishou-drama/recreation",
         icon: CloudUpload,
       },
+      { title: "同步账号", route: "kuaishou-drama/account-sync", icon: CloudUpload },
       {
         title: "配置管理",
         route: "kuaishou-drama/config",

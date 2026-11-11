@@ -9,7 +9,7 @@ import {
 import { ListFilterMenu } from "@/components/list-filter-menu";
 import { InstanceStatus } from "./instance-status";
 import { toast } from "sonner";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -84,13 +84,21 @@ export function AccountSelection({
   actions,
   runtimes = [],
   controls,
+  selectionMode = "multiple",
+  showRuntime = true,
+  lockedLabel,
 }: {
   selection: Selection;
   locked: boolean;
   actions?: ReactNode;
   runtimes?: Runtime[];
   controls?: AccountControls;
+  selectionMode?: "single" | "multiple";
+  showRuntime?: boolean;
+  lockedLabel?: string;
 }) {
+  const radioName = useId();
+  const single = selectionMode === "single";
   const [pending, setPending] = useState<Set<string>>(() => new Set());
   const controlAccount = async (id: string, action: () => Promise<void>) => {
     if (pending.has(id)) return;
@@ -157,11 +165,11 @@ export function AccountSelection({
             已选{" "}
             <strong className="font-medium tabular-nums text-foreground">{selectedCount}</strong>
           </span>
-          <span>
+          {!single && showRuntime && <span>
             运行中 <strong className="font-medium tabular-nums text-foreground">{running}</strong>
-          </span>
+          </span>}
         </div>
-        {locked && <span>停止服务后可更换账号</span>}
+        {locked && <span>{lockedLabel ?? (single ? "停止同步后可更换账号" : "停止服务后可更换账号")}</span>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <InputGroup className="h-7 w-full min-w-0 rounded-md sm:max-w-80 sm:flex-1">
@@ -198,7 +206,7 @@ export function AccountSelection({
                 { value: "disabled", label: "已禁用" },
               ],
             },
-            {
+            ...(!single && showRuntime ? [{
               key: "runtime",
               label: "运行状态",
               value: runtimeFilter,
@@ -211,7 +219,7 @@ export function AccountSelection({
                 { value: "paused", label: "已暂停" },
                 { value: "idle", label: "未启动" },
               ],
-            },
+            }] : []),
           ]}
         />
         <Button
@@ -226,9 +234,9 @@ export function AccountSelection({
         </Button>
         {actions && <div className="ml-auto flex flex-wrap gap-2">{actions}</div>}
       </div>
-      {!s.fetching && !s.error && s.accounts.length > 0 && (
+      {!s.fetching && !s.error && s.accounts.length > 0 && (!single || filtered) && (
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          <label className="flex min-h-7 items-center gap-2">
+          {!single && <label className="flex min-h-7 items-center gap-2">
             <Checkbox
               aria-label="全选当前结果中的启用账号"
               checked={allSelected}
@@ -243,8 +251,8 @@ export function AccountSelection({
               }
             />
             全选当前结果
-          </label>
-          {selectedCount > 0 && (
+          </label>}
+          {!single && selectedCount > 0 && (
             <Button size="sm" variant="ghost" disabled={disabled} onClick={() => s.setSelected([])}>
               取消选择
             </Button>
@@ -302,7 +310,15 @@ export function AccountSelection({
                 <label
                   className="flex min-w-0 flex-1 items-start gap-3 px-3 py-4"
                 >
-                  <Checkbox
+                  {single ? <input
+                    type="radio"
+                    name={radioName}
+                    className="mt-0.5 size-4 shrink-0 accent-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    aria-label={`选择账号 ${account.accountName || account.accountId}`}
+                    checked={selected}
+                    disabled={disabled || !enabled(account)}
+                    onChange={() => s.setSelected([account.accountId])}
+                  /> : <Checkbox
                     className="mt-0.5"
                     aria-label={`选择账号 ${account.accountName || account.accountId}`}
                     checked={selected}
@@ -314,7 +330,7 @@ export function AccountSelection({
                           : ids.filter((id) => id !== account.accountId),
                       )
                     }
-                  />
+                  />}
                   <span className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <span className="min-w-0 space-y-1">
                       <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
@@ -332,7 +348,7 @@ export function AccountSelection({
                     </span>
                   </span>
                 </label>
-                <div className="flex shrink-0 flex-col items-end gap-2 px-3 py-4">
+                {!single && showRuntime && <div className="flex shrink-0 flex-col items-end gap-2 px-3 py-4">
                   <span className="flex shrink-0 flex-wrap items-center gap-2">
                     <InstanceStatus
                       launched={Boolean(runtime?.launched)}
@@ -374,7 +390,7 @@ export function AccountSelection({
                           : "启动"}
                     </Button>
                   )}
-                </div>
+                </div>}
               </li>
             );
           })}

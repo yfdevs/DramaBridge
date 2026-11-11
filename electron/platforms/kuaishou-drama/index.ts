@@ -12,6 +12,7 @@ import { getKuaishouWorkerId } from "./worker-identity";
 import { selectKuaishouAccounts } from "./account-selection";
 import { app } from "electron";
 import { registerKuaishouRecreationHandlers, stopKuaishouRecreation } from "./recreation";
+import { registerKuaishouAccountSyncHandlers, stopKuaishouAccountSync } from "./account-sync";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
@@ -661,6 +662,17 @@ export function registerKuaishouDramaPlatformHandlers() {
   taskMonitor();
   ipcMain.handle("kuaishou-drama:tasks:cleanup", () => taskMonitor().sweep());
   registerKuaishouRecreationHandlers(readConfig);
+  registerKuaishouAccountSyncHandlers({
+    prepare: async (id) => {
+      process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
+      const accounts = await (await importKuaishouDramaRuntimePackage()).fetchKuaishouDramaAccounts(readConfig().apiBaseUrl);
+      const account = accounts.find(account => account.accountId === id);
+      if (!account) throw new Error("请选择有效的快手来源账号");
+      const paths = storagePaths(readConfig(), id);
+      if (!existsSync(paths.credentialStatePath)) throw new Error(`“${account.accountName}”暂无登录凭证，请先在实例页面登录快手`);
+      return { ...paths, accountId: account.accountId, accountName: account.accountName };
+    },
+  });
   registerTaskAnalyticsHandler({
     platform: "kuaishou-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,
@@ -810,6 +822,7 @@ export function stopKuaishouDramaPlatformRuntime() {
 }
 
 export async function stopKuaishouDramaPlatformService() {
+  await stopKuaishouAccountSync();
   await stopKuaishouRecreation();
   await runtimeController.stop();
 }
