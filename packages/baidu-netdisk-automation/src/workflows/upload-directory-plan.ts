@@ -9,7 +9,7 @@ export type RemoteUploadEntry = { server_filename: string; path: string; isdir: 
 
 export function assertRecreationVersionDirectory(directory: string) {
   const parts = directory.split("/").filter(Boolean);
-  if (parts.length !== 3 || parts[0] !== "快手_二创集合" || !parts[2].endsWith("-60%")
+  if ((parts.length !== 2 && parts.length !== 3) || parts[0] !== "快手_二创集合" || (parts.length === 3 && !parts[2].endsWith("-60%"))
     || parts.some(part => part === "." || part === "..") || directory !== "/" + parts.join("/"))
     throw new Error("无效的二创版本目录");
 }

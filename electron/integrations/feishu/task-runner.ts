@@ -13,6 +13,7 @@ export type TaskTableOptions = {
   episodeRatio?: number;
   label?: string;
   plainLink?: boolean;
+  singleBundle?: boolean;
 };
 
 export function tableColumns(table: TableSnapshot, options: TaskTableOptions = {}) {
@@ -65,6 +66,7 @@ type Journal = { get(key: string): RecreationTask | undefined; save(task: Recrea
 export type FeishuTaskTransfer = (input: {
   title: string;
   versionTitle: string;
+  versions?: string[];
   shareText: string;
   episodeCount: number;
   onProgress: (progress: { stage: string; completed: number; total?: number }) => void;
@@ -202,7 +204,7 @@ export class FeishuTaskRunner {
       }
       if (
         task?.state === "completed" &&
-        task.results.every((version) => version.shareLayout === "directory")
+        task.results.every((version) => version.shareLayout === (this.options.singleBundle ? "bundle" : "directory"))
       ) {
         this.update({ phase: "writing", current: task, message: "补写已完成任务的分享链接" });
         await this.writeBack(key, this.links(task));
@@ -247,6 +249,9 @@ export class FeishuTaskRunner {
       };
       try {
         validateRecreationInput(input);
+        if (this.options.singleBundle && (task.results.length !== 1 || task.results[0]?.shareLayout !== "bundle")) {
+          task.results = [{ title: input.originalTitle }];
+        }
         task.state = "checking";
         save();
         for (const version of task.results) {
@@ -258,6 +263,7 @@ export class FeishuTaskRunner {
           const result = await this.options.transfer({
             title: input.originalTitle,
             versionTitle: version.title,
+            ...(this.options.singleBundle ? { versions: input.versions } : {}),
             shareText: input.shareText,
             episodeCount: input.episodeCount,
             onProgress: (progress) => {
@@ -267,7 +273,7 @@ export class FeishuTaskRunner {
             },
           });
           Object.assign(version, {
-            shareLayout: "directory",
+            shareLayout: this.options.singleBundle ? "bundle" : "directory",
             remotePath: result.path,
             shareUrl: result.shareUrl,
             extractionCode: new URL(result.shareUrl).searchParams.get("pwd") || "",

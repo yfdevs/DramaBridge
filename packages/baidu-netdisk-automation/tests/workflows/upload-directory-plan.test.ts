@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
@@ -29,6 +30,8 @@ test("same-name conflicts stay in the canonical directory and produce a targeted
     assert.equal(retry.remoteDirectory, base);
     assert.equal(retry.conflicts.length, 0);
     assert.equal(retry.reuseFrom, undefined);
-    await assert.rejects(planUploadDirectory({ ...options, remoteDirectory: "/快手_二创集合/原剧" }), /无效的二创版本目录/);
+    const bundle = await planUploadDirectory({ ...options, remoteDirectory: "/快手_二创集合/原剧" });
+    assert.equal(bundle.remoteDirectory, "/快手_二创集合/原剧");
+    await assert.rejects(planUploadDirectory({ ...options, remoteDirectory: "/快手_二创集合/../原剧" }), /无效的二创版本目录/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

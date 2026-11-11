@@ -58,6 +58,7 @@ function fixture(options: TaskTableOptions = {}) {
     },
   };
   let calls = 0;
+  const transferredVersions: Array<string[] | undefined> = [];
   let failTransfer = false;
   let gate: Promise<void> | undefined;
   const create = () =>
@@ -69,8 +70,9 @@ function fixture(options: TaskTableOptions = {}) {
       pollSeconds: 60,
       journal,
       changed: () => {},
-      transfer: async () => {
+      transfer: async (input) => {
         calls++;
+        transferredVersions.push(input.versions);
         await gate;
         if (failTransfer) throw new Error("源链接失效");
         table.rows[0].number = 7; // A user moved the row during transfer.
@@ -86,6 +88,7 @@ function fixture(options: TaskTableOptions = {}) {
     saved,
     create,
     calls: () => calls,
+    transferredVersions,
     failWrite: (value: boolean) => {
       failWrite = value;
     },
@@ -94,6 +97,28 @@ function fixture(options: TaskTableOptions = {}) {
     },
   };
 }
+
+test("快手统一目录只处理一次，传入全部封面标题并在回写失败后复用链接", async () => {
+  const f = fixture({ singleBundle: true, plainLink: true });
+  f.table.headers.push("版本2");
+  f.table.rows[0].values.push("第二个新剧名");
+  f.failWrite(true);
+  const runner = f.create();
+  runner.start();
+  try { await wait(() => runner.status().phase === "error"); }
+  finally { await runner.stop(); }
+  assert.equal(f.calls(), 1);
+  assert.deepEqual(f.transferredVersions, [["新剧名", "第二个新剧名"]]);
+  assert.equal(runner.status().current?.results.length, 1);
+  assert.equal(runner.status().current?.results[0].shareLayout, "bundle");
+  f.failWrite(false);
+  const resume = f.create();
+  resume.start();
+  try { await wait(() => resume.status().phase === "waiting"); }
+  finally { await resume.stop(); }
+  assert.equal(f.calls(), 1);
+  assert.equal(f.table.rows[0].values[3], "https://pan.baidu.com/s/1result?pwd=1234");
+});
 
 for (const [platform, column, ratio] of [
   ["微信二创", "二创百度链接", 0.6],

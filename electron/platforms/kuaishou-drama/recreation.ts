@@ -6,7 +6,7 @@ import {
   lockFeishuSettings,
   readFeishuSettings,
 } from "../../integrations/feishu";
-import { transferKuaishouRecreationVideos } from "../baidu-netdisk";
+import { transferKuaishouRecreationBundle } from "./recreation-bundle";
 import { KuaishouFeishuRunner } from "./recreation-feishu";
 
 let runner: KuaishouFeishuRunner | undefined;
@@ -59,7 +59,9 @@ export function registerKuaishouRecreationHandlers(
       sheet: config.recreationSheetName,
       pollSeconds: Number(config.recreationPollSeconds),
       journal: new KuaishouFeishuRepository(openAutomationDatabase().database),
-      transfer: transferKuaishouRecreationVideos,
+      singleBundle: true,
+      plainLink: true,
+      transfer: transferKuaishouRecreationBundle,
       changed: notify,
     });
     lockFeishuSettings("kuaishou-recreation", true);

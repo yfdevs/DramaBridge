@@ -5,7 +5,7 @@ export type RecreationInput = {
   versions: string[];
 };
 export type RecreationVersion = {
-  shareLayout?: "directory";
+  shareLayout?: "directory" | "bundle";
   title: string;
   localPath?: string;
   poster?: { recipe: string; title: string; sha256: string };
