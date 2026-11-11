@@ -132,7 +132,7 @@ export async function waitForLoginIfNeeded(
   state = await waitForAuthCookies(page, context, 60_000);
   if (!qqDramaAuthCookiesReady(state)) {
     throw new Error(
-      "QQ_DRAMA_LOGIN_COOKIES_NOT_READY: 登录页面已跳转，但 access_token/csrf_token 仍未就绪。",
+      "QQ_DRAMA_LOGIN_COOKIES_NOT_READY: 登录页面已跳转，但 access_token/csrf_token 仍未就绪",
     );
   }
   await saveCredentialState(context, options).catch(() => undefined);

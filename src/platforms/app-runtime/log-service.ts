@@ -18,7 +18,7 @@ export function subscribeToPlatformLogs(
   },
 ) {
   if (!window.platformLogs) {
-    handlers.onError("实时日志仅在 Electron 应用内可用。");
+    handlers.onError("实时日志仅在 Electron 应用内可用");
     return () => undefined;
   }
   return window.platformLogs.subscribe(platform, {
@@ -29,7 +29,7 @@ export function subscribeToPlatformLogs(
 
 export function clearPlatformLog(platform: PlatformId) {
   if (!window.platformLogs) {
-    throw new Error("实时日志仅在 Electron 应用内可用。");
+    throw new Error("实时日志仅在 Electron 应用内可用");
   }
   return window.platformLogs.clear(platform);
 }

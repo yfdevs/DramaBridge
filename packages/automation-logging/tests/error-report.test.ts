@@ -3,6 +3,11 @@ import test from "node:test";
 
 import { formatAutomationErrorReport } from "../src/index.js";
 
+test("keeps report details and codes without a trailing Chinese full stop", () => {
+  assert.equal(formatAutomationErrorReport("上传失败，请检查文件。"), "上传失败，请检查文件");
+  assert.equal(formatAutomationErrorReport("IQIYI_DRAMA_FORM_INVALID: 演员姓名不能为空。"), "爱奇艺提交表单校验未通过：演员姓名不能为空（错误码：IQIYI_DRAMA_FORM_INVALID）");
+});
+
 test("formats nested iQiyi AI cover failures with the real cause", () => {
   const cause = new Error(
     "IQIYI_DRAMA_AI_COVER_TEXT_VALIDATION_FAILED: 剧名不准确；检测到剧名以外的文字",

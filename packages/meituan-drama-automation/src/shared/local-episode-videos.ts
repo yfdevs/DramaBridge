@@ -23,7 +23,7 @@ export function getMeituanLocalEpisodeVideoRoot(
 ) {
   const localEpisodeVideoRoot = options.config?.localEpisodeVideoRoot?.trim();
   if (!localEpisodeVideoRoot) {
-    throw new Error("请先配置美团短剧本地剧集视频目录。");
+    throw new Error("请先配置美团短剧本地剧集视频目录");
   }
   return localEpisodeVideoRoot;
 }

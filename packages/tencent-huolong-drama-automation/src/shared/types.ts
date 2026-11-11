@@ -3,7 +3,7 @@ import { z } from "zod";
 import { tencentHuolongKeywordValues, tencentHuolongThemeValues } from "./constants.js";
 
 const requiredText = z.string().trim().min(1);
-const fileReference = requiredText.describe("本地文件路径或 HTTP(S) 下载地址。");
+const fileReference = requiredText.describe("本地文件路径或 HTTP(S) 下载地址");
 
 export const tencentHuolongYesNoValues = ["是", "否"] as const;
 export const tencentHuolongTaskFailStageValues = [
@@ -66,6 +66,7 @@ export type TencentHuolongRuntimeStatus = {
 };
 
 export type TencentHuolongRuntimeOptions = {
+  canClaimTask?: () => boolean;
   accountProfileName?: string;
   accountDir?: string;
   userDataDir?: string;

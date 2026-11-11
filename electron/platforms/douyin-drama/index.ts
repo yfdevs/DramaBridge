@@ -1,3 +1,5 @@
+import { createAccountRuntimeGroup } from "../shared/account-runtime-group";
+import { registerAccountControl } from "../shared/account-control";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -267,11 +269,15 @@ async function status(): Promise<DouyinDramaServiceStatus> {
 }
 
 async function startRuntime(selectedAccountIds: unknown) {
+  return createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+}
+
+async function startAccountRuntime(selectedAccountIds: unknown, canClaimTask: () => boolean) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const configuredVideoRoot = config.localEpisodeVideoRoot.trim();
   if (!configuredVideoRoot) {
-    throw new Error("请先在抖音短剧配置中选择剧集视频根目录，再启动服务。");
+    throw new Error("请先在抖音短剧配置中选择剧集视频根目录，再启动服务");
   }
   const localEpisodeVideoRoot = resolveFromAppRoot(configuredVideoRoot);
   if (!existsSync(localEpisodeVideoRoot) || !statSync(localEpisodeVideoRoot).isDirectory()) {
@@ -285,7 +291,7 @@ async function startRuntime(selectedAccountIds: unknown) {
     startDouyinDramaRuntime: (options: Record<string, unknown>) => Promise<DouyinDramaAccountRuntime>;
   };
   const availableAccounts = await fetchDouyinDramaAccounts(config.apiBaseUrl);
-  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请选择要启动的账号");
   const ids = new Set(selectedAccountIds);
   const accounts = availableAccounts.filter(account => ids.has(account.accountId));
   if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
@@ -298,6 +304,7 @@ async function startRuntime(selectedAccountIds: unknown) {
       const paths = storagePaths(config, account.accountId);
       ensureStorageDirectories(paths);
       const runtime = await startDouyinDramaRuntime({
+        canClaimTask,
         accountProfileName: account.accountId,
         douyinAccountId: account.accountId,
         douyinAccountName: account.accountName,
@@ -397,6 +404,7 @@ export function openDouyinDramaLogDir() {
 }
 
 export function registerDouyinDramaPlatformHandlers() {
+  registerAccountControl({ platform: "douyin-drama", controller: runtimeController, start: startRuntime, status });
   registerTaskAnalyticsHandler({
     platform: "douyin-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,

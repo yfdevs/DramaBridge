@@ -27,18 +27,18 @@ const emptyConfig: QqDramaConfig = {
 const configSections: ConfigSectionDefinition<QqDramaConfig>[] = [
   {
     title: "任务接口",
-    description: "启动时读取已启用的账号，分别打开浏览器。",
+    description: "启动时读取已启用的账号，分别打开浏览器",
     fields: [
       {
         key: "apiBaseUrl",
         label: "接口地址",
-        description: "用于读取账号、领取任务和提交结果。",
+        description: "读取账号、领取任务并上报结果",
         type: "url",
       },
       {
         key: "taskPollIntervalSeconds",
         label: "任务检查间隔",
-        description: "暂无任务或当前任务结束后，再次领取任务的等待时间。",
+        description: "无任务或任务结束后，再次检查任务的间隔",
         type: "number",
         suffix: "秒",
         min: 1,
@@ -46,7 +46,7 @@ const configSections: ConfigSectionDefinition<QqDramaConfig>[] = [
       {
         key: "baiduNetdiskDownloadRetryAttempts",
         label: "网盘下载重试次数",
-        description: "下载失败后的额外重试次数，填 0 不重试。",
+        description: "下载失败后的额外重试次数，填 0 不重试",
         type: "number",
         suffix: "次",
         min: 0,
@@ -54,7 +54,7 @@ const configSections: ConfigSectionDefinition<QqDramaConfig>[] = [
       {
         key: "episodeUploadWaitTimeoutMinutes",
         label: "上传时限",
-        description: "等待全部剧集上传完成的最长时间。",
+        description: "等待全部剧集上传完成的最长时间",
         type: "number",
         suffix: "分钟",
         min: 1,
@@ -62,7 +62,7 @@ const configSections: ConfigSectionDefinition<QqDramaConfig>[] = [
       {
         key: "episodeUploadFailedRetryAttempts",
         label: "上传失败重试次数",
-        description: "单集上传失败时，最多重试多少次。",
+        description: "单集上传失败后的额外重试次数，填 0 不重试",
         type: "number",
         suffix: "次",
         min: 0,
@@ -71,7 +71,7 @@ const configSections: ConfigSectionDefinition<QqDramaConfig>[] = [
         kind: "switch",
         key: "acceptSecondVersion",
         label: "上传第二版本",
-        description: "关闭后只上传主版本，忽略任务中的第二版本。",
+        description: "关闭后只上传主版本，忽略任务中的第二版本",
         activeLabel: "上传",
         inactiveLabel: "不上传",
       },
@@ -79,12 +79,12 @@ const configSections: ConfigSectionDefinition<QqDramaConfig>[] = [
   },
   {
     title: "浏览器与日志",
-    description: "账号登录信息独立保存，共享目录在全局配置中设置。",
+    description: "账号登录信息独立保存，共享目录在全局配置中设置",
     fields: [
       {
         key: "logRetentionDays",
         label: "日志保留天数",
-        description: "启动服务时，清理超过此天数的日志。",
+        description: "启动服务时清理超过保留期限的日志",
         type: "number",
         suffix: "天",
         min: 1,
@@ -92,7 +92,7 @@ const configSections: ConfigSectionDefinition<QqDramaConfig>[] = [
       {
         key: "operationDelaySeconds",
         label: "操作间隔",
-        description: "两次浏览器操作之间的等待时间。",
+        description: "浏览器操作之间的等待时间",
         type: "number",
         suffix: "秒",
         step: "0.01",
@@ -101,7 +101,7 @@ const configSections: ConfigSectionDefinition<QqDramaConfig>[] = [
         kind: "switch",
         key: "headless",
         label: "隐藏浏览器窗口",
-        description: "登录或排查问题时，需显示浏览器窗口。",
+        description: "登录或排查问题时请关闭此项，显示浏览器窗口",
         activeLabel: "已隐藏",
         inactiveLabel: "显示窗口",
       },

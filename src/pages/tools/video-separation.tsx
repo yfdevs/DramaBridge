@@ -46,7 +46,7 @@ export function VideoSeparationPage() {
         update(task.id, { status: "合并与分离中…" });
         try {
           const result = await service.run(task.directory, task.seconds, task.id);
-          update(task.id, { output: result.output, status: `已完成 · ${result.count} 集` });
+          update(task.id, { output: result.output, status: `已完成，${result.count} 集` });
         } catch (e) {
           update(task.id, { status: "失败：" + String(e) });
         }
@@ -180,7 +180,7 @@ export function VideoSeparationPage() {
             {!tasks.length && (
               <tr>
                 <td colSpan={5} className="p-12 text-center text-muted-foreground">
-                  选择视频目录并添加，开始创建分离任务。
+                  选择视频目录并添加，开始创建分离任务
                 </td>
               </tr>
             )}

@@ -1,9 +1,7 @@
 import { getWechatVideoRuntimeSettings } from "../shared/runtime-settings.js";
 import { fetchVideoAccountsApi, type VideoAccount } from "../api/video-accounts.js";
 import { BrowserContextManager } from "../automation/browser-context-manager.js";
-import {
-  type ServiceConfig,
-} from "../shared/config.js";
+import { type ServiceConfig } from "../shared/config.js";
 import { createLogger } from "../shared/logger.js";
 import { TaskWorkerPool } from "./task-worker-pool.js";
 
@@ -11,7 +9,7 @@ const logger = createLogger("video-account-sync");
 
 export class VideoAccountSyncService {
   private timer: NodeJS.Timeout | undefined;
-  private syncing = false;
+  private syncing: Promise<void> | undefined;
 
   constructor(
     private readonly serviceConfig: ServiceConfig,
@@ -39,43 +37,52 @@ export class VideoAccountSyncService {
   }
 
   async sync(): Promise<void> {
-    if (this.syncing) return;
-    this.syncing = true;
-
+    while (this.syncing) await this.syncing;
+    const operation = this.syncAccounts();
+    this.syncing = operation;
     try {
-      const allVideoAccounts = await fetchVideoAccountsApi();
-      const selectedIds = new Set(getWechatVideoRuntimeSettings().selectedVideoAccountIds.split(",").map(id => id.trim()).filter(Boolean));
-      const videoAccounts = allVideoAccounts.filter(account => selectedIds.has(account.id));
-      this.validateVideoAccounts(videoAccounts);
-      const changes = this.browserContexts.syncVideoAccounts(videoAccounts);
-      this.taskWorkerPool.syncVideoAccounts(videoAccounts);
-      this.serviceConfig.videoAccounts = videoAccounts;
-      this.idlePageRefreshService?.syncVideoAccounts();
-      logger.info("synced video accounts", {
-        selectedContractSubjects: this.serviceConfig.videoAccountContractSubjects,
-        totalCount: allVideoAccounts.length,
-        filteredCount: videoAccounts.length,
-      });
-
-      if (changes.added.length || changes.removed.length || changes.renamed.length) {
-        logger.info("video accounts changed", {
-          added: changes.added.map((account) => ({
-            videoAccountId: account.id,
-            videoAccountName: account.name,
-          })),
-          removed: changes.removed.map((account) => ({
-            videoAccountId: account.id,
-            videoAccountName: account.name,
-          })),
-          renamed: changes.renamed.map((change) => ({
-            videoAccountId: change.previous.id,
-            previousName: change.previous.name,
-            nextName: change.next.name,
-          })),
-        });
-      }
+      await operation;
     } finally {
-      this.syncing = false;
+      if (this.syncing === operation) this.syncing = undefined;
+    }
+  }
+
+  private async syncAccounts(): Promise<void> {
+    const allVideoAccounts = await fetchVideoAccountsApi();
+    const selectedIds = new Set(
+      getWechatVideoRuntimeSettings()
+        .selectedVideoAccountIds.split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
+    );
+    const videoAccounts = allVideoAccounts.filter((account) => selectedIds.has(account.id));
+    this.validateVideoAccounts(videoAccounts);
+    const changes = this.browserContexts.syncVideoAccounts(videoAccounts);
+    this.taskWorkerPool.syncVideoAccounts(videoAccounts);
+    this.serviceConfig.videoAccounts = videoAccounts;
+    this.idlePageRefreshService?.syncVideoAccounts();
+    logger.info("synced video accounts", {
+      selectedContractSubjects: this.serviceConfig.videoAccountContractSubjects,
+      totalCount: allVideoAccounts.length,
+      filteredCount: videoAccounts.length,
+    });
+
+    if (changes.added.length || changes.removed.length || changes.renamed.length) {
+      logger.info("video accounts changed", {
+        added: changes.added.map((account) => ({
+          videoAccountId: account.id,
+          videoAccountName: account.name,
+        })),
+        removed: changes.removed.map((account) => ({
+          videoAccountId: account.id,
+          videoAccountName: account.name,
+        })),
+        renamed: changes.renamed.map((change) => ({
+          videoAccountId: change.previous.id,
+          previousName: change.previous.name,
+          nextName: change.next.name,
+        })),
+      });
     }
   }
 

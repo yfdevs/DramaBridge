@@ -1,4 +1,5 @@
-﻿export type MeituanCreationLoginState = "login-required" | "logged-in" | "unknown"
+import { createAccountControl } from "@/platforms/app-runtime/service";
+export type MeituanCreationLoginState = "login-required" | "logged-in" | "unknown"
 
 export type MeituanCreationConfig = {
   apiBaseUrl: string
@@ -35,7 +36,7 @@ export type MeituanCreationServiceStatus = {
 
 async function invokeMeituanCreation<T>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.ipcRenderer) {
-    throw new Error("美团创作平台服务控制仅在 Electron 应用内可用。")
+    throw new Error("美团创作平台服务控制仅在 Electron 应用内可用")
   }
 
   try {
@@ -53,15 +54,15 @@ async function invokeMeituanCreation<T>(channel: string, ...args: unknown[]): Pr
 
 function readableMeituanCreationError(message: string) {
   if (message.includes("MEITUAN_API_BASE_URL_REQUIRED")) {
-    return "请先配置美团账号接口地址。"
+    return "请先配置美团账号接口地址"
   }
 
   if (message.includes("MEITUAN_ENABLED_ACCOUNT_NOT_FOUND")) {
-    return "没有获取到已启用的美团账号，请先在后台开启账号。"
+    return "没有获取到已启用的美团账号，请先在后台开启账号"
   }
 
   if (message.includes("MEITUAN_ACCOUNT_CONFIG_RESPONSE_DATA_REQUIRED")) {
-    return "美团账号列表响应缺少 data，请检查登录状态和接口地址。"
+    return "美团账号列表响应缺少 data，请检查登录状态和接口地址"
   }
 
   const accountRequestFailed = message.match(
@@ -72,7 +73,7 @@ function readableMeituanCreationError(message: string) {
   }
 
   if (message.includes("MEITUAN_LOCAL_VIDEO_ROOT_REQUIRED")) {
-    return "请先在美团创作平台配置中选择剧集视频目录。"
+    return "请先在美团创作平台配置中选择剧集视频目录"
   }
 
   const rootNotFound = message.match(/MEITUAN_LOCAL_VIDEO_ROOT_NOT_FOUND: root=(.*)$/)
@@ -97,6 +98,7 @@ function readableMeituanCreationError(message: string) {
 }
 
 export const meituanCreationService = {
+  accountControl: createAccountControl("meituan-drama"),
   listAccounts: () => invokeMeituanCreation<Array<{ accountId: string; accountName: string }>>("meituan-drama:accounts:list"),
   getConfig() {
     return invokeMeituanCreation<MeituanCreationConfigResult>("meituan-drama:config:get")

@@ -1,3 +1,5 @@
+import { createAccountRuntimeGroup } from "../shared/account-runtime-group";
+import { registerAccountControl } from "../shared/account-control";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -508,6 +510,10 @@ async function status(): Promise<QqDramaServiceStatus> {
 }
 
 async function startRuntime(selectedAccountIds: unknown) {
+  return createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+}
+
+async function startAccountRuntime(selectedAccountIds: unknown, canClaimTask: () => boolean) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
 
   const config = readConfig();
@@ -531,7 +537,7 @@ async function startRuntime(selectedAccountIds: unknown) {
     startQqDramaRuntime,
   } = await importQqDramaRuntimePackage();
   const availableAccounts = await fetchQqDramaAccounts(config.apiBaseUrl);
-  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请选择要启动的账号");
   const ids = new Set(selectedAccountIds);
   const accounts = availableAccounts.filter(account => ids.has(account.accountId));
   if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
@@ -554,6 +560,7 @@ async function startRuntime(selectedAccountIds: unknown) {
       const paths = storagePaths(config, account.accountId);
       ensureStorageDirectories(paths);
       const runtime = await startQqDramaRuntime({
+        canClaimTask,
         accountProfileName: account.accountId,
         qqAccountId: account.accountId,
         qqAccountName: account.accountName,
@@ -628,6 +635,7 @@ async function startRuntime(selectedAccountIds: unknown) {
 }
 
 export function registerQqDramaPlatformHandlers() {
+  registerAccountControl({ platform: "qq-drama", controller: runtimeController, start: startRuntime, status });
   registerTaskAnalyticsHandler({
     platform: "qq-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,

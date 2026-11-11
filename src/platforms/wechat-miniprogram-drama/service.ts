@@ -1,3 +1,4 @@
+import { createAccountControl } from "@/platforms/app-runtime/service";
 import type { IpcRendererEvent } from "electron"
 
 export type WechatMiniProgramAccountStatus = {
@@ -6,6 +7,7 @@ export type WechatMiniProgramAccountStatus = {
   launched: boolean
   loginState: "not-launched" | "login-required" | "logged-in" | "unknown"
   pageCount: number
+  paused?: boolean
   activeUrl?: string
   userDataDir: string
 }
@@ -55,7 +57,7 @@ export type WechatMiniProgramConfigResult = {
 
 async function invokeWechatMiniProgram<T>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.ipcRenderer) {
-    throw new Error("微信小程序服务控制仅在 Electron 应用内可用。")
+    throw new Error("微信小程序服务控制仅在 Electron 应用内可用")
   }
 
   try {
@@ -82,11 +84,11 @@ function onWechatMiniProgram<T>(channel: string, listener: (payload: T) => void)
 
 function readableWechatMiniProgramError(message: string) {
   if (message.includes("WECHAT_MINIPROGRAM_LOCAL_VIDEO_ROOT_REQUIRED")) {
-    return "请先在微信小程序配置中选择剧集视频根目录。"
+    return "请先在微信小程序配置中选择剧集视频根目录"
   }
 
   if (message.includes("localEpisodeVideoRoot is required for local episode videos")) {
-    return "请先在微信小程序配置中选择剧集视频根目录。"
+    return "请先在微信小程序配置中选择剧集视频根目录"
   }
 
   if (message.includes("[local-video-invalid] 剧集视频目录不存在:")) {
@@ -102,13 +104,14 @@ function readableWechatMiniProgramError(message: string) {
   }
 
   if (message.includes("微信小程序账号接口至少需要返回一个启用账号")) {
-    return "微信小程序账号接口没有返回启用账号，请检查账号接口。"
+    return "微信小程序账号接口没有返回启用账号，请检查账号接口"
   }
 
   return message
 }
 
 export const wechatMiniProgramService = {
+  accountControl: createAccountControl("wechat-miniprogram-drama"),
   getConfig() {
     return invokeWechatMiniProgram<WechatMiniProgramConfigResult>("wechat-miniprogram-drama:config:get")
   },
@@ -138,7 +141,7 @@ export const wechatMiniProgramService = {
       "wechat-miniprogram-drama:config:get"
     )
     if (!config.localEpisodeVideoRoot.trim()) {
-      throw new Error("请先在微信小程序配置中选择剧集视频根目录。")
+      throw new Error("请先在微信小程序配置中选择剧集视频根目录")
     }
 
     return invokeWechatMiniProgram<WechatMiniProgramServiceStatus>("wechat-miniprogram-drama:service:start")

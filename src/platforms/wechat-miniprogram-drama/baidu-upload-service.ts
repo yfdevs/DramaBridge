@@ -48,7 +48,7 @@ export type WechatMiniProgramDirectUploadWorkspace = {
 
 function ipc() {
   if (!window.ipcRenderer) {
-    throw new Error("百度资源直传仅在 Electron 应用内可用。")
+    throw new Error("百度资源直传仅在 Electron 应用内可用")
   }
   return window.ipcRenderer
 }

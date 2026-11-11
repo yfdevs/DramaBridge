@@ -26,7 +26,7 @@ async function ensureBaiduNetdiskResourceReady(
   if (!baiduPanResourceLink) return;
 
   if (!options.ensureBaiduNetdiskResource) {
-    throw new Error("任务包含百度网盘资源链接，但当前美团运行时未接入百度网盘下载能力。");
+    throw new Error("任务包含百度网盘资源链接，但当前美团运行时未接入百度网盘下载能力");
   }
 
   const localEpisodeVideoRoot = getMeituanLocalEpisodeVideoRoot(options);

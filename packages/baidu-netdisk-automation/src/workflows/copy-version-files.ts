@@ -38,7 +38,7 @@ export function assertBaiduCopyResult(result: Record<string, unknown>) {
       { errno: code || (failed ? failureCode(failed) : 0) },
       "/api/filemanager",
     );
-    throw error ?? new Error("百度网盘云端复制任务失败（status=failed）；请核对目标目录后重试。");
+    throw error ?? new Error("百度网盘云端复制任务失败（status=failed）；请核对目标目录后重试");
   }
 }
 

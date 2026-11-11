@@ -1,4 +1,4 @@
-"""视频人声分离并自动上传到 YouTube 频道。"""
+"""视频人声分离并自动上传到 YouTube 频道"""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -15,7 +15,8 @@ from fractions import Fraction
 from urllib.parse import quote
 from project_paths import ROOT, credential_path
 from windows_job import hidden_process_options
-from pipeline_events import emit, ensure_running, PipelineStopped, timed_stage
+from pipeline_events import emit, ensure_running, PipelineStopped, timed_stage, progress_context
+from ffmpeg_progress import run_ffmpeg, run_media_process, input_duration
 from merge_plan import build_merge_plan, video_differences, MERGE_PIPELINE_VERSION
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
@@ -23,7 +24,7 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
 
 
 def compute_input_hash(path: Path) -> str:
-    """对输入视频生成稳定短哈希（基于绝对路径），用于防重复上传。"""
+    """对输入视频生成稳定短哈希（基于绝对路径），用于防重复上传"""
     return hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:16]
 
 
@@ -41,17 +42,17 @@ def cache_paths(video: Path, work_dir: Path) -> tuple[Path, Path, Path, Path]:
 
 
 def load_uploaded_log(log_path: Path, strict=False) -> dict:
-    """读取已上传记录；文件不存在或损坏时返回空字典。"""
+    """读取已上传记录；文件不存在或损坏时返回空字典"""
     if not log_path.exists():
         return {}
     try:
         data = json.loads(log_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
         if strict:
-            raise SystemExit(f'无法读取上传记录 {log_path}，已停止上传以避免重复；请恢复记录后重试。') from exc
+            raise SystemExit(f'无法读取上传记录 {log_path}，已停止上传以避免重复；请恢复记录后重试') from exc
         return {}
     if strict and not isinstance(data, dict):
-        raise SystemExit(f'上传记录 {log_path} 格式无效，已停止上传以避免重复。')
+        raise SystemExit(f'上传记录 {log_path} 格式无效，已停止上传以避免重复')
     return data if isinstance(data, dict) else {}
 
 
@@ -136,7 +137,9 @@ def parse_args(argv=None):
 
 def _run_ffmpeg(args: list[str]) -> None:
     try:
-        subprocess.run(["ffmpeg", "-y", *args], check=True, capture_output=True, **hidden_process_options())
+        result = run_ffmpeg(args)
+        if result.returncode:
+            raise subprocess.CalledProcessError(result.returncode, result.args, stderr=result.stderr)
     except FileNotFoundError:
         raise SystemExit("未找到 ffmpeg，请确认它已加入 PATH")
     except subprocess.CalledProcessError as e:
@@ -144,7 +147,7 @@ def _run_ffmpeg(args: list[str]) -> None:
 
 
 def extract_audio(input_video: Path, out_wav: Path, duration: float | None = None) -> None:
-    """提取音轨为 44.1kHz/16bit 立体声 wav。"""
+    """提取音轨为 44.1kHz/16bit 立体声 wav"""
     out_wav.parent.mkdir(parents=True, exist_ok=True)
     # Copied AAC packets can decode to more samples than their timeline spans
     # (encoder padding at episode boundaries). Match PCM to timestamps instead
@@ -161,7 +164,7 @@ def extract_audio(input_video: Path, out_wav: Path, duration: float | None = Non
 
 
 def remux_video(input_video: Path, vocals_wav: Path, out_video: Path) -> None:
-    """原视频画面（无损复制）+ 人声轨（AAC 192k）重混输出。"""
+    """原视频画面（无损复制）+ 人声轨（AAC 192k）重混输出"""
     partial = out_video.with_name(out_video.stem + ".partial.mp4")
     _run_ffmpeg(["-i", str(input_video), "-i", str(vocals_wav),
                  "-map", "0:v:0", "-map", "1:a:0",
@@ -172,13 +175,13 @@ def remux_video(input_video: Path, vocals_wav: Path, out_video: Path) -> None:
 
 
 def natural_sort_key(path: Path) -> list:
-    """按文件名中的数字自然排序：第2集排在第10集之前。"""
+    """按文件名中的数字自然排序：第2集排在第10集之前"""
     return [int(part) if part.isdigit() else part.casefold()
             for part in re.split(r"(\d+)", path.name)]
 
 
 def discover_videos(directory: Path, recursive: bool = False) -> list[Path]:
-    """扫描源视频，可包含下载目录的子目录；排除本工具生成的结果。"""
+    """扫描源视频，可包含下载目录的子目录；排除本工具生成的结果"""
     candidates = directory.rglob("*") if recursive else directory.iterdir()
     videos = [
         path for path in candidates
@@ -213,27 +216,26 @@ def _run_concat_copy(paths: list[Path], output: Path, list_path: Path, durations
     """
     _write_concat_list(paths, list_path, durations)
     log_path = list_path.with_suffix('.ffmpeg.log')
-    result = subprocess.run(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-auto_convert", "1", "-i", str(list_path),
+    result = run_ffmpeg(
+        ["-f", "concat", "-safe", "0", "-auto_convert", "1", "-i", str(list_path),
          "-map", "0:v:0", "-map", "0:a:0",
          "-c:v", "copy", "-c:a", "copy", str(output)],
-        capture_output=True, **hidden_process_options(),
+        duration=sum(durations) if durations else None, log_path=log_path,
     )
-    log_path.write_bytes(getattr(result, 'stderr', b''))
     if result.returncode:
         print("   拼接失败详情：" + result.stderr.decode(errors='replace')[-1500:])
     return result.returncode == 0
 
 
 def _probe_stream_signature(path: Path):
-    """返回影响无损拼接兼容性的音视频流参数；无 ffprobe 时返回 None。"""
+    """返回影响无损拼接兼容性的音视频流参数；无 ffprobe 时返回 None"""
     if not shutil.which("ffprobe"):
         return None
     result = subprocess.run(
         ["ffprobe", "-v", "error", "-show_data_hash", "sha256", "-show_entries",
          "stream=codec_type,codec_name,width,height,pix_fmt,profile,level,extradata_hash,nb_frames,r_frame_rate,avg_frame_rate,time_base,sample_aspect_ratio,sample_rate,channels,channel_layout,start_time,duration:format=duration",
          "-of", "json", str(path)],
-        check=True, capture_output=True, text=True, **hidden_process_options(),
+        check=True, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL, **hidden_process_options(),
     )
     data = json.loads(result.stdout)
     # These are the same first video/audio streams selected by the concat command.
@@ -283,42 +285,23 @@ def _streams_are_concat_compatible(videos: list[Path], signatures=None) -> bool:
 
 
 def _verify_video_decode(output):
-    """Decode every frame; FFmpeg can return zero despite HEVC decoder errors."""
+    """Decode every frame, retaining the complete error log and live progress."""
     log_path = output.with_name(output.name + '.decode.log')
-    print(f'   完整解码校验（覆盖所有拼接点）：{output.name}', flush=True)
-    ensure_running()
-    with log_path.open('wb') as log:
-        process = subprocess.Popen(
-            ['ffmpeg', '-nostdin', '-hide_banner', '-v', 'error', '-xerror',
-             '-err_detect', 'explode', '-i', str(output), '-map', '0:v:0',
-             '-an', '-f', 'null', '-'], stdout=subprocess.DEVNULL, stderr=log,
-            **hidden_process_options())
-        next_update = time.monotonic() + 15
-        try:
-            while True:
-                try:
-                    code = process.wait(timeout=1)
-                    break
-                except subprocess.TimeoutExpired:
-                    ensure_running()
-                    if time.monotonic() >= next_update:
-                        print(f'   正在完整解码校验：{output.name}…', flush=True)
-                        next_update = time.monotonic() + 15
-        except BaseException:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-            raise
-    ensure_running()
-    if code or log_path.stat().st_size:
-        with log_path.open('rb') as log:
-            log.seek(max(0, log_path.stat().st_size - 1500))
-            detail = log.read().decode(errors='replace')
-        print(f'   解码校验失败（退出码 {code}），完整日志：{log_path}\n{detail}')
+    try:
+        with timed_stage('validating', message='完整解码校验，检查全部拼接点'):
+            result = run_media_process(
+                ['ffmpeg', '-nostdin', '-hide_banner', '-v', 'error', '-nostats',
+                 '-stats_period', '1', '-progress', 'pipe:1', '-xerror',
+                 '-err_detect', 'explode', '-i', str(output), '-map', '0:v:0',
+                 '-an', '-f', 'null', '-'],
+                duration=input_duration(['-i', str(output)]), log_path=log_path)
+            if result.returncode or log_path.stat().st_size:
+                raise subprocess.CalledProcessError(result.returncode or 1, result.args, stderr=result.stderr)
+    except subprocess.CalledProcessError as error:
+        detail = error.stderr.decode(errors='replace')[-1500:]
+        print(f'   解码校验失败（退出码 {error.returncode}），完整日志：{log_path}\n{detail}', flush=True)
         return False
+    ensure_running()
     return True
 
 
@@ -341,28 +324,32 @@ def _verify_frame_timeline(output, signatures):
     rates = [_rate(_video_signature(s).get('r_frame_rate')) for s in signatures]
     if durations is None or not rates or any(abs(r - rates[0]) > 1e-6 for r in rates):
         return True  # VFR: full decoding still runs, without imposing a CFR grid.
-    probe = subprocess.run(
-        ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_packets',
-         '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', str(output)],
-        capture_output=True, **hidden_process_options())
-    if probe.returncode or probe.stderr.strip():
-        print('   校验失败：无法读取成片帧时间戳。')
-        return False
     points = []
-    for line in probe.stdout.splitlines():
+    def collect(line):
         try:
-            points.append(float(line.split(b',')[0]))
+            point = float(line.split(',')[0])
         except ValueError:
-            continue
-    expected = sum(int(_video_signature(s)['nb_frames']) for s in signatures)
-    if len(points) != expected:
-        print(f'   校验失败：成片视频包数 {len(points)}，源片帧数合计 {expected}。')
+            return None
+        points.append(point)
+        return {'out_time_us': max(0, point - points[0]) * 1_000_000, 'frame': len(points)}
+    try:
+        with timed_stage('checking_timestamps', message='逐帧检查时间轴，确认无卡顿或跳帧'):
+            probe = run_media_process(
+                ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_packets',
+                 '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', str(output)],
+                duration=sum(durations), on_line=collect)
+            if probe.returncode or probe.stderr.strip():
+                raise ValueError('无法读取成片帧时间戳')
+            expected = sum(int(_video_signature(s)['nb_frames']) for s in signatures)
+            if len(points) != expected:
+                raise ValueError(f'成片视频包数 {len(points)}，源片帧数合计 {expected}')
+            points.sort()  # B-frame PTS reorder in packet order is normal.
+            for index, point in enumerate(points):
+                if abs(point - points[0] - index / rates[0]) > .5 / rates[0]:
+                    raise ValueError(f'第 {index + 1} 帧（{point:.6f} 秒）偏离帧时间网格，可能卡顿或跳帧')
+    except ValueError as error:
+        print(f'   时间轴校验失败：{error}', flush=True)
         return False
-    points.sort()  # B-frame PTS reorder in packet order is normal.
-    for index, point in enumerate(points):
-        if abs(point - points[0] - index / rates[0]) > .5 / rates[0]:
-            print(f'   校验失败：第 {index + 1} 帧（{point:.6f} 秒）偏离帧时间网格，可能卡顿或跳帧。')
-            return False
     return True
 
 
@@ -384,7 +371,7 @@ def _verify_merge(output, signatures):
             tolerance = max(2, len(durations) * .05)
             label = '容器时长'
         if duration is None or abs(duration - sum(durations)) > tolerance:
-            print(f'   校验失败：成片{label} {duration} 秒，源片合计 {sum(durations):.3f} 秒。')
+            print(f'   校验失败：成片{label} {duration} 秒，源片合计 {sum(durations):.3f} 秒')
             return False
     return _verify_video_decode(output) and _verify_frame_timeline(output, signatures)
 
@@ -434,7 +421,7 @@ def _probe_video_target(path: Path) -> tuple[int, int, str]:
 
 
 def _choose_video_target(videos: list[Path]) -> tuple[int, int, str]:
-    """选择像素数最小的源规格，避免为合并而放大低分辨率视频。"""
+    """选择像素数最小的源规格，避免为合并而放大低分辨率视频"""
     targets = [_probe_video_target(video) for video in videos]
     return min(targets, key=lambda target: target[0] * target[1])
 
@@ -459,13 +446,20 @@ CPU_HEVC_ENCODER = ("libx265", "CPU libx265", ["-c:v", "libx265", "-preset", "ve
 
 def _encoder_works(encoder_args: list[str], width: int, height: int,
                    frame_rate: str) -> bool:
-    """用目标规格试编码两帧，确认编码器不仅存在，而且硬件和驱动确实可用。"""
-    result = subprocess.run([
-        "ffmpeg", "-v", "error", "-f", "lavfi",
+    """用目标规格试编码两帧，确认编码器不仅存在，而且硬件和驱动确实可用"""
+    try:
+        result = subprocess.run([
+        "ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi",
         "-i", f"color=c=black:s={width}x{height}:r={frame_rate}",
         "-frames:v", "2", "-vf", "format=nv12", *encoder_args,
         "-f", "null", "-",
-    ], capture_output=True, **hidden_process_options())
+        ], capture_output=True, stdin=subprocess.DEVNULL, timeout=15, **hidden_process_options())
+    except subprocess.TimeoutExpired:
+        print(f"[编码器检查] {encoder_args[1]} 15 秒内未响应，尝试其他编码器", flush=True)
+        return False
+    if result.returncode:
+        detail = result.stderr.decode(errors='replace').strip().splitlines()
+        print(f"[编码器检查] {encoder_args[1]} 不可用，尝试其他编码器或 CPU：{detail[0] if detail else '初始化失败'}", flush=True)
     return result.returncode == 0
 
 
@@ -542,50 +536,53 @@ def _prepare_merge_episodes(videos, plan, merge_dir, reuse_normalized, encoder_o
             checkpoint = output.with_suffix('.done')
             valid = (reuse_normalized and output.exists() and output.stat().st_size > 0 and
                      checkpoint.exists() and checkpoint.read_text(encoding='utf-8') == key)
-            if valid:
-                cached += 1
-                print(f"   复用第 {episode['index']} 集处理缓存：{video.name}")
-            else:
-                output.parent.mkdir(parents=True, exist_ok=True)
-                checkpoint.unlink(missing_ok=True)
-                reason = '；'.join(episode['reasons'])
-                if episode['action'] == 'transcode':
-                    encoded += 1
-                    print(f"   转码 {encoded}/{encode_total}（原第 {episode['index']} 集）：{video.name}；原因：{reason}")
-                    kwargs = dict(timescale=target['timescale'], pixel_format=target['pix_fmt'],
-                                  sample_aspect_ratio=target['sample_aspect_ratio'],
-                                  audio_rate=int(target['audio']['sample_rate']), audio_channels=target['audio']['channels'])
-                    try:
-                        _normalize_for_merge(video, output, target['width'], target['height'],
-                                             target['r_frame_rate'], encoder[2], **kwargs)
-                    except PipelineStopped:
-                        raise
-                    except SystemExit:
-                        if encoder[0] in ('libx264', 'libx265'):
-                            raise
-                        fallback = CPU_HEVC_ENCODER if target['codec_name'] == 'hevc' else CPU_ENCODER
-                        if plan.get('uniform_hevc'):
-                            print(f'   {encoder[1]} 失败，统一改用 {fallback[1]} 重做所有 H.265 片段，避免混用编码参数。')
-                            return _prepare_merge_episodes(videos, plan, merge_dir, reuse_normalized,
-                                                           encoder_override=fallback)
-                        print(f"   {encoder[1]} 失败，仅将第 {episode['index']} 集回退 {fallback[1]}。")
-                        _normalize_for_merge(video, output, target['width'], target['height'],
-                                             target['r_frame_rate'], fallback[2], **kwargs)
+            with progress_context(completedItems=done, totalItems=len(pending),
+                                  episodeIndex=episode['index'], episodeCount=len(videos),
+                                  message=f"处理第 {episode['index']}/{len(videos)} 集：{video.name}"):
+                if valid:
+                    cached += 1
+                    print(f"   复用第 {episode['index']} 集处理缓存：{video.name}")
                 else:
-                    print(f"   无损修复（原第 {episode['index']} 集）：{video.name}；原因：{reason}；画面复制")
-                    partial = output.with_name(output.stem + '.partial.mp4')
-                    audio_args = (["-c:a", "aac", "-b:a", "192k", "-ar", target['audio']['sample_rate'],
-                                   "-ac", str(target['audio']['channels'])] if episode['audio_changes'] else ["-c:a", "copy"])
-                    _run_ffmpeg(["-i", str(video), "-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy",
-                                 *audio_args, "-video_track_timescale", str(target['timescale']), str(partial)])
-                    partial.replace(output)
-                checkpoint.write_text(key, encoding='utf-8')
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    checkpoint.unlink(missing_ok=True)
+                    reason = '；'.join(episode['reasons'])
+                    if episode['action'] == 'transcode':
+                        encoded += 1
+                        print(f"   转码 {encoded}/{encode_total}（原第 {episode['index']} 集）：{video.name}；原因：{reason}")
+                        kwargs = dict(timescale=target['timescale'], pixel_format=target['pix_fmt'],
+                                      sample_aspect_ratio=target['sample_aspect_ratio'],
+                                      audio_rate=int(target['audio']['sample_rate']), audio_channels=target['audio']['channels'])
+                        try:
+                            _normalize_for_merge(video, output, target['width'], target['height'],
+                                                 target['r_frame_rate'], encoder[2], **kwargs)
+                        except PipelineStopped:
+                            raise
+                        except SystemExit:
+                            if encoder[0] in ('libx264', 'libx265'):
+                                raise
+                            fallback = CPU_HEVC_ENCODER if target['codec_name'] == 'hevc' else CPU_ENCODER
+                            if plan.get('uniform_hevc'):
+                                print(f'   {encoder[1]} 失败，统一改用 {fallback[1]} 重做所有 H.265 片段，避免混用编码参数')
+                                return _prepare_merge_episodes(videos, plan, merge_dir, reuse_normalized,
+                                                               encoder_override=fallback)
+                            print(f"   {encoder[1]} 失败，仅将第 {episode['index']} 集回退 {fallback[1]}")
+                            _normalize_for_merge(video, output, target['width'], target['height'],
+                                                 target['r_frame_rate'], fallback[2], **kwargs)
+                    else:
+                        print(f"   无损修复（原第 {episode['index']} 集）：{video.name}；原因：{reason}；画面复制")
+                        partial = output.with_name(output.stem + '.partial.mp4')
+                        audio_args = (["-c:a", "aac", "-b:a", "192k", "-ar", target['audio']['sample_rate'],
+                                       "-ac", str(target['audio']['channels'])] if episode['audio_changes'] else ["-c:a", "copy"])
+                        _run_ffmpeg(["-i", str(video), "-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy",
+                                     *audio_args, "-video_track_timescale", str(target['timescale']), str(partial)])
+                        partial.replace(output)
+                    checkpoint.write_text(key, encoding='utf-8')
             prepared.append(output)
             done += 1
             emit('normalizing', round(100 * done / len(pending), 1),
                  message=f"已处理 {done}/{len(pending)} 个异常片段；其余画面直接复制")
         if cached:
-            print(f"   已复用 {cached} 个完整处理缓存。")
+            print(f"   已复用 {cached} 个完整处理缓存")
     return prepared
 
 
@@ -598,13 +595,18 @@ def merge_videos(videos: list[Path], output: Path, work_dir: Path,
     merge_dir = work_dir / "merge" / compute_input_hash(output)
     merge_dir.mkdir(parents=True, exist_ok=True)
     with timed_stage("probing", message=f"分析 {len(videos)} 集拼接兼容性"):
-        signatures = [_probe_stream_signature(video) for video in videos]
+        signatures = []
+        for index, video in enumerate(videos, 1):
+            ensure_running()
+            signatures.append(_probe_stream_signature(video))
+            emit('probing', round(100 * index / len(videos), 1), completedItems=index,
+                 totalItems=len(videos), message=f'已分析 {index}/{len(videos)} 集')
         for video, signature in zip(videos, signatures):
             if signature is not None and (not _video_signature(signature) or
                     not any(s.get("codec_type") == "audio" for s in signature)):
                 raise SystemExit(f"视频缺少画面或音轨，无法分离：{video.name}")
     if any(s is None for s in signatures):
-        raise SystemExit('安全拼接需要 ffprobe 检查编码参数，请安装完整版 ffmpeg；已停止，未生成未校验成片。')
+        raise SystemExit('安全拼接需要 ffprobe 检查编码参数，请安装完整版 ffmpeg；已停止，未生成未校验成片')
 
     plan = build_merge_plan(videos, signatures)
     plan['target'].pop('container_duration', None)
@@ -612,15 +614,21 @@ def merge_videos(videos: list[Path], output: Path, work_dir: Path,
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding='utf-8')
     counts = plan['counts']
     if plan.get('uniform_hevc'):
-        print('   安全模式：H.265 参数集不一致，必须统一全剧编码；不混拼原片与转码片段。')
+        print('   安全模式：H.265 参数集不一致，必须统一全剧编码；不混拼原片与转码片段')
     print(f"   拼接计划：直接复制 {counts.get('copy', 0)} 集，重封装 {counts.get('remux', 0)} 集，"
-          f"仅修复音轨 {counts.get('audio', 0)} 集，画面转码 {counts.get('transcode', 0)} 集。")
+          f"仅修复音轨 {counts.get('audio', 0)} 集，画面转码 {counts.get('transcode', 0)} 集")
     print(f"   逐集计划：{plan_path.resolve()}")
     for episode in plan['episodes']:
         if episode['action'] != 'copy':
             print(f"   第 {episode['index']} 集：{'；'.join(episode['reasons'])}")
     prepared = _prepare_merge_episodes(videos, plan, merge_dir, reuse_normalized)
-    prepared_signatures = [_probe_stream_signature(video) for video in prepared]
+    with timed_stage('probing', message='复核已处理片段的编码参数'):
+        prepared_signatures = []
+        for index, video in enumerate(prepared, 1):
+            ensure_running()
+            prepared_signatures.append(_probe_stream_signature(video))
+            emit('probing', round(100 * index / len(prepared), 1), completedItems=index,
+                 totalItems=len(prepared), message=f'已复核 {index}/{len(prepared)} 集')
     if plan['target']['codec_name'] == 'hevc':
         hashes = [_video_signature(s).get('extradata_hash') for s in prepared_signatures]
         if not all(hashes) or len(set(hashes)) != 1:
@@ -628,7 +636,9 @@ def merge_videos(videos: list[Path], output: Path, work_dir: Path,
     durations = _cfr_durations(prepared_signatures)
     # Publish only a validated result. A failed partial is retained for diagnosis.
     partial = output.with_name(output.stem + '.partial.mp4')
-    with timed_stage("merging", message=f"拼接 {len(videos)} 集；画面仅转码 {counts.get('transcode', 0)} 集"):
+    merge_duration = sum(durations) if durations else sum(_rate(_video_signature(signature).get('container_duration')) or 0 for signature in prepared_signatures)
+    with timed_stage("merging", durationSeconds=merge_duration,
+                     message=f"合并 {len(videos)} 集；{counts.get('transcode', 0)} 集需转码，其余保留原画面"):
         concat_args = (prepared, partial, merge_dir / 'concat.txt')
         success = (_run_concat_copy(*concat_args, durations) if durations is not None
                    else _run_concat_copy(*concat_args))
@@ -636,18 +646,18 @@ def merge_videos(videos: list[Path], output: Path, work_dir: Path,
             raise SystemExit(f"拼接或成片校验失败，已停止，未自动整剧转码。请提供逐集计划及上述错误：{plan_path.resolve()}")
         partial.replace(output)
         print(f"   拼接完成并通过校验：画面直接复制 {len(videos) - counts.get('transcode', 0)} 集，"
-              f"仅转码 {counts.get('transcode', 0)} 集。")
+              f"仅转码 {counts.get('transcode', 0)} 集")
 
 
 def extract_thumbnail_frame(input_video: Path, out_jpg: Path) -> None:
-    """截取第 1 秒画面作为缩略图（1280 宽，符合 YouTube 要求）。"""
+    """截取第 1 秒画面作为缩略图（1280 宽，符合 YouTube 要求）"""
     out_jpg.parent.mkdir(parents=True, exist_ok=True)
     _run_ffmpeg(["-ss", "1", "-i", str(input_video), "-frames:v", "1",
                  "-vf", "scale=1280:-2", str(out_jpg)])
 
 
 def probe_readable(path: Path) -> bool:
-    """探测文件是否可被 ffmpeg 读取；无 ffprobe 时用 ffmpeg 试读前 0.5 秒。"""
+    """探测文件是否可被 ffmpeg 读取；无 ffprobe 时用 ffmpeg 试读前 0.5 秒"""
     if path.suffix.lower() in SUPPORTED_EXTENSIONS:
         return True
     if shutil.which("ffprobe"):
@@ -661,7 +671,7 @@ def probe_readable(path: Path) -> bool:
 
 
 def separate_vocals(wav: Path, out_dir: Path, fast: bool = False) -> Path:
-    """隔离运行 Demucs，只保存人声并透传模型加载和推理进度。"""
+    """隔离运行 Demucs，只保存人声并透传模型加载和推理进度"""
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "-u", str(Path(__file__).with_name("separation_worker.py")), str(wav), str(out_dir)]
     if fast:
@@ -698,7 +708,7 @@ def apply_proxy(proxy: str) -> None:
 def find_client_secret(cli_path: Path | None, script_dir: Path) -> Path:
     """凭据查找顺序：--client-secret > data/credentials > 旧版根目录。
 
-    显式指定 --client-secret 时该路径必须存在，否则立即报错（防止静默用错凭据）。"""
+    显式指定 --client-secret 时该路径必须存在，否则立即报错（防止静默用错凭据）"""
     if cli_path is not None:
         if cli_path.exists():
             return cli_path
@@ -711,15 +721,15 @@ def find_client_secret(cli_path: Path | None, script_dir: Path) -> Path:
 
 
 def validate_client_secret(path: Path) -> None:
-    """校验凭据是"桌面应用"类型，避免用错 Web 客户端凭据。"""
+    """校验凭据是"桌面应用"类型，避免用错 Web 客户端凭据"""
     data = json.loads(path.read_text(encoding="utf-8"))
     if "installed" not in data:
-        raise SystemExit(f"{path} 不是桌面应用凭据（缺少 installed 字段）。"
-                         "请在 Google Cloud 控制台创建『桌面应用』类型的 OAuth 客户端。")
+        raise SystemExit(f"{path} 不是桌面应用凭据（缺少 installed 字段）"
+                         "请在 Google Cloud 控制台创建『桌面应用』类型的 OAuth 客户端")
 
 
 def get_authenticated_service(client_secret: Path, token_path: Path, allow_interactive=True):
-    """OAuth 2.0：优先用缓存 token，过期自动刷新，否则弹浏览器授权。"""
+    """OAuth 2.0：优先用缓存 token，过期自动刷新，否则弹浏览器授权"""
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
@@ -738,7 +748,7 @@ def get_authenticated_service(client_secret: Path, token_path: Path, allow_inter
                 creds = None
         if not creds or not creds.valid:
             if not allow_interactive:
-                raise SystemExit("所选上传账号的授权缺失或已失效，请在服务设置中选择该账号并更新授权信息后重试。")
+                raise SystemExit("所选上传账号的授权缺失或已失效，请在服务设置中选择该账号并更新授权信息后重试")
             flow = InstalledAppFlow.from_client_secrets_file(str(client_secret), SCOPES)
             creds = flow.run_local_server(port=0)
         from oauth_service import save_token
@@ -771,7 +781,7 @@ def upload_video(youtube, file_path: Path, title: str, description: str,
                 raise ValueError('上次上传会话创建结果不明')
             state = saved
         except (ValueError, OSError, AttributeError) as exc:
-            raise SystemExit(f'无法安全恢复上传：{exc}。请先在 YouTube 核对视频，避免重复上传。')
+            raise SystemExit(f'无法安全恢复上传：{exc}。请先在 YouTube 核对视频，避免重复上传')
     started = time.monotonic()
     media = MediaFileUpload(str(file_path), chunksize=8 * 1024 * 1024, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
@@ -805,7 +815,7 @@ def upload_video(youtube, file_path: Path, title: str, description: str,
             return response["id"], f"https://youtu.be/{response['id']}"
         except HttpError as e:
             if checkpoint_path and e.resp.status in (404, 410):
-                raise SystemExit('原 YouTube 上传会话已失效，已停止自动新建上传。请在 YouTube 核对是否已生成视频，避免重复上传。')
+                raise SystemExit('原 YouTube 上传会话已失效，已停止自动新建上传。请在 YouTube 核对是否已生成视频，避免重复上传')
             if e.resp.status >= 500 and attempt < retries - 1:
                 print(f"上传出错（HTTP {e.resp.status}），{2 ** attempt} 秒后重试…")
                 time.sleep(2 ** attempt)
@@ -831,7 +841,7 @@ def set_thumbnail(youtube, video_id: str, thumb_jpg: Path) -> None:
 
 
 def process_video(video: Path, args, work_dir: Path) -> Path:
-    """对单个视频执行音轨提取、人声分离和重混。"""
+    """对单个视频执行音轨提取、人声分离和重混"""
     if not probe_readable(video):
         print(f"无法读取该格式：{video.suffix}（支持 {sorted(SUPPORTED_EXTENSIONS)}，"
               "或安装新版 ffmpeg）")
@@ -886,11 +896,11 @@ def process_video(video: Path, args, work_dir: Path) -> Path:
 def _upload_processed_video(youtube, source: Path, output: Path, thumbnail_source: Path,
                             title: str, args, script_dir: Path, work_dir: Path,
                             upload_key: str | None = None) -> bool:
-    """上传一个已处理视频；返回是否实际执行了上传。"""
+    """上传一个已处理视频；返回是否实际执行了上传"""
     key = upload_key or compute_input_hash(source)
     log_path = _upload_log_path(args, script_dir)
     if is_uploaded(log_path, key) and not args.force_upload:
-        print(f"{output.name} 已上传过，跳过上传（--force-upload 可强制再传）。")
+        print(f"{output.name} 已上传过，跳过上传（--force-upload 可强制再传）")
         return False
 
     with timed_stage("uploading", message=title):
@@ -907,7 +917,7 @@ def _upload_processed_video(youtube, source: Path, output: Path, thumbnail_sourc
         with timed_stage("thumbnail"):
             extract_thumbnail_frame(thumbnail_source, thumb_path)
             set_thumbnail(youtube, video_id, thumb_path)
-        print("缩略图已设置。")
+        print("缩略图已设置")
     except PipelineStopped:
         raise
     except (SystemExit, Exception) as e:
@@ -1011,7 +1021,7 @@ def _main_single(video: Path, args, work_dir: Path, script_dir: Path):
 
     key = compute_input_hash(video)
     if is_uploaded(_upload_log_path(args, script_dir), key) and not args.force_upload:
-        print("该视频已上传过，跳过上传（--force-upload 可强制再传）。")
+        print("该视频已上传过，跳过上传（--force-upload 可强制再传）")
         return out_video
     youtube = _get_youtube_service(args, script_dir)
     _upload_processed_video(youtube, video, out_video, video,
@@ -1096,7 +1106,7 @@ def _main_batch(directory: Path, args, work_dir: Path, script_dir: Path):
             return merged
         upload_key = f"batch-{signature}"
         if is_uploaded(_upload_log_path(args, script_dir), upload_key) and not args.force_upload:
-            print("该全集已上传过，跳过上传（--force-upload 可强制再传）。")
+            print("该全集已上传过，跳过上传（--force-upload 可强制再传）")
             return merged
         youtube = _get_youtube_service(args, script_dir)
         _upload_processed_video(youtube, directory, merged, videos[0],
@@ -1117,7 +1127,7 @@ def _main_batch(directory: Path, args, work_dir: Path, script_dir: Path):
     for video, output in zip(videos, outputs):
         key = compute_input_hash(video)
         if is_uploaded(_upload_log_path(args, script_dir), key) and not args.force_upload:
-            print(f"{video.name} 已上传过，跳过上传。")
+            print(f"{video.name} 已上传过，跳过上传")
             continue
         if youtube is None:
             youtube = _get_youtube_service(args, script_dir)
@@ -1151,6 +1161,14 @@ def main(argv=None, work_dir: Path | None = None):
 
 
 def dispatch_input(input_path, args, work_dir, script_dir):
+    for tool in ('ffmpeg', 'ffprobe'):
+        executable = shutil.which(tool)
+        if not executable:
+            raise SystemExit(f'未找到 {tool}，请重新检查运行环境')
+        result = subprocess.run([executable, '-version'], stdin=subprocess.DEVNULL,
+                                capture_output=True, text=True, timeout=10, **hidden_process_options())
+        version = (result.stdout or result.stderr).splitlines()
+        print(f"[媒体工具] {version[0] if version else tool}；路径：{executable}", flush=True)
     if input_path.is_dir():
         return _main_batch(input_path, args, work_dir, script_dir)
     if args.batch or args.merge:

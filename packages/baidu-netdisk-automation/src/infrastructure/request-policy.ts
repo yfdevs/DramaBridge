@@ -14,10 +14,10 @@ export function baiduApiError(result: Record<string, unknown>, endpoint: string)
   if (code === 132) {
     // The installed client routes this to deleteFileSecurity. This operation
     // requires verification; it is not evidence that reads/uploads are blocked.
-    return new Error(`${BAIDU_IDENTITY_VERIFICATION_MARKER} ${detail}；百度网盘要求验证身份后才能删除或管理文件。请在百度客户端完成身份验证后重试此操作；已保留本地文件和已上传内容，不会自动重试，也不会暂停其他上传。`);
+    return new Error(`${BAIDU_IDENTITY_VERIFICATION_MARKER} ${detail}；百度网盘要求验证身份后才能删除或管理文件。请在百度客户端完成身份验证后重试此操作；已保留本地文件和已上传内容，不会自动重试，也不会暂停其他上传`);
   }
   if (verificationCodes.has(code) || frequencyCodes.has(code)) {
-    return new Error(`${BAIDU_RISK_CONTROL_MARKER} ${detail}；百度网盘要求验证或操作过于频繁，已暂停自动请求。请在客户端完成验证，稍后手动重试。`);
+    return new Error(`${BAIDU_RISK_CONTROL_MARKER} ${detail}；百度网盘要求验证或操作过于频繁，已暂停自动请求。请在客户端完成验证，稍后手动重试`);
   }
   const message = String(result.errmsg ?? result.error_msg ?? result.show_msg ?? "百度接口返回异常").slice(0, 200);
   return new Error(`百度网盘接口失败：${detail}；${message}`);
@@ -30,7 +30,7 @@ export function createBaiduRequestGate(intervalMs = 400, cooldownMs = 60_000, da
   return {
     async acquire(signal?: AbortSignal, traffic: "metadata" | "data" = "metadata") {
       signal?.throwIfAborted();
-      if (Date.now() < blockedUntil) throw new Error(`${BAIDU_RISK_CONTROL_MARKER} 百度网盘自动操作暂停中，请完成客户端验证后稍后重试。`);
+      if (Date.now() < blockedUntil) throw new Error(`${BAIDU_RISK_CONTROL_MARKER} 百度网盘自动操作暂停中，请完成客户端验证后稍后重试`);
       const start = Math.max(Date.now(), nextStart[traffic]);
       nextStart[traffic] = start + (traffic === "data" ? dataIntervalMs : intervalMs);
       if (start > Date.now()) {
@@ -38,7 +38,7 @@ export function createBaiduRequestGate(intervalMs = 400, cooldownMs = 60_000, da
         catch (error) { signal?.throwIfAborted(); throw error; }
       }
       signal?.throwIfAborted();
-      if (Date.now() < blockedUntil) throw new Error(`${BAIDU_RISK_CONTROL_MARKER} 百度网盘自动操作暂停中，请完成客户端验证后稍后重试。`);
+      if (Date.now() < blockedUntil) throw new Error(`${BAIDU_RISK_CONTROL_MARKER} 百度网盘自动操作暂停中，请完成客户端验证后稍后重试`);
     },
     observe(error: unknown) {
       if (String(error).includes(BAIDU_RISK_CONTROL_MARKER)) blockedUntil = Date.now() + cooldownMs;

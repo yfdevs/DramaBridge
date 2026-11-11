@@ -22,7 +22,7 @@ async function resolveSessionToken(page: Page): Promise<string> {
   const linkedToken = href ? tokenFromUrl(new URL(href, page.url()).href) : null;
   if (linkedToken) return linkedToken;
 
-  throw new Error("[login-required] 微信小程序后台登录状态无效，请重新扫码登录。");
+  throw new Error("[login-required] 微信小程序后台登录状态无效，请重新扫码登录");
 }
 
 export async function gotoMiniProgramPage(page: Page, pathname: string): Promise<void> {

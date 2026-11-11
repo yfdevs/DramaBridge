@@ -14,7 +14,7 @@ export type IqiyiDramaTaskFailStage =
 
 const requiredText = z.string().trim().min(1);
 const optionalText = z.string().trim().optional();
-const fileReference = requiredText.describe("本地文件路径或 HTTP(S) 下载地址。");
+const fileReference = requiredText.describe("本地文件路径或 HTTP(S) 下载地址");
 const iqiyiCopyrightSchema = z.object({
   productionProofFiles: z.array(fileReference).max(20).default([]),
 }).strict();
@@ -191,6 +191,7 @@ export type IqiyiDramaRuntimeStatus = {
 };
 
 export type IqiyiDramaRuntimeOptions = {
+  canClaimTask?: () => boolean;
   classifyOwnershipLocally?: (file: string) => Promise<OwnershipProjectProofKind>;
   accountProfileName?: string;
   accountDir?: string;

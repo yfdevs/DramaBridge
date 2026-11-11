@@ -31,7 +31,7 @@ function errorMessage(error: unknown) { return error instanceof Error ? error.me
 export function taobaoDownloadInfrastructurePauseReason(error: unknown): string | undefined {
   const message = errorMessage(error);
   if (/BAIDU_NETDISK_CLIENT_RESTART_REQUIRED|不是可用百度网盘 CDP|百度网盘 CDP 核心页面不可用|Error parsing .*@electron[\\/]remote[\\/]package\.json/i.test(message)) {
-    return "百度网盘客户端下载组件或 CDP 连接不可用，已暂停领取新任务。请重启百度网盘为 CDP 模式，再重启淘宝服务。";
+    return "百度网盘客户端下载组件或 CDP 连接不可用，已暂停领取新任务。请重启百度网盘为 CDP 模式，再重启淘宝服务";
   }
 }
 
@@ -151,7 +151,7 @@ export async function startTaobaoDramaRuntime(options: TaobaoDramaRuntimeOptions
         await flushPendingTaobaoReports({ store: executionStore, apiBaseUrl: options.apiConfig!.baseUrl, accountId: account.accountId,
           onError: (message) => errorLog(options, `[taobao-drama] ${message}`) });
         if (claimPausedReason) { await waitPoll(); continue; }
-        const task = await claimNextTaobaoDramaTaskApi({ apiBaseUrl: options.apiConfig!.baseUrl, account,
+        const task = options.canClaimTask?.() === false ? null : await claimNextTaobaoDramaTaskApi({ apiBaseUrl: options.apiConfig!.baseUrl, account,
           workerId: options.workerId!, executionStore, runtimeOptions: options });
         if (task) {
           let taskPage = reusableTaskPage && !reusableTaskPage.isClosed() ? reusableTaskPage : await context.newPage();

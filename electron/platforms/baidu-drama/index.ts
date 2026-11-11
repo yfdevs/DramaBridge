@@ -1,3 +1,5 @@
+import { createAccountRuntimeGroup } from "../shared/account-runtime-group";
+import { registerAccountControl } from "../shared/account-control";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -405,12 +407,16 @@ async function status(): Promise<BaiduDramaServiceStatus> {
   return { ...runtimeStatus, pid: process.pid };
 }
 
-async function startRuntime(selectedAccountIds: string[]) {
+async function startRuntime(selectedAccountIds: unknown) {
+  return createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+}
+
+async function startAccountRuntime(selectedAccountIds: string[], canClaimTask: () => boolean) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const configuredVideoRoot = config.localEpisodeVideoRoot.trim();
   if (!configuredVideoRoot) {
-    throw new Error("请先在百度短剧配置中选择剧集视频根目录，再启动服务。");
+    throw new Error("请先在百度短剧配置中选择剧集视频根目录，再启动服务");
   }
   const localEpisodeVideoRoot = resolveFromAppRoot(configuredVideoRoot);
   if (!existsSync(localEpisodeVideoRoot) || !statSync(localEpisodeVideoRoot).isDirectory()) {
@@ -444,6 +450,7 @@ async function startRuntime(selectedAccountIds: string[]) {
       const paths = storagePaths(config, accountProfileName);
       ensureStorageDirectories(paths);
       const runtime = await startBaiduDramaRuntime({
+        canClaimTask,
         accountProfileName,
         baiduAccountId: account.accountId,
         baiduAccountName: account.accountName,
@@ -567,6 +574,7 @@ export function openBaiduDramaLogDir() {
 }
 
 export function registerBaiduDramaPlatformHandlers() {
+  registerAccountControl({ platform: "baidu-drama", controller: runtimeController, start: startRuntime, status });
   registerTaskAnalyticsHandler({
     platform: "baidu-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,

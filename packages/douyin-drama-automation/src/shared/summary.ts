@@ -20,6 +20,6 @@ export async function optimizeDouyinSummary(text: string, sourceClient?: Summary
     minLength: 101,
     maxLength: 200,
     fieldName: "抖音短剧剧情简介",
-    instructions: "最终101-200字符（含标点），忠于原文，过长自然压缩、过短自然扩写；只输出简介，不输出字数说明。",
+    instructions: "最终101-200字符（含标点），忠于原文，过长自然压缩、过短自然扩写；只输出简介，不输出字数说明",
   });
 }

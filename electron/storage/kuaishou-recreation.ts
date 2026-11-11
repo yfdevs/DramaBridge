@@ -46,7 +46,7 @@ export class KuaishouRecreationRepository {
             .prepare("SELECT id FROM kuaishou_recreation_tasks WHERE title_key = ?")
             .get(key)
         )
-          throw new Error(`原剧名重复：${input.originalTitle}。整批未导入，请移除重复行。`);
+          throw new Error(`原剧名重复：${input.originalTitle}。整批未导入，请移除重复行`);
         const now = new Date().toISOString();
         const task: RecreationTask = {
           ...input,

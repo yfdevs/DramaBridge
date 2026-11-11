@@ -21,13 +21,13 @@ export function parseBaiduNetdiskShareText(
   sourceLabel = "分享文本",
 ): BaiduNetdiskShareInfo {
   const link = trimShareLink(content.match(/https?:\/\/pan\.baidu\.com\/s\/[^\s"'<>]+/)?.[0] ?? "");
-  if (!link) throw new Error(`${sourceLabel} 中没有找到百度网盘分享链接。`);
+  if (!link) throw new Error(`${sourceLabel} 中没有找到百度网盘分享链接`);
 
   const url = new URL(link);
   const pwd =
     url.searchParams.get("pwd") ??
     content.match(/(?:提取码|密码|pwd)[:：\s]*([a-zA-Z0-9]{4})/)?.[1];
-  if (!pwd) throw new Error(`${sourceLabel} 中没有找到提取码。`);
+  if (!pwd) throw new Error(`${sourceLabel} 中没有找到提取码`);
 
   const name =
     content.match(/通过网盘分享的文件[:：]\s*([^\r\n]+)/)?.[1]?.trim() ??

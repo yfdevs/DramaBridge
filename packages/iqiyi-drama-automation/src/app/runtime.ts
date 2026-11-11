@@ -115,10 +115,10 @@ async function ensureRemoteMaterials(
   const shareText = task.playlet.baiduPanResourceLink?.trim();
   if (!shareText) return;
   if (!options.ensureBaiduNetdiskResource) {
-    throw new Error("任务包含百度网盘资源链接，但爱奇艺运行时未接入百度网盘下载能力。");
+    throw new Error("任务包含百度网盘资源链接，但爱奇艺运行时未接入百度网盘下载能力");
   }
   const localMaterialRoot = options.localMaterialRoot?.trim();
-  if (!localMaterialRoot) throw new Error("请先配置爱奇艺本地素材根目录。");
+  if (!localMaterialRoot) throw new Error("请先配置爱奇艺本地素材根目录");
 
   const maximumAttempts = Math.max(0, options.baiduNetdiskDownloadRetryAttempts ?? 3) + 1;
   const downloadEpisodeVideos = true;
@@ -271,7 +271,7 @@ async function installFixedTitle(context: BrowserContext, title: string) {
 export async function startIqiyiDramaRuntime(
   options: IqiyiDramaRuntimeOptions = {},
 ): Promise<IqiyiDramaRuntime> {
-  if (!options.userDataDir) throw new Error("爱奇艺浏览器用户数据目录未配置。");
+  if (!options.userDataDir) throw new Error("爱奇艺浏览器用户数据目录未配置");
   configureIqiyiDramaLogger(options);
   cleanupOldLogFiles(options);
 
@@ -312,7 +312,7 @@ export async function startIqiyiDramaRuntime(
         await waitForIqiyiLogin(page, context, options);
         if (!running || page.isClosed()) break;
         if (iqiyiDramaLoginStateFromUrl(page.url()) !== "logged-in") continue;
-        const task = await claimNextIqiyiDramaTaskApi({
+        const task = options.canClaimTask?.() === false ? null : await claimNextIqiyiDramaTaskApi({
           apiConfig: options.apiConfig,
           runtimeOptions: options,
         });

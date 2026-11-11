@@ -1,3 +1,4 @@
+import { createAccountControl } from "@/platforms/app-runtime/service";
 import type { TaskSweepResult } from "@dramabridge/automation-logging"
 export type KuaishouDramaAccount = {
   accountId: string;
@@ -87,7 +88,7 @@ export type KuaishouDramaServiceStatus = {
 
 async function invokeKuaishouDrama<T>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.ipcRenderer) {
-    throw new Error("快手短剧服务控制仅在 Electron 应用内可用。");
+    throw new Error("快手短剧服务控制仅在 Electron 应用内可用");
   }
 
   try {
@@ -96,16 +97,17 @@ async function invokeKuaishouDrama<T>(channel: string, ...args: unknown[]): Prom
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("KUAISHOU_DRAMA_ENABLED_ACCOUNT_NOT_FOUND")) {
-      throw Object.assign(new Error("没有获取到已启用的快手账号，请先在后台创建并开启账号配置。"), { cause: error });
+      throw Object.assign(new Error("没有获取到已启用的快手账号，请先在后台创建并开启账号配置"), { cause: error });
     }
     if (message.includes("KUAISHOU_DRAMA_API_BASE_URL_REQUIRED")) {
-      throw Object.assign(new Error("请先配置快手后台接口地址。"), { cause: error });
+      throw Object.assign(new Error("请先配置快手后台接口地址"), { cause: error });
     }
     throw error;
   }
 }
 
 export const kuaishouDramaService = {
+  accountControl: createAccountControl("kuaishou-drama"),
   cleanupTasks: () => invokeKuaishouDrama<TaskSweepResult>("kuaishou-drama:tasks:cleanup"),
   getConfig() {
     return invokeKuaishouDrama<KuaishouDramaConfigResult>("kuaishou-drama:config:get");

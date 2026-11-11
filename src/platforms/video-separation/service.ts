@@ -2,7 +2,7 @@ export type DirectoryListing = {directory:string; parent:string; entries:{name:s
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   try { return await window.ipcRenderer.invoke(channel, ...args); }
   catch (error) {
-    if (String(error).includes('未注册 IPC 过程')) throw new Error('视频分离主进程尚未更新，请完全退出应用后重新启动；开发环境请重启 pnpm dev。');
+    if (String(error).includes('未注册 IPC 过程')) throw Object.assign(new Error('视频分离主进程尚未更新，请完全退出应用后重新启动；开发环境请重启 pnpm dev'), { cause: error });
     throw error;
   }
 }

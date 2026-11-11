@@ -67,7 +67,7 @@ export function TaobaoDramaServiceControlPage() {
       startDisabled={accountsLoading || accountsError !== null || selectedIds.length === 0}
       onToggle={() => void state.toggleService()}
       beforeBrowserInstances={
-        <AccountSelection runtimes={state.status.accounts}
+        <AccountSelection controls={taobaoDramaService.accountControl} runtimes={state.status.accounts}
           locked={state.loading || state.status.running}
           selection={{
             accounts: accounts.map(account => {

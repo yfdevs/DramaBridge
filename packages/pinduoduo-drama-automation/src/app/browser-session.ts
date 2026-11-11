@@ -52,8 +52,8 @@ export async function launchPinduoduoBrowserContext(
     throw Object.assign(
       new Error(
         options.config?.browser?.executablePath
-          ? "无法启动配置的浏览器，请检查可执行文件路径和浏览器安装。"
-          : "拼多多短剧需要本机安装 Google Chrome，请安装或修复 Chrome 后重启服务。",
+          ? "无法启动配置的浏览器，请检查可执行文件路径和浏览器安装"
+          : "拼多多短剧需要本机安装 Google Chrome，请安装或修复 Chrome 后重启服务",
       ),
       { cause: error },
     );
@@ -72,8 +72,8 @@ export async function testPinduoduoBrowserExecutable(
     return {
       ok: true,
       message: trimmedPath
-        ? "浏览器路径可用，Playwright 已成功启动。"
-        : "未填写自定义路径，系统 Chrome 可用。",
+        ? "浏览器路径可用，Playwright 已成功启动"
+        : "未填写自定义路径，系统 Chrome 可用",
     };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) };

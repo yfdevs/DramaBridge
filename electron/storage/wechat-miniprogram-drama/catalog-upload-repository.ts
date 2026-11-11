@@ -166,7 +166,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
         episodeStatuses,
         uploadedEpisodeCount,
         coverStatus: coverComplete ? (current.coverStatus === "uploaded" ? "uploaded" : "existing") : "pending",
-        error: complete || sourceAvailable ? undefined : "剧列表未提供百度网盘链接。",
+        error: complete || sourceAvailable ? undefined : "剧列表未提供百度网盘链接",
       })
     }
     const now = new Date().toISOString()
@@ -189,7 +189,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
       error: input.baiduNetdiskUrl?.trim()
         || (input.hasFirstFourEpisodes && input.hasCover)
         ? undefined
-        : "剧列表未提供百度网盘链接。",
+        : "剧列表未提供百度网盘链接",
       createdAt: now,
       updatedAt: now,
     }
@@ -235,7 +235,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
   retry(id: string): WechatMiniProgramCatalogUploadTask {
     const current = this.findById(id)
     if (!current) throw new Error(`前四集与封面上传记录不存在：${id}`)
-    if (!current.baiduNetdiskUrl?.trim()) throw new Error("当前剧目没有百度网盘链接，无法重试。")
+    if (!current.baiduNetdiskUrl?.trim()) throw new Error("当前剧目没有百度网盘链接，无法重试")
     return this.update(id, {
       state: "discovered",
       error: undefined,
@@ -248,7 +248,7 @@ export class WechatMiniProgramCatalogUploadTaskRepository {
     const now = new Date().toISOString()
     this.database.prepare(`
       UPDATE wechat_miniprogram_catalog_upload_tasks
-      SET state='interrupted', error='应用上次退出时任务尚未完成，请重新开始队列。',
+      SET state='interrupted', error='应用上次退出时任务尚未完成，请重新开始队列',
           updated_at=@now, finished_at=@now
       WHERE state IN ('downloading', 'uploading')
     `).run({ now })

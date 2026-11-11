@@ -148,7 +148,7 @@ function baiduNetdiskSummary(status: BaiduNetdiskCdpStatus | null, error: string
 
 async function getAppRuntimeStatus() {
   if (!window.ipcRenderer) {
-    throw new Error("应用运行状态仅在 Electron 应用内可用。");
+    throw new Error("应用运行状态仅在 Electron 应用内可用");
   }
 
   return window.ipcRenderer.invoke("app:runtime:status") as Promise<AppRuntimeStatus>;

@@ -234,7 +234,7 @@ async function dismissTaobaoUploadDialog(dialog: ElementHandle<Node>) {
       if (!(await dialog.isVisible().catch(() => false))) return;
       // The parent can survive while React replaces just its button. Re-read
       // the buttons in the pinned dialog, never an index in a new dialog list.
-      if (attempt === 3) throw Object.assign(new Error("TAOBAO_DRAMA_UPLOAD_DIALOG_ACK_FAILED: 上传提示框连续重绘或无法关闭，请检查当前页面。"), { cause: error });
+      if (attempt === 3) throw Object.assign(new Error("TAOBAO_DRAMA_UPLOAD_DIALOG_ACK_FAILED: 上传提示框连续重绘或无法关闭，请检查当前页面"), { cause: error });
     }
   }
 }
@@ -789,7 +789,7 @@ async function pasteTaobaoContentTagQuery(page: Page, editor: Locator, tag: stri
       const input = element.ownerDocument.querySelector<HTMLTextAreaElement>(
         `textarea[data-cangjie-dockey="${CSS.escape(documentKey)}"]`,
       );
-      if (!input) throw new Error("TAOBAO_DRAMA_CONTENT_TAG_INPUT_NOT_FOUND: 未找到淘宝内容标签编辑器的实际输入框，请检查页面是否已加载完成。");
+      if (!input) throw new Error("TAOBAO_DRAMA_CONTENT_TAG_INPUT_NOT_FOUND: 未找到淘宝内容标签编辑器的实际输入框，请检查页面是否已加载完成");
       input.focus();
       if (input.ownerDocument.activeElement !== input) throw new Error("TAOBAO_DRAMA_CONTENT_TAG_INPUT_NOT_FOCUSED");
     } else {
@@ -818,7 +818,7 @@ async function confirmTaobaoContentTagSelected(page: Page, panel: Locator, edito
     if ((await readTaobaoSelectedTags(editor)).includes(expected)) return;
     await page.waitForTimeout(100);
   }
-  throw new Error(`TAOBAO_DRAMA_CONTENT_TAG_SELECTION_NOT_CONFIRMED: 点击内容标签“${label}”后，未确认它已添加到视频，请检查淘宝发布页的内容标签。`);
+  throw new Error(`TAOBAO_DRAMA_CONTENT_TAG_SELECTION_NOT_CONFIRMED: 点击内容标签“${label}”后，未确认它已添加到视频，请检查淘宝发布页的内容标签`);
 }
 
 export function scoreTaobaoContentTagMatch(candidate: string, requested: string) {
@@ -892,7 +892,7 @@ async function openTaobaoTagSearchPanel(page: Page, panel: Locator) {
       if (pending.size === 0 && Date.now() - lastActivity >= 400 && loading === 0) return true;
       await page.waitForTimeout(100);
     }
-    throw new Error("TAOBAO_DRAMA_CONTENT_TAG_SEARCH_NOT_READY: 淘宝内容标签面板仍在加载推荐标签，尚不能开始搜索。已保留当前输入，请等待页面加载完成后重试任务。");
+    throw new Error("TAOBAO_DRAMA_CONTENT_TAG_SEARCH_NOT_READY: 淘宝内容标签面板仍在加载推荐标签，尚不能开始搜索。已保留当前输入，请等待页面加载完成后重试任务");
   } finally {
     page.off("request", requested);
     page.off("requestfinished", finished);
@@ -926,9 +926,9 @@ export async function selectTaobaoContentTag(
   await page.keyboard.press("ArrowRight");
   // The fixed first tag needs the same initialized, native-paste search as
   // later tags. Character events can leave even AI短剧 on default suggestions.
-  let panelOpened = await openTaobaoTagSearchPanel(page, panel);
+  await openTaobaoTagSearchPanel(page, panel);
   await pasteTaobaoContentTagQuery(page, editor, tag);
-  panelOpened = await waitForTaobaoTagSearchPanel(page, panel);
+  const panelOpened = await waitForTaobaoTagSearchPanel(page, panel);
   const suggestions = new Set<string>();
   if (panelOpened) {
     const deadline = Date.now() + 30_000;
@@ -953,13 +953,13 @@ export async function selectTaobaoContentTag(
   }
   const inputDescription = tagKind === "title" ? "完整剧名已粘贴" : "完整内容标签已粘贴";
   const reason = suggestions.size > 0
-    ? `淘宝标签搜索列表未显示完全匹配的已有或新建标签，可能仍停留在默认推荐。当前候选标签：${[...suggestions].slice(0, 8).join("、")}。`
+    ? `淘宝标签搜索列表未显示完全匹配的已有或新建标签，可能仍停留在默认推荐。当前候选标签：${[...suggestions].slice(0, 8).join("、")}`
     : !panelOpened
-      ? `${inputDescription}，但标签搜索面板未打开。`
-      : `${inputDescription}，但未读到可选标签或新建标签记录，可能是页面搜索未响应或结果未加载。`;
+      ? `${inputDescription}，但标签搜索面板未打开`
+      : `${inputDescription}，但未读到可选标签或新建标签记录，可能是页面搜索未响应或结果未加载`;
   throw new Error(
     `TAOBAO_DRAMA_CONTENT_TAG_NOT_FOUND: 填写视频内容标签失败：目标标签“#${tag}”。` +
-      `${reason}已保留标签输入，请检查淘宝发布页的搜索或新建标签记录后重试任务。`,
+      `${reason}已保留标签输入，请检查淘宝发布页的搜索或新建标签记录后重试任务`,
   );
 }
 
@@ -1431,7 +1431,7 @@ export async function uploadAndPublishTaobaoEpisodes(
       );
     }
     if (currentPlan?.missingEpisodeNumbers.length) {
-      throw new Error(`TAOBAO_DRAMA_EPISODE_SUBMISSIONS_INCOMPLETE: 仍有 ${currentPlan.missingEpisodeNumbers.length} 集未确认提交，请核实发布结果。`);
+      throw new Error(`TAOBAO_DRAMA_EPISODE_SUBMISSIONS_INCOMPLETE: 仍有 ${currentPlan.missingEpisodeNumbers.length} 集未确认提交，请核实发布结果`);
     }
     finished = true;
   } finally {

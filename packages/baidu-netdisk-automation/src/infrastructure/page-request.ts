@@ -11,7 +11,8 @@ export async function baiduPageRequest<T>(
     if (init.signal?.aborted) throw init.signal.reason ?? new Error("百度网盘请求已取消");
     try {
       const result = await requestOnce();
-      const code = Number((result as any)?.errno ?? (result as any)?.error_code ?? 0);
+      const data = result as { errno?: unknown; error_code?: unknown } | null;
+      const code = Number(data?.errno ?? data?.error_code ?? 0);
       if (readOnly && [1, 4].includes(code) && attempt < attempts) {
         await new Promise(resolve => setTimeout(resolve, attempt * 800));
         continue;
@@ -36,7 +37,7 @@ export async function baiduPageRequest<T>(
     };
     const policy = host.__dramaBridgeRequestPolicy ??= { nextStart: 0, blockedUntil: 0 };
     const endpoint = new URL(url, location.href).pathname;
-    const riskMessage = "[BAIDU_NETDISK_RISK_CONTROL] 百度网盘要求验证或操作过于频繁，已暂停自动请求。请在客户端完成验证，稍后手动重试。";
+    const riskMessage = "[BAIDU_NETDISK_RISK_CONTROL] 百度网盘要求验证或操作过于频繁，已暂停自动请求。请在客户端完成验证，稍后手动重试";
     if (Date.now() < policy.blockedUntil) throw new Error(riskMessage);
     const start = Math.max(Date.now(), policy.nextStart);
     policy.nextStart = start + 400;
@@ -86,7 +87,7 @@ export async function baiduPageRequest<T>(
       if (!response.ok) {
         // Do not expose signed URLs, credentials, or response HTML in logs.
         let finalPath = endpoint;
-        try { finalPath = new URL(response.url || url, location.href).pathname; } catch {}
+        try { finalPath = new URL(response.url || url, location.href).pathname; } catch { /* Keep the original endpoint when the response URL is invalid. */ }
         const contentType = response.headers?.get?.("content-type") || "unknown";
         throw new Error(`百度网盘接口 HTTP ${response.status}：${endpoint}；method=${init.method || "GET"}；redirected=${Boolean(response.redirected)}；finalPath=${finalPath}；contentType=${contentType}`);
       }
@@ -108,7 +109,7 @@ export async function baiduPageRequest<T>(
     } catch (error) {
       if (init.signal?.aborted) throw init.signal.reason ?? error;
       if (controller.signal.aborted) {
-        throw new Error(`百度网盘接口请求超时（${timeoutMs / 1000} 秒）：${new URL(url, location.href).pathname}；请核对操作结果后重试。`);
+        throw Object.assign(new Error(`百度网盘接口请求超时（${timeoutMs / 1000} 秒）：${new URL(url, location.href).pathname}；请核对操作结果后重试`), { cause: error });
       }
       throw error;
     } finally {

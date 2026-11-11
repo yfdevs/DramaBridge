@@ -10,7 +10,7 @@ import type { ClaimedTencentHuolongDramaTask, TencentHuolongRuntimeOptions } fro
 
 export function materialRoot(options: TencentHuolongRuntimeOptions) {
   const root = options.localMaterialRoot?.trim();
-  if (!root) throw new Error("请先配置腾讯火龙漫剧本地素材目录。");
+  if (!root) throw new Error("请先配置腾讯火龙漫剧本地素材目录");
   return root;
 }
 

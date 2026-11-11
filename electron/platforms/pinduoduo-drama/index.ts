@@ -551,7 +551,7 @@ export function registerPinduoduoDramaPlatformHandlers() {
     "pinduoduo-drama:upload-records:retry-one",
     (_event, platformApplyId: number) => {
       if (!Number.isSafeInteger(platformApplyId) || platformApplyId <= 0) {
-        throw new Error("无效的拼多多短剧记录 ID。");
+        throw new Error("无效的拼多多短剧记录 ID");
       }
 
       return {

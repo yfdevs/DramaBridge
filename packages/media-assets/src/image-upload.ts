@@ -349,10 +349,10 @@ function assertImagePolicy(policy: ImageUploadPolicy) {
     policy.targetFileBytes <= 0 ||
     policy.targetFileBytes >= policy.maxFileBytes
   ) {
-    throw new Error("[image-compress-failed] 图片目标体积必须大于 0 且小于上传上限。");
+    throw new Error("[image-compress-failed] 图片目标体积必须大于 0 且小于上传上限");
   }
   if (policy.minimumWidth <= 0 || policy.minimumHeight <= 0) {
-    throw new Error("[image-compress-failed] 图片最小宽高必须大于 0。");
+    throw new Error("[image-compress-failed] 图片最小宽高必须大于 0");
   }
 }
 
@@ -546,7 +546,7 @@ export async function compressImageForUpload(options: {
     || options.policy.targetFileBytes <= 0
     || options.policy.targetFileBytes >= options.policy.compressAboveBytes
   ) {
-    throw new Error("[image-compress-failed] 图片压缩目标体积必须大于 0 且小于触发体积。");
+    throw new Error("[image-compress-failed] 图片压缩目标体积必须大于 0 且小于触发体积");
   }
 
   const sourceStat = await stat(options.inputFile).catch(() => undefined);

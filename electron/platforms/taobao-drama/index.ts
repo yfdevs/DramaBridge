@@ -1,3 +1,5 @@
+import { createAccountRuntimeGroup } from "../shared/account-runtime-group";
+import { registerAccountControl } from "../shared/account-control";
 import { seedUnconfirmedClaims, staleTaskMonitor } from "../shared/stale-task-monitor";
 import { app, Notification } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
@@ -141,7 +143,7 @@ function notifyTaobaoHumanVerification(account: Account) {
   if (Notification.isSupported()) {
     new Notification({
       title: "淘宝需要手动验证",
-      body: `${accountLabel} 的发布任务已暂停，请打开淘宝浏览器完成验证码，验证通过后任务会自动继续。`,
+      body: `${accountLabel} 的发布任务已暂停，请打开淘宝浏览器完成验证码，验证通过后任务会自动继续`,
     }).show();
   }
 }
@@ -213,7 +215,13 @@ async function status(): Promise<TaobaoDramaServiceStatus> {
   return { ...current, pid: process.pid, executions: executionAttention() };
 }
 
-async function startRuntime(selectedAccountIds: unknown): Promise<Runtime> {
+async function startRuntime(selectedAccountIds: unknown) {
+  const runtime = await createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+  configStore().set("selectedAccountIds", runtime.getStatus().accounts.filter(account => account.launched).map(account => account.accountId));
+  return runtime;
+}
+
+async function startAccountRuntime(selectedAccountIds: unknown, canClaimTask: () => boolean): Promise<Runtime> {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const workerId = await getTaobaoWorkerId(() => {
@@ -230,13 +238,13 @@ async function startRuntime(selectedAccountIds: unknown): Promise<Runtime> {
   const enabledAccounts = await fetchTaobaoDramaAccounts(config.apiBaseUrl);
   if (!enabledAccounts.length) throw new Error("TAOBAO_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
   const accounts = selectTaobaoAccounts(enabledAccounts, selectedAccountIds);
-  configStore().set("selectedAccountIds", accounts.map((account) => account.accountId));
   const accountRuntimes: Array<{ account: Account; runtime: AccountRuntime }> = [];
   try {
     for (const account of accounts) {
       const accountProfileName = account.rpaProfileKey?.trim() || account.accountId;
       const paths = storagePaths(config, accountProfileName); ensureDirectories(paths);
       const runtime = await startTaobaoDramaRuntime({
+        canClaimTask,
         workerId, executionStore: executions(), taskWatchdog: taskMonitor(),
         accountProfileName, accountId: account.accountId, accountName: account.accountName,
         accountDir: paths.accountDir, userDataDir: paths.userDataDir, credentialStatePath: paths.credentialStatePath,
@@ -279,6 +287,7 @@ export function getTaobaoDramaPlatformRuntimeSummary() {
 export function openTaobaoDramaLogDir() { const paths = storagePaths(); ensureDirectories(paths); return openExistingPath(paths.logDir); }
 
 export function registerTaobaoDramaPlatformHandlers() {
+  registerAccountControl({ platform: "taobao-drama", controller: controller, start: startRuntime, status, onStarted: () => configStore().set("selectedAccountIds", controller.current?.getStatus().accounts.filter(account => account.launched).map(account => account.accountId) ?? []) });
   taskMonitor();
   ipcMain.handle("taobao-drama:tasks:cleanup", () => taskMonitor().sweep());
   registerTaskAnalyticsHandler({ platform: "taobao-drama", apiBaseUrl: () => readConfig().apiBaseUrl, apiPrefix: "/dramaAiRpa/taobao" });
@@ -307,18 +316,18 @@ export function registerTaobaoDramaPlatformHandlers() {
     };
   });
   ipcMain.handle("taobao-drama:execution:recheck", async (_event, id: string) => {
-    if (controller.running || controller.startingPromise) throw new Error("请先停止淘宝服务，并在淘宝和后台核实、处理该任务，再重新检查。");
+    if (controller.running || controller.startingPromise) throw new Error("请先停止淘宝服务，并在淘宝和后台核实、处理该任务，再重新检查");
     const record = executions().get(id);
-    if (!record || record.apiBaseUrl !== readConfig().apiBaseUrl.trim().replace(/\/+$/, "")) throw new Error("未找到当前后台的本地任务记录。");
-    if (!["review-required", "report-blocked"].includes(record.phase)) throw new Error("该记录无需人工解除；待补报记录会在服务启动后自动重试。");
+    if (!record || record.apiBaseUrl !== readConfig().apiBaseUrl.trim().replace(/\/+$/, "")) throw new Error("未找到当前后台的本地任务记录");
+    if (!["review-required", "report-blocked"].includes(record.phase)) throw new Error("该记录无需人工解除；待补报记录会在服务启动后自动重试");
     const task = await (await runtimePackage()).fetchTaobaoAccountTaskApi({ apiBaseUrl: record.apiBaseUrl, accountId: record.accountId, taskId: record.taskId });
-    if (controller.running || controller.startingPromise) throw new Error("检查期间服务已启动，请先停止服务再检查。");
-    if (executions().get(id)?.updatedAt !== record.updatedAt) throw new Error("任务记录已更新，请刷新后重新检查。");
+    if (controller.running || controller.startingPromise) throw new Error("检查期间服务已启动，请先停止服务再检查");
+    if (executions().get(id)?.updatedAt !== record.updatedAt) throw new Error("任务记录已更新，请刷新后重新检查");
     if (!task || !["READY", "FAILED", "COMPLETED", "CANCELED", "DRAFT", "CONTRACT_FILLING"].includes(task.status || "")) {
-      throw new Error("后台任务仍在上传中或状态无法确认。请先在淘宝确认是否已提交，并在后台处理占用，再重新检查。");
+      throw new Error("后台任务仍在上传中或状态无法确认。请先在淘宝确认是否已提交，并在后台处理占用，再重新检查");
     }
     executions().save({ ...record, phase: "released", updatedAt: new Date().toISOString(),
-      errorMessage: `用户已在后台核实处理，重新检查状态为 ${task.status}，保留原领取和结果记录。` });
+      errorMessage: `用户已在后台核实处理，重新检查状态为 ${task.status}，保留原领取和结果记录` });
     return status();
   });
   ipcMain.handle("taobao-drama:service:start", async (_event, selectedAccountIds: unknown) => {

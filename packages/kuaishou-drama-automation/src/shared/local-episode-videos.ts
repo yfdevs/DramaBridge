@@ -4,7 +4,7 @@ import type { KuaishouDramaRuntimeOptions, KuaishouDramaTaskConfig } from "./typ
 export function getKuaishouDramaLocalEpisodeVideoRoot(options: KuaishouDramaRuntimeOptions) {
   const root = options.localEpisodeVideoRoot?.trim();
   if (!root) {
-    throw new Error("请先配置快手短剧本地剧集视频目录。");
+    throw new Error("请先配置快手短剧本地剧集视频目录");
   }
   return root;
 }

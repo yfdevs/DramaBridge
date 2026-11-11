@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ListFilterMenu } from "@/components/list-filter-menu";
 import {
   Select,
   SelectContent,
@@ -181,17 +182,13 @@ function CompactSelect<T extends string | number>({
         if (nextValue !== null) onValueChange(nextValue);
       }}
     >
-      <SelectTrigger className={className} size="sm" aria-label={ariaLabel}>
+      <SelectTrigger size="sm" className={className} aria-label={ariaLabel}>
         <SelectValue />
       </SelectTrigger>
-      <SelectContent align="start" alignItemWithTrigger={false}>
+      <SelectContent>
         <SelectGroup>
           {options.map((option) => (
-            <SelectItem
-              key={String(option.value)}
-              value={option.value}
-              className="min-h-8 px-2 py-1.5 pr-8 text-xs"
-            >
+            <SelectItem key={String(option.value)} value={option.value}>
               {option.label}
             </SelectItem>
           ))}
@@ -304,7 +301,8 @@ export function WechatMiniProgramCatalogUploadWindow() {
       if (episodeFilter === "pending" && (episodeComplete || episodeFailed)) return false;
       if (episodeFilter === "failed" && !episodeFailed) return false;
       if (coverFilter === "complete" && !isCoverComplete) return false;
-      if (coverFilter === "pending" && (isCoverComplete || task.coverStatus === "failed")) return false;
+      if (coverFilter === "pending" && (isCoverComplete || task.coverStatus === "failed"))
+        return false;
       if (coverFilter === "failed" && task.coverStatus !== "failed") return false;
       if (sourceFilter === "available" && !task.baiduNetdiskUrl) return false;
       if (sourceFilter === "missing" && task.baiduNetdiskUrl) return false;
@@ -329,13 +327,6 @@ export function WechatMiniProgramCatalogUploadWindow() {
     const start = (currentPage - 1) * pageSize;
     return filteredTasks.slice(start, start + pageSize);
   }, [currentPage, filteredTasks, pageSize]);
-  const hasFilters =
-    Boolean(keyword.trim()) ||
-    stateFilter !== "all" ||
-    episodeFilter !== "all" ||
-    coverFilter !== "all" ||
-    sourceFilter !== "all";
-
   useEffect(() => {
     setCurrentPage(1);
   }, [coverFilter, episodeFilter, keyword, pageSize, sourceFilter, stateFilter]);
@@ -474,7 +465,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
           <span className="text-muted-foreground">
             {workspace?.sync.running
               ? `同步第 ${Math.min((workspace.sync.currentPage ?? 0) + 1, workspace.sync.totalPages ?? 1)}/${workspace.sync.totalPages ?? "—"} 页，已读取 ${workspace.sync.syncedCount} 部`
-              : `剧目 ${workspace?.tasks.length ?? 0} 部${workspace?.sync.lastSyncedAt ? ` · 更新于 ${formatDateTime(workspace.sync.lastSyncedAt)}` : ""}`}
+              : `剧目 ${workspace?.tasks.length ?? 0} 部${workspace?.sync.lastSyncedAt ? `，更新于 ${formatDateTime(workspace.sync.lastSyncedAt)}` : ""}`}
           </span>
           {workspace?.queue.totalCount ? (
             <span className="text-muted-foreground">
@@ -513,39 +504,43 @@ export function WechatMiniProgramCatalogUploadWindow() {
             placeholder="搜索剧名、剧 ID 或网盘链接"
             aria-label="搜索剧目"
           />
-          <CompactSelect
-            ariaLabel="任务状态筛选"
-            className="w-36"
-            options={stateFilterOptions}
-            value={stateFilter}
-            onValueChange={setStateFilter}
+          <ListFilterMenu
+            label="筛选剧目"
+            groups={[
+              {
+                key: "state",
+                label: "任务状态",
+                value: stateFilter,
+                defaultValue: "all",
+                options: stateFilterOptions,
+                onChange: (value) => setStateFilter(value as StateFilter),
+              },
+              {
+                key: "episodes",
+                label: "前四集",
+                value: episodeFilter,
+                defaultValue: "all",
+                options: episodeFilterOptions,
+                onChange: (value) => setEpisodeFilter(value as MaterialFilter),
+              },
+              {
+                key: "cover",
+                label: "封面",
+                value: coverFilter,
+                defaultValue: "all",
+                options: coverFilterOptions,
+                onChange: (value) => setCoverFilter(value as MaterialFilter),
+              },
+              {
+                key: "source",
+                label: "网盘资源",
+                value: sourceFilter,
+                defaultValue: "all",
+                options: sourceFilterOptions,
+                onChange: (value) => setSourceFilter(value as SourceFilter),
+              },
+            ]}
           />
-          <CompactSelect
-            ariaLabel="前四集状态筛选"
-            className="w-36"
-            options={episodeFilterOptions}
-            value={episodeFilter}
-            onValueChange={setEpisodeFilter}
-          />
-          <CompactSelect
-            ariaLabel="封面状态筛选"
-            className="w-32"
-            options={coverFilterOptions}
-            value={coverFilter}
-            onValueChange={setCoverFilter}
-          />
-          <CompactSelect
-            ariaLabel="网盘资源筛选"
-            className="w-36"
-            options={sourceFilterOptions}
-            value={sourceFilter}
-            onValueChange={setSourceFilter}
-          />
-          {hasFilters ? (
-            <Button type="button" size="xs" variant="ghost" onClick={resetFilters}>
-              清除筛选
-            </Button>
-          ) : null}
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
             显示 {filteredTasks.length} / {workspace?.tasks.length ?? 0} 部
           </span>
@@ -623,11 +618,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
                                     : "text-foreground"
                               }
                             >
-                              {episodeComplete
-                                ? "已入库"
-                                : episodeFailed
-                                  ? "上传失败"
-                                  : "待入库"}
+                              {episodeComplete ? "已入库" : episodeFailed ? "上传失败" : "待入库"}
                             </span>
                             <span className="tabular-nums text-muted-foreground">
                               {Math.min(task.uploadedEpisodeCount, task.targetEpisodeCount)}/
@@ -659,7 +650,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
                               {task.coverStatus === "existing" || task.hasCover
                                 ? "后台已有"
                                 : task.coverStatus === "uploaded"
-                                  ? task.coverFileName ?? "本次上传"
+                                  ? (task.coverFileName ?? "本次上传")
                                   : "—"}
                             </span>
                           </div>
@@ -730,7 +721,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
               <div className="max-w-sm">
                 <h2 className="text-sm font-medium">没有符合条件的剧目</h2>
                 <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                  尝试调整关键词或筛选条件。
+                  尝试调整关键词或筛选条件
                 </p>
                 <Button
                   className="mt-3"
@@ -749,7 +740,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
             <div className="max-w-md">
               <h2 className="text-sm font-medium">还没有剧目入库记录</h2>
               <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                点击“获取全部剧目”，系统会一次操作自动读取全部分页，并统一更新剧目和后台状态。
+                点击“获取全部剧目”，系统会一次操作自动读取全部分页，并统一更新剧目和后台状态
               </p>
             </div>
           </div>
@@ -774,7 +765,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
             <div className="flex items-center gap-1">
               <Button
                 type="button"
-                size="xs"
+                size="sm"
                 variant="ghost"
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(1)}
@@ -783,7 +774,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
               </Button>
               <Button
                 type="button"
-                size="xs"
+                size="sm"
                 variant="outline"
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
@@ -795,7 +786,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
               </span>
               <Button
                 type="button"
-                size="xs"
+                size="sm"
                 variant="outline"
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
@@ -804,7 +795,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
               </Button>
               <Button
                 type="button"
-                size="xs"
+                size="sm"
                 variant="ghost"
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(totalPages)}

@@ -1,3 +1,5 @@
+import { createAccountRuntimeGroup } from "../shared/account-runtime-group";
+import { registerAccountControl } from "../shared/account-control";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -334,6 +336,10 @@ async function status(): Promise<IqiyiDramaServiceStatus> {
 }
 
 async function startRuntime(selectedAccountIds: unknown) {
+  return createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+}
+
+async function startAccountRuntime(selectedAccountIds: unknown, canClaimTask: () => boolean) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const {
@@ -341,7 +347,7 @@ async function startRuntime(selectedAccountIds: unknown) {
     startIqiyiDramaRuntime,
   } = await importRuntimePackage();
   const availableAccounts = await fetchIqiyiDramaAccounts(config.apiBaseUrl);
-  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请选择要启动的账号");
   const ids = new Set(selectedAccountIds);
   const accounts = availableAccounts.filter(account => ids.has(account.accountId));
   if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
@@ -356,6 +362,7 @@ async function startRuntime(selectedAccountIds: unknown) {
       const paths = storagePaths(config, account.accountId);
       ensureStorageDirectories(paths);
       const runtime = await startIqiyiDramaRuntime({
+        canClaimTask,
         accountProfileName: account.accountId,
         iqiyiAccountId: account.accountId,
         iqiyiAccountName: account.accountName,
@@ -430,6 +437,7 @@ async function startRuntime(selectedAccountIds: unknown) {
 }
 
 export function registerIqiyiDramaPlatformHandlers() {
+  registerAccountControl({ platform: "iqiyi-drama", controller: runtimeController, start: startRuntime, status });
   registerTaskAnalyticsHandler({
     platform: "iqiyi-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,

@@ -171,7 +171,7 @@ export async function claimTaobaoAccountTaskApi(options: {
   assertSuccess(responseBaseSchema.parse(raw), "TAOBAO_DRAMA_ACCOUNT_TASK_CLAIM_FAILED");
   const response = claimResponseSchema.parse(raw);
   if (!response.data || response.data.accountTaskId !== options.accountTaskId || response.data.workerId !== options.workerId) {
-    throw new Error("TAOBAO_DRAMA_CLAIM_UNCERTAIN: 领取响应中的任务或执行器身份不匹配，已暂停该任务，禁止上传，请核实后台领取结果。");
+    throw new Error("TAOBAO_DRAMA_CLAIM_UNCERTAIN: 领取响应中的任务或执行器身份不匹配，已暂停该任务，禁止上传，请核实后台领取结果");
   }
   return response.data;
 }

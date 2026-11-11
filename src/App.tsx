@@ -1,4 +1,4 @@
-import { HashRouter } from "react-router-dom";
+import { HashRouter, useLocation } from "react-router-dom";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppWorkspaceHeader } from "@/components/app-workspace-header";
@@ -56,6 +56,7 @@ export default function App() {
 }
 
 function AppContent() {
+  const youtube = useLocation().pathname.startsWith("/youtube-drama/");
   return (
     <TooltipProvider delay={120} closeDelay={0} timeout={250}>
       <BaiduNetdiskDialogProvider>
@@ -69,7 +70,9 @@ function AppContent() {
             <AppTitlebarMemory />
             <AppSidebar />
             <WorkspaceToolbarProvider>
-              <div className="app-workspace flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+              <div
+                className={`${youtube ? "youtube-theme " : ""}app-workspace flex min-w-0 flex-1 flex-col overflow-hidden bg-background`}
+              >
                 <AppWorkspaceHeader />
                 <div className="app-page-scroll min-h-0 flex-1 overflow-auto">
                   <AppRoutes />

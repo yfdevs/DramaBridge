@@ -33,7 +33,7 @@ async function isBaiduCdpPort(port: number) {
 export async function ensureBaiduCdpPort(port: number) {
   if (await isBaiduCdpPort(port)) return;
   throw new Error(
-    `端口 ${port} 不是可用百度网盘 CDP。请在百度网盘服务页点击“启动并连接”或“重启连接”。`,
+    `端口 ${port} 不是可用百度网盘 CDP。请在百度网盘服务页点击“启动并连接”或“重启连接”`,
   );
 }
 
@@ -99,12 +99,12 @@ export class CdpPage {
       };
       const onError = () => {
         cleanup();
-        reject(new Error("CDP WebSocket 连接失败。"));
+        reject(new Error("CDP WebSocket 连接失败"));
       };
 
       timeout = setTimeout(() => {
         cleanup();
-        reject(new Error("CDP WebSocket 连接超时。"));
+        reject(new Error("CDP WebSocket 连接超时"));
       }, 10000);
 
       this.socket.once("open", onOpen);
@@ -119,7 +119,7 @@ export class CdpPage {
   }
 
   async send<T = unknown>(method: string, params: Record<string, unknown> = {}, timeoutMs = 15000) {
-    if (this.closed) throw new Error("CDP 页面已关闭。");
+    if (this.closed) throw new Error("CDP 页面已关闭");
 
     const id = ++this.nextId;
     return new Promise<T>((resolve, reject) => {
@@ -130,7 +130,7 @@ export class CdpPage {
       };
       const onClose = () => {
         cleanup();
-        reject(new Error("CDP 页面已关闭。"));
+        reject(new Error("CDP 页面已关闭"));
       };
       const onMessage = (data: unknown) => {
         const message = JSON.parse(websocketDataToString(data)) as CdpMessage;
@@ -143,7 +143,7 @@ export class CdpPage {
       const timeout = setTimeout(() => {
         cleanup();
         reject(new CdpTimeoutError({
-          message: `${method} 超时（${timeoutMs / 1000} 秒），网盘客户端未及时响应。`,
+          message: `${method} 超时（${timeoutMs / 1000} 秒），网盘客户端未及时响应`,
           operation: method,
           timeoutMs,
         }));
@@ -179,7 +179,7 @@ export class CdpPage {
     ).catch((error: unknown) => {
       if (error instanceof CdpTimeoutError) {
         throw new CdpTimeoutError({
-          message: `${stage}：${error.message} 请检查网盘客户端是否卡顿或等待登录；操作结果可能尚未返回，请先核对后重试。`,
+          message: `${stage}：${error.message} 请检查网盘客户端是否卡顿或等待登录；操作结果可能尚未返回，请先核对后重试`,
           operation: stage,
           timeoutMs,
           cause: error,
@@ -192,10 +192,10 @@ export class CdpPage {
         `${stage}：${response.exceptionDetails.exception?.description ??
           response.exceptionDetails.exception?.value ??
           response.exceptionDetails.text ??
-          "CDP 执行脚本异常。"}`,
+          "CDP 执行脚本异常"}`,
       );
     }
-    if (!response.result) throw new Error("CDP 执行脚本失败。");
+    if (!response.result) throw new Error("CDP 执行脚本失败");
     return response.result.value as T;
   }
 
@@ -204,7 +204,7 @@ export class CdpPage {
   }
 
   async navigateWithoutWaiting(url: string) {
-    if (this.closed) throw new Error("CDP 页面已关闭。");
+    if (this.closed) throw new Error("CDP 页面已关闭");
 
     const id = ++this.nextId;
     await new Promise<void>((resolve, reject) => {
@@ -219,7 +219,7 @@ export class CdpPage {
   }
 
   async reloadWithoutWaiting(ignoreCache = true) {
-    if (this.closed) throw new Error("CDP 页面已关闭。");
+    if (this.closed) throw new Error("CDP 页面已关闭");
 
     const id = ++this.nextId;
     await new Promise<void>((resolve, reject) => {
@@ -289,7 +289,7 @@ export function openCdpPageEffect<T extends CdpPageResource = CdpPage>(
   return Effect.tryPromise({
     try: async () => {
       if (!target.webSocketDebuggerUrl) {
-        throw new Error("目标页面没有 WebSocket 调试地址。");
+        throw new Error("目标页面没有 WebSocket 调试地址");
       }
 
       const page = createPage(target.webSocketDebuggerUrl);
@@ -343,7 +343,7 @@ export async function waitForDocumentBody(page: CdpPage, timeoutMs = 15000) {
     timeoutMs + 1000,
   );
 
-  if (!loaded) throw new Error("页面 body 未加载完成。");
+  if (!loaded) throw new Error("页面 body 未加载完成");
 }
 
 export function waitForTargetEffect(
@@ -365,7 +365,7 @@ export function waitForTargetEffect(
     timeoutMs,
     isDone: (target) => target !== undefined,
     onTimeout: () => new CdpTimeoutError({
-      message: "没有找到目标页面。",
+      message: "没有找到目标页面",
       operation: "waitForTarget",
       timeoutMs,
     }),

@@ -210,7 +210,7 @@ async function normalizeClaimedTask(options: {
       maxLength: 200,
       fieldName: "QQ 短剧作品简介",
       contentDescription: "QQ 短剧上剧页展示的剧情简介",
-      instructions: "使用自然、完整的中文句子，保留主要人物、冲突、转折和结局走向。",
+      instructions: "使用自然、完整的中文句子，保留主要人物、冲突、转折和结局走向",
     });
     log(runtimeOptions, "[qq-drama] AI 作品简介优化完成", {
       accountTaskId: claimed.accountTaskId,

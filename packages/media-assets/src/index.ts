@@ -657,7 +657,7 @@ export function selectOwnershipProjectProofFiles(
     const unknownSummary = unknown.length > 0
       ? ` 未识别文件：${unknown.slice(0, 8).map((item) => item.name).join("、")}${
         unknown.length > 8 ? `等 ${unknown.length} 张` : ""
-      }。`
+      }`
       : "";
     throw new Error(
       "[ownership-project-proof-invalid] 权属工程截图不足："
@@ -685,7 +685,7 @@ function ownershipProjectProofCounts(filesPerKind: number | { jianying: number; 
     : filesPerKind;
   if (!Number.isSafeInteger(required.jianying) || required.jianying < 1
     || !Number.isSafeInteger(required.juchuang) || required.juchuang < 1) {
-    throw new Error("每类权属工程截图数量必须是正整数。");
+    throw new Error("每类权属工程截图数量必须是正整数");
   }
   return required;
 }
@@ -730,14 +730,14 @@ export async function findOwnershipProjectProofFiles(options: {
   const filesPerKind = ownershipProjectProofCounts(options.filesPerKind ?? 2);
   const classified: ClassifiedOwnershipProjectProof[] = [];
   const deadline = Date.now() + ownershipProjectProofClassificationTimeoutMs;
-  let classificationSource: "name" | "local" | "ai" = "name";
+  let classificationSource: "name" | "local" | "ai";
   const classifyBeforeDeadline = async (material: LocalOwnershipMaterialFile) => {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) {
       throw new Error(
         `[ownership-project-proof-ai-timeout] 权属工程截图识别超过 ${
           ownershipProjectProofClassificationTimeoutMs / 1_000
-        } 秒。`,
+        } 秒`,
       );
     }
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -1080,7 +1080,7 @@ export async function composeOwnershipMaterials(options: {
   resourceName: string;
   onLog?: (message: string) => void;
 }) {
-  if (options.files.length === 0) throw new Error("[production-proof-invalid] 没有可合成的权属图片。");
+  if (options.files.length === 0) throw new Error("[production-proof-invalid] 没有可合成的权属图片");
   const labelHeight = 56;
   const padding = 12;
   const maxHeight = 1400;
@@ -1133,7 +1133,7 @@ export async function composeOwnershipMaterialsIntoTwo(options: {
   outputDir: string;
   resourceName: string;
 }) {
-  if (options.files.length === 0) throw new Error("[production-proof-invalid] 没有可合成的权属图片。");
+  if (options.files.length === 0) throw new Error("[production-proof-invalid] 没有可合成的权属图片");
   const splitAt = Math.ceil(options.files.length / 2);
   const groups = [options.files.slice(0, splitAt), options.files.slice(splitAt)].filter((group) => group.length > 0);
   await mkdir(options.outputDir, { recursive: true });
@@ -1170,7 +1170,7 @@ export async function composeOwnershipMaterialsIntoOne(options: {
   resourceName: string;
 }) {
   if (options.files.length === 0) {
-    throw new Error("[production-proof-invalid] 没有可合成的权属图片。");
+    throw new Error("[production-proof-invalid] 没有可合成的权属图片");
   }
   const source = await Promise.all(options.files.map(async (file) => {
     const metadata = await sharp(file.file, { failOn: "error" }).metadata();
@@ -1498,7 +1498,7 @@ async function cachedVideoDurationSeconds(
     if (signal?.aborted) {
       throw signal.reason instanceof Error
         ? signal.reason
-        : Object.assign(new Error("视频时长校验已终止。"), { name: "AbortError" });
+        : Object.assign(new Error("视频时长校验已终止"), { name: "AbortError" });
     }
     if (controller.signal.aborted) {
       throw Object.assign(

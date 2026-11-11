@@ -21,7 +21,10 @@ catalog:
 minimumReleaseAgeExclude:
   - thinking-orbs@0.1.1
   - electron@44.9.3
+  - lucide-react@1.71.0
 overrides:
+  # Recharts pins the older shim whose peer range excludes React 19.
+  recharts>use-sync-external-store: 1.7.0
   # ffmpeg-static 5.3.0 bundles an agent that fails Node 24's protocol check.
   ffmpeg-static>https-proxy-agent: 7.0.6
   # electron-builder 26 uses the cache-mode API added after @electron/get 3.0.0.

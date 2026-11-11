@@ -1,4 +1,5 @@
-﻿export type TencentHuolongDramaLoginState = "login-required" | "logged-in" | "unknown"
+import { createAccountControl } from "@/platforms/app-runtime/service";
+export type TencentHuolongDramaLoginState = "login-required" | "logged-in" | "unknown"
 
 export type TencentHuolongDramaConfig = {
   accountProfileName: string
@@ -57,11 +58,12 @@ export type TencentHuolongDramaServiceStatus = {
 }
 
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-  if (!window.ipcRenderer) throw new Error("腾讯火龙漫剧服务仅在 Electron 应用内可用。")
+  if (!window.ipcRenderer) throw new Error("腾讯火龙漫剧服务仅在 Electron 应用内可用")
   return await window.ipcRenderer.invoke(channel, ...args) as T
 }
 
 export const tencentHuolongDramaService = {
+  accountControl: createAccountControl("tencent-huolong-drama"),
   listAccounts: () => invoke<Array<{ accountId: string; accountName: string }>>("tencent-huolong-drama:accounts:list"),
   getConfig: () => invoke<TencentHuolongDramaConfigResult>("tencent-huolong-drama:config:get"),
   saveConfig: (config: TencentHuolongDramaConfig) =>

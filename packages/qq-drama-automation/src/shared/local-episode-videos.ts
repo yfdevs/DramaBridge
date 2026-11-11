@@ -12,7 +12,7 @@ export function getQqDramaOriginalTitle(task: ClaimedQqDramaTask) {
 export function getQqDramaLocalEpisodeVideoRoot(options: QqDramaRuntimeOptions) {
   const localEpisodeVideoRoot = options.localEpisodeVideoRoot?.trim();
   if (!localEpisodeVideoRoot) {
-    throw new Error("请先配置 QQ 短剧本地剧集视频目录。");
+    throw new Error("请先配置 QQ 短剧本地剧集视频目录");
   }
   return localEpisodeVideoRoot;
 }

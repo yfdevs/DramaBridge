@@ -1,4 +1,5 @@
-﻿export type QqDramaLoginState = "login-required" | "logged-in" | "unknown"
+import { createAccountControl } from "@/platforms/app-runtime/service";
+export type QqDramaLoginState = "login-required" | "logged-in" | "unknown"
 
 export type QqDramaConfig = {
   accountProfileName: string
@@ -64,7 +65,7 @@ export type QqDramaServiceStatus = {
 
 async function invokeQqDrama<T>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.ipcRenderer) {
-    throw new Error("QQ 短剧服务控制仅在 Electron 应用内可用。")
+    throw new Error("QQ 短剧服务控制仅在 Electron 应用内可用")
   }
 
   try {
@@ -82,13 +83,13 @@ async function invokeQqDrama<T>(channel: string, ...args: unknown[]): Promise<T>
 
 function readableQqDramaError(message: string) {
   if (message.includes("QQ_DRAMA_ENABLED_ACCOUNT_NOT_FOUND")) {
-    return "没有获取到已启用的 QQ 账号，请先在后台开启账号。"
+    return "没有获取到已启用的 QQ 账号，请先在后台开启账号"
   }
   if (message.includes("QQ_DRAMA_API_BASE_URL_REQUIRED")) {
-    return "请先配置 QQ 后台接口地址。"
+    return "请先配置 QQ 后台接口地址"
   }
   if (message.includes("QQ_DRAMA_ACCOUNT_CONFIG_RESPONSE_DATA_REQUIRED")) {
-    return "QQ 账号列表响应缺少 data，请检查登录状态和接口地址。"
+    return "QQ 账号列表响应缺少 data，请检查登录状态和接口地址"
   }
   const requestFailed = message.match(/QQ_DRAMA_ACCOUNT_CONFIG_REQUEST_FAILED: (.*)/)
   if (requestFailed) {
@@ -98,6 +99,7 @@ function readableQqDramaError(message: string) {
 }
 
 export const qqDramaService = {
+  accountControl: createAccountControl("qq-drama"),
   listAccounts: () => invokeQqDrama<Array<{ accountId: string; accountName: string }>>("qq-drama:accounts:list"),
   getConfig() {
     return invokeQqDrama<QqDramaConfigResult>("qq-drama:config:get")

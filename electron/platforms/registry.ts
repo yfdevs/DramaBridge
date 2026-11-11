@@ -328,7 +328,7 @@ export function getPlatformLogDir(platformId: PlatformId) {
     !("logDir" in summary) ||
     typeof summary.logDir !== "string"
   ) {
-    throw new Error(`无法确定${getPlatformDefinition(platformId).label}日志目录。`);
+    throw new Error(`无法确定${getPlatformDefinition(platformId).label}日志目录`);
   }
   return summary.logDir;
 }
@@ -356,6 +356,6 @@ export async function stopAllPlatformServices() {
   });
 
   if (failures.length > 0) {
-    throw new Error(`${failures.join("、")}停止失败。`);
+    throw new Error(`${failures.join("、")}停止失败`);
   }
 }

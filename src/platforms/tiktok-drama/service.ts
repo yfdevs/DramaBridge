@@ -1,4 +1,4 @@
-﻿export type TiktokDramaCenterLoginState = "login-required" | "logged-in" | "unknown"
+export type TiktokDramaCenterLoginState = "login-required" | "logged-in" | "unknown"
 
 export type TiktokDramaCenterConfig = {
   netdiskSheetName: string;
@@ -26,7 +26,7 @@ export type TiktokDramaCenterServiceStatus = {
 
 async function invokeTiktokDramaCenter<T>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.ipcRenderer) {
-    throw new Error("TikTok 服务控制仅在 Electron 应用内可用。")
+    throw new Error("TikTok 服务控制仅在 Electron 应用内可用")
   }
 
   try {
@@ -40,11 +40,11 @@ async function invokeTiktokDramaCenter<T>(channel: string, ...args: unknown[]): 
 
 function readableTiktokDramaCenterError(message: string) {
   if (message.includes("TIKTOK_LOCAL_VIDEO_ROOT_REQUIRED")) {
-    return "请先在 TikTok 配置中选择剧集视频根目录。"
+    return "请先在 TikTok 配置中选择剧集视频根目录"
   }
 
   if (message.includes("video root is required")) {
-    return "请先在 TikTok 配置中选择剧集视频根目录。"
+    return "请先在 TikTok 配置中选择剧集视频根目录"
   }
 
   if (message.includes("video directory not found:")) {

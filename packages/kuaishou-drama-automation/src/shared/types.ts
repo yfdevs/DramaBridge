@@ -423,6 +423,7 @@ export type KuaishouDramaRuntimeStatus = {
 };
 
 export type KuaishouDramaRuntimeOptions = {
+  canClaimTask?: () => boolean;
   taskWatchdog?: TaskWatchdog;
   watchedTaskId?: number;
   workerId?: string;

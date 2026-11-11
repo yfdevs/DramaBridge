@@ -25,7 +25,7 @@ export type TaskAnalyticsResult = {
 
 export async function getTaskAnalytics(platform: TaskAnalyticsPlatform, days = 30) {
   if (!window.ipcRenderer) {
-    throw new Error("任务统计仅在 Electron 应用内可用。");
+    throw new Error("任务统计仅在 Electron 应用内可用");
   }
   return window.ipcRenderer.invoke(`${platform}:analytics:get`, { days }) as Promise<TaskAnalyticsResult>;
 }

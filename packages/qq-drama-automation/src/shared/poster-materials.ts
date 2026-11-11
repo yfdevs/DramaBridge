@@ -92,12 +92,12 @@ async function preparePrimaryPoster(
 
 function secondVersionPrompt(title: string) {
   return [
-    "参考原剧封面，重新设计一张同一部作品的商业漫剧封面。",
-    "保留核心人物、面部特征、服饰、时代背景、人物关系、画面比例和作品辨识度，但使用不同的构图与视觉排版，不能只替换文字。",
-    `新剧名必须完整、清晰、逐字准确地展示为“${title}”，不改字、不漏字。`,
-    "除新剧名外，不得出现其他作品名、随机乱码、联系方式、账号、二维码、平台水印、技术参数、操作按钮或伪界面元素。",
-    "主要人物、面部、头部和关键道具必须完整，四周保留安全裁切空间。",
-    "直接输出可发布的成品封面，不要输出设计稿、模板、制作说明或界面预览。",
+    "参考原剧封面，重新设计一张同一部作品的商业漫剧封面",
+    "保留核心人物、面部特征、服饰、时代背景、人物关系、画面比例和作品辨识度，但使用不同的构图与视觉排版，不能只替换文字",
+    `新剧名必须完整、清晰、逐字准确地展示为“${title}”，不改字、不漏字`,
+    "除新剧名外，不得出现其他作品名、随机乱码、联系方式、账号、二维码、平台水印、技术参数、操作按钮或伪界面元素",
+    "主要人物、面部、头部和关键道具必须完整，四周保留安全裁切空间",
+    "直接输出可发布的成品封面，不要输出设计稿、模板、制作说明或界面预览",
   ].join("\n");
 }
 
@@ -115,9 +115,9 @@ async function validateSecondVersionCover(
       { type: "file", path: generatedFile, detail: "high" },
     ],
     prompt: [
-      "你是 QQ 漫剧封面质检员。第 1 张是参考封面，第 2 张是待验收的新版本封面。",
-      `准确的新剧名是：${title}。`,
-      "检查第 2 张图：人物和人脸是否完整；是否保持原作品辨识度；剧名是否完整、清晰、没有严重错字；是否出现其他作品名、乱码、联系方式、二维码、水印、技术参数或伪界面元素。",
+      "你是 QQ 漫剧封面质检员。第 1 张是参考封面，第 2 张是待验收的新版本封面",
+      `准确的新剧名是：${title}`,
+      "检查第 2 张图：人物和人脸是否完整；是否保持原作品辨识度；剧名是否完整、清晰、没有严重错字；是否出现其他作品名、乱码、联系方式、二维码、水印、技术参数或伪界面元素",
       "只返回 JSON 对象，不要 Markdown 或解释。格式：" + JSON.stringify({
         mainSubjectsComplete: true,
         facesIntact: true,
@@ -132,7 +132,7 @@ async function validateSecondVersionCover(
         warnings: [],
       }),
     ].join("\n"),
-    systemPrompt: "你只输出符合用户指定结构的 JSON 对象。",
+    systemPrompt: "你只输出符合用户指定结构的 JSON 对象",
     maxTokens: 700,
     temperature: 0,
   });
@@ -189,7 +189,7 @@ async function generateSecondVersionPoster(
     const rawOutput = path.join(outputDir, `.generated-${process.pid}-${Date.now()}-${attempt}.image`);
     try {
       const retryGuidance = previousFailure
-        ? `\n\n上一张未通过验收：${previousFailure.slice(0, 500)}。请重新生成并逐项修正。`
+        ? `\n\n上一张未通过验收：${previousFailure.slice(0, 500)}。请重新生成并逐项修正`
         : "";
       log(options, "[qq-drama] generating AI second-version cover", {
         title,

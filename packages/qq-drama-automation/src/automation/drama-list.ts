@@ -29,7 +29,7 @@ function normalizeTitle(value: string) {
 async function csrfToken(context: BrowserContext) {
   const cookies = await context.cookies(QQ_CPPLATFORM_URL);
   const token = cookies.find((cookie) => cookie.name === "csrf_token")?.value.trim();
-  if (!token) throw new Error("QQ_DRAMA_CSRF_TOKEN_MISSING: 无法读取 QQ 登录态中的 csrf_token。");
+  if (!token) throw new Error("QQ_DRAMA_CSRF_TOKEN_MISSING: 无法读取 QQ 登录态中的 csrf_token");
   return token;
 }
 
@@ -71,5 +71,5 @@ export async function findUploadedQqDramaByExactTitle(
     }
   }
 
-  throw new Error(`QQ_DRAMA_LIST_QUERY_FAILED: 查询页数超过安全上限 ${maxPages}。`);
+  throw new Error(`QQ_DRAMA_LIST_QUERY_FAILED: 查询页数超过安全上限 ${maxPages}`);
 }

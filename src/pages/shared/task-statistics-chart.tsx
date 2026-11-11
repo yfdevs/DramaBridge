@@ -182,7 +182,7 @@ export function TaskStatisticsChart({ platform }: { platform: TaskAnalyticsPlatf
   }, [hasData, loading, result, resolvedTheme]);
 
   const stateText = result.unavailableReason
-    ? "任务统计暂不可用，请检查桌面服务连接。"
+    ? "任务统计暂不可用，请检查桌面服务连接"
     : loading
       ? "正在加载任务统计…"
       : !hasData

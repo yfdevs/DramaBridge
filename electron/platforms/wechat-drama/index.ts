@@ -1,3 +1,4 @@
+import { registerAccountControl } from "../shared/account-control";
 import { normalizeFeishuPollSeconds } from "../../integrations/feishu/task-handlers";
 import { registerWechatRecreationHandlers, stopWechatRecreation } from "./netdisk";
 import { staleTaskMonitor } from "../shared/stale-task-monitor"
@@ -360,7 +361,7 @@ function assertOwnershipProofCounts(config: WechatVideoConfig) {
     normalizeOwnershipProofCount(config.jianyingOwnershipProofCount) !== config.jianyingOwnershipProofCount
     || normalizeOwnershipProofCount(config.juchuangOwnershipProofCount) !== config.juchuangOwnershipProofCount
   ) {
-    throw new Error('剪映和剧创权属图片数量必须分别填写正整数。')
+    throw new Error('剪映和剧创权属图片数量必须分别填写正整数')
   }
 }
 
@@ -516,7 +517,7 @@ function assertWechatVideoConfigReady(config = readConfig()) {
     || targetVideoMegabytes <= 0
     || targetVideoMegabytes >= maxVideoMegabytes
   ) {
-    throw new Error('视频压缩目标体积必须大于 0 且小于单集视频上限。')
+    throw new Error('视频压缩目标体积必须大于 0 且小于单集视频上限')
   }
   const imageThresholdMegabytes = Number(config.imageCompressionThresholdMegabytes)
   const imageTargetMegabytes = Number(config.imageCompressionTargetMegabytes)
@@ -527,7 +528,7 @@ function assertWechatVideoConfigReady(config = readConfig()) {
     || imageTargetMegabytes <= 0
     || imageTargetMegabytes >= imageThresholdMegabytes
   ) {
-    throw new Error('图片压缩目标体积必须大于 0 且小于压缩触发体积。')
+    throw new Error('图片压缩目标体积必须大于 0 且小于压缩触发体积')
   }
 }
 
@@ -570,6 +571,16 @@ async function startRuntime() {
 }
 
 export function registerWechatVideoPlatformHandlers() {
+  registerAccountControl({ platform: "wechat-drama", controller: runtimeController, status,
+    start: async ids => {
+      assertWechatVideoConfigReady();
+      const { accounts } = await listSelectableWechatAccounts();
+      if (ids.some(id => !accounts.some(account => account.id === id && account.status === "ON"))) throw new Error("所选账号已停用或不存在，请刷新列表");
+      getStore().set('config', normalizeConfig({ ...readConfig(), selectedVideoAccountIds: ids.join(',') }));
+      return startRuntime();
+    },
+    onStarted: id => getStore().set('config', normalizeConfig({ ...readConfig(), selectedVideoAccountIds: [...new Set([...readConfig().selectedVideoAccountIds.split(',').filter(Boolean), id])].join(',') })),
+  });
   registerWechatRecreationHandlers(readConfig);
   ipcMain.handle("wechat-drama:tasks:cleanup", () => staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl }).sweep());
   staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl });
@@ -652,7 +663,7 @@ export function registerWechatVideoPlatformHandlers() {
     const runtime = await runtimeController.resolveStarting()
 
     if (!runtime) {
-      throw new Error('微信视频号服务未启动。')
+      throw new Error('微信视频号服务未启动')
     }
 
     let currentRuntime = runtime
@@ -661,7 +672,7 @@ export function registerWechatVideoPlatformHandlers() {
     }
 
     if (typeof currentRuntime.focusVideoAccount !== 'function') {
-      throw new Error('当前微信视频号服务实例不支持打开浏览器到前台，请重启应用后再试。')
+      throw new Error('当前微信视频号服务实例不支持打开浏览器到前台，请重启应用后再试')
     }
 
     await currentRuntime.focusVideoAccount(videoAccountId)

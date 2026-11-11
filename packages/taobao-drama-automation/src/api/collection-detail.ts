@@ -20,11 +20,11 @@ export type TaobaoCollectionDetail = z.infer<typeof collectionDetailSchema>;
 export function parseTaobaoCollectionDetail(data: unknown, collectionId: string): TaobaoCollectionDetail {
   const parsed = z.object({ model: collectionDetailSchema }).safeParse(data);
   if (!parsed.success) throw new Error(
-    "TAOBAO_DRAMA_COLLECTION_DETAIL_INVALID: 合集详情缺少完整的视频列表或集数信息，已停止上传，请检查淘宝合集详情后重试。",
+    "TAOBAO_DRAMA_COLLECTION_DETAIL_INVALID: 合集详情缺少完整的视频列表或集数信息，已停止上传，请检查淘宝合集详情后重试",
   );
   const detail = parsed.data.model;
   if (detail.collectionInfo.collectionId !== collectionId) throw new Error(
-    "TAOBAO_DRAMA_COLLECTION_DETAIL_ID_MISMATCH: 返回的合集与目标合集不一致，已停止上传。",
+    "TAOBAO_DRAMA_COLLECTION_DETAIL_ID_MISMATCH: 返回的合集与目标合集不一致，已停止上传",
   );
   return detail;
 }

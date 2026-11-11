@@ -1,7 +1,6 @@
 import { WorkspaceActions } from "@/components/workspace-toolbar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown } from "@mynaui/icons-react";
+import { SquareIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -77,6 +76,12 @@ export function useServiceControl<TStatus extends RuntimeStatus>({
     try {
       const nextStatus = await (status.running ? service.stop() : service.start());
       applyStatus(nextStatus);
+      const errors = (nextStatus as TStatus & { accountErrors?: Record<string, string> })
+        .accountErrors;
+      if (errors && Object.keys(errors).length)
+        toast.warning("部分账号启动失败，其他账号继续运行", {
+          description: Object.values(errors).join("；"),
+        });
       toast.success(successMessage(nextStatus));
     } catch (error) {
       const directoryWarning = action === "start" ? globalDirectoriesWarning(error) : null;
@@ -102,9 +107,12 @@ export function useServiceControl<TStatus extends RuntimeStatus>({
     const statusRefreshInterval = window.setInterval(() => {
       void refreshStatus(true);
     }, 3000);
+    const refresh = () => void refreshStatus(true);
+    window.addEventListener("app:service-changed", refresh);
 
     return () => {
       window.clearInterval(statusRefreshInterval);
+      window.removeEventListener("app:service-changed", refresh);
     };
   }, [refreshStatus]);
 
@@ -156,39 +164,42 @@ export function ServiceControlButtonPage({
         <Button
           aria-busy={loading}
           aria-pressed={running}
-          className="h-7 min-w-20 gap-1.5 px-3 text-xs"
-          size="sm"
+          aria-label={label}
+          title={label}
+          className={running ? undefined : "h-7 min-w-20 gap-1.5 px-3 text-xs"}
+          size={running ? "icon-sm" : "sm"}
           disabled={loading || !connected || (!running && startDisabled)}
           variant={running ? "secondary" : "default"}
           onClick={onToggle}
         >
-          <span>{label}</span>
+          {running ? <SquareIcon aria-hidden="true" /> : <span>{label}</span>}
         </Button>
-        {additionalAction && (
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="size-7"
-                  aria-label="更多服务操作"
-                />
-              }
-            >
-              <ChevronDown className="size-3.5" />
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              sideOffset={8}
-              className="w-fit min-w-44 p-2 [&_button]:w-full [&_button]:justify-start [&_div]:flex-col"
-            >
-              {additionalAction}
-            </PopoverContent>
-          </Popover>
-        )}
       </WorkspaceActions>
-      <div className="mx-auto flex w-full min-w-0 max-w-[920px] flex-1 flex-col px-7 pt-4 pb-8 md:px-12 md:pt-4">
+      <div className="mx-auto flex w-full min-w-0 max-w-[1120px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span
+              aria-hidden="true"
+              className={`size-1.5 rounded-full ${running ? "bg-[var(--instance-ready)]" : "bg-muted-foreground/50"}`}
+            />
+            {pendingAction === "start"
+              ? "正在启动服务…"
+              : pendingAction === "stop"
+                ? "正在停止服务…"
+                : running
+                  ? "服务运行中"
+                  : "服务已停止"}
+          </p>
+          {additionalAction}
+        </div>
+        {!connected && (
+          <p
+            role="status"
+            className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+          >
+            请在桌面应用中管理浏览器实例
+          </p>
+        )}
         {beforeBrowserInstances}
         {children}
       </div>

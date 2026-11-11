@@ -116,6 +116,7 @@ export type BaiduDramaRuntimeStatus = {
 };
 
 export type BaiduDramaRuntimeOptions = {
+  canClaimTask?: () => boolean;
   accountProfileName?: string;
   userDataDir?: string;
   credentialStatePath?: string;

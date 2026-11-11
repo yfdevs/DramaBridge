@@ -26,7 +26,7 @@ export function FeishuGlobalConfiguration({
   const [failed, setFailed] = useState(false);
   const section: ConfigSectionDefinition<FeishuConfigFields> = {
     title: "飞书表格",
-    description: "连接各平台共用的任务表。",
+    description: "连接各平台共用的任务表",
     fields: [
       { key: "feishuAppId", label: "应用 ID" },
       {
@@ -47,7 +47,7 @@ export function FeishuGlobalConfiguration({
       setMessage("连接成功");
     } catch (error) {
       setFailed(true);
-      setMessage(error instanceof Error ? error.message : "连接失败，请检查配置和表格权限。");
+      setMessage(error instanceof Error ? error.message : "连接失败，请检查配置和表格权限");
     } finally {
       setTesting(false);
     }

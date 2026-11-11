@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
 @import "./assets/fonts/harmonyos-sans/fonts.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -8,10 +9,47 @@
 @custom-variant win (&:is(.platform-win *));
 @custom-variant linux (&:is(.platform-linux *));
 
+.service-workspace {
+  --instance-ready: #218358;
+  --instance-ready-bg: #e6f6eb;
+  --instance-waiting: #ad5700;
+  --instance-waiting-bg: #fff1d6;
+}
+.dark .service-workspace {
+  --instance-ready: #3dd68c;
+  --instance-ready-bg: #132d21;
+  --instance-waiting: #ffca16;
+  --instance-waiting-bg: #302008;
+}
+.instance-status[data-state="ready"] {
+  color: var(--instance-ready);
+  background: var(--instance-ready-bg);
+}
+.instance-status[data-state="waiting"] {
+  color: var(--instance-waiting);
+  background: var(--instance-waiting-bg);
+}
+
+.platform-log-viewer {
+  --log-info: #0d74ce;
+  --log-warn: #ad5700;
+  --log-error: #ce2c31;
+  --log-ready: #218358;
+  --log-error-bg: #fff7f7;
+}
+.dark .platform-log-viewer {
+  --log-info: #70b8ff;
+  --log-warn: #ffca16;
+  --log-error: #ff9592;
+  --log-ready: #3dd68c;
+  --log-error-bg: #22191a;
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans:
-    "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    "Geist Variable", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif,
+    system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -45,41 +83,29 @@
   --color-background: var(--background);
 }
 
-/* A compact control, a menu and a panel need different corner sizes. Keep
-   literal token values so PostCSS can compensate squircle curvature once. */
-@theme {
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
-  --radius-3xl: 24px;
-  --radius-4xl: 28px;
-}
-
-/* Explicitly preserve circles and capsules, including responsive/state
-   variants and the thumbs of switches, radio buttons and sliders. */
-@utility rounded-full {
-  corner-shape: round;
-}
-
-@utility rounded-none {
-  corner-shape: round;
+@theme inline {
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 :root {
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --primary: oklch(0 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.49 0 0);
+  --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -91,9 +117,9 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 14px;
-  --sidebar: oklch(0.951 0.009 270);
-  --sidebar-foreground: oklch(0.145 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0 0 0 / 0.05);
@@ -115,7 +141,7 @@
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+  --accent: oklch(0.371 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
@@ -208,49 +234,74 @@
   }
 }
 
-/* Configuration surfaces use Radix Slate, Red, Amber and Green scales.
-   Keep these scoped so platform workspaces retain their existing theme. */
-.configuration-theme {
-  --background: #ffffff;
-  --foreground: #1c2024;
-  --card: #ffffff;
-  --card-foreground: #1c2024;
-  --muted: #f0f0f3;
-  --muted-foreground: #60646c;
-  --border: #d9d9e0;
-  --input: #d9d9e0;
-  --primary: #1c2024;
-  --primary-foreground: #ffffff;
-  --secondary: #f0f0f3;
-  --secondary-foreground: #1c2024;
-  --accent: #f0f0f3;
-  --accent-foreground: #1c2024;
-  --ring: #8b8d98;
-  --destructive: #ce2c31;
+/* Status colors supplement the shared shadcn theme without overriding controls. */
+.configuration-theme,
+.youtube-theme {
   --config-warning: #915930;
   --config-success: #218358;
+  --youtube-warning-bg: #fff7c2;
+  --youtube-warning-text: #915930;
+  --youtube-success-bg: #e6f6eb;
+  --youtube-success-text: #193b2d;
+  --youtube-error-bg: #feebec;
+  --youtube-info-text: #0d74ce;
 }
-.dark .configuration-theme {
-  --background: #111113;
-  --foreground: #edeef0;
-  --card: #18191b;
-  --card-foreground: #edeef0;
-  --muted: #212225;
-  --muted-foreground: #b0b4ba;
-  --border: #363a3f;
-  --input: #363a3f;
-  --primary: #edeef0;
-  --primary-foreground: #111113;
-  --secondary: #212225;
-  --secondary-foreground: #edeef0;
-  --accent: #272a2d;
-  --accent-foreground: #edeef0;
-  --ring: #696e77;
-  --destructive: #ff9592;
+.dark .configuration-theme,
+.dark .youtube-theme {
   --config-warning: #ffca16;
   --config-success: #3dd68c;
+  --youtube-warning-bg: #302008;
+  --youtube-warning-text: #ffca16;
+  --youtube-success-bg: #132d21;
+  --youtube-success-text: #3dd68c;
+  --youtube-error-bg: #3b1219;
+  --youtube-info-text: #70b8ff;
 }
-.configuration-theme input::placeholder {
+.configuration-theme input::placeholder,
+.youtube-theme input::placeholder,
+.youtube-theme textarea::placeholder {
   color: var(--muted-foreground);
   opacity: 1;
+}
+
+.youtube-theme {
+  color: var(--foreground);
+  --color-red-300: #ff9592;
+  --color-red-500: #e5484d;
+  --color-red-700: #ce2c31;
+  --color-amber-300: #ffca16;
+  --color-amber-500: #ffc53d;
+  --color-amber-700: #915930;
+  --color-sky-300: #70b8ff;
+  --color-sky-500: #0090ff;
+  --color-sky-700: #0d74ce;
+  --color-emerald-500: #30a46c;
+  --color-slate-400: #b0b4ba;
+  --color-slate-500: #60646c;
+}
+
+.youtube-log .font-mono,
+.youtube-log .font-mono span {
+  font-size: 12px;
+}
+
+.youtube-log [class*="text-muted-foreground/"] {
+  color: var(--muted-foreground);
+}
+
+.youtube-log .group\/row {
+  border-bottom: 0;
+}
+
+.youtube-theme [data-slot="table-container"] {
+  overscroll-behavior-x: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .youtube-theme *,
+  .youtube-theme *::before,
+  .youtube-theme *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

@@ -1,6 +1,7 @@
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -36,7 +37,6 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { defaultRoute, isAppRoute, platformForPath, routePath } from "@/config/navigation";
 
@@ -147,7 +147,7 @@ export function usePlatformConfig<TConfig extends object, TResult extends Config
       applyResult(result);
       if (result.restartRequired) {
         toast.warning("配置已保存", {
-          description: "服务正在运行，请重启服务后生效。",
+          description: "服务正在运行，请重启服务后生效",
         });
       } else {
         toast.success("配置已保存");
@@ -183,6 +183,7 @@ export function ConfigurationPageFrame({
   onClose,
   onSave,
   restartRequired,
+  saveDisabled = false,
   title,
 }: {
   children: ReactNode;
@@ -193,6 +194,7 @@ export function ConfigurationPageFrame({
   onClose?: () => void;
   onSave: () => void;
   restartRequired: boolean;
+  saveDisabled?: boolean;
   title: string;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -231,12 +233,16 @@ export function ConfigurationPageFrame({
   };
 
   return (
-    <main aria-label={title} className="configuration-theme flex min-w-0 flex-1 flex-col bg-background">
+    <main
+      aria-label={title}
+      className="configuration-theme flex min-w-0 flex-1 flex-col bg-background"
+    >
       <ConfigurationToolbar
         title={title}
         hasChanges={hasChanges}
         loading={loading}
         restartRequired={restartRequired}
+        saveDisabled={saveDisabled}
         onCancel={cancelConfig}
         onSave={save}
       />
@@ -245,7 +251,7 @@ export function ConfigurationPageFrame({
         className={`@container mx-auto flex w-full ${maxWidth} flex-1 flex-col gap-8 px-5 py-6 sm:px-8`}
       >
         {sectionLinks.length > 3 ? (
-          <nav aria-label="配置分组" className="flex flex-wrap gap-x-4 gap-y-2 border-b pb-4">
+          <nav aria-label="配置分组" className="flex flex-wrap gap-x-4 gap-y-2">
             {sectionLinks.map((section) => (
               <button
                 key={section.id}
@@ -277,6 +283,7 @@ export function ConfigurationToolbar({
   hasChanges,
   loading,
   restartRequired,
+  saveDisabled = false,
   onCancel,
   onSave,
 }: {
@@ -284,6 +291,7 @@ export function ConfigurationToolbar({
   hasChanges: boolean;
   loading: boolean;
   restartRequired: boolean;
+  saveDisabled?: boolean;
   onCancel: () => void;
   onSave: () => void;
 }) {
@@ -302,7 +310,7 @@ export function ConfigurationToolbar({
       <Button
         size="sm"
         className="h-7 min-w-14 px-3 text-xs"
-        disabled={loading || !hasChanges}
+        disabled={loading || saveDisabled || !hasChanges}
         aria-busy={loading}
         onClick={onSave}
       >
@@ -371,9 +379,8 @@ export function ConfigSection<TConfig extends object>({
       title={section.title}
     >
       <fieldset disabled={busy} className="min-w-0">
-        {sectionFields.map((field, index) => (
+        {sectionFields.map((field) => (
           <div key={field.key}>
-            {index > 0 ? <Separator /> : null}
             <ConfigFieldControl
               config={config}
               field={field}
@@ -383,12 +390,7 @@ export function ConfigSection<TConfig extends object>({
           </div>
         ))}
       </fieldset>
-      {footer ? (
-        <div>
-          <Separator />
-          <div className="flex justify-end py-3">{footer}</div>
-        </div>
-      ) : null}
+      {footer ? <div className="flex justify-end pt-2">{footer}</div> : null}
     </ConfigPanelSection>
   );
 }
@@ -412,7 +414,7 @@ export function ConfigPanelSection({
       id={`config-${sectionId}`}
       data-config-title={title}
       aria-label={title}
-      className={compact ? "scroll-mt-6" : "scroll-mt-6 space-y-2 border-t pt-5"}
+      className={compact ? "scroll-mt-6" : "scroll-mt-6 space-y-2"}
     >
       {!compact ? (
         <div className="space-y-1">
@@ -465,7 +467,7 @@ function ConfigFieldControl<TConfig extends object>({
             {field.options.map((option) => (
               <label
                 key={option.value}
-                className="flex h-8 cursor-pointer items-center gap-2 rounded-md px-1 text-sm hover:bg-muted"
+                className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-1 text-sm hover:bg-muted"
               >
                 <RadioGroupItem value={option.value} />
                 {option.label}
@@ -480,20 +482,23 @@ function ConfigFieldControl<TConfig extends object>({
             }}
           >
             <SelectTrigger
+              size="sm"
               id={field.key}
               aria-describedby={field.description ? `${field.key}-description` : undefined}
-              className="h-8 w-full text-sm"
+              className="w-full"
             >
               <SelectValue>
                 {field.options.find((option) => option.value === value)?.label}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {field.options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                {field.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         )}
@@ -546,7 +551,7 @@ function ConfigFieldControl<TConfig extends object>({
         ) : null}
       </FieldContent>
       <div className="w-full min-w-0">
-        <InputGroup>
+        <InputGroup className="h-7 rounded-md">
           <InputGroupInput
             className="text-sm md:text-sm"
             id={field.key}

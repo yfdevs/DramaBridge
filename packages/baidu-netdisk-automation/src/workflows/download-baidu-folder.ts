@@ -630,7 +630,7 @@ async function openSharePage(port: number, share: ShareInfo) {
   const targets = await getTargets(port);
   const reusableTargets = openShareCandidates(targets);
 
-  if (reusableTargets.length <= 0) throw new Error("没有找到可导航的百度网盘分享页面；已保留客户端主页和 AI 助手页面。");
+  if (reusableTargets.length <= 0) throw new Error("没有找到可导航的百度网盘分享页面；已保留客户端主页和 AI 助手页面");
 
   log("通过 CDP 打开分享链接");
   for (const reusable of reusableTargets) {
@@ -654,7 +654,7 @@ export function baiduShareCodeExpression(share: ShareInfo) {
         const text = () => document.body?.innerText || '';
         const terminal = text().match(${baiduShareFailurePattern})?.[0];
         if (terminal) throw new Error('分享链接不可用：' + terminal);
-        if (text().includes('请输入验证码')) throw new Error('分享页要求验证码，CDP 无法自动完成。');
+        if (text().includes('请输入验证码')) throw new Error('分享页要求验证码，CDP 无法自动完成');
         let detail = '';
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
@@ -678,7 +678,7 @@ export function baiduShareCodeExpression(share: ShareInfo) {
           detail = String(data.errmsg || data.err_msg || data.show_msg || ('errno=' + data.errno));
           const failure = detail.match(${baiduShareFailurePattern})?.[0];
           if (failure) throw new Error('分享链接不可用：' + failure);
-          if (/验证码/.test(detail)) throw new Error('分享页要求验证码，CDP 无法自动完成。');
+          if (/验证码/.test(detail)) throw new Error('分享页要求验证码，CDP 无法自动完成');
         } catch (error) {
           if (/分享链接不可用|验证码/.test(String(error?.message || error))) throw error;
           detail = String(error?.message || error);
@@ -849,7 +849,7 @@ export async function waitForShareReadyTarget(
     lastState = state;
     const signature = [target.id, state.url, state.readyState, state.needsCode, state.hasShareMetadata].join('|');
     if (signature !== lastSignature) { lastSignature = signature; lastProgress = runtime.now(); }
-    if (state.captcha) throw new Error('分享页要求验证码，CDP 无法自动完成。');
+    if (state.captcha) throw new Error('分享页要求验证码，CDP 无法自动完成');
     if (state.failureText) throw new Error(`分享链接不可用：${state.failureText}`);
 
     // A target ID can survive navigation to a different share. Never accept
@@ -1022,7 +1022,7 @@ export async function saveShareToOwnNetdisk(
   const shouldUseSourceName = ${JSON.stringify(share.name === DEFAULT_BAIDU_NETDISK_SHARE_NAME)};
   const shareUrl = new URL(shareLink);
   const surl = shareUrl.pathname.split("/s/")[1]?.replace(/^1/, "") || "";
-  if (!surl) throw new Error("分享链接没有解析出 surl。");
+  if (!surl) throw new Error("分享链接没有解析出 surl");
 
   const getLocal = (key) => {
     try {
@@ -1180,7 +1180,7 @@ export async function saveShareToOwnNetdisk(
     matchString(sharePageHtml, /share_uk["']?\\s*[:=]\\s*["']?(\\d+)/),
   );
   if (!shareId || !shareUk) {
-    throw new Error("分享页 HTML 没有解析到 shareid/share_uk，无法保存到我的网盘。");
+    throw new Error("分享页 HTML 没有解析到 shareid/share_uk，无法保存到我的网盘");
   }
   const shareListAttempts = [];
   const htmlFileList = fileListOf(completeFileBlock).length > 0
@@ -1316,7 +1316,7 @@ export async function saveShareToOwnNetdisk(
     throw new Error(
       shareHasDramaWrapper
         ? "分享中的剧名目录为空或无法读取：" + itemPath(wrapperCandidate)
-        : "分享根目录没有可转存素材。",
+        : "分享根目录没有可转存素材",
     );
   }
 
@@ -1541,7 +1541,7 @@ export async function saveShareToOwnNetdisk(
       ownSearchCache.invalidate();
       const message = String(transferred.show_msg || transferred.errmsg || transferred.message || "");
       if (transferred.errno === -6 || message.includes("账户已过期") || message.includes("重新登陆")) {
-        throw new Error("百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载。");
+        throw new Error("百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载");
       }
       if (transferred.errno === 4) {
         if (transferred.request_id) timeoutRequestIds.push(String(transferred.request_id));
@@ -2320,7 +2320,7 @@ export async function saveShareToOwnNetdisk(
     );
 
       await Promise.all(temporaryTransferNotifications);
-      if (!result.savedPath) throw new Error("没有拿到保存后的网盘路径。");
+      if (!result.savedPath) throw new Error("没有拿到保存后的网盘路径");
       return result;
     } finally {
       await Promise.allSettled(temporaryTransferNotifications);
@@ -2667,7 +2667,7 @@ async function confirmDownloadSetting(port: number, downloadDir?: string) {
       await sleep(100);
     }
 
-    if (!rect) throw new Error("没有找到确认下载按钮。");
+    if (!rect) throw new Error("没有找到确认下载按钮");
     const resolvedDownloadRoot = downloadDirApplied ? downloadDir : (downloadRoot ?? downloadDir);
     log(resolvedDownloadRoot ? `确认下载路径：${resolvedDownloadRoot}` : "确认下载路径");
     await page.clickPoint(rect.x + rect.width / 2, rect.y + rect.height / 2, true);
@@ -2811,7 +2811,7 @@ export async function controlBaiduNetdiskDownloadTask(options: {
   // Validate destructive scope before connecting to the client.
   selectNativeTasksForControl([], options);
   const target = findUsableCoreTarget(await getTargets(options.port ?? 9337));
-  if (!target) throw new Error("百度网盘 CDP 页面不可用。");
+  if (!target) throw new Error("百度网盘 CDP 页面不可用");
   return runNativeTaskOperationExclusive(options.port ?? 9337, () => withPage(target, (page) => page.evaluate(`(async () => {
     const options = ${JSON.stringify(options)};
     const read = async () => {
@@ -2971,12 +2971,12 @@ async function waitForDownloadSubmitted(port: number, task?: SavedDownloadTask) 
         await sleep(500);
       }
 
-      throw new Error(`下载设置窗口已关闭，但 ${task.targetName} 没有进入客户端传输列表。`);
+      throw new Error(`下载设置窗口已关闭，但 ${task.targetName} 没有进入客户端传输列表`);
     }
     await sleep(500);
   }
 
-  throw new Error("已点击确认下载，但下载设置窗口没有关闭。");
+  throw new Error("已点击确认下载，但下载设置窗口没有关闭");
 }
 
 async function isPresentInClientTransfers(port: number, targetName: string) {
@@ -3143,7 +3143,7 @@ export function selectLeadingEpisodeFiles<
   if (episodeDownloadLimit === undefined) return files;
   const limit = Number(episodeDownloadLimit);
   if (!Number.isInteger(limit) || limit <= 0) {
-    throw new Error("仅下载前 X 集的集数必须是正整数。");
+    throw new Error("仅下载前 X 集的集数必须是正整数");
   }
   return files.filter((file) => file.index >= 1 && file.index <= limit);
 }
@@ -3254,7 +3254,7 @@ async function submitSavedDownload(
         duplicateIndexes: [],
         aiSelectionApplied: true,
       };
-      log(`AI 已从${ambiguousCandidates.length}个候选视频中选出${selected.length}个连续短剧分集。`);
+      log(`AI 已从${ambiguousCandidates.length}个候选视频中选出${selected.length}个连续短剧分集`);
     } catch (error) {
       warn(
         `AI 文件名归类未通过校验，改用集数、大小和内容指纹规则：${errorMessage(error)}`,
@@ -3268,7 +3268,7 @@ async function submitSavedDownload(
       files: selectLeadingEpisodeFiles(remoteVideos.files, limit),
       duplicateIndexes: remoteVideos.duplicateIndexes.filter((index) => index <= limit),
     };
-    log(`已启用按集下载：仅下载第1-${limit}集，其他剧集不会提交到本地下载队列。`);
+    log(`已启用按集下载：仅下载第1-${limit}集，其他剧集不会提交到本地下载队列`);
   }
   const remoteIndexes = [...new Set(remoteVideos.files.map((file) => file.index))].sort(
     (left, right) => left - right,
@@ -3343,7 +3343,7 @@ async function submitSavedDownload(
         actual: 0,
         message:
           `百度网盘没有识别到可上传的剧集视频：${targetName}。` +
-          `请使用“第1集.mp4”“剧名-第1集.mov”或“1.mov”等包含集数的文件名。`,
+          `请使用“第1集.mp4”“剧名-第1集.mov”或“1.mov”等包含集数的文件名`,
       });
     }
     inferredEpisodeCount = inspection.episodeCount;
@@ -3353,7 +3353,7 @@ async function submitSavedDownload(
       if (remoteVideos.duplicateIndexes.length > 0 && !saveOptions.isolatedRoot) {
         log(
           `检测到复用网盘目录存在重复剧集：${formatNumberRanges(remoteVideos.duplicateIndexes)}，` +
-            "改用干净的分享专属中转目录重新转存。",
+            "改用干净的分享专属中转目录重新转存",
         );
         return submitSavedDownload(
           port,
@@ -3390,10 +3390,10 @@ async function submitSavedDownload(
         message: `百度网盘剧集不连续：${targetName}。` +
           `系统识别为1-${inferredEpisodeCount}共${inferredEpisodeCount}集，` +
           `实际${formatNumberRanges(remoteIndexes)}共${remoteVideos.files.length}个文件。` +
-          `问题：${problemParts.join("；")}。`,
+          `问题：${problemParts.join("；")}`,
       });
     }
-    log(`已自动识别总集数：${inferredEpisodeCount}集，1-${inferredEpisodeCount}连续完整。`);
+    log(`已自动识别总集数：${inferredEpisodeCount}集，1-${inferredEpisodeCount}连续完整`);
   } else if (expectedEpisodeCount !== undefined) {
     const expectedCount = Number(expectedEpisodeCount);
     const expectedIndexes =
@@ -3412,7 +3412,7 @@ async function submitSavedDownload(
       if (remoteVideos.duplicateIndexes.length > 0 && !saveOptions.isolatedRoot) {
         log(
           `检测到复用网盘目录存在重复剧集：${formatNumberRanges(remoteVideos.duplicateIndexes)}，` +
-            "改用干净的分享专属中转目录重新转存。",
+            "改用干净的分享专属中转目录重新转存",
         );
         return submitSavedDownload(
           port,
@@ -3450,7 +3450,7 @@ async function submitSavedDownload(
         message: `百度网盘剧集视频数量不正确：${targetName}。` +
           `期望1-${expectedEpisodeCount}共${expectedIndexes.length}集，` +
           `实际${formatNumberRanges(remoteIndexes)}共${remoteVideos.files.length}集。` +
-          (problemParts.length > 0 ? `问题：${problemParts.join("；")}。` : ""),
+          (problemParts.length > 0 ? `问题：${problemParts.join("；")}` : ""),
       });
     }
   }
@@ -3478,7 +3478,7 @@ async function submitSavedDownload(
       actual: remoteOwnership.files.length,
       message: `百度网盘权属材料数量不足。` +
         `至少需要${requiredOwnershipImages}张图片，实际找到${remoteOwnership.files.length}张。` +
-        `请在分享资源中添加“权属”或“工程”目录及对应图片。`,
+        `请在分享资源中添加“权属”或“工程”目录及对应图片`,
     });
   }
   const requiredOwnershipFiles = Math.max(0, expectedOwnershipFiles ?? 0);
@@ -3490,7 +3490,7 @@ async function submitSavedDownload(
       actual: remoteOwnership.allFiles.length,
       message: `百度网盘权属文件数量不足。` +
         `至少需要${requiredOwnershipFiles}个 JPG、PNG 或 PDF，实际找到${remoteOwnership.allFiles.length}个。` +
-        `请在分享资源中添加独立的“权属”“工程”“资质”或“版权”目录。`,
+        `请在分享资源中添加独立的“权属”“工程”“资质”或“版权”目录`,
     });
   }
   const requiredPosterImages = Math.max(0, expectedPosterImages ?? 0);
@@ -3502,7 +3502,7 @@ async function submitSavedDownload(
       actual: remotePosters.files.length,
       message: `百度网盘海报封面数量不足。` +
         `至少需要${requiredPosterImages}张图片，实际找到${remotePosters.files.length}张。` +
-        `请在分享资源中添加“海报”或“封面”目录及对应图片。`,
+        `请在分享资源中添加“海报”或“封面”目录及对应图片`,
     });
   }
   const requiredAiProductionProofFiles = Math.max(0, expectedAiProductionProofFiles ?? 0);
@@ -3514,7 +3514,7 @@ async function submitSavedDownload(
       actual: remoteAiProductionProofs.files.length,
       message: `百度网盘AI制作证明数量不足。` +
         `至少需要${requiredAiProductionProofFiles}个文件，实际找到${remoteAiProductionProofs.files.length}个。` +
-        `请在分享资源中添加文件名或目录名包含“AI制作证明”的图片/PDF。`,
+        `请在分享资源中添加文件名或目录名包含“AI制作证明”的图片/PDF`,
     });
   }
   const requiredMetadataTextFiles = Math.max(0, expectedMetadataTextFiles ?? 0);
@@ -3526,7 +3526,7 @@ async function submitSavedDownload(
       actual: remoteMetadata.textFiles.length,
       message: `百度网盘剧情资料数量不足。` +
         `至少需要${requiredMetadataTextFiles}个 TXT、MD、DOC 或 DOCX 文件，实际找到${remoteMetadata.textFiles.length}个。` +
-        `请将简介与角色资料文件放入分享目录。`,
+        `请将简介与角色资料文件放入分享目录`,
     });
   }
   // Keep the large video download scoped to the selected episode directory. Every matched
@@ -3543,15 +3543,15 @@ async function submitSavedDownload(
   const limitedEpisodeDownload = downloadEpisodeVideos && episodeDownloadLimit !== undefined;
   let videoSubmitted = true;
   if (limitedEpisodeDownload) {
-    if (!downloadDir) throw new Error("按集下载缺少本地下载目录。");
+    if (!downloadDir) throw new Error("按集下载缺少本地下载目录");
     const limitedDownloadRoot = path.join(downloadDir, downloadTargetName);
     await mkdir(limitedDownloadRoot, { recursive: true });
     const pendingEpisodes = await selectIncompleteEpisodeDownloads(remoteVideos.files, limitedDownloadRoot, signal);
-    log(`复用${remoteVideos.files.length - pendingEpisodes.length}集已下载文件，仅提交${pendingEpisodes.length}集缺失或不完整文件。`);
+    log(`复用${remoteVideos.files.length - pendingEpisodes.length}集已下载文件，仅提交${pendingEpisodes.length}集缺失或不完整文件`);
     for (const episode of pendingEpisodes) {
       signal?.throwIfAborted();
       if (!episode.fsId) {
-        throw new Error(`第${episode.index}集缺少百度网盘文件 ID，无法执行按集下载。`);
+        throw new Error(`第${episode.index}集缺少百度网盘文件 ID，无法执行按集下载`);
       }
       const submission = await submitNativeDownloadTask(port, {
         targetName: episode.name,
@@ -3567,7 +3567,7 @@ async function submitSavedDownload(
         );
       }
     }
-    log(`前${remoteVideos.files.length}集已逐集提交到百度网盘下载队列。`);
+    log(`前${remoteVideos.files.length}集已逐集提交到百度网盘下载队列`);
   } else if (downloadEpisodeVideos) {
     const nativeSubmission = await submitNativeDownloadTask(port, task);
     videoSubmitted = nativeSubmission.submitted;
@@ -3613,7 +3613,7 @@ async function submitSavedDownload(
     ) {
       throw new Error(
         `百度网盘${materialName}与正片视频混放在同一目录，素材-only 模式不会下载该目录。` +
-          `请将${materialName}放入独立子目录后重试。`,
+          `请将${materialName}放入独立子目录后重试`,
       );
     }
   };
@@ -3624,7 +3624,7 @@ async function submitSavedDownload(
     requireAllDiscoveredAssets,
   });
   if (!downloadOwnershipDirectories && remoteOwnership.roots.length > 0) {
-    log(`当前平台不需要权属材料，跳过${remoteOwnership.roots.length}个已发现的权属目录下载。`);
+    log(`当前平台不需要权属材料，跳过${remoteOwnership.roots.length}个已发现的权属目录下载`);
   }
   for (const ownershipRoot of downloadOwnershipDirectories ? remoteOwnership.roots : []) {
     if (!ownershipRoot.path || !ownershipRoot.fsId || assetRootIsCovered(ownershipRoot.path)) continue;
@@ -3672,12 +3672,12 @@ async function submitSavedDownload(
       remoteVideoCount: remoteVideos.allVideoFiles.length,
     });
     if (mixedWithVideoRoot) {
-      if (!assetDownloadRoot) throw new Error("下载混放海报封面时缺少本地素材目录。");
+      if (!assetDownloadRoot) throw new Error("下载混放海报封面时缺少本地素材目录");
       const localPosterRoot = path.join(assetDownloadRoot, "海报封面");
       await mkdir(localPosterRoot, { recursive: true });
       const localPosterCount = await countLocalPosterImages(localPosterRoot);
       if (remotePosters.files.length > 0 && localPosterCount >= remotePosters.files.length) {
-        log("本地已有海报封面素材，跳过混放封面的重复下载。");
+        log("本地已有海报封面素材，跳过混放封面的重复下载");
         continue;
       }
       for (const posterFile of remotePosters.files) {
@@ -3808,7 +3808,7 @@ async function downloadBaiduNetdiskSharePromise(
 ): Promise<BaiduNetdiskShareDownloadResult> {
   options.signal?.throwIfAborted();
   if (process.platform !== "win32" && process.platform !== "darwin") {
-    throw new Error("百度网盘 CDP 下载当前支持 Windows 和 macOS。");
+    throw new Error("百度网盘 CDP 下载当前支持 Windows 和 macOS");
   }
 
   const port = options.port ?? 9337;
@@ -3821,7 +3821,7 @@ async function downloadBaiduNetdiskSharePromise(
     const loaded = await readShareInfo(options.shareFile);
     share = loaded.share;
   } else {
-    throw new Error("必须提供 shareText 或 --share-file，不能使用默认分享文件。");
+    throw new Error("必须提供 shareText 或 --share-file，不能使用默认分享文件");
   }
 
   if (options.resourceName?.trim()) {
@@ -3839,7 +3839,7 @@ async function downloadBaiduNetdiskSharePromise(
   await ensureBaiduCdpPort(port);
   options.signal?.throwIfAborted();
   const coreTarget = findUsableCoreTarget(await getTargets(port));
-  if (!coreTarget) throw new Error("百度网盘 CDP 核心页面不可用，请重启为 CDP 模式。");
+  if (!coreTarget) throw new Error("百度网盘 CDP 核心页面不可用，请重启为 CDP 模式");
   // A live debugging port alone is insufficient: an in-place client update can
   // leave the old process reading invalid module offsets from the new archive.
   // Check before saving the share or creating any native download tasks.

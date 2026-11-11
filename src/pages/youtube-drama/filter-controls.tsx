@@ -8,6 +8,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -35,7 +36,7 @@ export function YoutubeFilterSelect({
   const visibleOptions = options.filter((option) => option.label.trim());
   const selected = visibleOptions.find((option) => option.value === value);
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       {caption && <span className="text-xs text-muted-foreground">{caption}</span>}
       <Select
         value={selected ? value : null}
@@ -45,31 +46,25 @@ export function YoutubeFilterSelect({
         }}
       >
         <SelectTrigger
+          size="sm"
           aria-label={label}
           title={label}
-          className={cn(
-            "min-w-32 text-xs",
-            selected && value !== options[0]?.value && "border-foreground/30 bg-muted/40",
-            className,
-          )}
+          className={cn("min-w-32", className)}
         >
           <SelectValue />
         </SelectTrigger>
-        <SelectContent
-          align="start"
-          alignItemWithTrigger={false}
-          className="motion-reduce:animate-none"
-        >
-          {visibleOptions.map((option) => (
-            <SelectItem
-              key={option.value}
-              value={option.value}
-              aria-label={option.label || `清除${label}筛选`}
-              className="min-h-8"
-            >
-              {option.label}
-            </SelectItem>
-          ))}
+        <SelectContent className="youtube-theme motion-reduce:animate-none">
+          <SelectGroup>
+            {visibleOptions.map((option) => (
+              <SelectItem
+                key={option.value}
+                value={option.value}
+                aria-label={option.label || `清除${label}筛选`}
+              >
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
     </div>
@@ -88,7 +83,7 @@ export function YoutubeSearchField({
   onChange: (value: string) => void;
 }) {
   return (
-    <InputGroup className="min-w-48 flex-1 sm:max-w-80">
+    <InputGroup className="h-7 w-full min-w-0 basis-full rounded-md sm:w-auto sm:min-w-48 sm:flex-1 sm:basis-auto sm:max-w-80">
       <InputGroupAddon>
         <Search aria-hidden="true" className="size-3.5" />
       </InputGroupAddon>

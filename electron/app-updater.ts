@@ -27,55 +27,55 @@ const appUpdateSources = [
   {
     id: "accelerated",
     label: "down.mxw.xx.kg（默认）",
-    description: "通过 down.mxw.xx.kg 获取 GitHub Release，国内网络通常更快。",
+    description: "通过 down.mxw.xx.kg 获取 GitHub Release，国内网络通常更快",
     url: "https://down.mxw.xx.kg/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
   {
     id: "github",
     label: "GitHub 官方源",
-    description: "直接连接 GitHub Release，适合可稳定访问 GitHub 的网络。",
+    description: "直接连接 GitHub Release，适合可稳定访问 GitHub 的网络",
     url: "https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
   {
     id: "github-dpik-top",
     label: "github.dpik.top",
-    description: "通过 github.dpik.top 加速获取 GitHub Release。",
+    description: "通过 github.dpik.top 加速获取 GitHub Release",
     url: "https://github.dpik.top/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
   {
     id: "gh-proxy-com",
     label: "gh-proxy.com",
-    description: "通过 gh-proxy.com 加速获取 GitHub Release。",
+    description: "通过 gh-proxy.com 加速获取 GitHub Release",
     url: "https://gh-proxy.com/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
   {
     id: "github-tbap-top",
     label: "github.tbap.top",
-    description: "通过 github.tbap.top 加速获取 GitHub Release。",
+    description: "通过 github.tbap.top 加速获取 GitHub Release",
     url: "https://github.tbap.top/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
   {
     id: "memory-echoes",
     label: "github-proxy.memory-echoes.cn",
-    description: "通过 github-proxy.memory-echoes.cn 加速获取 GitHub Release。",
+    description: "通过 github-proxy.memory-echoes.cn 加速获取 GitHub Release",
     url: "https://github-proxy.memory-echoes.cn/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
   {
     id: "gh-dpik-top",
     label: "gh.dpik.top",
-    description: "通过 gh.dpik.top 加速获取 GitHub Release。",
+    description: "通过 gh.dpik.top 加速获取 GitHub Release",
     url: "https://gh.dpik.top/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
   {
     id: "geekertao",
     label: "ghfile.geekertao.top",
-    description: "通过 ghfile.geekertao.top 加速获取 GitHub Release。",
+    description: "通过 ghfile.geekertao.top 加速获取 GitHub Release",
     url: "https://ghfile.geekertao.top/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
   {
     id: "ghproxy-net",
     label: "ghproxy.net",
-    description: "通过 ghproxy.net 加速获取 GitHub Release。",
+    description: "通过 ghproxy.net 加速获取 GitHub Release",
     url: "https://ghproxy.net/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
 ] as const;
@@ -278,14 +278,14 @@ type UpdateSourceProbeResult = {
 
 function parseUpdateMetadata(metadata: string) {
   if (metadata.length > 1024 * 1024) {
-    throw new Error("更新元数据过大。");
+    throw new Error("更新元数据过大");
   }
   const version = /^\s*version:\s*["']?([^\s"']+)/mu.exec(metadata)?.[1];
   const hashes = [...metadata.matchAll(/^\s*sha512:\s*["']?([^\s"']+)/gmu)]
     .map((match) => match[1])
     .filter((hash): hash is string => Boolean(hash));
   if (!version || hashes.length === 0) {
-    throw new Error("更新元数据缺少版本号或 SHA512。");
+    throw new Error("更新元数据缺少版本号或 SHA512");
   }
   return {
     version,
@@ -393,7 +393,7 @@ async function selectAutomaticUpdateSource(excluded = new Set<AppUpdateSourceId>
     : appUpdateSources.filter((source) => !excluded.has(source.id));
   const selected = chooseBestUpdateSource(await probeUpdateSources(candidates));
   if (!selected) {
-    throw new Error("所有自动更新源当前均不可用。");
+    throw new Error("所有自动更新源当前均不可用");
   }
   getStore().set("sourceId", selected.source.id);
   logMain("info", "Auto-selected application update source", {
@@ -500,7 +500,7 @@ async function performAppUpdateCheck(automatic: boolean) {
   }
 
   if (!net.isOnline()) {
-    const networkError = "当前网络不可用，联网后将自动重试更新。";
+    const networkError = "当前网络不可用，联网后将自动重试更新";
     setStatus({
       ...(downloadedUpdateInfo
         ? downloadedStatus(downloadedUpdateInfo)
@@ -551,7 +551,7 @@ async function performAppUpdateCheck(automatic: boolean) {
         if (getUpdateSourceMode() === "manual" || attempt >= UPDATE_DOWNLOAD_MAX_SOURCE_ATTEMPTS) {
           throw error;
         }
-        setStatus({ retryAttempt: attempt, error: `更新源 ${failedSource.label} 不可用，正在切换。` });
+        setStatus({ retryAttempt: attempt, error: `更新源 ${failedSource.label} 不可用，正在切换` });
       }
     }
 
@@ -614,7 +614,7 @@ async function performAppUpdateDownload(automatic: boolean) {
   }
 
   if (!latestUpdateInfo) {
-    const message = "当前没有可下载的新版本，请先检查更新。";
+    const message = "当前没有可下载的新版本，请先检查更新";
     setStatus({ state: "error", error: message });
     throw new Error(message);
   }
@@ -631,7 +631,7 @@ async function performAppUpdateDownload(automatic: boolean) {
         applySelectedUpdateSource(autoUpdater);
         await autoUpdater.checkForUpdates();
         if (!latestUpdateInfo || status?.state !== "available") {
-          throw new Error("备用更新源没有返回可下载的新版本。");
+          throw new Error("备用更新源没有返回可下载的新版本");
         }
       } catch (sourceError) {
         lastError = sourceError;
@@ -673,7 +673,7 @@ async function performAppUpdateDownload(automatic: boolean) {
         state: "checking",
         progress: undefined,
         retryAttempt: attempt,
-        error: `从 ${source.label} 下载失败，正在切换备用更新源。`,
+        error: `从 ${source.label} 下载失败，正在切换备用更新源`,
       });
       latestUpdateInfo = null;
     }
@@ -694,7 +694,7 @@ async function performAppUpdateDownload(automatic: boolean) {
 async function performAppUpdateDownloadAttempt(): Promise<"completed" | "cancelled"> {
   const autoUpdater = getAutoUpdater();
   if (!autoUpdater) {
-    throw new Error(readDisabledReason() ?? "更新模块不可用。");
+    throw new Error(readDisabledReason() ?? "更新模块不可用");
   }
 
   const cancellationToken = new CancellationToken();
@@ -716,7 +716,7 @@ async function performAppUpdateDownloadAttempt(): Promise<"completed" | "cancell
     if (error instanceof CancellationError || cancellationToken.cancelled) {
       if (downloadCancellationReason === "user") return "cancelled";
       if (downloadCancellationReason === "stall") {
-        if (error instanceof Error) error.message = "更新下载超过 45 秒没有进度。";
+        if (error instanceof Error) error.message = "更新下载超过 45 秒没有进度";
         throw error;
       }
     }
@@ -733,7 +733,7 @@ async function performAppUpdateDownloadAttempt(): Promise<"completed" | "cancell
 
 function cancelAppUpdateDownload() {
   if (status?.state !== "downloading" || !downloadCancellationToken) {
-    throw new Error("当前没有正在下载的应用更新。");
+    throw new Error("当前没有正在下载的应用更新");
   }
 
   downloadCancellationReason = "user";
@@ -755,7 +755,7 @@ async function installAppUpdate(options: AppUpdateInstallOptions = {}) {
   }
 
   if (status?.state !== "downloaded") {
-    const message = "更新还没有下载完成，暂时不能安装。";
+    const message = "更新还没有下载完成，暂时不能安装";
     setStatus({ error: message });
     throw new Error(message);
   }
@@ -763,13 +763,13 @@ async function installAppUpdate(options: AppUpdateInstallOptions = {}) {
   const runningPlatformCount = getRunningPlatformCount();
   if (runningPlatformCount > 0) {
     if (!options.stopRunningServices) {
-      const message = `有 ${runningPlatformCount} 个平台服务正在运行。可以停止全部服务后重启安装。`;
+      const message = `有 ${runningPlatformCount} 个平台服务正在运行。可以停止全部服务后重启安装`;
       setStatus({ state: "downloaded", error: message });
       throw new Error(message);
     }
 
     if (!stopAllPlatformServices) {
-      const message = "暂时无法自动停止平台服务，请手动停止后再重启安装。";
+      const message = "暂时无法自动停止平台服务，请手动停止后再重启安装";
       setStatus({ state: "downloaded", error: message });
       throw new Error(message);
     }
@@ -782,14 +782,14 @@ async function installAppUpdate(options: AppUpdateInstallOptions = {}) {
     try {
       await stopAllPlatformServices();
     } catch (error) {
-      const message = `未能停止全部平台服务：${readableError(error)} 请稍后重试，或手动停止服务。`;
+      const message = `未能停止全部平台服务：${readableError(error)} 请稍后重试，或手动停止服务`;
       setStatus({ state: "downloaded", error: message });
       throw Object.assign(new Error(message), { cause: error });
     }
 
     const remainingPlatformCount = getRunningPlatformCount();
     if (remainingPlatformCount > 0) {
-      const message = `仍有 ${remainingPlatformCount} 个平台服务未停止，请稍后重试或手动停止。`;
+      const message = `仍有 ${remainingPlatformCount} 个平台服务未停止，请稍后重试或手动停止`;
       setStatus({ state: "downloaded", error: message });
       throw new Error(message);
     }
@@ -800,7 +800,7 @@ async function installAppUpdate(options: AppUpdateInstallOptions = {}) {
   const autoUpdater = getAutoUpdater();
 
   if (!autoUpdater) {
-    throw new Error(readDisabledReason() ?? "更新模块不可用。");
+    throw new Error(readDisabledReason() ?? "更新模块不可用");
   }
 
   autoUpdater.quitAndInstall(false, true);
@@ -906,7 +906,7 @@ function setAppUpdateSource(selection: AppUpdateSourceSelection) {
   if (
     ["checking", "downloading", "installing", "downloaded"].includes(status?.state ?? "")
   ) {
-    throw new Error("当前更新任务进行中，暂时不能切换更新源。");
+    throw new Error("当前更新任务进行中，暂时不能切换更新源");
   }
 
   if (selection === "auto") {
@@ -914,7 +914,7 @@ function setAppUpdateSource(selection: AppUpdateSourceSelection) {
   } else {
     const source = appUpdateSources.find((candidate) => candidate.id === selection);
     if (!source) {
-      throw new Error("未知的应用更新源。");
+      throw new Error("未知的应用更新源");
     }
     getStore().set({
       sourceId: source.id,
@@ -1062,11 +1062,11 @@ function normalizeReleaseNotes(releaseNotes: UpdateInfo["releaseNotes"]) {
 
 function readDisabledReason() {
   if (process.platform !== "win32") {
-    return "当前更新功能只启用 Windows 安装包。";
+    return "当前更新功能只启用 Windows 安装包";
   }
 
   if (!app.isPackaged) {
-    return "开发模式下不会连接 GitHub Releases 更新源。";
+    return "开发模式下不会连接 GitHub Releases 更新源";
   }
 
   if (autoUpdaterLoadError) {

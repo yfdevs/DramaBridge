@@ -28,29 +28,29 @@ const emptyConfig: TaobaoDramaConfig = {
 const sections: ConfigSectionDefinition<TaobaoDramaConfig>[] = [
   {
     title: "任务接口与下载",
-    description: "读取已启用的淘宝账号，分别领取任务。",
+    description: "读取已启用的淘宝账号，分别领取任务",
     fields: [
-      { key: "apiBaseUrl", label: "接口地址", type: "url", description: "用于读取账号、领取任务和提交结果。" },
-      { key: "taskPollIntervalSeconds", label: "任务检查间隔", type: "number", suffix: "秒", min: 1, description: "暂无任务或当前任务结束后，再次领取任务的等待时间。" },
-      { key: "browserExecutablePath", label: "浏览器路径", type: "text", description: "浏览器启动文件路径，留空使用系统 Chrome。" },
-      { key: "baiduNetdiskDownloadRetryAttempts", label: "网盘下载重试次数", type: "number", suffix: "次", min: 0, description: "下载失败后的额外重试次数，填 0 不重试。" },
+      { key: "apiBaseUrl", label: "接口地址", type: "url", description: "读取账号、领取任务并上报结果" },
+      { key: "taskPollIntervalSeconds", label: "任务检查间隔", type: "number", suffix: "秒", min: 1, description: "无任务或任务结束后，再次检查任务的间隔" },
+      { key: "browserExecutablePath", label: "浏览器路径", type: "text", description: "浏览器启动文件路径，留空使用系统 Chrome" },
+      { key: "baiduNetdiskDownloadRetryAttempts", label: "网盘下载重试次数", type: "number", suffix: "次", min: 0, description: "下载失败后的额外重试次数，填 0 不重试" },
     ],
   },
   {
     title: "浏览器与上传",
-    description: "先创建合集，再批量上传视频；素材目录在全局配置中设置。",
+    description: "先创建合集，再批量上传视频；素材目录在全局配置中设置",
     fields: [
-      { key: "episodeUploadWaitTimeoutMinutes", label: "上传时限", type: "number", suffix: "分钟", min: 1, description: "等待全部剧集上传完成的最长时间。" },
-      { key: "operationDelaySeconds", label: "操作间隔", type: "number", suffix: "秒", step: "0.01", description: "两次浏览器操作之间的等待时间。" },
-      { kind: "switch", key: "headless", label: "隐藏浏览器窗口", description: "登录或完成安全验证时，需显示浏览器窗口。", activeLabel: "已隐藏", inactiveLabel: "显示窗口" },
+      { key: "episodeUploadWaitTimeoutMinutes", label: "上传时限", type: "number", suffix: "分钟", min: 1, description: "等待全部剧集上传完成的最长时间" },
+      { key: "operationDelaySeconds", label: "操作间隔", type: "number", suffix: "秒", step: "0.01", description: "浏览器操作之间的等待时间" },
+      { kind: "switch", key: "headless", label: "隐藏浏览器窗口", description: "登录或完成安全验证时，需显示浏览器窗口", activeLabel: "已隐藏", inactiveLabel: "显示窗口" },
     ],
   },
   {
     title: "失败页面与日志",
-    description: "成功任务校验完成后自动关闭页面；失败页面按下方设置保留。",
+    description: "成功任务校验完成后自动关闭页面；失败页面按下方设置保留",
     fields: [
-      { kind: "switch", key: "closeFailedTaskPages", label: "自动关闭失败页", description: "失败结果提交后，关闭对应任务页。", activeLabel: "自动关闭", inactiveLabel: "保留页面" },
-      { key: "logRetentionDays", label: "日志保留天数", type: "number", suffix: "天", min: 1, description: "超过此天数的日志会被清理。" },
+      { kind: "switch", key: "closeFailedTaskPages", label: "自动关闭失败页", description: "失败结果提交后，关闭对应任务页", activeLabel: "自动关闭", inactiveLabel: "保留页面" },
+      { key: "logRetentionDays", label: "日志保留天数", type: "number", suffix: "天", min: 1, description: "自动清理超过保留期限的日志" },
     ],
   },
 ]

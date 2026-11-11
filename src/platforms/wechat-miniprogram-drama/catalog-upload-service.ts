@@ -77,7 +77,7 @@ export type WechatMiniProgramCatalogUploadWorkspace = {
 }
 
 function ipc() {
-  if (!window.ipcRenderer) throw new Error("前四集与封面入库仅在 Electron 应用内可用。")
+  if (!window.ipcRenderer) throw new Error("前四集与封面入库仅在 Electron 应用内可用")
   return window.ipcRenderer
 }
 

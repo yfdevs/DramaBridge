@@ -236,6 +236,7 @@ export type DouyinDramaRuntimeStatus = {
 };
 
 export type DouyinDramaRuntimeOptions = {
+  canClaimTask?: () => boolean;
   classifyOwnershipLocally?: (file: string) => Promise<OwnershipProjectProofKind>;
   accountProfileName?: string;
   douyinAccountId?: string;

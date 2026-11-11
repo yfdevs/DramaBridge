@@ -434,7 +434,7 @@ export async function submitBaiduDramaForReview(
 
     if (baiduReviewHomePath.test(new URL(page.url()).pathname)) {
       if (Date.now() - lastSubmitActionAt >= settleMs && !(await hasVisibleBaiduCaptcha(page))) {
-        log(options, "[baidu-drama] 已进入短剧管理页，且提交后安全等待期已结束。", { url: page.url() }, "automation");
+        log(options, "[baidu-drama] 已进入短剧管理页，且提交后安全等待期已结束", { url: page.url() }, "automation");
         return;
       }
       await page.waitForTimeout(pollIntervalMs);
@@ -444,7 +444,7 @@ export async function submitBaiduDramaForReview(
     if (await hasVisibleBaiduCaptcha(page)) {
       if (!captchaWasVisible) {
         captchaWasVisible = true;
-        log(options, "[baidu-drama] 百度安全验证已出现，请在当前浏览器中手动完成；任务正在等待，不会提前报成功。", undefined, "automation");
+        log(options, "[baidu-drama] 百度安全验证已出现，请在当前浏览器中手动完成；任务正在等待，不会提前报成功", undefined, "automation");
         await page.bringToFront().catch(() => undefined);
       }
       const captchaDeadline = Date.now() + captchaTimeoutMs;
@@ -455,7 +455,7 @@ export async function submitBaiduDramaForReview(
         }
         await page.waitForTimeout(pollIntervalMs);
       }
-      log(options, "[baidu-drama] 百度安全验证弹窗已关闭，继续确认审核提交结果。", undefined, "automation");
+      log(options, "[baidu-drama] 百度安全验证弹窗已关闭，继续确认审核提交结果", undefined, "automation");
       resultDeadline = Date.now() + resultTimeoutMs;
       lastSubmitActionAt = Date.now();
     }
@@ -515,7 +515,7 @@ export async function runBaiduDramaPublishTask(
     await runAction("提交短剧审核并确认结果", () => submitBaiduDramaForReview(page, options));
     log(
       options,
-      "[baidu-drama] 发布脚本完成：已提交审核。",
+      "[baidu-drama] 发布脚本完成：已提交审核",
       { accountTaskId: task.accountTaskId, submitted: true },
       "publish",
     );

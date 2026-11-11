@@ -183,7 +183,7 @@ export const meituanCreationTaskSchema = z.discriminatedUnion("collectionType", 
 export const claimedMeituanDramaTaskSchema = z.object({
   accountTaskId: z.coerce.number().int().positive(),
   dramaId: z.coerce.number().int().positive().optional(),
-  originalTitle: requiredText.describe("原始剧名，用于匹配业务任务和本地剧集资源。"),
+  originalTitle: requiredText.describe("原始剧名，用于匹配业务任务和本地剧集资源"),
   meituanAccountId: z.string().trim().optional(),
   meituanAccountName: z.string().trim().optional(),
   playlet: meituanCreationTaskSchema,
@@ -285,6 +285,7 @@ export type MeituanCreationRuntimeStatus = {
 };
 
 export type MeituanCreationRuntimeOptions = {
+  canClaimTask?: () => boolean;
   config?: MeituanCreationConfig;
   accounts?: MeituanCreationAccount[];
   apiBaseUrl?: string;

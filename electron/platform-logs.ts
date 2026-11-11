@@ -45,7 +45,7 @@ export function configurePlatformLogViewer(resolver: LogDirectoryResolver) {
 
 function logDirectory(platform: PlatformLogId) {
   if (!resolveLogDirectory) {
-    throw new Error("实时日志服务尚未初始化。");
+    throw new Error("实时日志服务尚未初始化");
   }
   return resolveLogDirectory(platform);
 }
@@ -163,7 +163,7 @@ export function subscribePlatformLogs(
       emit({ type: "reset", filePath });
     });
     nextTail.on("tail_error", ({ meta }) => {
-      emit({ type: "error", message: meta.actual?.message ?? "日志文件读取失败。" });
+      emit({ type: "error", message: meta.actual?.message ?? "日志文件读取失败" });
       if (tail === nextTail) tail = null;
       void nextTail.quit().catch(() => undefined);
     });
@@ -178,7 +178,7 @@ export function subscribePlatformLogs(
       if (tail === nextTail) tail = null;
       emit({
         type: "error",
-        message: error instanceof Error ? error.message : "日志监听启动失败。",
+        message: error instanceof Error ? error.message : "日志监听启动失败",
       });
     }
   };
@@ -198,7 +198,7 @@ export function subscribePlatformLogs(
     } catch (error) {
       emit({
         type: "error",
-        message: error instanceof Error ? error.message : "无法读取日志目录。",
+        message: error instanceof Error ? error.message : "无法读取日志目录",
       });
     } finally {
       switching = false;

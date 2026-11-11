@@ -226,7 +226,7 @@ async function reportAndUpdateAuditRecord(
 ): Promise<void> {
   try {
     if (!record) {
-      const errorMessage = `在平台最近 ${SUBMITTED_SHORTPLAY_AUDIT_LIST_PAGE_SIZE} 条已提交记录中未找到该短剧，无法确认审核状态。`;
+      const errorMessage = `在平台最近 ${SUBMITTED_SHORTPLAY_AUDIT_LIST_PAGE_SIZE} 条已提交记录中未找到该短剧，无法确认审核状态`;
       const resultJson = {
         activeUrl: page.url(),
         checkedSubmittedRecordCount: SUBMITTED_SHORTPLAY_AUDIT_LIST_PAGE_SIZE,
@@ -246,7 +246,7 @@ async function reportAndUpdateAuditRecord(
     }
 
     if (record.status === 3) {
-      const errorMessage = record.rejectReason || "拼多多短剧审核未通过，平台未返回具体驳回原因。";
+      const errorMessage = record.rejectReason || "拼多多短剧审核未通过，平台未返回具体驳回原因";
       await reportPinduoduoDramaTaskErrorApi({
         apiConfig: options.config?.api,
         accountTaskId: trackedRecord.accountTaskId,
@@ -499,11 +499,9 @@ export async function claimAndSubmitNextTask(
   options: PinduoduoDramaRuntimeOptions,
 ): Promise<void> {
   const applyRecordsRepository = new PinduoduoApplyRecordsRepository(options);
-  let checkedAuditRecords = false;
-  let processedApprovedQueue = false;
   try {
-    checkedAuditRecords = await checkLocalAuditTask(page, options, applyRecordsRepository);
-    processedApprovedQueue = await runApprovedShortplayQueue(page, options, applyRecordsRepository);
+    const checkedAuditRecords = await checkLocalAuditTask(page, options, applyRecordsRepository);
+    const processedApprovedQueue = await runApprovedShortplayQueue(page, options, applyRecordsRepository);
     if (checkedAuditRecords || processedApprovedQueue) return;
     if (await claimAndSubmitApplyTask(page, options, applyRecordsRepository)) return;
   } finally {

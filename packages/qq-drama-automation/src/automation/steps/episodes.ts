@@ -211,7 +211,7 @@ async function uploadEpisodeVideosIfPresent(
   // 剧集上传依赖本地视频根目录和临时上传目录，缺任意一个都无法准备文件。
   const localEpisodeVideoRoot = getQqDramaLocalEpisodeVideoRoot(options);
   if (!options.assetDownloadDir) {
-    throw new Error("请先配置 QQ 短剧素材下载目录。");
+    throw new Error("请先配置 QQ 短剧素材下载目录");
   }
 
   const resourceName = getQqDramaOriginalTitle(task);

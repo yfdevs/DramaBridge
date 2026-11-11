@@ -65,7 +65,7 @@ export async function openQqDramaAddPage(
           successPageRecoveryAttempts += 1;
           if (successPageRecoveryAttempts > 3) {
             throw new Error(
-              "QQ_DRAMA_SUCCESS_PAGE_RECOVERY_FAILED: 多次点击继续添加后仍停留在提交成功页。",
+              "QQ_DRAMA_SUCCESS_PAGE_RECOVERY_FAILED: 多次点击继续添加后仍停留在提交成功页",
             );
           }
           log(

@@ -216,7 +216,7 @@ export function PinduoduoDramaUploadRecordsPage() {
         const { reset } = await pinduoduoDramaService.retryFailedUploadRecords();
         if (reset > 0) {
           toast.success("已重新加入待处理队列", {
-            description: `共重置 ${reset} 条失败记录，服务会在下一轮自动重试。`,
+            description: `共重置 ${reset} 条失败记录，服务会在下一轮自动重试`,
           });
         } else {
           toast.info("没有需要重试的失败记录");
@@ -240,7 +240,7 @@ export function PinduoduoDramaUploadRecordsPage() {
         const { reset } = await pinduoduoDramaService.retryUploadRecord(record.platformApplyId);
         if (reset > 0) {
           toast.success(`《${record.title}》已加入待处理队列`, {
-            description: "服务会在下一轮自动重试这部剧。",
+            description: "服务会在下一轮自动重试这部剧",
           });
         } else {
           toast.info(`《${record.title}》当前不需要重试`);
@@ -269,7 +269,7 @@ export function PinduoduoDramaUploadRecordsPage() {
                 </span>
               </div>
               <p className="max-w-3xl text-xs leading-5 text-muted-foreground">
-                服务按配置周期同步拼多多审核列表，本窗口每 30 秒刷新下载与上传进度。
+                服务按配置周期同步拼多多审核列表，本窗口每 30 秒刷新下载与上传进度
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -370,7 +370,7 @@ export function PinduoduoDramaUploadRecordsPage() {
                       </div>
                       <div className="truncate text-[11px] text-muted-foreground">
                         {record.episodeCount ? `共 ${record.episodeCount} 集` : "集数未知"}
-                        {record.accountProfileName ? ` · ${record.accountProfileName}` : ""}
+                        {record.accountProfileName ? `，${record.accountProfileName}` : ""}
                       </div>
                     </TableCell>
                     <TableCell className="py-2">
@@ -435,7 +435,7 @@ export function PinduoduoDramaUploadRecordsPage() {
                   {loading ? "正在加载上传记录…" : "暂无上传记录"}
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {loading ? "请稍候" : "启动拼多多服务后，将自动同步审核通过的短剧。"}
+                  {loading ? "请稍候" : "启动拼多多服务后，将自动同步审核通过的短剧"}
                 </div>
               </div>
             </div>

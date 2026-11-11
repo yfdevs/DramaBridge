@@ -54,10 +54,10 @@ export function FeishuTaskCard({ state }: { state: FeishuRunnerState }) {
         </div>
         <p className="text-xs text-muted-foreground">
           {Number.isFinite(task.episodeCount)
-            ? `${task.episodeCount} 集 · 转存 ${task.downloadCount} 集`
+            ? `${task.episodeCount} 集，转存 ${task.downloadCount} 集`
             : "集数待修正"}
           {task.results.length > 1 &&
-            ` · 版本 ${task.results.filter((v) => v.shareUrl).length}/${task.results.length}`}
+            `，版本 ${task.results.filter((v) => v.shareUrl).length}/${task.results.length}`}
         </p>
         <p
           role="status"

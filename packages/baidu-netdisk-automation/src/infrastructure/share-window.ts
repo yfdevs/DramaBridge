@@ -53,7 +53,7 @@ export async function openDedicatedBaiduShareWindow(port: number, link: string):
   const before = await getTargets(port);
   const core = before.find(target => target.webSocketDebuggerUrl && target.url.includes("core.asar")
     && !/#\/(?:bubble_menu|sestonMenu|workspace)/.test(target.url));
-  if (!core) throw new Error("百度网盘 CDP 核心页面不可用，无法打开独立分享页。");
+  if (!core) throw new Error("百度网盘 CDP 核心页面不可用，无法打开独立分享页");
   const opened = await withPage(core, page => page.evaluate<{ windowId: number; webContentsId: number }>(
     baiduShareWindowExpression(link),
   ));

@@ -7,6 +7,21 @@ export type LogMessageRule = readonly [pattern: RegExp, replacement: string];
  * structured context fields instead of being interpolated into the message.
  */
 export const conciseLogMessageRules: ReadonlyArray<LogMessageRule> = [
+  [/^initialized video accounts$/i, "账号初始化完成"],
+  [/^video account loaded$/i, "账号已加载"],
+  [/^synced video accounts$/i, "账号状态已同步"],
+  [/^video accounts changed$/i, "账号列表已更新"],
+  [/^sync failed$/i, "账号同步失败"],
+  [/^skip claim, login required$/i, "账号未登录，暂不领取任务"],
+  [/^skip duplicate claimed account task$/i, "跳过重复领取的任务"],
+  [/^task loop tick failed$/i, "本轮任务处理失败，稍后继续检查"],
+  [/^initial page failed$/i, "初始页面打开失败"],
+  [/^fail callback failed$/i, "任务失败结果上报失败"],
+  [/^success callback failed$/i, "任务完成结果上报失败"],
+  [/^failed task page retained for inspection$/i, "失败页面已保留，可查看现场"],
+  [/^all account browsers stopped$/i, "全部账号浏览器已关闭"],
+  [/^starting account browsers in parallel$/i, "正在启动账号浏览器"],
+  [/^loaded enabled accounts$/i, "已读取启用账号"],
   [/^运行时启动[：:].*$/u, "服务启动"],
   [/^运行时停止$/u, "服务停止"],
   [/^任务开始[：:].*$/u, "任务开始"],

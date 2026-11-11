@@ -36,13 +36,15 @@ export type EnsureBaiduNetdiskResource = (
 export type CleanupBaiduNetdiskResource = (resource: unknown) => Promise<void>;
 
 export type WechatMiniProgramRuntime = {
+  addAccount: (id: string) => Promise<void>;
+  setAccountPaused: (id: string, paused: boolean) => void;
   getStatus: () => WechatMiniProgramRuntimeStatus;
   focusVideoAccount: (videoAccountId: string) => Promise<void>;
   stop: () => Promise<void>;
 }
 
 export type WechatMiniProgramRuntimeStatus = {
-  videoAccounts: VideoAccountRuntimeStatus[];
+  videoAccounts: Array<VideoAccountRuntimeStatus & { paused?: boolean }>;
 }
 
 export type WechatMiniProgramRuntimeOptions = {
@@ -66,12 +68,14 @@ export async function startWechatMiniProgramRuntime(options: WechatMiniProgramRu
   await browserContexts.initialize();
 
   const taskService = new TaskService(browserContexts);
+  const pausedAccounts = new Set<string>();
   const taskWorkerPool = new TaskWorkerPool(
     serviceConfig,
     browserContexts,
     taskService,
     options.ensureBaiduNetdiskResource,
     options.cleanupBaiduNetdiskResourceAfterTaskSuccess,
+    id => !pausedAccounts.has(id),
   );
   const idlePageRefreshService = new IdlePageRefreshService(serviceConfig, browserContexts, taskService);
   const videoAccountSyncService = new VideoAccountSyncService(
@@ -100,9 +104,18 @@ export async function startWechatMiniProgramRuntime(options: WechatMiniProgramRu
   log(options, "[runtime] started");
 
   return {
+    async addAccount(id: string) {
+      await videoAccountSyncService.sync();
+      if (!browserContexts.has(id)) throw new Error("账号已停用或不存在，请刷新列表");
+      await browserContexts.getOrLaunch(id);
+    },
+    setAccountPaused(id: string, paused: boolean) {
+      if (!browserContexts.has(id)) throw new Error("账号不存在");
+      if (paused) pausedAccounts.add(id); else pausedAccounts.delete(id);
+    },
     getStatus() {
       return {
-        videoAccounts: browserContexts.getRuntimeStatuses(),
+        videoAccounts: browserContexts.getRuntimeStatuses().map(account => ({ ...account, paused: pausedAccounts.has(account.videoAccountId) })),
       };
     },
     async focusVideoAccount(videoAccountId: string) {

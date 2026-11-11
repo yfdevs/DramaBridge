@@ -33,7 +33,7 @@ async function isValidContractImage(file: string) {
 async function resolveContractFiles(config: Config) {
   const candidates = config.playlet.copyright.productionProofFiles?.filter(Boolean) ?? [];
   if (candidates.length < 1) {
-    throw new Error("[production-proof-invalid] 合同材料至少需要1张。");
+    throw new Error("[production-proof-invalid] 合同材料至少需要1张");
   }
 
   const errors: string[] = [];

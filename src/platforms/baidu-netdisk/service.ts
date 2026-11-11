@@ -160,7 +160,7 @@ export function parseBaiduNetdiskShareText(text: string): BaiduNetdiskShareInfo 
 
 function requireIpcRenderer(feature: string) {
   if (!window.ipcRenderer) {
-    throw new Error(`${feature}仅在 Electron 应用内可用。`);
+    throw new Error(`${feature}仅在 Electron 应用内可用`);
   }
 
   return window.ipcRenderer;

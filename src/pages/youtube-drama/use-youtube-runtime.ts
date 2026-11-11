@@ -66,11 +66,13 @@ export function useYoutubeRuntime() {
       }
     };
     void poll();
+    window.addEventListener("youtube:tasks-changed", poll);
     const timer = setInterval(() => {
       void poll();
     }, 2500);
     return () => {
       disposed = true;
+      window.removeEventListener("youtube:tasks-changed", poll);
       clearInterval(timer);
     };
   }, [refresh, active]);

@@ -103,7 +103,7 @@ def test_authorization(path, proxy):
                 return result('invalid', '当前授权缺少 YouTube 上传权限，请更新授权信息并允许上传权限')
         if Path(path).read_text(encoding='utf-8-sig') != content:
             return result('error', '测试期间授权文件已变化，请重新测试')
-        return result('valid', '授权有效：令牌可刷新，且具有 YouTube 上传权限。实际上传仍受频道状态和配额限制。')
+        return result('valid', '授权有效：令牌可刷新，且具有 YouTube 上传权限。实际上传仍受频道状态和配额限制')
     except requests.RequestException:
         return result('error', '无法连接 Google，请检查服务器网络和已保存的 YouTube 代理设置后重试')
     except (ValueError, TypeError, OSError):

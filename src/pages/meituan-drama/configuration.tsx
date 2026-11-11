@@ -22,25 +22,25 @@ const emptyConfig: MeituanCreationConfig = {
 const sections: ConfigSectionDefinition<MeituanCreationConfig>[] = [
   {
     title: "账号连接",
-    description: "启动时读取已启用的账号，分别打开浏览器。",
+    description: "启动时读取已启用的账号，分别打开浏览器",
     fields: [
       {
         key: "apiBaseUrl",
         label: "接口地址",
         type: "url",
-        description: "用于读取后台启用的美团账号。",
+        description: "用于读取后台启用的美团账号",
       },
     ],
   },
   {
     title: "浏览器与上传",
-    description: "账号登录信息独立保存，共享目录在全局配置中设置。",
+    description: "账号登录信息独立保存，共享目录在全局配置中设置",
     fields: [
       {
         key: "operationDelaySeconds",
         label: "操作间隔",
         type: "number",
-        description: "两次浏览器操作之间的等待时间。",
+        description: "浏览器操作之间的等待时间",
         suffix: "秒",
         step: "0.01",
       },
@@ -48,7 +48,7 @@ const sections: ConfigSectionDefinition<MeituanCreationConfig>[] = [
         key: "episodeUploadFailedRetryAttempts",
         label: "上传失败重试次数",
         type: "number",
-        description: "单集上传失败时的重试次数，耗尽后任务失败。",
+        description: "单集上传失败时的重试次数，耗尽后任务失败",
         suffix: "次",
         min: 0,
       },
@@ -56,7 +56,7 @@ const sections: ConfigSectionDefinition<MeituanCreationConfig>[] = [
         kind: "switch",
         key: "headless",
         label: "隐藏浏览器窗口",
-        description: "登录或排查问题时，需显示浏览器窗口。",
+        description: "登录或排查问题时请关闭此项，显示浏览器窗口",
         activeLabel: "已隐藏",
         inactiveLabel: "显示窗口",
       },
@@ -64,13 +64,13 @@ const sections: ConfigSectionDefinition<MeituanCreationConfig>[] = [
   },
   {
     title: "任务页面",
-    description: "每个任务使用独立页面，互不影响。",
+    description: "每个任务使用独立页面，互不影响",
     fields: [
       {
         kind: "switch",
         key: "closeTaskPageAfterRun",
         label: "结束后关闭页面",
-        description: "任务成功或失败并提交结果后，关闭任务页。",
+        description: "任务成功或失败并提交结果后，关闭任务页",
         activeLabel: "自动关闭",
         inactiveLabel: "保留页面",
       },

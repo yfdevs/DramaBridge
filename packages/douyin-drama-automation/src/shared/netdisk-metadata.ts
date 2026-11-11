@@ -249,11 +249,11 @@ function mergeRoles(
 
 function buildPrompt(task: ClaimedDouyinDramaTask, inputs: MetadataInputs) {
   return [
-    "请一次性整理抖音漫剧提报所需的简介和角色资料，只输出 JSON 对象，不要 Markdown。",
-    "JSON 格式：{\"summary\":\"...\",\"roles\":[{\"name\":\"...\",\"roleType\":\"主角|配角|参演\",\"intro\":\"...\",\"photoImageId\":\"image-1或null\"}]}。",
-    "规则：summary 必须为 101-200 个字符（含标点），忠于资料，不虚构关键剧情；每个角色必须包含10-100字的 intro 人物简介，建议20-80字，空白不计字数。",
-    "根据简介和角色资料返回至少2个、最多10个重要角色。图片候选中能明确匹配到单人头像时填写对应 photoImageId；没有匹配头像时填写 null，后续会为该角色生成头像。不要把封面、海报、横图或竖图当成角色头像。",
-    "短剧信息填写中已提供的简介和角色属于权威信息，应保留事实并补全缺项。所有角色和简介在这一次响应中同时完成。",
+    "请一次性整理抖音漫剧提报所需的简介和角色资料，只输出 JSON 对象，不要 Markdown",
+    "JSON 格式：{\"summary\":\"...\",\"roles\":[{\"name\":\"...\",\"roleType\":\"主角|配角|参演\",\"intro\":\"...\",\"photoImageId\":\"image-1或null\"}]}",
+    "规则：summary 必须为 101-200 个字符（含标点），忠于资料，不虚构关键剧情；每个角色必须包含10-100字的 intro 人物简介，建议20-80字，空白不计字数",
+    "根据简介和角色资料返回至少2个、最多10个重要角色。图片候选中能明确匹配到单人头像时填写对应 photoImageId；没有匹配头像时填写 null，后续会为该角色生成头像。不要把封面、海报、横图或竖图当成角色头像",
+    "短剧信息填写中已提供的简介和角色属于权威信息，应保留事实并补全缺项。所有角色和简介在这一次响应中同时完成",
     `剧名：${task.playlet.title}`,
     `短剧信息填写中的简介：${task.playlet.summary || "（未提供）"}`,
     `短剧信息填写中的角色：${JSON.stringify(task.playlet.roles)}`,
@@ -281,16 +281,16 @@ async function completeRoleIntroductions(
     log(options, `[douyin-drama] AI 补充人物简介：${pending.map(role => role.name).join("、")}（${attempt}/2）`, undefined, "metadata");
     try {
       const completion = await client.generateText({
-        systemPrompt: "你是短剧人物资料编辑。仅依据提供的简介和角色事实补充人物介绍，不虚构人物身份、关系或关键剧情。仅输出合法 JSON。",
+        systemPrompt: "你是短剧人物资料编辑。仅依据提供的简介和角色事实补充人物介绍，不虚构人物身份、关系或关键剧情。仅输出合法 JSON",
         prompt: [
-          "角色简介补充：只补充下列简介缺失或不足10字的角色，保留角色姓名、身份和原简介事实。",
-          "每段人物简介必须10-100字，建议20-80字，空白不计字数；不要通过重复姓名、空格或标点凑字数。",
-          '仅返回 JSON：{"roles":[{"index":0,"intro":"完整的人物简介"}]}，index 必须与输入一致，不改动其他角色。',
+          "角色简介补充：只补充下列简介缺失或不足10字的角色，保留角色姓名、身份和原简介事实",
+          "每段人物简介必须10-100字，建议20-80字，空白不计字数；不要通过重复姓名、空格或标点凑字数",
+          '仅返回 JSON：{"roles":[{"index":0,"intro":"完整的人物简介"}]}，index 必须与输入一致，不改动其他角色',
           `剧名：${task.playlet.title}`,
           `剧情简介：${summary}`,
           `待补充的角色：${JSON.stringify(pending)}`,
           `参考资料：${JSON.stringify(inputs?.texts.map(text => ({ content: text.content, fileName: text.fileName })) ?? [])}`,
-          ...(attempt > 1 ? ["上一轮仍有角色简介不合格，请严格遵守字数与 JSON 格式要求。"] : []),
+          ...(attempt > 1 ? ["上一轮仍有角色简介不合格，请严格遵守字数与 JSON 格式要求"] : []),
         ].join("\n"),
         maxTokens: 2_000, temperature: 0.1,
       });
@@ -315,17 +315,17 @@ function buildRolePortraitPrompt(
   summary: string,
 ) {
   return [
-    "参考随请求附带的剧目封面，生成一张同一部剧角色的单人头像，用于平台角色资料上传。",
-    "只展示一个角色，正面或轻微侧脸，头肩构图，五官清晰，人物完整，不要多人、拼图、海报或场景远景。",
-    "画面不得包含任何文字、剧名、字幕、标志、水印、二维码、边框或界面元素。",
-    "根据剧情简介、角色身份和人物介绍设计年龄、气质、服装与表情，不改变人物性别和核心身份。",
-    "必须先判断参考封面属于真人实拍、写实AI、动漫、插画或3D等哪种视觉风格，并严格保持与封面一致，不要擅自把真人改成动漫，也不要把动漫改成真人。",
-    "若封面中能识别到对应角色，应继承其性别、年龄、发型、脸型、服装、色彩和整体美术风格；背景简洁，不照搬封面文字。",
+    "参考随请求附带的剧目封面，生成一张同一部剧角色的单人头像，用于平台角色资料上传",
+    "只展示一个角色，正面或轻微侧脸，头肩构图，五官清晰，人物完整，不要多人、拼图、海报或场景远景",
+    "画面不得包含任何文字、剧名、字幕、标志、水印、二维码、边框或界面元素",
+    "根据剧情简介、角色身份和人物介绍设计年龄、气质、服装与表情，不改变人物性别和核心身份",
+    "必须先判断参考封面属于真人实拍、写实AI、动漫、插画或3D等哪种视觉风格，并严格保持与封面一致，不要擅自把真人改成动漫，也不要把动漫改成真人",
+    "若封面中能识别到对应角色，应继承其性别、年龄、发型、脸型、服装、色彩和整体美术风格；背景简洁，不照搬封面文字",
     `剧名：${task.playlet.title}`,
     `剧情简介：${summary}`,
     `角色姓名：${role.name}`,
     `角色性质：${role.roleType ?? "参演"}`,
-    `角色介绍：${role.intro ?? `${role.name}是本剧重要角色。`}`,
+    `角色介绍：${role.intro ?? `${role.name}是本剧重要角色`}`,
   ].join("\n");
 }
 
@@ -436,14 +436,14 @@ export async function enrichDouyinTaskFromNetdisk(
     throw new Error("DOUYIN_DRAMA_AI_CLIENT_REQUIRED: 网盘简介和角色资料需要全局 AI 配置");
   }
 
-  log(options, "[douyin-drama] 开始一次性 AI 整理网盘简介、角色资料和头像文件名。", {
+  log(options, "[douyin-drama] 开始一次性 AI 整理网盘简介、角色资料和头像文件名", {
     accountTaskId: task.accountTaskId,
     textFiles: inputs.texts.map((text) => text.relativePath),
     imageCandidates: inputs.images.map((image) => image.relativePath),
   }, "metadata");
   const aiClient = options.aiClientFactory();
   const completion = await aiClient.generateText({
-    systemPrompt: "你是短剧资料整理助手。严格基于输入资料输出合法 JSON，不解释、不追加文字。",
+    systemPrompt: "你是短剧资料整理助手。严格基于输入资料输出合法 JSON，不解释、不追加文字",
     prompt: buildPrompt(task, inputs),
     maxTokens: 2_000,
     temperature: 0.1,
@@ -456,7 +456,7 @@ export async function enrichDouyinTaskFromNetdisk(
     client: aiClient, text: sourceSummary, minLength: 101, maxLength: 200,
     fieldName: "抖音短剧剧情简介",
     context: `剧名：${task.originalTitle}\n资料：${inputs.texts.map(text => text.content).join("\n").slice(0, 6000)}`,
-    instructions: "简介不足101字符时忠于资料自然扩写，超过200字符时压缩；最终为101-200字符（含标点），不得虚构剧情，不输出字数说明。",
+    instructions: "简介不足101字符时忠于资料自然扩写，超过200字符时压缩；最终为101-200字符（含标点），不得虚构剧情，不输出字数说明",
   });
   if (sourceSummary.length !== summary.length) log(options, `[douyin-drama] AI 简介长度修复完成：${sourceSummary.length} → ${summary.length}字符`, undefined, "metadata");
   const roles = mergeRoles(task.playlet.roles, generated.roles, inputs.images);
@@ -491,7 +491,7 @@ export async function enrichDouyinTaskFromNetdisk(
   }
   task.playlet.summary = await optimizeDouyinSummary(summary, aiClient);
   task.playlet.roles = roles;
-  log(options, "[douyin-drama] 网盘元数据整理及人物简介校验完成。", {
+  log(options, "[douyin-drama] 网盘元数据整理及人物简介校验完成", {
     accountTaskId: task.accountTaskId,
     model: completion.model,
     summaryLength: task.playlet.summary.length,

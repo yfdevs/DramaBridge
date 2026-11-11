@@ -1,3 +1,5 @@
+import { createAccountRuntimeGroup } from "../shared/account-runtime-group";
+import { registerAccountControl } from "../shared/account-control";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -222,12 +224,16 @@ async function status(): Promise<TencentHuolongDramaServiceStatus> {
   return { ...current, pid: process.pid };
 }
 
-async function startRuntime(selectedAccountIds: unknown): Promise<PlatformRuntime> {
+async function startRuntime(selectedAccountIds: unknown) {
+  return createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+}
+
+async function startAccountRuntime(selectedAccountIds: unknown, canClaimTask: () => boolean): Promise<PlatformRuntime> {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const { fetchTencentHuolongDramaAccounts, startTencentHuolongDramaRuntime } = await importRuntimePackage();
   const availableAccounts = await fetchTencentHuolongDramaAccounts(config.apiBaseUrl);
-  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请选择要启动的账号");
   const ids = new Set(selectedAccountIds);
   const accounts = availableAccounts.filter(account => ids.has(account.accountId));
   if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
@@ -241,6 +247,7 @@ async function startRuntime(selectedAccountIds: unknown): Promise<PlatformRuntim
       const paths = storagePaths(config, account.accountId);
       ensureDirectories(paths);
       const runtime = await startTencentHuolongDramaRuntime({
+        canClaimTask,
         accountProfileName: account.accountId,
         accountId: account.accountId,
         accountName: account.accountName,
@@ -333,6 +340,7 @@ export function openTencentHuolongDramaLogDir() {
 }
 
 export function registerTencentHuolongDramaPlatformHandlers() {
+  registerAccountControl({ platform: "tencent-huolong-drama", controller: controller, start: startRuntime, status });
   registerTaskAnalyticsHandler({
     platform: "tencent-huolong-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,

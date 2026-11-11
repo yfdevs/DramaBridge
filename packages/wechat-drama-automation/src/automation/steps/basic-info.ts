@@ -292,7 +292,7 @@ async function uploadByLabeledGroupFileInput(
 ): Promise<void> {
   const files = await prepareUploadFiles(filePaths, resolveFromRoot, remoteDirectoryName);
   if (required && (files.length === 0 || files.length !== filePaths.length)) {
-    throw new Error(`[upload-file-invalid] ${label}: 必传文件不存在或不可用，请检查后端返回的文件地址。`);
+    throw new Error(`[upload-file-invalid] ${label}: 必传文件不存在或不可用，请检查后端返回的文件地址`);
   }
   if (!files.length) {
     formLogger.warn("没有可用文件，已跳过", { field: label });

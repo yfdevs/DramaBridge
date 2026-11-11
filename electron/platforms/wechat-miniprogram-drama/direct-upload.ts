@@ -31,13 +31,13 @@ function taskInterruptionError(message: string): Error {
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
     return Promise.reject(
-      signal.reason instanceof Error ? signal.reason : taskInterruptionError("任务已终止。"),
+      signal.reason instanceof Error ? signal.reason : taskInterruptionError("任务已终止"),
     )
   }
 
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(
-      signal.reason instanceof Error ? signal.reason : taskInterruptionError("任务已终止。"),
+      signal.reason instanceof Error ? signal.reason : taskInterruptionError("任务已终止"),
     )
     signal.addEventListener("abort", onAbort, { once: true })
     void promise.then(resolve, reject).finally(() => {
@@ -111,7 +111,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
     ipcMain.handle(
       "wechat-miniprogram-drama:baidu-upload:task:delete",
       (_event, id: string) => {
-        if (this.activeTaskId === id) throw new Error("正在执行的任务不能删除。")
+        if (this.activeTaskId === id) throw new Error("正在执行的任务不能删除")
         this.repository.delete(id)
         this.broadcast()
         return this.workspace()
@@ -133,8 +133,8 @@ export class WechatMiniProgramDirectUploadCoordinator {
       return this.workspace()
     })
     ipcMain.handle("wechat-miniprogram-drama:baidu-upload:task:cancel-active", async () => {
-      if (!this.activeTaskId) throw new Error("当前没有正在执行的任务。")
-      this.interruptActiveTask("用户已终止当前任务。")
+      if (!this.activeTaskId) throw new Error("当前没有正在执行的任务")
+      this.interruptActiveTask("用户已终止当前任务")
       await this.runtime?.closeBrowser().catch(() => undefined)
       this.broadcast()
       return this.workspace()
@@ -144,7 +144,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
       return this.workspace()
     })
     ipcMain.handle("wechat-miniprogram-drama:baidu-upload:browser:close", async () => {
-      if (this.activeTaskId) throw new Error("任务上传期间不能关闭浏览器。")
+      if (this.activeTaskId) throw new Error("任务上传期间不能关闭浏览器")
       await this.runtime?.closeBrowser()
       this.broadcast()
       return this.workspace()
@@ -188,7 +188,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
 
   async stop(): Promise<void> {
     this.queueRunning = false
-    this.interruptActiveTask("应用正在退出，当前任务已中断。")
+    this.interruptActiveTask("应用正在退出，当前任务已中断")
     await this.runtime?.stop().catch(() => undefined)
     this.runtime = null
     this.window?.destroy()
@@ -198,10 +198,10 @@ export class WechatMiniProgramDirectUploadCoordinator {
   private createTask(input: { dramaName?: string; shareText?: string }) {
     const dramaName = String(input.dramaName ?? "").trim()
     const shareText = String(input.shareText ?? "").trim()
-    if (!dramaName) throw new Error("请填写剧目名称。")
-    if (!shareText) throw new Error("请粘贴百度网盘分享内容。")
+    if (!dramaName) throw new Error("请填写剧目名称")
+    if (!shareText) throw new Error("请粘贴百度网盘分享内容")
     if (!/https?:\/\/pan\.baidu\.com\/s\//i.test(shareText)) {
-      throw new Error("分享内容中没有找到有效的百度网盘链接。")
+      throw new Error("分享内容中没有找到有效的百度网盘链接")
     }
     const shareKey = createHash("sha256").update(shareText).digest("hex").slice(0, 24)
     this.repository.create({ dramaName, shareText, shareKey })
@@ -213,7 +213,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
     this.assertDirectModeAvailable()
     const settings = this.options.getSettings()
     if (!settings.localEpisodeVideoRoot.trim()) {
-      throw new Error("请先在微信小程序配置中设置剧集视频根目录。")
+      throw new Error("请先在微信小程序配置中设置剧集视频根目录")
     }
     if (this.queueRunning) return
     this.queueError = undefined
@@ -316,7 +316,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
       signal.throwIfAborted()
       const episodeCount = Number(download.episodeCount)
       if (!Number.isInteger(episodeCount) || episodeCount <= 0) {
-        throw new Error("百度网盘资源下载完成，但未能确定有效总集数。")
+        throw new Error("百度网盘资源下载完成，但未能确定有效总集数")
       }
 
       const {
@@ -336,7 +336,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
         || episodeIndexes.some((value, index) => value !== expectedIndexes[index])
       ) {
         throw new Error(
-          `本地下载后的剧集校验失败：期望1-${episodeCount}，实际${episodeIndexes.join("、") || "无"}。`,
+          `本地下载后的剧集校验失败：期望1-${episodeCount}，实际${episodeIndexes.join("、") || "无"}`,
         )
       }
       await abortable(validateLocalEpisodeMinimumDuration({
@@ -365,7 +365,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
         Math.floor(Number(settings.episodeVideoTargetFileMegabytes) || 480),
       )
       if (targetFileMegabytes >= maxFileMegabytes) {
-        throw new Error("视频压缩目标体积必须小于单集视频上限。")
+        throw new Error("视频压缩目标体积必须小于单集视频上限")
       }
       const videoTranscodeQueue = new VideoTranscodeQueue({
         concurrency: Math.max(
@@ -465,7 +465,7 @@ export class WechatMiniProgramDirectUploadCoordinator {
 
   private assertDirectModeAvailable(): void {
     if (this.options.regularServiceRunning()) {
-      throw new Error("微信小程序常规服务正在运行，请先关闭常规服务再使用百度资源直传。")
+      throw new Error("微信小程序常规服务正在运行，请先关闭常规服务再使用百度资源直传")
     }
   }
 

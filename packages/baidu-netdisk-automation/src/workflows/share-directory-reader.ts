@@ -59,7 +59,7 @@ export function createBaiduShareDirectoryReader(options: {
         throw new Error(
           "分享目录仍是客户端临时路径，未能从分享根目录确认真实路径，已停止转存：" +
             requested +
-            "；请重新打开原分享链接后重试。",
+            "；请重新打开原分享链接后重试",
         );
       }
       const results: ShareEntry[] = [];

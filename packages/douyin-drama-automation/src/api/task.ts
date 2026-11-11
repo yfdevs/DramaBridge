@@ -295,7 +295,7 @@ export async function claimNextDouyinDramaTaskApi(
   );
   log(
     options.runtimeOptions ?? {},
-    `[douyin-drama] 获取到 ${readyTasks.length} 条 READY 任务。`,
+    `[douyin-drama] 获取到 ${readyTasks.length} 条 READY 任务`,
     { accountId, readyTaskCount: readyTasks.length },
     "polling",
   );

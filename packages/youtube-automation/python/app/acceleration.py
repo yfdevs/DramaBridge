@@ -66,7 +66,7 @@ def installation_plan(hardware, mode='auto'):
         elif supported >= (11, 8) and (capability is None or 5 <= capability < 10):
             index, version = 'cu118', '2.7.1'
         else:
-            return {'backend': 'cpu', 'reason': 'NVIDIA 驱动或计算架构不满足已配置的稳定版运行时，请更新官方驱动。'}
+            return {'backend': 'cpu', 'reason': 'NVIDIA 驱动或计算架构不满足已配置的稳定版运行时，请更新官方驱动'}
         return {'backend': 'cuda', 'index': PYTORCH_INDEX + index,
                 'packages': [f'torch=={version}']}
     if mode in ('auto', 'rocm') and hardware.get('windows_build', 0) >= 22000:
@@ -76,13 +76,13 @@ def installation_plan(hardware, mode='auto'):
                 'rocm_sdk_devel-7.2.1-py3-none-win_amd64.whl',
                 'rocm_sdk_libraries_custom-7.2.1-py3-none-win_amd64.whl', 'rocm-7.2.1.tar.gz')],
                 'packages': [AMD_ROOT + 'torch-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl'],
-                'reason': '需要 AMD 26.2.2 或该版本对应的兼容驱动；安装后会实际检测。'}
+                'reason': '需要 AMD 26.2.2 或该版本对应的兼容驱动；安装后会实际检测'}
     if mode in ('auto', 'xpu') and hardware.get('windows_build', 0) >= 22000 and any('intel' in name and 'arc' in name for name in names):
         return {'backend': 'xpu', 'index': PYTORCH_INDEX + 'xpu',
                 'packages': ['torch==2.11.0']}
-    reason = '当前硬件未匹配已配置的 AI GPU 运行时，使用 CPU；视频硬件编码另行实测。'
+    reason = '当前硬件未匹配已配置的 AI GPU 运行时，使用 CPU；视频硬件编码另行实测'
     if any('nvidia' in name for name in names):
-        reason = '检测到 NVIDIA 显卡，但驱动或 nvidia-smi 未就绪；请更新 NVIDIA 官方驱动后重新运行 install.bat。'
+        reason = '检测到 NVIDIA 显卡，但驱动或 nvidia-smi 未就绪；请更新 NVIDIA 官方驱动后重新运行 install.bat'
     return {'backend': 'cpu', 'reason': reason}
 
 

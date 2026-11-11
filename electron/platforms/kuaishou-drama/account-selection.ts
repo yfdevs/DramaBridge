@@ -7,12 +7,12 @@ export function selectKuaishouAccounts<T extends { accountId: string }>(
     !selectedIds.length ||
     selectedIds.some((id) => typeof id !== "string" || !id.trim())
   ) {
-    throw new Error("请至少选择一个快手账号后再启动服务。");
+    throw new Error("请至少选择一个快手账号后再启动服务");
   }
   const selected = new Set<string>(selectedIds);
   const available = new Set(accounts.map((account) => account.accountId));
   if ([...selected].some((id) => !available.has(id))) {
-    throw new Error("所选快手账号已停用或不存在，请刷新账号列表后重新选择。");
+    throw new Error("所选快手账号已停用或不存在，请刷新账号列表后重新选择");
   }
   return accounts.filter((account) => selected.has(account.accountId));
 }

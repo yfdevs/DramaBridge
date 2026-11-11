@@ -158,7 +158,7 @@ export class WindowsOwnershipOcr {
   }
 
   async test(): Promise<LocalOcrTestResult> {
-    if (process.platform !== "win32") return { available: false, message: "这台电脑不支持本机识别，将使用 AI 识别。" };
+    if (process.platform !== "win32") return { available: false, message: "这台电脑不支持本机识别，将使用 AI 识别" };
     let directory: string | undefined;
     const started = Date.now();
     try {
@@ -167,9 +167,9 @@ export class WindowsOwnershipOcr {
       await sharp(Buffer.from('<svg width="800" height="120"><rect width="100%" height="100%" fill="white"/><text x="30" y="80" font-family="Arial" font-size="48" fill="black">OCR TEST 123</text></svg>')).png().toFile(file);
       const text = (await this.recognize([file], true)).join("").replace(/\s+/gu, "").toUpperCase();
       if (!text.includes("OCRTEST123")) throw new Error("OCR_TEST_FAILED");
-      return { available: true, message: "本机识别可用，无法确认的截图会自动交给 AI。", latencyMs: Date.now() - started };
+      return { available: true, message: "本机识别可用，无法确认的截图会自动交给 AI", latencyMs: Date.now() - started };
     } catch {
-      return { available: false, message: "本机识别暂不可用，可能缺少系统识别组件。任务会自动使用 AI。" };
+      return { available: false, message: "本机识别暂不可用，可能缺少系统识别组件。任务会自动使用 AI" };
     } finally { if (directory) await rm(directory, { recursive: true, force: true }).catch(() => undefined); }
   }
 

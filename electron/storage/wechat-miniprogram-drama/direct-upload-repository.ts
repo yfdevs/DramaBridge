@@ -151,7 +151,7 @@ export class WechatMiniProgramDirectUploadTaskRepository {
     const current = this.findById(id)
     if (!current) throw new Error(`直传任务不存在：${id}`)
     if (!["failed", "interrupted"].includes(current.state)) {
-      throw new Error("只有失败或中断的任务可以重试。")
+      throw new Error("只有失败或中断的任务可以重试")
     }
     return this.update(id, {
       state: "queued",
@@ -174,7 +174,7 @@ export class WechatMiniProgramDirectUploadTaskRepository {
     const result = this.database.prepare(`
       UPDATE wechat_miniprogram_direct_upload_tasks
       SET state='interrupted',
-          error='应用上次退出时任务尚未完成，请确认后重试。',
+          error='应用上次退出时任务尚未完成，请确认后重试',
           updated_at=@now,
           finished_at=@now
       WHERE state IN ('inspecting', 'downloading', 'waiting-login', 'uploading')

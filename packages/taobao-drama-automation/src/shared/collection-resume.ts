@@ -8,7 +8,7 @@ export type TaobaoCollectionUploadPlan = {
 };
 
 function invalid(reason: string): never {
-  throw new Error(`TAOBAO_DRAMA_COLLECTION_RESUME_UNSAFE: ${reason}。已停止上传，请核实淘宝合集，避免重复上传或补错集。`);
+  throw new Error(`TAOBAO_DRAMA_COLLECTION_RESUME_UNSAFE: ${reason}。已停止上传，请核实淘宝合集，避免重复上传或补错集`);
 }
 
 export function applyTaobaoConfirmedSubmissions(plan: TaobaoCollectionUploadPlan, episodeNumbers: number[]) {

@@ -198,7 +198,7 @@ export async function ensureDouyinNetdiskResource(
   const missingRequiredText = task.playlet.summary.trim().length < 101 && inputs.texts.length === 0;
   if (!missingRequiredText) return resource;
 
-  log(options, "[douyin-drama] “短剧信息填写”中的简介不足 101 字，且本地未读取到剧情资料，重新下载百度网盘简介文件。", {
+  log(options, "[douyin-drama] “短剧信息填写”中的简介不足 101 字，且本地未读取到剧情资料，重新下载百度网盘简介文件", {
     accountTaskId: task.accountTaskId,
     missingRequiredText,
   }, "download");
@@ -250,7 +250,7 @@ async function runTask(
     ).catch((error) => {
       warn(
         options,
-        "[douyin-drama] 已有剧目检查失败，继续执行原创建上传流程。",
+        "[douyin-drama] 已有剧目检查失败，继续执行原创建上传流程",
         { accountTaskId: task.accountTaskId, title: task.playlet.title, error },
         "task",
       );
@@ -276,7 +276,7 @@ async function runTask(
       });
       log(
         options,
-        "[douyin-drama] 平台已有同名剧目，已跳过创建上传并上报成功。",
+        "[douyin-drama] 平台已有同名剧目，已跳过创建上传并上报成功",
         {
           accountTaskId: task.accountTaskId,
           title: task.playlet.title,
@@ -289,7 +289,7 @@ async function runTask(
     }
     log(
       options,
-      "[douyin-drama] 未找到同名剧目，继续创建上传。",
+      "[douyin-drama] 未找到同名剧目，继续创建上传",
       {
         accountTaskId: task.accountTaskId,
         title: task.playlet.title,
@@ -297,31 +297,31 @@ async function runTask(
       },
       "task",
     );
-    log(options, "[douyin-drama] 阶段开始：准备百度网盘资源。", {
+    log(options, "[douyin-drama] 阶段开始：准备百度网盘资源", {
       accountTaskId: task.accountTaskId,
     }, "task");
     const baiduNetdiskResource = await ensureDouyinNetdiskResource(task, options, signal);
     signal?.throwIfAborted();
-    log(options, "[douyin-drama] 阶段完成：百度网盘资源已就绪。", {
+    log(options, "[douyin-drama] 阶段完成：百度网盘资源已就绪", {
       accountTaskId: task.accountTaskId,
     }, "task");
-    log(options, "[douyin-drama] 阶段开始：读取并补全任务资料。", {
+    log(options, "[douyin-drama] 阶段开始：读取并补全任务资料", {
       accountTaskId: task.accountTaskId,
     }, "task");
     const enrichedTask = await enrichDouyinTaskFromNetdisk(task, options);
     signal?.throwIfAborted();
-    log(options, "[douyin-drama] 阶段开始：校验视频、封面和权属素材。", {
+    log(options, "[douyin-drama] 阶段开始：校验视频、封面和权属素材", {
       accountTaskId: task.accountTaskId,
     }, "task");
     const resources = await prepareDouyinDramaResources(enrichedTask, options);
     signal?.throwIfAborted();
     log(
       options,
-      "[douyin-drama] 任务资源准备完成。",
+      "[douyin-drama] 任务资源准备完成",
       { accountTaskId: task.accountTaskId, ...resources },
       "task",
     );
-    log(options, "[douyin-drama] 阶段开始：填写抖音表单并上传。", {
+    log(options, "[douyin-drama] 阶段开始：填写抖音表单并上传", {
       accountTaskId: task.accountTaskId,
     }, "task");
     await runDouyinDramaPublishTask(taskPage, enrichedTask, options);
@@ -331,7 +331,7 @@ async function runTask(
       accountTaskId: task.accountTaskId,
     });
     await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
-      (error) => warn(options, "[douyin-drama] 任务成功，但百度网盘剧目目录清理失败。", { error }, "task"),
+      (error) => warn(options, "[douyin-drama] 任务成功，但百度网盘剧目目录清理失败", { error }, "task"),
     );
     setLastTask({
       accountTaskId: task.accountTaskId,
@@ -444,7 +444,7 @@ export async function startDouyinDramaRuntime(
   const pollLoop = async () => {
     while (running) {
       try {
-        const task = await claimNextDouyinDramaTaskApi({
+        const task = options.canClaimTask?.() === false ? null : await claimNextDouyinDramaTaskApi({
           apiConfig: options.apiConfig,
           runtimeOptions: options,
         });
@@ -460,7 +460,7 @@ export async function startDouyinDramaRuntime(
           ) {
             await taskPage.close().catch(() => undefined);
           } else if (!taskPage.isClosed()) {
-            log(options, "[douyin-drama] 已保留失败任务页面供排查。", {
+            log(options, "[douyin-drama] 已保留失败任务页面供排查", {
               accountTaskId: task.accountTaskId,
               activeUrl: taskPage.url(),
             }, "task");
@@ -512,7 +512,7 @@ export async function startDouyinDramaRuntime(
     async stop() {
       running = false;
       runtimeAbortController.abort(new Error("DOUYIN_DRAMA_RUNTIME_STOPPED"));
-      log(options, "[douyin-drama] 运行时停止。", undefined, "runtime");
+      log(options, "[douyin-drama] 运行时停止", undefined, "runtime");
       // Release a pending login wait; active tasks retain their normal stop grace period.
       if (!loginReady) await context.close().catch(() => undefined);
       await Promise.race([

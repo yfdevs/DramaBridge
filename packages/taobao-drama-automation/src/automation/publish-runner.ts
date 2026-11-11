@@ -49,7 +49,7 @@ export function findReusableTaobaoCollection(
   const expectedTitle = normalizedCollectionTitle(title);
   const matched = items.filter((item) => normalizedCollectionTitle(item.collectionInfo.title) === expectedTitle);
   if (matched.length > 1) throw new Error(
-    `TAOBAO_DRAMA_COLLECTION_AMBIGUOUS: 找到 ${matched.length} 个同名合集“${title}”，无法确定补传目标，已停止上传，请先处理同名合集。`,
+    `TAOBAO_DRAMA_COLLECTION_AMBIGUOUS: 找到 ${matched.length} 个同名合集“${title}”，无法确定补传目标，已停止上传，请先处理同名合集`,
   );
   return matched[0];
 }
@@ -87,7 +87,7 @@ async function ensureResource(
   options: TaobaoDramaRuntimeOptions,
 ) {
   if (!options.ensureBaiduNetdiskResource) {
-    throw new Error("淘宝短剧运行时未接入百度网盘下载能力。");
+    throw new Error("淘宝短剧运行时未接入百度网盘下载能力");
   }
   const retries = Math.max(0, options.baiduNetdiskDownloadRetryAttempts ?? 3);
   let lastError: unknown;
@@ -154,7 +154,7 @@ export async function runTaobaoPublishTask(
       uploadPlan = await findExistingTaobaoCollectionPlan(context, collectionTitle, task.episodeCount, options);
       if (!uploadPlan && attempt < 4) await page.waitForTimeout(1_000);
     }
-    if (!uploadPlan) throw new Error("TAOBAO_DRAMA_COLLECTION_CREATED_NOT_FOUND: 合集创建后未能读到合集信息，已停止上传，请检查淘宝合集列表后重试。");
+    if (!uploadPlan) throw new Error("TAOBAO_DRAMA_COLLECTION_CREATED_NOT_FOUND: 合集创建后未能读到合集信息，已停止上传，请检查淘宝合集列表后重试");
   }
 
   await waitForTaobaoPage(page, "batch", options);

@@ -1,3 +1,5 @@
+import { createAccountRuntimeGroup } from "../shared/account-runtime-group";
+import { registerAccountControl } from "../shared/account-control";
 import { seedUnconfirmedClaims, staleTaskMonitor } from "../shared/stale-task-monitor";
 import { randomUUID } from "node:crypto";
 import type {
@@ -506,6 +508,12 @@ async function status(): Promise<KuaishouDramaServiceStatus> {
 }
 
 async function startRuntime(selectedAccountIds: unknown) {
+  const runtime = await createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+  getStore().set("selectedAccountIds", runtime.getStatus().accounts.filter(account => account.launched).map(account => account.accountId));
+  return runtime;
+}
+
+async function startAccountRuntime(selectedAccountIds: unknown, canClaimTask: () => boolean) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
 
   const config = readConfig();
@@ -544,7 +552,7 @@ async function startRuntime(selectedAccountIds: unknown) {
   }
   const configuredVideoRoot = config.localEpisodeVideoRoot.trim();
   if (!configuredVideoRoot) {
-    throw new Error("请先在快手短剧配置中选择本地剧集视频目录，再启动服务。");
+    throw new Error("请先在快手短剧配置中选择本地剧集视频目录，再启动服务");
   }
   const localEpisodeVideoRoot = resolveFromAppRoot(configuredVideoRoot);
   if (!existsSync(localEpisodeVideoRoot) || !statSync(localEpisodeVideoRoot).isDirectory()) {
@@ -569,10 +577,6 @@ async function startRuntime(selectedAccountIds: unknown) {
   if (!enabledAccounts.length) throw new Error("KUAISHOU_DRAMA_ENABLED_ACCOUNT_NOT_FOUND");
 
   const accounts = selectKuaishouAccounts(enabledAccounts, selectedAccountIds);
-  getStore().set(
-    "selectedAccountIds",
-    accounts.map((account) => account.accountId),
-  );
   const accountRuntimes: Array<{
     account: (typeof accounts)[number];
     runtime: KuaishouDramaAccountRuntime;
@@ -584,6 +588,7 @@ async function startRuntime(selectedAccountIds: unknown) {
       ensureStorageDirectories(paths);
       const apiOptions = { apiConfig: { baseUrl: config.apiBaseUrl } };
       const runtimeOptions: KuaishouDramaRuntimeOptions = {
+        canClaimTask,
         workerId,
         executionStore: executions(),
         taskWatchdog: taskMonitor(),
@@ -652,6 +657,7 @@ async function startRuntime(selectedAccountIds: unknown) {
 }
 
 export function registerKuaishouDramaPlatformHandlers() {
+  registerAccountControl({ platform: "kuaishou-drama", controller: runtimeController, start: startRuntime, status, onStarted: () => getStore().set("selectedAccountIds", runtimeController.current?.getStatus().accounts.filter(account => account.launched).map(account => account.accountId) ?? []) });
   taskMonitor();
   ipcMain.handle("kuaishou-drama:tasks:cleanup", () => taskMonitor().sweep());
   registerKuaishouRecreationHandlers(readConfig);
@@ -732,12 +738,12 @@ export function registerKuaishouDramaPlatformHandlers() {
 
   ipcMain.handle("kuaishou-drama:execution:recheck", async (_event, id: string) => {
     if (runtimeController.running || runtimeController.startingPromise)
-      throw new Error("请先停止快手服务，并在快手和后台核实、处理该任务，再重新检查。");
+      throw new Error("请先停止快手服务，并在快手和后台核实、处理该任务，再重新检查");
     const record = executions().get(id);
     if (!record || record.apiBaseUrl !== readConfig().apiBaseUrl.trim().replace(/\/+$/, ""))
-      throw new Error("未找到当前后台的本地任务记录。");
+      throw new Error("未找到当前后台的本地任务记录");
     if (!["review-required", "report-blocked"].includes(record.phase))
-      throw new Error("该记录无需人工解除；待补报记录会在服务启动后自动重试。");
+      throw new Error("该记录无需人工解除；待补报记录会在服务启动后自动重试");
     const task = await (
       await importKuaishouDramaRuntimePackage()
     ).fetchKuaishouAccountTaskApi({
@@ -746,9 +752,9 @@ export function registerKuaishouDramaPlatformHandlers() {
       taskId: record.taskId,
     });
     if (runtimeController.running || runtimeController.startingPromise)
-      throw new Error("检查期间服务已启动，请先停止服务再检查。");
+      throw new Error("检查期间服务已启动，请先停止服务再检查");
     if (executions().get(id)?.updatedAt !== record.updatedAt)
-      throw new Error("任务记录已更新，请刷新后重新检查。");
+      throw new Error("任务记录已更新，请刷新后重新检查");
     if (
       !task ||
       !["READY", "FAILED", "COMPLETED", "CANCELED", "DRAFT", "CONTRACT_FILLING"].includes(
@@ -756,14 +762,14 @@ export function registerKuaishouDramaPlatformHandlers() {
       )
     ) {
       throw new Error(
-        "后台任务仍在上传中或状态无法确认。请先在快手确认是否已提交，并在后台处理占用，再重新检查。",
+        "后台任务仍在上传中或状态无法确认。请先在快手确认是否已提交，并在后台处理占用，再重新检查",
       );
     }
     executions().save({
       ...record,
       phase: "released",
       updatedAt: new Date().toISOString(),
-      errorMessage: `用户已在后台核实处理，重新检查状态为 ${task.status}，保留原领取和结果记录。`,
+      errorMessage: `用户已在后台核实处理，重新检查状态为 ${task.status}，保留原领取和结果记录`,
     });
     return status();
   });

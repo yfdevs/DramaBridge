@@ -1,3 +1,4 @@
+import { createAccountControl } from "@/platforms/app-runtime/service";
 import type { TaskSweepResult } from "@dramabridge/automation-logging"
 import type { IpcRendererEvent } from "electron"
 
@@ -78,7 +79,7 @@ const contractSubjectLabels: Record<string, string> = {
 
 async function invokeWechatVideo<T>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.ipcRenderer) {
-    throw new Error("微信视频号服务控制仅在 Electron 应用内可用。")
+    throw new Error("微信视频号服务控制仅在 Electron 应用内可用")
   }
 
   try {
@@ -105,11 +106,11 @@ function onWechatVideo<T>(channel: string, listener: (payload: T) => void) {
 
 function readableWechatVideoError(message: string) {
   if (message.includes("WECHAT_LOCAL_VIDEO_ROOT_REQUIRED")) {
-    return "请先在微信视频号配置中选择剧集视频根目录。"
+    return "请先在微信视频号配置中选择剧集视频根目录"
   }
 
   if (message.includes("localEpisodeVideoRoot is required for local episode videos")) {
-    return "请先在微信视频号配置中选择剧集视频根目录。"
+    return "请先在微信视频号配置中选择剧集视频根目录"
   }
 
   if (message.includes("[local-video-invalid] 剧集视频目录不存在:")) {
@@ -128,7 +129,7 @@ function readableWechatVideoError(message: string) {
   if (emptyContractSubjectMatch) {
     const selectedSubjects = formatContractSubjectList(emptyContractSubjectMatch[1])
     const availableSubjects = formatContractSubjectList(emptyContractSubjectMatch[2])
-    return `当前选择的主体没有可用视频号账号：${selectedSubjects}。当前接口返回的可用主体：${availableSubjects}。请在配置页选择已有主体，或让后端为所选主体配置 ON 状态的视频号账号。`
+    return `当前选择的主体没有可用视频号账号：${selectedSubjects}。当前接口返回的可用主体：${availableSubjects}。请在配置页选择已有主体，或让后端为所选主体配置 ON 状态的视频号账号`
   }
 
   return message
@@ -145,6 +146,7 @@ function formatContractSubjectList(value: string) {
 }
 
 export const wechatVideoService = {
+  accountControl: createAccountControl("wechat-drama"),
   cleanupTasks: () => invokeWechatVideo<TaskSweepResult>("wechat-drama:tasks:cleanup"),
   listAccounts() {
     return invokeWechatVideo<{ accounts: Array<{ id: string; name: string; status: string }>; selectedAccountIds: string[] }>("wechat-drama:accounts:list")
@@ -181,7 +183,7 @@ export const wechatVideoService = {
       "wechat-drama:config:get"
     )
     if (!config.localEpisodeVideoRoot.trim()) {
-      throw new Error("请先在微信视频号配置中选择剧集视频根目录。")
+      throw new Error("请先在微信视频号配置中选择剧集视频根目录")
     }
 
     return invokeWechatVideo<WechatVideoServiceStatus>("wechat-drama:service:start")

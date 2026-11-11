@@ -395,7 +395,7 @@ function runBaiduCdpOperationExclusive<T>(label: string, operation: () => Promis
       baiduNetdiskLogger("netdisk").info("Netdisk operation started", { action: label });
       try {
         if (Date.now() < baiduRiskBlockedUntil) {
-          throw new Error("[BAIDU_NETDISK_RISK_CONTROL] 百度网盘自动操作暂停中，请在客户端完成验证后稍后手动重试。");
+          throw new Error("[BAIDU_NETDISK_RISK_CONTROL] 百度网盘自动操作暂停中，请在客户端完成验证后稍后手动重试");
         }
         return await operation();
       } catch (error) {
@@ -503,7 +503,7 @@ function shareKeyFromText(shareText: string) {
   );
 
   if (!link) {
-    throw new Error("分享文本中没有找到百度网盘链接。");
+    throw new Error("分享文本中没有找到百度网盘链接");
   }
 
   try {
@@ -512,7 +512,7 @@ function shareKeyFromText(shareText: string) {
       url.searchParams.get("pwd") ??
       shareText.match(/(?:提取码|密码|pwd)[:：\s]*([a-zA-Z0-9]{4})/)?.[1];
     if (!pwd) {
-      throw new Error("分享文本中没有找到提取码。");
+      throw new Error("分享文本中没有找到提取码");
     }
 
     return [url.origin.toLowerCase(), url.pathname.replace(/\/+$/, ""), pwd.toLowerCase()]
@@ -521,7 +521,7 @@ function shareKeyFromText(shareText: string) {
     if (error instanceof Error && error.message.includes("提取码")) {
       throw error;
     }
-    throw Object.assign(new Error("分享文本中的百度网盘链接格式不正确。"), { cause: error });
+    throw Object.assign(new Error("分享文本中的百度网盘链接格式不正确"), { cause: error });
   }
 }
 
@@ -623,7 +623,7 @@ async function cleanupBaiduNetdiskDownloadArtifacts(options: {
         matchAllInDownloadRoot: true,
       }),
     );
-    if (!confirmed) throw new Error("百度客户端下载任务删除未确认，保留临时文件供后续恢复。");
+    if (!confirmed) throw new Error("百度客户端下载任务删除未确认，保留临时文件供后续恢复");
     cleanupAttemptCount += 1;
   } catch (error) {
     baiduNetdiskLogger("download").warn("Baidu download task cleanup could not be confirmed", { error });
@@ -746,8 +746,8 @@ function recoverPendingRemoteTransferCleanups() {
           ...recovered,
           state: "failed",
           error: recovered.remoteCleanupPending
-            ? "上次运行异常中断；网盘中转目录仍待清理。"
-            : "上次运行异常中断；网盘中转目录已清理。",
+            ? "上次运行异常中断；网盘中转目录仍待清理"
+            : "上次运行异常中断；网盘中转目录已清理",
         });
       }
     }
@@ -775,26 +775,26 @@ function normalizeEnsureDownloadRequest(
   const downloadEpisodeVideos = request.downloadEpisodeVideos !== false;
 
   if (!shareText) {
-    throw new Error("百度网盘分享链接不能为空。");
+    throw new Error("百度网盘分享链接不能为空");
   }
   if (!resourceName) {
-    throw new Error("百度网盘资源名称不能为空。");
+    throw new Error("百度网盘资源名称不能为空");
   }
   if (!localEpisodeVideoRoot) {
-    throw new Error("本地剧集视频根目录不能为空。");
+    throw new Error("本地剧集视频根目录不能为空");
   }
   if (
     (!Number.isInteger(episodeCount)
       || (downloadEpisodeVideos ? episodeCount <= 0 : episodeCount < 0))
     && !(downloadEpisodeVideos && inferEpisodeCount)
   ) {
-    throw new Error("剧集数量必须是正整数，或启用自动识别集数。");
+    throw new Error("剧集数量必须是正整数，或启用自动识别集数");
   }
   if (
     episodeDownloadLimit !== undefined
     && (!Number.isInteger(episodeDownloadLimit) || episodeDownloadLimit <= 0)
   ) {
-    throw new Error("仅下载前 X 集的集数必须是正整数。");
+    throw new Error("仅下载前 X 集的集数必须是正整数");
   }
 
   return {
@@ -853,7 +853,7 @@ function withAppVideoTranscode(
   const maxFileBytes = Math.max(1, settings.maxFileMegabytes) * 1_000_000;
   const targetFileBytes = Math.max(1, settings.targetFileMegabytes) * 1_000_000;
   if (targetFileBytes >= maxFileBytes) {
-    throw new Error("百度应用测试转码目标体积必须小于触发体积。");
+    throw new Error("百度应用测试转码目标体积必须小于触发体积");
   }
   const queue = appVideoTranscodeQueue(settings.concurrency);
   const cacheRootDir = path.join(
@@ -1072,7 +1072,7 @@ function normalizeShareText(request: BaiduNetdiskShareDownloadRequest | undefine
   const shareText = request?.shareText?.trim();
 
   if (!shareText) {
-    throw new Error("请先粘贴包含百度网盘链接和提取码的分享文本。");
+    throw new Error("请先粘贴包含百度网盘链接和提取码的分享文本");
   }
 
   return shareText;
@@ -1165,7 +1165,7 @@ export async function ensureBaiduNetdiskShareDownloaded(
   if (normalizedRequest.forceRedownload && [...activeDownloadOperations.values()].some(
     operation => normalizedPathKey(operation.localPath) === normalizedPathKey(localPath),
   )) {
-    throw new Error("该剧仍有正在执行的下载任务，请等待完成或停止原任务后再重新下载。");
+    throw new Error("该剧仍有正在执行的下载任务，请等待完成或停止原任务后再重新下载");
   }
 
   if (activeOperation) {
@@ -1267,7 +1267,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
   if (existingRecord?.remoteCleanupPending) {
     throw new Error(
       `上一次任务的网盘中转目录仍待清理：${existingRecord.remoteTransferPath || "未知路径"}。` +
-        "系统已停止创建新的中转目录，请确认百度网盘在线后重试。",
+        "系统已停止创建新的中转目录，请确认百度网盘在线后重试",
     );
   }
   const localPath = playletDir(request.localEpisodeVideoRoot, request.resourceName);
@@ -1330,7 +1330,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
             port,
             preserveLocalFiles: true,
           });
-          if (!confirmed) throw new Error("重新下载前未能确认旧下载任务已清理，请检查百度网盘客户端后重试。");
+          if (!confirmed) throw new Error("重新下载前未能确认旧下载任务已清理，请检查百度网盘客户端后重试");
           request.signal?.throwIfAborted();
         },
       });
@@ -1475,7 +1475,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
       );
       if (record.remoteCleanupPending) {
         throw Object.assign(
-          new Error("旧网盘中转目录尚未清理，已停止创建新的中转目录；下次启动将自动重试清理。"),
+          new Error("旧网盘中转目录尚未清理，已停止创建新的中转目录；下次启动将自动重试清理"),
           { cause: error },
         );
       }
@@ -1676,7 +1676,7 @@ function readableError(error: unknown) {
         apiMessage.includes("账户已过期") ||
         apiMessage.includes("重新登陆")
       ) {
-        return "百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载。";
+        return "百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载";
       }
 
       return `保存分享到网盘失败：${apiMessage || "百度接口返回异常"}；errno=${data.errno ?? "-"}${
@@ -1699,7 +1699,7 @@ function readableError(error: unknown) {
       };
       const apiMessage = data.show_msg || data.errmsg || data.message || "";
       if (data.errno === -6 || apiMessage.includes("账户已过期") || apiMessage.includes("重新登陆")) {
-        return "百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载。";
+        return "百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载";
       }
       if (data.errno === 1 || data.errno === 4) {
         return `读取我的网盘目录失败：${dir}；百度接口临时异常或登录态不可用，请确认客户端已登录并重启为 CDP 模式后重试；errno=${data.errno}${
@@ -1715,7 +1715,7 @@ function readableError(error: unknown) {
   }
 
   if (normalizedMessage.includes("账户已过期") || normalizedMessage.includes("重新登陆")) {
-    return "百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载。";
+    return "百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载";
   }
 
   return normalizedMessage;

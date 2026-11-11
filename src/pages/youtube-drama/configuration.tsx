@@ -24,7 +24,7 @@ function ConfigRow({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-3 border-b py-4 last:border-0 @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-8">
+    <div className="grid gap-3 py-4 @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-8">
       <div className="space-y-1">
         <p className="text-sm font-medium">{title}</p>
         {description && <p className="text-xs leading-5 text-muted-foreground">{description}</p>}
@@ -132,7 +132,8 @@ export function YoutubeConfigurationPage() {
     <ConfigurationPageFrame
       title="YouTube 配置"
       hasChanges={changed}
-      loading={disabled}
+      loading={loading || model.busy}
+      saveDisabled={locked || status.running || Boolean(loadError)}
       restartRequired={false}
       onDiscard={() => {
         setConfig(saved);
@@ -153,7 +154,7 @@ export function YoutubeConfigurationPage() {
       )}
       {status.running && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2.5 text-xs">
-          <span>请先停止服务，再修改配置。</span>
+          <span>请先停止服务，再修改配置</span>
           <Button
             size="sm"
             variant="outline"
@@ -165,7 +166,7 @@ export function YoutubeConfigurationPage() {
         </div>
       )}
       <ConfigPanelSection title="运行环境" description="">
-        <ConfigRow title="依赖管理" description="自动安装和管理 Python 及所需依赖。">
+        <ConfigRow title="运行依赖" description="自动安装并管理 Python 和视频处理依赖">
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -176,11 +177,11 @@ export function YoutubeConfigurationPage() {
                   if (changed) await persist();
                   await youtubeService.install();
                   setChecked(null);
-                  setNotice("环境安装中，完成后会自动检查，可查看日志。");
+                  setNotice("环境安装中，完成后会自动检查，可查看日志");
                 })
               }
             >
-              {status.installing ? "安装中…" : "安装环境"}
+              {status.installing ? "安装中…" : environment?.ready ? "重新安装依赖" : "安装依赖"}
             </Button>
             <Button
               size="sm"
@@ -262,17 +263,21 @@ export function YoutubeConfigurationPage() {
           ) : (
             <p className="text-xs leading-5 text-muted-foreground">
               {checkingEnvironment
-                ? "正在检查已有的 Python 环境，无需重复安装。"
+                ? "正在检查运行环境…"
                 : environmentError
-                  ? "请重新检查或查看日志；只有缺少依赖时才需要安装。"
-                  : "尚未检查运行环境，请先检查已有环境。"}
+                  ? "可重新检查或查看日志"
+                  : "尚未检查运行环境"}
             </p>
           )}
         </ConfigRow>
       </ConfigPanelSection>
-      <ConfigPanelSection title="网络" description="授权和上传时使用。">
-        <ConfigRow title="代理端口" description="不使用代理时留空。">
+      <ConfigPanelSection title="网络" description="">
+        <ConfigRow
+          title="本机代理端口"
+          description="用于 Google 授权和视频上传，不使用代理时留空"
+        >
           <Input
+            className="h-7 rounded-md"
             aria-label="YouTube 代理端口"
             disabled={disabled}
             type="number"
@@ -284,9 +289,10 @@ export function YoutubeConfigurationPage() {
           />
         </ConfigRow>
       </ConfigPanelSection>
-      <ConfigPanelSection title="Web 访问" description="服务启动后，可在浏览器添加任务和管理账号。">
+      <ConfigPanelSection title="Web 访问" description="服务启动后，可在浏览器添加任务和管理账号">
         <ConfigRow title="Web 端口">
           <Input
+            className="h-7 rounded-md"
             aria-label="Web 端口"
             type="number"
             min={1}
@@ -315,7 +321,7 @@ export function YoutubeConfigurationPage() {
           </ConfigRow>
         ) : null}
       </ConfigPanelSection>
-      <ConfigPanelSection title="Google 凭据" description="导入一次，即可为多个账号授权。">
+      <ConfigPanelSection title="Google 凭据" description="多个账号共用一份 Google 客户端凭据">
         <ConfigRow title="凭据文件" description="client_secret.json">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{metadata?.credentialsImported ? "已导入" : "未导入"}</Badge>
@@ -325,9 +331,9 @@ export function YoutubeConfigurationPage() {
               disabled={disabled}
               onClick={() =>
                 void run(async () => {
-                  if (await youtubeService.importCredentials()) {
+                  if ((await youtubeService.importCredentials())?.imported) {
                     setMetadata(await youtubeService.config());
-                    setNotice("凭据已导入，请到账号管理授权。");
+                    setNotice("凭据已导入，请到账号管理授权");
                   }
                 })
               }

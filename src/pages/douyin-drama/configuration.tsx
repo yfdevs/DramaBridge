@@ -29,18 +29,18 @@ const emptyConfig: DouyinDramaConfig = {
 const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
   {
     title: "任务与上传",
-    description: "剧目信息由后台提供，售价和付费集数在此设置。",
+    description: "剧目信息由后台提供，售价和付费集数在此设置",
     fields: [
       {
         key: "apiBaseUrl",
         label: "接口地址",
-        description: "用于读取账号、领取任务和提交结果。",
+        description: "读取账号、领取任务并上报结果",
         type: "url",
       },
       {
         key: "taskPollIntervalSeconds",
         label: "任务检查间隔",
-        description: "暂无任务或当前任务结束后，再次领取任务的等待时间。",
+        description: "无任务或任务结束后，再次检查任务的间隔",
         type: "number",
         suffix: "秒",
         min: 1,
@@ -48,7 +48,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         key: "baiduNetdiskDownloadRetryAttempts",
         label: "网盘下载重试次数",
-        description: "下载失败后的额外重试次数，填 0 不重试。",
+        description: "下载失败后的额外重试次数，填 0 不重试",
         type: "number",
         suffix: "次",
         min: 0,
@@ -56,7 +56,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         key: "episodeUploadBatchSize",
         label: "同时上传集数",
-        description: "最多同时上传多少集，完成后自动补充下一集。",
+        description: "最多同时上传多少集，完成后自动补充下一集",
         type: "number",
         suffix: "集",
         min: 1,
@@ -65,7 +65,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         key: "episodeUploadReplaceAttempts",
         label: "重新上传次数",
-        description: "上传失败或时长异常时，删除异常条目并重新上传的最多次数。",
+        description: "上传失败或时长异常时，删除异常条目并重新上传的最多次数",
         type: "number",
         suffix: "次",
         min: 0,
@@ -74,7 +74,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         key: "episodeUploadWaitTimeoutMinutes",
         label: "上传时限",
-        description: "等待全部剧集上传和处理完成的最长时间。",
+        description: "等待全部剧集上传和处理完成的最长时间",
         type: "number",
         suffix: "分钟",
         min: 1,
@@ -82,7 +82,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         key: "unitPriceYuan",
         label: "单集售价",
-        description: "填写每集的付费价格。",
+        description: "填写每集的付费价格",
         type: "number",
         suffix: "元",
         min: 0.1,
@@ -92,7 +92,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         key: "paidEpisodeStart",
         label: "付费起始集",
-        description: "从此集起收费；第 1 集免费，最早从第 2 集起。",
+        description: "从此集起收费；第 1 集免费，最早从第 2 集起",
         type: "number",
         suffix: "集起",
         min: 2,
@@ -102,12 +102,12 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
   },
   {
     title: "浏览器与日志",
-    description: "账号登录信息独立保存，共享目录在全局配置中设置。",
+    description: "账号登录信息独立保存，共享目录在全局配置中设置",
     fields: [
       {
         key: "logRetentionDays",
         label: "日志保留天数",
-        description: "启动服务时，清理超过此天数的日志。",
+        description: "启动服务时清理超过保留期限的日志",
         type: "number",
         suffix: "天",
         min: 1,
@@ -115,7 +115,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
       {
         key: "operationDelaySeconds",
         label: "操作间隔",
-        description: "两次浏览器操作之间的等待时间。",
+        description: "浏览器操作之间的等待时间",
         type: "number",
         suffix: "秒",
         step: "0.01",
@@ -124,7 +124,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
         kind: "switch",
         key: "headless",
         label: "隐藏浏览器窗口",
-        description: "登录或排查问题时，需显示浏览器窗口。",
+        description: "登录或排查问题时请关闭此项，显示浏览器窗口",
         activeLabel: "已隐藏",
         inactiveLabel: "显示窗口",
       },
@@ -132,7 +132,7 @@ const sections: ConfigSectionDefinition<DouyinDramaConfig>[] = [
         kind: "switch",
         key: "closeFailedTaskPages",
         label: "自动关闭失败页",
-        description: "开启后自动关闭失败页面；关闭后保留页面以便排查。",
+        description: "开启后自动关闭失败页面；关闭后保留页面以便排查",
         activeLabel: "自动关闭",
         inactiveLabel: "保留页面",
       },

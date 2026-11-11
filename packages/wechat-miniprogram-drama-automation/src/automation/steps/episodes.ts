@@ -78,7 +78,7 @@ async function waitForPreparedUploadRows(page: Page, expectedCount: number): Pro
     }
     await page.waitForTimeout(500);
   }
-  throw new Error(`[upload-failed] 本地上传列表未出现完整剧集：期望 ${expectedCount} 集。`);
+  throw new Error(`[upload-failed] 本地上传列表未出现完整剧集：期望 ${expectedCount} 集`);
 }
 
 async function cleanupEpisodeUploadDir(uploadDir: string, accountLabel?: string): Promise<void> {
@@ -129,7 +129,7 @@ export async function uploadEpisodeVideosOnly(
     const videoFiles = prepared.files;
     if (videoFiles.length !== input.episodeCount) {
       throw new Error(
-        `[upload-failed] 剧集视频：期望 ${input.episodeCount} 个本地文件，实际 ${videoFiles.length} 个。`,
+        `[upload-failed] 剧集视频：期望 ${input.episodeCount} 个本地文件，实际 ${videoFiles.length} 个`,
       );
     }
 
@@ -173,7 +173,7 @@ export async function uploadEpisodeVideosOnly(
       const remainingUploadTime = uploadDeadline - Date.now();
       if (remainingUploadTime <= 0) {
         throw new Error(
-          `[upload-failed] 剧集上传超时：总等待时间已超过 ${Math.round(uploadTimeout / 60000)} 分钟。`,
+          `[upload-failed] 剧集上传超时：总等待时间已超过 ${Math.round(uploadTimeout / 60000)} 分钟`,
         );
       }
 
@@ -196,7 +196,7 @@ export async function uploadEpisodeVideosOnly(
       );
       if (report.successes.length !== batch.length) {
         throw new Error(
-          `[upload-failed] 微信小程序素材库第 ${batchIndex + 1} 批仅确认 ${report.successes.length}/${batch.length} 集上传成功。`,
+          `[upload-failed] 微信小程序素材库第 ${batchIndex + 1} 批仅确认 ${report.successes.length}/${batch.length} 集上传成功`,
         );
       }
       uploadedCount += report.successes.length;
@@ -401,7 +401,7 @@ async function nextPage(
   }
 
   throw new Error(
-    `[episode-selection-failed] 点击“下一页”后页码和剧集列表均未变化，当前页=${previousPageNumber || "未知"}。`,
+    `[episode-selection-failed] 点击“下一页”后页码和剧集列表均未变化，当前页=${previousPageNumber || "未知"}`,
   );
 }
 
@@ -426,7 +426,7 @@ async function readEpisodeSelectionSummary(page: Page): Promise<EpisodeSelection
     .filter({ hasText: /已选\s*\d+\s*\/\s*\d+\s*集/ })
     .last();
   if ((await summary.count()) === 0) {
-    throw new Error("[episode-selection-failed] 未找到页面底部的“已选 N/N 集”统计。");
+    throw new Error("[episode-selection-failed] 未找到页面底部的“已选 N/N 集”统计");
   }
 
   const text = normalizeUiText(await summary.innerText().catch(() => ""));
@@ -486,7 +486,7 @@ async function applyEpisodeSearch(
 
   throw new Error(
     `[episode-selection-failed] 搜索“${value || "全部文件"}”后 30 秒内未出现稳定结果，`
-    + `最后读取到 ${lastFileNames.length} 行。`,
+    + `最后读取到 ${lastFileNames.length} 行`,
   );
 }
 
@@ -534,14 +534,14 @@ async function clearExistingEpisodeSelections(
 
   if (!clearingFinished) {
     throw new Error(
-      `[episode-selection-failed] 清理历史选集时文件库超过 ${maxEpisodeLibraryPages} 页，已停止提交。`,
+      `[episode-selection-failed] 清理历史选集时文件库超过 ${maxEpisodeLibraryPages} 页，已停止提交`,
     );
   }
 
   const after = await readEpisodeSelectionSummary(page);
   if (after.selected !== 0) {
     throw new Error(
-      `[episode-selection-failed] 历史选集未清空：页面仍显示 ${after.selected}/${after.total} 集。`,
+      `[episode-selection-failed] 历史选集未清空：页面仍显示 ${after.selected}/${after.total} 集`,
     );
   }
   uploadLogger.info("历史选集状态已清空", { clearedCount, status: after.text });
@@ -639,7 +639,7 @@ async function selectExactEpisodeRows(
 
   if (!selectionScanFinished) {
     throw new Error(
-      `[episode-selection-failed] 搜索结果超过 ${maxEpisodeLibraryPages} 页，无法完成全部重复项检查。`,
+      `[episode-selection-failed] 搜索结果超过 ${maxEpisodeLibraryPages} 页，无法完成全部重复项检查`,
     );
   }
   return {
@@ -666,7 +666,7 @@ async function auditExactEpisodeSelections(
   if (beforeAudit.selected !== expectedCount || beforeAudit.total !== expectedCount) {
     throw new Error(
       `[episode-selection-failed] 页面选集计数错误：要求 ${expectedCount}/${expectedCount}，`
-      + `实际 ${beforeAudit.selected}/${beforeAudit.total}。`,
+      + `实际 ${beforeAudit.selected}/${beforeAudit.total}`,
     );
   }
   const checkedIndexes = new Set<number>();
@@ -704,7 +704,7 @@ async function auditExactEpisodeSelections(
 
   if (!auditScanFinished) {
     throw new Error(
-      `[episode-selection-failed] 复核选集时搜索结果超过 ${maxEpisodeLibraryPages} 页，已停止提交。`,
+      `[episode-selection-failed] 复核选集时搜索结果超过 ${maxEpisodeLibraryPages} 页，已停止提交`,
     );
   }
 
@@ -713,7 +713,7 @@ async function auditExactEpisodeSelections(
   if (checkedIndexes.size !== expectedCount || missingIndexes.length > 0) {
     throw new Error(
       `[episode-selection-failed] 实际勾选不完整：已勾选 ${checkedIndexes.size}/${expectedCount} 集，`
-      + `缺少第 ${missingIndexes.join("、") || "未知"} 集。`,
+      + `缺少第 ${missingIndexes.join("、") || "未知"} 集`,
     );
   }
 
@@ -721,7 +721,7 @@ async function auditExactEpisodeSelections(
   if (summary.selected !== expectedCount || summary.total !== expectedCount) {
     throw new Error(
       `[episode-selection-failed] 页面选集计数错误：要求 ${expectedCount}/${expectedCount}，`
-      + `实际 ${summary.selected}/${summary.total}。`,
+      + `实际 ${summary.selected}/${summary.total}`,
     );
   }
   uploadLogger.info("剧集勾选复核通过", {
@@ -758,7 +758,7 @@ export async function selectUploadedEpisodeFilesStep(page: Page, config: Config)
         .filter((index) => !result.selectedIndexes.has(index));
       if (missingIndexes.length > 0 || result.selectedFileNames.size !== expectedCount) {
         throw new Error(
-          `[episode-selection-failed] 已上传文件库缺少 ${config.playlet.name} 的第 ${missingIndexes.join("、")} 集。`,
+          `[episode-selection-failed] 已上传文件库缺少 ${config.playlet.name} 的第 ${missingIndexes.join("、")} 集`,
         );
       }
       if (result.duplicateIndexes.size > 0) {
@@ -792,7 +792,7 @@ export async function selectUploadedEpisodeFilesStep(page: Page, config: Config)
     }
   }
   if (!selectionCompleted) {
-    throw lastSelectionError ?? new Error("[episode-selection-failed] 剧集勾选未完成。");
+    throw lastSelectionError ?? new Error("[episode-selection-failed] 剧集勾选未完成");
   }
 
   const confirmButton = page.getByRole("button", { name: "确认提审", exact: true }).first();

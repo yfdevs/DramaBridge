@@ -99,6 +99,7 @@ export class TaskWorkerPool {
     private readonly taskService: TaskService,
     private readonly ensureBaiduNetdiskResource?: EnsureBaiduNetdiskResource,
     private readonly cleanupBaiduNetdiskResourceAfterTaskSuccess?: CleanupBaiduNetdiskResource,
+    private readonly canClaimTask: (id: string) => boolean = () => true,
   ) {
     const settings = getWechatMiniProgramRuntimeSettings();
     this.materialPreparationQueue = new PQueue({
@@ -198,6 +199,7 @@ export class TaskWorkerPool {
       logger.info("worker started", { videoAccountId, prefetchLimit });
 
       while (!this.stopped && !worker.stopped) {
+        if (!this.canClaimTask(videoAccountId)) { await sleep(1000); continue; }
         if (inFlightTasks.size >= prefetchLimit) {
           await Promise.race(inFlightTasks);
           continue;
@@ -240,7 +242,7 @@ export class TaskWorkerPool {
               prefetchLimit,
             });
           }
-          const claimedAccountTask = await claimNextWechatMiniProgramTaskApi(videoAccount, {
+          const claimedAccountTask = !this.canClaimTask(videoAccountId) ? null : await claimNextWechatMiniProgramTaskApi(videoAccount, {
             excludedAccountTaskIds: worker.activeAccountTaskIds,
           });
           if (!claimedAccountTask) {
@@ -438,7 +440,7 @@ export class TaskWorkerPool {
       if (reservation) return reservation;
       await sleep(1000);
     }
-    throw Object.assign(new Error("微信任务准备完成后服务已停止。"), {
+    throw Object.assign(new Error("微信任务准备完成后服务已停止"), {
       errorType: ErrorType.Interrupted,
     });
   }
@@ -526,7 +528,7 @@ export class TaskWorkerPool {
     if (!baiduPanResourceLink) return;
 
     if (!this.ensureBaiduNetdiskResource) {
-      throw new Error("任务包含百度网盘资源链接，但当前运行时未接入百度网盘下载能力。");
+      throw new Error("任务包含百度网盘资源链接，但当前运行时未接入百度网盘下载能力");
     }
 
     logger.info("ensure baidu netdisk resource before task", {

@@ -10,6 +10,7 @@ export type YoutubeStatus = {
   running: boolean;
   starting: boolean;
   installing: boolean;
+  startedAt?: number;
   installStage?: string;
   pid?: number;
   error?: string;
@@ -37,7 +38,28 @@ export type YoutubeTask = {
     compress?: boolean;
     accountId?: string;
   };
-  progress?: { percent?: number; speedText?: string; stage?: string } | null;
+  progress?: {
+    percent?: number | null;
+    speedText?: string;
+    etaText?: string;
+    etaScope?: "item";
+    stage?: string;
+    message?: string;
+    elapsedSeconds?: number;
+    processedSeconds?: number;
+    durationSeconds?: number;
+    episodeIndex?: number;
+    episodeCount?: number;
+    completedItems?: number;
+    totalItems?: number;
+    lastAdvanceSeconds?: number;
+    frame?: number;
+    fps?: number;
+  } | null;
+  timings?: {
+    active?: { stage: string; startedAt: string } | null;
+    stages?: Record<string, { elapsedSeconds: number; runs: number; lastOutcome?: string }>;
+  };
   error?: string | null;
   logs?: string;
   result?: Json;

@@ -77,10 +77,10 @@ async function ensureBaiduNetdiskResourceReady(
     return;
   }
   if (!/https?:\/\/pan\.baidu\.com\/s\//i.test(shareText)) {
-    throw new Error("分享文本中没有找到百度网盘链接。");
+    throw new Error("分享文本中没有找到百度网盘链接");
   }
   if (!options.ensureBaiduNetdiskResource) {
-    throw new Error("任务包含百度网盘资源链接，但当前快手运行时未接入百度网盘下载能力。");
+    throw new Error("任务包含百度网盘资源链接，但当前快手运行时未接入百度网盘下载能力");
   }
 
   const localEpisodeVideoRoot = getKuaishouDramaLocalEpisodeVideoRoot(options);
@@ -212,7 +212,7 @@ export async function startKuaishouDramaRuntime(
       configuredTaskConsumed = true;
       return { taskConfig: configuredTask, resourceName: configuredTask.title };
     }
-    if (!options.claimTask) return null;
+    if (!options.claimTask || options.canClaimTask?.() === false) return null;
 
     log(options, "[kuaishou-drama] polling for next task");
     const claimedTask = await options.claimTask();

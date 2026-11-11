@@ -97,8 +97,8 @@ export function createMockWechatMiniProgramClaimResponse(
         name: originalTitle,
         platform: "wechatMiniProgram",
         summary:
-          "一次意外让主人公重新站在人生的岔路口。面对亲情、事业与命运的多重考验，他凭借勇气和智慧弥补遗憾，也找到了真正值得守护的人。",
-        recommendation: "改写遗憾，奔赴新的人生。",
+          "一次意外让主人公重新站在人生的岔路口。面对亲情、事业与命运的多重考验，他凭借勇气和智慧弥补遗憾，也找到了真正值得守护的人",
+        recommendation: "改写遗憾，奔赴新的人生",
         episodeCount: 11,
         baiduPanResourceLink:
           "通过网盘分享的文件：赶海救下美人鱼，她让整片大海来报恩\n" +

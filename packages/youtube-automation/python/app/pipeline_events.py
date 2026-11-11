@@ -4,15 +4,29 @@ import os
 import re
 import sqlite3
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
+from contextvars import ContextVar
 
 PREFIX = "DRAMAVOX_EVENT "
 UPLOAD_STAGES = {"authorizing", "uploading", "thumbnail"}
-STAGES = {"muting", "compressing", "probing", "normalizing", "merging", "extracting", "loading_model", "separating", "saving_audio", "remuxing", *UPLOAD_STAGES}
+STAGES = {"muting", "compressing", "probing", "normalizing", "merging", "validating", "checking_timestamps", "extracting", "loading_model", "separating", "saving_audio", "remuxing", *UPLOAD_STAGES}
 PHASE_NAMES = {"queued": "排队等待", "downloading": "下载及重连", "preparing": "准备处理",
-               "probing": "分析素材", "normalizing": "修复片段", "merging": "拼接原片",
+               "probing": "分析素材", "normalizing": "处理片段", "merging": "合并视频", "validating": "校验成片", "checking_timestamps": "校验时间轴",
                "extracting": "提取音轨", "loading_model": "加载分离模型", "separating": "人声分离",
                "muting": "移除音轨", "compressing": "压缩视频", "saving_audio": "保存人声", "remuxing": "重混视频", "authorizing": "准备授权", "uploading": "上传视频", "thumbnail": "设置封面"}
+
+_progress_context = ContextVar("pipeline_progress", default={})
+
+def current_progress():
+    return dict(_progress_context.get())
+
+@contextmanager
+def progress_context(**details):
+    token = _progress_context.set({**_progress_context.get(), **details})
+    try:
+        yield
+    finally:
+        _progress_context.reset(token)
 
 
 class PipelineStopped(SystemExit):
@@ -26,12 +40,12 @@ def ensure_running():
         return
     # Fail closed: loss of control state must never permit another upload request.
     try:
-        with sqlite3.connect(database, timeout=5) as db:
+        with closing(sqlite3.connect(database, timeout=5)) as db:
             row = db.execute("SELECT status FROM tasks WHERE id=?", (task_id,)).fetchone()
     except sqlite3.Error as exc:
         raise PipelineStopped(f"无法确认任务状态，已停止上传：{exc}") from exc
     if not row or row[0] in {"paused", "deleted", "cancelled"}:
-        raise PipelineStopped("任务已暂停或删除，停止后续处理和上传。")
+        raise PipelineStopped("任务已暂停或删除，停止后续处理和上传")
 
 
 def emit(stage, percent=None, **details):
@@ -44,16 +58,22 @@ def emit(stage, percent=None, **details):
 def timed_stage(stage, **details):
     """Emit exact completed durations; still report failure when a stop check raises."""
     emit(stage, timing="start", **details)
+    print(f"[开始] {PHASE_NAMES.get(stage, stage)}" + (f"：{details['message']}" if details.get('message') else ""), flush=True)
     started = time.monotonic()
     outcome = "completed"
     try:
-        yield
-    except BaseException:
+        with progress_context(stage=stage, **details):
+            yield
+    except (PipelineStopped, KeyboardInterrupt):
         outcome = "interrupted"
+        raise
+    except BaseException:
+        outcome = "failed"
         raise
     finally:
         elapsed = round(time.monotonic() - started, 3)
-        print(f"[耗时] {PHASE_NAMES.get(stage, stage)}：{elapsed:.2f} 秒（{outcome}）", flush=True)
+        label = {'completed': '完成', 'interrupted': '中断', 'failed': '失败'}[outcome]
+        print(f"[{label}] {PHASE_NAMES.get(stage, stage)}，耗时 {elapsed:.2f} 秒", flush=True)
         # Do not call ensure_running here: it would mask the original exception on pause.
         if os.environ.get("DRAMAVOX_EVENTS") == "1":
             print(PREFIX + json.dumps({"stage": stage, "timing": "finish", "elapsedSeconds": elapsed,

@@ -95,6 +95,7 @@ export async function runMeituanAccountTaskWorker(options: {
   let consecutiveEmptyQueries = 0;
 
   while (isRunning() && !page.isClosed()) {
+    if (runtimeOptions.canClaimTask?.() === false) { await waitWhileRunning(1000, isRunning); continue; }
     let readyTasks;
     try {
       readyTasks = await fetchReadyMeituanAccountTasksApi({
@@ -130,7 +131,7 @@ export async function runMeituanAccountTaskWorker(options: {
     let claimedCount = 0;
 
     for (const listedTask of readyTasks) {
-      if (!isRunning() || page.isClosed()) break;
+      if (!isRunning() || page.isClosed() || runtimeOptions.canClaimTask?.() === false) break;
 
       let claimed;
       try {

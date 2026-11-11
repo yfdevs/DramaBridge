@@ -1,14 +1,7 @@
-"use client"
-
 import * as React from "react"
+import { cn } from "cn"
 
-import { cn } from "@/lib/utils"
-
-function Table({
-  className,
-  containerClassName,
-  ...props
-}: React.ComponentProps<"table"> & { containerClassName?: string }) {
+function Table({ className, containerClassName, ...props }: React.ComponentProps<"table"> & { containerClassName?: string }) {
   return (
     <div
       data-slot="table-container"

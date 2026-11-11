@@ -11,6 +11,7 @@ export type YoutubeRuntimeStatus = {
   running: boolean;
   starting: boolean;
   installing: boolean;
+  startedAt?: number;
   pid?: number;
   error?: string;
   installStage?: string;
@@ -190,6 +191,7 @@ export class YoutubePythonRuntime {
             this.child = undefined;
             this.url = undefined;
             this.state.running = false;
+            this.state.startedAt = undefined;
             options.onExit?.();
           }
           if (!ready) fail(new Error(`YouTube Python 服务退出（${code ?? "signal"}），请查看日志`));
@@ -212,7 +214,13 @@ export class YoutubePythonRuntime {
             Number(data.port) <= 65535
           ) {
             this.url = `http://127.0.0.1:${Number(data.port)}`;
-            this.state = { running: true, starting: false, installing: false, pid: child.pid };
+            this.state = {
+              running: true,
+              starting: false,
+              installing: false,
+              pid: child.pid,
+              startedAt: this.state.startedAt ?? Date.now(),
+            };
             ready = true;
             clearTimeout(timer);
             resolve();
@@ -391,7 +399,7 @@ export class YoutubePythonRuntime {
           });
         child.once("error", (error) => {
           clearTimeout(timer);
-          const failure = new Error(`无法启动 Python：${executable}。请检查所选文件是否可用。`);
+          const failure = new Error(`无法启动 Python：${executable}。请检查所选文件是否可用`);
           Object.assign(failure, { cause: error });
           reject(failure);
         });

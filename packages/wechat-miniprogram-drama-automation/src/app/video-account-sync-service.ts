@@ -11,7 +11,7 @@ const logger = createLogger("video-account-sync");
 
 export class VideoAccountSyncService {
   private timer: NodeJS.Timeout | undefined;
-  private syncing = false;
+  private syncing: Promise<void> | undefined;
 
   constructor(
     private readonly serviceConfig: ServiceConfig,
@@ -39,41 +39,45 @@ export class VideoAccountSyncService {
   }
 
   async sync(): Promise<void> {
-    if (this.syncing) return;
-    this.syncing = true;
-
+    while (this.syncing) await this.syncing;
+    const operation = this.syncAccounts();
+    this.syncing = operation;
     try {
-      const videoAccounts = await fetchWechatMiniProgramAccountsApi();
-      this.validateVideoAccounts(videoAccounts);
-      const changes = this.browserContexts.syncVideoAccounts(videoAccounts);
-      this.taskWorkerPool.syncVideoAccounts(videoAccounts);
-      await this.browserContexts.closeRemovedVideoAccounts(changes.removed);
-      this.serviceConfig.videoAccounts = videoAccounts;
-      this.idlePageRefreshService?.syncVideoAccounts();
-      logger.info("synced video accounts", {
-        accountCount: videoAccounts.length,
-        source: "wechat-mini-program-account-api",
-      });
-
-      if (changes.added.length || changes.removed.length || changes.renamed.length) {
-        logger.info("video accounts changed", {
-          added: changes.added.map((account) => ({
-            videoAccountId: account.id,
-            videoAccountName: account.name,
-          })),
-          removed: changes.removed.map((account) => ({
-            videoAccountId: account.id,
-            videoAccountName: account.name,
-          })),
-          renamed: changes.renamed.map((change) => ({
-            videoAccountId: change.previous.id,
-            previousName: change.previous.name,
-            nextName: change.next.name,
-          })),
-        });
-      }
+      await operation;
     } finally {
-      this.syncing = false;
+      if (this.syncing === operation) this.syncing = undefined;
+    }
+  }
+
+  private async syncAccounts(): Promise<void> {
+    const videoAccounts = await fetchWechatMiniProgramAccountsApi();
+    this.validateVideoAccounts(videoAccounts);
+    const changes = this.browserContexts.syncVideoAccounts(videoAccounts);
+    this.taskWorkerPool.syncVideoAccounts(videoAccounts);
+    await this.browserContexts.closeRemovedVideoAccounts(changes.removed);
+    this.serviceConfig.videoAccounts = videoAccounts;
+    this.idlePageRefreshService?.syncVideoAccounts();
+    logger.info("synced video accounts", {
+      accountCount: videoAccounts.length,
+      source: "wechat-mini-program-account-api",
+    });
+
+    if (changes.added.length || changes.removed.length || changes.renamed.length) {
+      logger.info("video accounts changed", {
+        added: changes.added.map((account) => ({
+          videoAccountId: account.id,
+          videoAccountName: account.name,
+        })),
+        removed: changes.removed.map((account) => ({
+          videoAccountId: account.id,
+          videoAccountName: account.name,
+        })),
+        renamed: changes.renamed.map((change) => ({
+          videoAccountId: change.previous.id,
+          previousName: change.previous.name,
+          nextName: change.next.name,
+        })),
+      });
     }
   }
 

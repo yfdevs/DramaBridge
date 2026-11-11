@@ -21,7 +21,7 @@ export function restoreTaobaoConfirmedSubmissions(plan: TaobaoCollectionUploadPl
   const restored = applyTaobaoConfirmedSubmissions(plan, submitted);
   const missing = new Set(restored.missingEpisodeNumbers);
   if (uncertain.some((episode) => missing.has(episode))) throw new Error(
-    "TAOBAO_DRAMA_COLLECTION_SUBMISSION_UNCERTAIN: 该合集有已点击发布但未确认结果的集数，作品列表可能尚未更新，已暂停自动补传，请先核实原提交结果。",
+    "TAOBAO_DRAMA_COLLECTION_SUBMISSION_UNCERTAIN: 该合集有已点击发布但未确认结果的集数，作品列表可能尚未更新，已暂停自动补传，请先核实原提交结果",
   );
   return restored;
 }

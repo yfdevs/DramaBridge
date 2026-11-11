@@ -16,7 +16,7 @@ export function numberArg(args: string[], name: string) {
   if (!value) return undefined;
 
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) throw new Error(`${name} 必须是数字。`);
+  if (!Number.isFinite(parsed)) throw new Error(`${name} 必须是数字`);
   return parsed;
 }
 

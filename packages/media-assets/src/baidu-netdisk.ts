@@ -145,7 +145,7 @@ export type EnsureBaiduNetdiskEpisodeVideosOptions = {
 
 function abortError(signal?: AbortSignal): Error {
   if (signal?.reason instanceof Error) return signal.reason;
-  const error = new Error("任务已终止。");
+  const error = new Error("任务已终止");
   error.name = "AbortError";
   return error;
 }
@@ -1057,7 +1057,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
             throw new Error(
               `[download-task-missing] 百度网盘下载任务提交后未出现在客户端传输列表，`
                 + `连续${missingNativeTaskPollLimit}次检查均不存在；`
-                + `本地识别${files.length}/${options.episodeCount}集。请重新创建下载任务。`,
+                + `本地识别${files.length}/${options.episodeCount}集。请重新创建下载任务`,
             );
           }
         }
@@ -1087,7 +1087,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
               `[local-video-invalid] 百度网盘下载任务已完成，但本地剧集连续${completedDownloadStallPollLimit}次检查无变化：` +
                 `期望${options.episodeCount}集，实际识别${recognizedIndexes.size}集` +
                 `${missingIndexes.length > 0 ? `，缺少第${missingIndexes.join("、")}集` : ""}。` +
-                "请检查百度网盘下载记录及本地文件名后重试。",
+                "请检查百度网盘下载记录及本地文件名后重试",
             );
           }
         } else {
@@ -1096,7 +1096,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
         }
         if (taskStatus.completed && ownershipDirectoryComplete && !ownershipComplete) {
           throw new Error(
-            `百度网盘权属材料筛选后数量不足。至少需要${options.ownershipRequirements.minimumImages ?? 0}张非竖图，实际找到${ownership.length}张；高度大于宽度的图片不会作为权属文件。`,
+            `百度网盘权属材料筛选后数量不足。至少需要${options.ownershipRequirements.minimumImages ?? 0}张非竖图，实际找到${ownership.length}张；高度大于宽度的图片不会作为权属文件`,
           );
         }
         if (
@@ -1160,7 +1160,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
   const hasConfiguredEpisodeCount = Number.isInteger(configuredEpisodeCount)
     && configuredEpisodeCount > 0;
   if (downloadEpisodeVideos && !hasConfiguredEpisodeCount && !options.inferEpisodeCount) {
-    throw new Error("剧集数量必须是正整数，或启用自动识别集数。")
+    throw new Error("剧集数量必须是正整数，或启用自动识别集数")
   }
   const targetLocalPath = playletDir(options.localEpisodeVideoRoot, options.resourceName);
   const ownershipRequirements = options.requiredOwnership ?? {};
@@ -1289,7 +1289,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     downloadEpisodeVideos
     && (!Number.isInteger(resolvedEpisodeCount) || resolvedEpisodeCount <= 0)
   ) {
-    throw new Error("百度网盘资源检查完成，但未能确定有效总集数。")
+    throw new Error("百度网盘资源检查完成，但未能确定有效总集数")
   }
 
   await options.onProgress?.({

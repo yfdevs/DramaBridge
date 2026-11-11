@@ -65,7 +65,7 @@ async function ensureResource(
   const link = task.playlet.baiduPanResourceLink?.trim();
   if (!link) return;
   if (!options.ensureBaiduNetdiskResource) {
-    throw new Error("任务包含百度网盘链接，但腾讯火龙漫剧运行时未接入网盘下载能力。");
+    throw new Error("任务包含百度网盘链接，但腾讯火龙漫剧运行时未接入网盘下载能力");
   }
   const retries = Math.max(0, options.baiduNetdiskDownloadRetryAttempts ?? 3);
   let lastError: unknown;
@@ -130,7 +130,7 @@ async function runTask(
       resultJson: { activeUrl: page.url(), accountId: task.accountId },
     });
     await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
-      (error) => log(options, "[tencent-huolong-drama] 任务成功，但百度网盘剧目目录清理失败。", { error }),
+      (error) => log(options, "[tencent-huolong-drama] 任务成功，但百度网盘剧目目录清理失败", { error }),
     );
     setLastTask({
       accountTaskId: task.accountTaskId,
@@ -216,7 +216,7 @@ export async function startTencentHuolongDramaRuntime(
     while (running && !activePage.isClosed()) {
       try {
         await waitForLoginIfNeeded(activePage, activeContext, options);
-        const task = await claimNextTencentHuolongDramaTaskApi({
+        const task = options.canClaimTask?.() === false ? null : await claimNextTencentHuolongDramaTaskApi({
           apiConfig: options.apiConfig,
           runtimeOptions: options,
         });

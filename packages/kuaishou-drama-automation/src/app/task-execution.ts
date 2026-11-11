@@ -29,7 +29,7 @@ export function recoverKuaishouExecutions(
       updateKuaishouExecution(store, record, {
         phase: "review-required",
         errorMessage:
-          "上次运行在领取或上传过程中中断，结果待核实。已暂停该任务，请先在快手和后台确认处理结果。",
+          "上次运行在领取或上传过程中中断，结果待核实。已暂停该任务，请先在快手和后台确认处理结果",
       });
     }
   }

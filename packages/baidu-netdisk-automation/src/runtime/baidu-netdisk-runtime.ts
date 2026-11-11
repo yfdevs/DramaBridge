@@ -149,7 +149,7 @@ export async function stopMacBaiduNetdiskProcesses(dependencies = {
     await dependencies.wait();
     remaining = await dependencies.list();
   }
-  if (remaining.length) throw Object.assign(new Error("百度网盘未能退出，请先在 Mac 上退出百度网盘后再重启连接。"), { cause: lastError });
+  if (remaining.length) throw Object.assign(new Error("百度网盘未能退出，请先在 Mac 上退出百度网盘后再重启连接"), { cause: lastError });
 }
 
 async function getRunningBaiduProcesses() {
@@ -188,7 +188,7 @@ export async function stopBaiduNetdiskProcesses(dependencies?: typeof windowsPro
   }
   const remaining = await dependencies.getRunningProcesses();
   if (remaining.length > 0) {
-    throw Object.assign(new Error(`百度网盘旧进程未能退出，重启失败（残留进程：${remaining.join("、")}）。请先退出百度网盘后再启动 CDP 模式。`), { cause: lastKillError });
+    throw Object.assign(new Error(`百度网盘旧进程未能退出，重启失败（残留进程：${remaining.join("、")}）。请先退出百度网盘后再启动 CDP 模式`), { cause: lastKillError });
   }
 }
 
@@ -228,7 +228,7 @@ async function checkBaiduNetdiskCdpStatusPromise(
       ready: false,
       targetCount: 0,
       checkedAt,
-      message: "百度网盘 CDP 自动化当前支持 Windows 和 macOS。",
+      message: "百度网盘 CDP 自动化当前支持 Windows 和 macOS",
     };
   }
 
@@ -261,10 +261,10 @@ async function checkBaiduNetdiskCdpStatusPromise(
     targetCount: targets.length,
     checkedAt,
     message: ready
-      ? `百度网盘 CDP 已连接，端口 ${port}。`
-      : componentError || (cdpRunning ? "百度网盘调试端口已开启，正在等待客户端主窗口和下载组件就绪。" : (appRunning
-        ? `百度网盘已启动，但端口 ${port} 未开启 CDP。`
-        : "百度网盘未启动。")),
+      ? `百度网盘 CDP 已连接，端口 ${port}`
+      : componentError || (cdpRunning ? "百度网盘调试端口已开启，正在等待客户端主窗口和下载组件就绪" : (appRunning
+        ? `百度网盘已启动，但端口 ${port} 未开启 CDP`
+        : "百度网盘未启动")),
   };
 }
 
@@ -283,10 +283,10 @@ async function startBaiduNetdiskCdpPromise(
 ): Promise<BaiduNetdiskLaunchResult> {
   const port = options.port ?? DEFAULT_BAIDU_NETDISK_CDP_PORT;
   const waitMs = options.waitMs ?? (process.platform === "darwin" ? 20_000 : 12_000);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("百度网盘 CDP 端口必须为 1 到 65535 的整数。");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("百度网盘 CDP 端口必须为 1 到 65535 的整数");
 
   if (process.platform !== "win32" && process.platform !== "darwin") {
-    throw new Error("百度网盘 CDP 启动当前支持 Windows 和 macOS。");
+    throw new Error("百度网盘 CDP 启动当前支持 Windows 和 macOS");
   }
 
   const currentStatus = await checkBaiduNetdiskCdpStatus({ ...options, port });
@@ -300,7 +300,7 @@ async function startBaiduNetdiskCdpPromise(
 
   if (currentStatus.appRunning && !currentStatus.ready && !options.restart) {
     throw new Error(
-      "百度网盘已启动，但不是 CDP 模式。请显式点击“重启为 CDP 模式”，该操作会先关闭当前百度网盘客户端再重新打开。",
+      "百度网盘已启动，但不是 CDP 模式。请显式点击“重启为 CDP 模式”，该操作会先关闭当前百度网盘客户端再重新打开",
     );
   }
 
@@ -359,7 +359,7 @@ export function startBaiduNetdiskCdpEffect(
 ): Effect.Effect<BaiduNetdiskLaunchResult, CdpConnectionError | UnsupportedPlatformError> {
   if (process.platform !== "win32" && process.platform !== "darwin") {
     return Effect.fail(new UnsupportedPlatformError({
-      message: "百度网盘 CDP 启动当前支持 Windows 和 macOS。",
+      message: "百度网盘 CDP 启动当前支持 Windows 和 macOS",
       platform: process.platform,
     }));
   }

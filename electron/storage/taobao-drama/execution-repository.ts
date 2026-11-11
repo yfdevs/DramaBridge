@@ -37,7 +37,7 @@ export class TaobaoExecutionRepository implements TaobaoExecutionStore {
           catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") continue; }
         }
         this.save({ ...record, phase: "review-required", updatedAt: new Date().toISOString(),
-          errorMessage: "上次运行在领取或上传过程中中断，结果待核实。已暂停该任务，请先在淘宝和后台确认处理结果。" });
+          errorMessage: "上次运行在领取或上传过程中中断，结果待核实。已暂停该任务，请先在淘宝和后台确认处理结果" });
       }
     })();
   }

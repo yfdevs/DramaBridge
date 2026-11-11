@@ -581,7 +581,7 @@ async function submitBasicInfoAndWaitForEpisodeSelection(
   const errors = await collectBasicInfoValidationErrors(page);
   if (errors.length > 0) await assertNoBasicInfoValidationErrors(page);
   throw new Error(
-    `[step-transition-failed] 点击“下一步”${maxAttempts} 次后仍未进入“剧集文件选取”步骤。`,
+    `[step-transition-failed] 点击“下一步”${maxAttempts} 次后仍未进入“剧集文件选取”步骤`,
   );
 }
 

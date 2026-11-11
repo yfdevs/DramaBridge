@@ -1,4 +1,5 @@
-﻿export type IqiyiDramaLoginState = "login-required" | "logged-in" | "unknown"
+import { createAccountControl } from "@/platforms/app-runtime/service";
+export type IqiyiDramaLoginState = "login-required" | "logged-in" | "unknown"
 
 export type IqiyiDramaConfig = {
   accountProfileName: string
@@ -58,17 +59,17 @@ export type IqiyiDramaServiceStatus = {
 }
 
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-  if (!window.ipcRenderer) throw new Error("爱奇艺服务控制仅在 Electron 应用内可用。")
+  if (!window.ipcRenderer) throw new Error("爱奇艺服务控制仅在 Electron 应用内可用")
   try {
     return await window.ipcRenderer.invoke(channel, ...args) as T
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const mappings: Array<[string, string]> = [
-      ["IQIYI_DRAMA_ENABLED_ACCOUNT_NOT_FOUND", "没有获取到已启用的爱奇艺账号，请先在后台开启账号。"],
-      ["IQIYI_DRAMA_API_BASE_URL_REQUIRED", "请先配置爱奇艺后台接口地址。"],
-      ["OWNERSHIP_PROJECT_PROOF_AI_CLIENT_REQUIRED", "存在无法从文件名判断的权属截图，请先在全局配置中填写 AI API Key。"],
-      ["DRAMA_AI_API_KEY_REQUIRED", "爱奇艺图片处理需要 AI，请先在全局配置中填写 API Key。"],
-      ["DRAMA_AI_IMAGE_MODEL_REQUIRED", "请先在全局配置中填写图片生成模型 ID。"],
+      ["IQIYI_DRAMA_ENABLED_ACCOUNT_NOT_FOUND", "没有获取到已启用的爱奇艺账号，请先在后台开启账号"],
+      ["IQIYI_DRAMA_API_BASE_URL_REQUIRED", "请先配置爱奇艺后台接口地址"],
+      ["OWNERSHIP_PROJECT_PROOF_AI_CLIENT_REQUIRED", "存在无法从文件名判断的权属截图，请先在全局配置中填写 AI API Key"],
+      ["DRAMA_AI_API_KEY_REQUIRED", "爱奇艺图片处理需要 AI，请先在全局配置中填写 API Key"],
+      ["DRAMA_AI_IMAGE_MODEL_REQUIRED", "请先在全局配置中填写图片生成模型 ID"],
     ]
     const readable = mappings.find(([code]) => message.includes(code))?.[1] ?? message
     throw Object.assign(new Error(readable), { cause: error })
@@ -76,6 +77,7 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
 }
 
 export const iqiyiDramaService = {
+  accountControl: createAccountControl("iqiyi-drama"),
   listAccounts: () => invoke<Array<{ accountId: string; accountName: string }>>("iqiyi-drama:accounts:list"),
   getConfig: () => invoke<IqiyiDramaConfigResult>("iqiyi-drama:config:get"),
   saveConfig: (config: IqiyiDramaConfig) =>

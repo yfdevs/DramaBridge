@@ -1,3 +1,4 @@
+import { registerAccountControl } from "../shared/account-control";
 import { app } from 'electron'
 import { emitIpcEvent, trpcIpc as ipcMain } from '../../ipc'
 import Store from 'electron-store'
@@ -436,11 +437,11 @@ function assertWechatMiniProgramConfigReady(config = readConfig()) {
     || targetVideoMegabytes <= 0
     || targetVideoMegabytes >= maxVideoMegabytes
   ) {
-    throw new Error('视频压缩目标体积必须大于 0 且小于单集视频上限。')
+    throw new Error('视频压缩目标体积必须大于 0 且小于单集视频上限')
   }
   const minimumDurationSeconds = Number(config.episodeVideoMinimumDurationSeconds)
   if (!Number.isFinite(minimumDurationSeconds) || minimumDurationSeconds < 0) {
-    throw new Error('单集最小时长必须是大于或等于 0 的数字。')
+    throw new Error('单集最小时长必须是大于或等于 0 的数字')
   }
 }
 
@@ -464,6 +465,13 @@ async function startRuntime() {
 }
 
 export function registerWechatMiniProgramPlatformHandlers() {
+  registerAccountControl({ platform: "wechat-miniprogram-drama", controller: runtimeController, status,
+    start: async () => {
+      if (directUploadCoordinator.isActive()) throw new Error("请先暂停直传队列并关闭直传浏览器");
+      assertWechatMiniProgramConfigReady();
+      return startRuntime();
+    },
+  });
   registerTaskAnalyticsHandler({
     platform: 'wechat-miniprogram-drama',
     apiBaseUrl: () => readConfig().apiBaseUrl,
@@ -515,7 +523,7 @@ export function registerWechatMiniProgramPlatformHandlers() {
 
   ipcMain.handle('wechat-miniprogram-drama:service:start', async () => {
     if (directUploadCoordinator.isActive()) {
-      throw new Error('百度资源直传正在运行或浏览器尚未关闭，请先暂停队列并关闭直传浏览器。')
+      throw new Error('百度资源直传正在运行或浏览器尚未关闭，请先暂停队列并关闭直传浏览器')
     }
     assertGlobalDirectoriesConfigured()
     assertWechatMiniProgramConfigReady()
@@ -536,7 +544,7 @@ export function registerWechatMiniProgramPlatformHandlers() {
     const runtime = await runtimeController.resolveStarting()
 
     if (!runtime) {
-      throw new Error('微信小程序服务未启动。')
+      throw new Error('微信小程序服务未启动')
     }
 
     let currentRuntime = runtime
@@ -545,7 +553,7 @@ export function registerWechatMiniProgramPlatformHandlers() {
     }
 
     if (typeof currentRuntime.focusVideoAccount !== 'function') {
-      throw new Error('当前微信小程序服务实例不支持打开浏览器到前台，请重启应用后再试。')
+      throw new Error('当前微信小程序服务实例不支持打开浏览器到前台，请重启应用后再试')
     }
 
     await currentRuntime.focusVideoAccount(videoAccountId)

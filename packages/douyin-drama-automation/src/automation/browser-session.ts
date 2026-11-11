@@ -194,7 +194,7 @@ export async function ensureDouyinDramaCreatePage(
 ) {
   await openDouyinDramaCreatePage(page);
   await waitForDouyinDramaCreatePageReady(page);
-  log(options, "[douyin-drama] 抖音上传漫剧页面已就绪，开始领取任务。", undefined, "browser");
+  log(options, "[douyin-drama] 抖音上传漫剧页面已就绪，开始领取任务", undefined, "browser");
 }
 
 export async function waitForDouyinDramaLogin(
@@ -204,7 +204,7 @@ export async function waitForDouyinDramaLogin(
 ) {
   const entryState = await waitForDouyinDramaEntryPageState(page);
   if (entryState === "logged-in") return false;
-  log(options, "[douyin-drama] 抖音短剧创作者中心需要登录，请在浏览器中完成登录。", undefined, "browser");
+  log(options, "[douyin-drama] 抖音短剧创作者中心需要登录，请在浏览器中完成登录", undefined, "browser");
   await page.bringToFront();
   if (!page.url().startsWith(DOUYIN_DRAMA_LOGIN_URL)) {
     await page.goto(DOUYIN_DRAMA_LOGIN_URL, {
@@ -216,7 +216,7 @@ export async function waitForDouyinDramaLogin(
   while (Date.now() < deadline) {
     if (douyinDramaLoginStateFromUrl(page.url()) === "logged-in") {
       await saveDouyinDramaCredentialState(context, options).catch(() => undefined);
-      log(options, "[douyin-drama] 抖音短剧创作者中心登录完成。", undefined, "browser");
+      log(options, "[douyin-drama] 抖音短剧创作者中心登录完成", undefined, "browser");
       return true;
     }
     await page.waitForTimeout(3_000);

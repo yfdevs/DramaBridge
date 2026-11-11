@@ -60,7 +60,7 @@ export async function pasteTaobaoTagWithClipboard(page: Page, text: string, focu
     }
     await page.keyboard.press("Control+V");
   } catch (error) {
-    throw Object.assign(new Error("TAOBAO_DRAMA_CONTENT_TAG_PASTE_FAILED: 无法将完整内容标签原生粘贴到淘宝标签输入框，请检查浏览器焦点和剪贴板权限。"), { cause: error });
+    throw Object.assign(new Error("TAOBAO_DRAMA_CONTENT_TAG_PASTE_FAILED: 无法将完整内容标签原生粘贴到淘宝标签输入框，请检查浏览器焦点和剪贴板权限"), { cause: error });
   } finally {
     try {
       if (changed && snapshot) {

@@ -22,7 +22,7 @@ export const qqDramaTaskFailStageValues = [
 
 const requiredText = z.string().trim().min(1);
 const optionalText = z.string().trim().optional();
-const fileReference = requiredText.describe("本地文件路径或 HTTP(S) 文件下载地址。");
+const fileReference = requiredText.describe("本地文件路径或 HTTP(S) 文件下载地址");
 
 export const qqDramaAudienceTypeValues = ["男频", "女频", "通用"] as const;
 export const qqDramaUpdateStatusValues = ["已完结", "连载中"] as const;
@@ -55,74 +55,74 @@ export const qqDramaSecondaryCategoryValuesByPrimary = {
 export const qqDramaSecondaryCategoryValues = qqDramaSecondaryCategoryValuesByPrimary["都市"];
 
 export const qqDramaRoleSchema = z.object({
-  name: requiredText.max(20).describe("角色名称。"),
-  description: optionalText.describe("角色简介，选填。"),
-  imageFile: fileReference.optional().describe("角色图片，支持 JPG、JPEG、PNG、BMP，选填。"),
+  name: requiredText.max(20).describe("角色名称"),
+  description: optionalText.describe("角色简介，选填"),
+  imageFile: fileReference.optional().describe("角色图片，支持 JPG、JPEG、PNG、BMP，选填"),
 });
 
 const qqDramaPublishFormBaseSchema = z.object({
-  title: requiredText.max(20).describe("作品名称，审核通过后不支持修改，最多 20 个字。"),
+  title: requiredText.max(20).describe("作品名称，审核通过后不支持修改，最多 20 个字"),
   aliases: z
     .array(requiredText)
     .default([])
-    .describe("别名，用于站外渠道展示，页面以逗号分隔填写。"),
-  summary: requiredText.max(200).describe("作品简介，最多 200 个字。"),
+    .describe("别名，用于站外渠道展示，页面以逗号分隔填写"),
+  summary: requiredText.max(200).describe("作品简介，最多 200 个字"),
   // 受众类型：男频、女频、通用
-  audienceType: z.enum(qqDramaAudienceTypeValues).describe("受众类型。"),
+  audienceType: z.enum(qqDramaAudienceTypeValues).describe("受众类型"),
   localCoverFile: fileReference.describe(
-    "运行时从本地资源匹配的封面图；<= 5MB 原图直传，超过时压缩，不检查比例和分辨率。",
+    "运行时从本地资源匹配的封面图；<= 5MB 原图直传，超过时压缩，不检查比例和分辨率",
   ),
-  episodeCount: z.coerce.number().int().min(1).max(1000).describe("承诺总集数，范围 1 ~ 1000。"),
+  episodeCount: z.coerce.number().int().min(1).max(1000).describe("承诺总集数，范围 1 ~ 1000"),
   // 更新状态：已完结、连载中
-  updateStatus: z.enum(qqDramaUpdateStatusValues).describe("更新状态。"),
+  updateStatus: z.enum(qqDramaUpdateStatusValues).describe("更新状态"),
   // 是否 AI 作品：是、否
   isAiGenerated: z
     .enum(qqDramaYesNoValues)
     .default("是")
-    .describe("是否 AI 作品；当前平台提示暂时仅支持 AI 制作漫剧上传。"),
+    .describe("是否 AI 作品；当前平台提示暂时仅支持 AI 制作漫剧上传"),
   primaryCategory: z
     .enum(qqDramaPrimaryCategoryValues)
     .describe(
-      `一级分类，按世界观、卖点、题材、剧情优先级选择，提交后不可修改。可选值：${qqDramaPrimaryCategoryValues.join("、")}。`,
+      `一级分类，按世界观、卖点、题材、剧情优先级选择，提交后不可修改。可选值：${qqDramaPrimaryCategoryValues.join("、")}`,
     ),
   secondaryCategory: z
     .enum(qqDramaSecondaryCategoryValues)
     .optional()
     .describe(
-      `二级分类，可选，页面会按一级分类联动。当前已确认「都市」二级选项：${qqDramaSecondaryCategoryValues.join("、")}。`,
+      `二级分类，可选，页面会按一级分类联动。当前已确认「都市」二级选项：${qqDramaSecondaryCategoryValues.join("、")}`,
     ),
   // 是否系列剧：是、否
-  isSeries: z.enum(qqDramaYesNoValues).default("否").describe("是否系列剧。"),
+  isSeries: z.enum(qqDramaYesNoValues).default("否").describe("是否系列剧"),
   // 漫剧类型：漫剧、仿真人漫剧、真人剧
   comicType: z
     .enum(qqDramaComicTypeValues)
     .default("漫剧")
-    .describe("漫剧类型；页面提示真人剧暂未开放上传，审核通过后不可修改。"),
+    .describe("漫剧类型；页面提示真人剧暂未开放上传，审核通过后不可修改"),
   productionOrganization: requiredText.describe("制作机构，个人创作者可填「无」。"),
-  producers: z.array(requiredText).min(1).describe("制片人，多个值会以逗号分隔填写。"),
-  directors: z.array(requiredText).min(1).describe("导演，多个值会以逗号分隔填写。"),
-  screenwriters: z.array(requiredText).default([]).describe("编剧，选填，多个值会以逗号分隔填写。"),
+  producers: z.array(requiredText).min(1).describe("制片人，多个值会以逗号分隔填写"),
+  directors: z.array(requiredText).min(1).describe("导演，多个值会以逗号分隔填写"),
+  screenwriters: z.array(requiredText).default([]).describe("编剧，选填，多个值会以逗号分隔填写"),
   roles: z
     .array(qqDramaRoleSchema)
     .default([])
-    .describe("角色信息，选填；添加角色时至少填写角色名称。"),
+    .describe("角色信息，选填；添加角色时至少填写角色名称"),
   // 制作成本范围：< 30 万、30 ~ 80 万、≥ 80 万
-  productionCostRange: z.enum(qqDramaProductionCostRangeValues).describe("制作成本范围。"),
-  productionCostWan: z.coerce.number().finite().nonnegative().describe("具体成本，单位：万元。"),
-  productionYear: z.coerce.number().int().min(1900).max(2100).describe("年份，例如 2026。"),
+  productionCostRange: z.enum(qqDramaProductionCostRangeValues).describe("制作成本范围"),
+  productionCostWan: z.coerce.number().finite().nonnegative().describe("具体成本，单位：万元"),
+  productionYear: z.coerce.number().int().min(1900).max(2100).describe("年份，例如 2026"),
   costAllocationReportFiles: z
     .array(fileReference)
     .min(1)
-    .describe("成本配置比例情况报告，支持 JPG、PNG、PDF，单个 <= 10MB。"),
+    .describe("成本配置比例情况报告，支持 JPG、PNG、PDF，单个 <= 10MB"),
   productionProofFiles: z
     .array(fileReference)
     .min(1)
-    .describe("制作合同文件，支持 PDF、JPG、JPEG、PNG，单个 <= 10MB。"),
-  contractName: requiredText.describe("与本剧目绑定的合同，绑定后不可更改。"),
+    .describe("制作合同文件，支持 PDF、JPG、JPEG、PNG，单个 <= 10MB"),
+  contractName: requiredText.describe("与本剧目绑定的合同，绑定后不可更改"),
 });
 
 export const qqDramaPublishFormSchema = qqDramaPublishFormBaseSchema.describe(
-  "QQ 漫剧上剧页第 1 步「基本信息」表单。",
+  "QQ 漫剧上剧页第 1 步「基本信息」表单",
 );
 
 export const qqDramaTaskFieldSchema = z.object({
@@ -261,6 +261,7 @@ export type QqDramaRuntimeStatus = {
 };
 
 export type QqDramaRuntimeOptions = {
+  canClaimTask?: () => boolean;
   accountProfileName?: string;
   accountDir?: string;
   userDataDir?: string;

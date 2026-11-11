@@ -166,7 +166,7 @@ async function ensureBaiduNetdiskResourceReady(
   if (!baiduPanResourceLink || !episodeCount) return;
 
   if (!options.ensureBaiduNetdiskResource) {
-    throw new Error("任务包含百度网盘资源链接，但当前 QQ 运行时未接入百度网盘下载能力。");
+    throw new Error("任务包含百度网盘资源链接，但当前 QQ 运行时未接入百度网盘下载能力");
   }
 
   const localEpisodeVideoRoot = getQqDramaLocalEpisodeVideoRoot(options);
@@ -456,7 +456,7 @@ export async function startQqDramaRuntime(
     while (running && !activePage.isClosed()) {
       try {
         await waitForLoginIfNeeded(activePage, activeContext, options);
-        const task = await claimNextQqDramaTaskApi({
+        const task = options.canClaimTask?.() === false ? null : await claimNextQqDramaTaskApi({
           apiConfig: options.apiConfig,
           runtimeOptions: options,
         });

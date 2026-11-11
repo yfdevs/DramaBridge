@@ -574,7 +574,7 @@ async function processUploadRecord(
         requiredPosterImages: 1,
         posterFallback: {
           title: record.title,
-          summary: `短剧《${record.title}》封面，用于拼多多短剧发布。`,
+          summary: `短剧《${record.title}》封面，用于拼多多短剧发布`,
         },
         signal: options.signal,
       });

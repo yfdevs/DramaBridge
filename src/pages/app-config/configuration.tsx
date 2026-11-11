@@ -34,14 +34,14 @@ const emptyConfig: GlobalAppConfig = {
 const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   {
     title: "外观与主题",
-    description: "保存后生效。",
+    description: "",
     layout: "compact",
     fields: [
       {
         kind: "select",
         key: "theme",
         label: "主题",
-        description: "保存后生效。",
+        description: "保存后生效",
         options: [
           { value: "system", label: "跟随系统" },
           { value: "light", label: "浅色" },
@@ -52,18 +52,18 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   },
   {
     title: "文件存储",
-    description: "两个目录须位于同一磁盘。选择并保存后统一用于各平台；未设置时，已有平台可能沿用原目录。",
+    description: "两个目录须位于同一磁盘。选择并保存后统一用于各平台；未设置时，已有平台可能沿用原目录",
     fields: [
       {
         key: "runDataRoot",
         label: "运行数据目录",
-        description: "保存各平台的登录信息、日志和缓存。",
+        description: "保存各平台的登录信息、日志和缓存",
         directory: true,
       },
       {
         key: "localMaterialRoot",
         label: "素材目录",
-        description: "按剧名存放视频、封面和权属材料。",
+        description: "按剧名存放视频、封面和权属材料",
         directory: true,
       },
     ],
@@ -75,7 +75,7 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
       {
         key: "baiduNetdiskDownloadTimeoutMinutes",
         label: "下载时限",
-        description: "单个资源的最长下载时间，超时则任务失败。",
+        description: "单个资源的最长下载时间，超时则任务失败",
         type: "number",
         suffix: "分钟",
         min: 1,
@@ -84,7 +84,7 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
         kind: "switch",
         key: "baiduNetdiskCleanupPlayletAfterTaskSuccess",
         label: "成功后清理网盘文件",
-        description: "任一平台完成任务并保存结果后，清理本次网盘文件，保留本地文件。",
+        description: "任一平台完成任务并保存结果后，清理本次网盘文件，保留本地文件",
         activeLabel: "自动清理",
         inactiveLabel: "保留文件",
       },
@@ -92,13 +92,13 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   },
   {
     title: "本机图片识别",
-    description: "用于区分剪映和 AI 剧创工程截图。",
+    description: "用于区分剪映和 AI 剧创工程截图",
     fields: [
       {
         kind: "switch",
         key: "ownershipLocalOcrEnabled",
         label: "优先使用本机识别",
-        description: "需要识别截图内容时先在电脑上处理，无法确认时自动使用 AI。",
+        description: "需要识别截图内容时先在电脑上处理，无法确认时自动使用 AI",
         activeLabel: "已开启",
         inactiveLabel: "已关闭",
       },
@@ -106,42 +106,42 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
   },
   {
     title: "AI 服务",
-    description: "各平台共用，用于图片识别和封面生成。",
+    description: "各平台共用，用于图片识别和封面生成",
     fields: [
       {
         key: "aiBaseURL",
         label: "接口地址",
-        description: "填写服务商提供的 OpenAI 兼容接口地址。",
+        description: "填写服务商提供的 OpenAI 兼容接口地址",
         type: "url",
       },
       {
         key: "aiApiKey",
         label: "API 密钥",
-        description: "密钥加密保存在本机。",
+        description: "密钥加密保存在本机",
         type: "password",
       },
       {
         key: "aiModel",
         label: "图文识别模型",
-        description: "填写模型 ID，用于识别图片和处理文本。",
+        description: "填写模型 ID，用于识别图片和处理文本",
       },
       {
         key: "aiImageModel",
         label: "封面生成模型",
-        description: "填写用于生成封面的模型 ID。",
+        description: "填写用于生成封面的模型 ID",
       },
       {
         kind: "switch",
         key: "aiPosterFallbackEnabled",
         label: "自动补全封面",
-        description: "缺少封面时，根据剧名和简介用 AI 生成。",
+        description: "缺少封面时，根据剧名和简介用 AI 生成",
         activeLabel: "已开启",
         inactiveLabel: "已关闭",
       },
       {
         key: "aiCoverGenerationRetryAttempts",
         label: "封面生成重试次数",
-        description: "生成失败后的额外重试次数，填 0 不重试。",
+        description: "生成失败后的额外重试次数，填 0 不重试",
         type: "number",
         suffix: "次",
         min: 0,
@@ -167,7 +167,7 @@ export function GlobalConfigurationPage() {
       const result = await globalAppConfigService.testLocalOcr();
       setOcrMessage(result.message);
     } catch {
-      setOcrMessage("测试未完成，请稍后重试。任务会自动使用 AI。");
+      setOcrMessage("测试未完成，请稍后重试。任务会自动使用 AI");
     } finally {
       setTestingOcr(false);
     }

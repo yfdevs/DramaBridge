@@ -65,7 +65,7 @@ function createMockTask(options: CreateMockDouyinDramaTaskOptions): ClaimedDouyi
       title,
       summary:
         options.summary ??
-        "小伙林海被亲叔谋害踹入大海，危难之际被鲛人少女宁汐救下。宁汐调动海中生灵报恩，助林海满载珍贵海货死里逃生。",
+        "小伙林海被亲叔谋害踹入大海，危难之际被鲛人少女宁汐救下。宁汐调动海中生灵报恩，助林海满载珍贵海货死里逃生",
       episodeCount: options.episodeCount ?? 10,
       baiduPanResourceLink:
         options.baiduPanResourceLink ??
@@ -83,14 +83,14 @@ function createMockTask(options: CreateMockDouyinDramaTaskOptions): ClaimedDouyi
           actorName: "明星说",
           roleType: "主角",
           photoFile: DOUYIN_DRAMA_MOCK_IMAGE_URL,
-          intro: "被亲叔谋害后意外获救，凭借勇气与海洋伙伴重启人生的青年。",
+          intro: "被亲叔谋害后意外获救，凭借勇气与海洋伙伴重启人生的青年",
         },
         {
           name: "宁汐",
           actorName: "明星说",
           roleType: "主角",
           photoFile: DOUYIN_DRAMA_MOCK_IMAGE_URL,
-          intro: "善良勇敢的鲛人少女，为报答林海而召集海中生灵帮助他渡过难关。",
+          intro: "善良勇敢的鲛人少女，为报答林海而召集海中生灵帮助他渡过难关",
         },
       ],
       productionCostWan: 1,

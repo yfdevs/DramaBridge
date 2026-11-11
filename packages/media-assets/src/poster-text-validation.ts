@@ -16,10 +16,10 @@ export type CommercialPosterTextValidationResult = {
 };
 
 export const commercialPosterSupportingCopyGuidance =
-  "除完整准确的剧名外，禁止出现任何辅助文案、地点、年代、人物身份、角色、演员信息、剧情氛围词、宣传语或装饰性小字。";
+  "除完整准确的剧名外，禁止出现任何辅助文案、地点、年代、人物身份、角色、演员信息、剧情氛围词、宣传语或装饰性小字";
 
 export const commercialPosterProhibitedTextGuidance =
-  "严格拦截任何额外文字、其他作品名称、随机乱码、联系方式、账号、广告引流、二维码、平台或品牌水印，以及画幅比例、尺寸、分辨率、像素值、相机参数、操作按钮、信息栏等技术或伪界面文字。";
+  "严格拦截任何额外文字、其他作品名称、随机乱码、联系方式、账号、广告引流、二维码、平台或品牌水印，以及画幅比例、尺寸、分辨率、像素值、相机参数、操作按钮、信息栏等技术或伪界面文字";
 
 export function normalizeCommercialPosterText(value: string) {
   return value.normalize("NFKC").replace(/[\s\p{P}\p{S}]+/gu, "").toLowerCase();

@@ -331,7 +331,7 @@ export async function prepareDouyinDramaResources(
         )
       : undefined,
   );
-  log(options, "[douyin-drama] 已从百度网盘权属目录选择 4 张剪映工程截图。", {
+  log(options, "[douyin-drama] 已从百度网盘权属目录选择 4 张剪映工程截图", {
     accountTaskId: task.accountTaskId,
     files: task.playlet.projectScreenshotFiles,
   }, "resources");

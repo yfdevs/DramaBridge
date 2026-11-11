@@ -1,4 +1,5 @@
-﻿export type DouyinDramaLoginState = "login-required" | "logged-in" | "unknown"
+import { createAccountControl } from "@/platforms/app-runtime/service";
+export type DouyinDramaLoginState = "login-required" | "logged-in" | "unknown"
 
 export type DouyinDramaConfig = {
   apiBaseUrl: string
@@ -52,18 +53,18 @@ export type DouyinDramaServiceStatus = {
 
 async function invokeDouyinDrama<T>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.ipcRenderer) {
-    throw new Error("抖音短剧服务控制仅在 Electron 应用内可用。")
+    throw new Error("抖音短剧服务控制仅在 Electron 应用内可用")
   }
   try {
     return await window.ipcRenderer.invoke(channel, ...args) as T
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const readableMessage = message.includes("DOUYIN_DRAMA_LOCAL_VIDEO_ROOT_REQUIRED")
-      ? "请先选择抖音短剧剧集视频根目录。"
+      ? "请先选择抖音短剧剧集视频根目录"
       : message.includes("DOUYIN_DRAMA_ENABLED_ACCOUNT_NOT_FOUND")
-        ? "没有获取到已启用的抖音账号，请先在后台开启账号。"
+        ? "没有获取到已启用的抖音账号，请先在后台开启账号"
         : message.includes("DOUYIN_DRAMA_API_BASE_URL_REQUIRED")
-          ? "请先配置抖音后台接口地址。"
+          ? "请先配置抖音后台接口地址"
       : message
     const readableError = new Error(readableMessage) as Error & { cause?: unknown }
     readableError.cause = error
@@ -72,6 +73,7 @@ async function invokeDouyinDrama<T>(channel: string, ...args: unknown[]): Promis
 }
 
 export const douyinDramaService = {
+  accountControl: createAccountControl("douyin-drama"),
   getConfig: () => invokeDouyinDrama<DouyinDramaConfigResult>("douyin-drama:config:get"),
   saveConfig: (config: DouyinDramaConfig) =>
     invokeDouyinDrama<DouyinDramaConfigResult>("douyin-drama:config:save", config),

@@ -103,7 +103,7 @@ export function BaiduNetdiskPanel() {
 
         setInstallPath(nextInstallPath);
         setSavedInstallPath(nextInstallPath);
-        setInstallPathMessage("安装目录已保存，启动文件将自动识别。");
+        setInstallPathMessage("安装目录已保存，启动文件将自动识别");
         void refreshStatus();
       } catch (error) {
         setInstallPathError(errorMessage(error));
@@ -123,7 +123,7 @@ export function BaiduNetdiskPanel() {
         const result = await saveBaiduNetdiskConfig({ executablePath: "" });
         setInstallPath(result.config.executablePath.trim());
         setSavedInstallPath(result.config.executablePath.trim());
-        setInstallPathMessage("已恢复默认自动查找。");
+        setInstallPathMessage("已恢复默认自动查找");
         void refreshStatus();
       } catch (error) {
         setInstallPathError(errorMessage(error));
@@ -160,8 +160,8 @@ export function BaiduNetdiskPanel() {
         setSavedInstallPath(result.config.executablePath);
         setInstallPathMessage(
           result.config.executablePath
-            ? "安装目录已保存，启动文件将自动识别。"
-            : "已恢复默认自动查找。",
+            ? "安装目录已保存，启动文件将自动识别"
+            : "已恢复默认自动查找",
         );
         void refreshStatus();
       } catch (error) {
@@ -219,7 +219,7 @@ export function BaiduNetdiskPanel() {
         </div>
 
         {status?.os === "darwin" ? (
-          <p className="text-xs text-muted-foreground">首次连接需联网准备组件；客户端打开后，如提示登录，请先完成登录。</p>
+          <p className="text-xs text-muted-foreground">首次连接需联网准备组件；客户端打开后，如提示登录，请先完成登录</p>
         ) : null}
         {statusError ? (
           <div className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs leading-5 break-words text-destructive">

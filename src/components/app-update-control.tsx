@@ -27,6 +27,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -102,24 +103,24 @@ function updateSummary(status: AppUpdateStatus | null) {
 }
 
 function updateDescription(status: AppUpdateStatus | null) {
-  if (!status) return "正在读取更新状态。";
-  if (!status.enabled) return "当前环境暂不支持应用内更新。";
+  if (!status) return "正在读取更新状态";
+  if (!status.enabled) return "当前环境暂不支持应用内更新";
 
   if (status.state === "available") {
-    return "自动下载已暂停或尚未开始，可以手动继续下载。";
+    return "自动下载已暂停或尚未开始，可以手动继续下载";
   }
 
   if (status.state === "downloaded") {
     return status.runningPlatformCount > 0
-      ? `${status.runningPlatformCount} 个平台服务正在运行，可一键停止后重启安装。`
-      : "更新已就绪，安装时应用会自动关闭并重启。";
+      ? `${status.runningPlatformCount} 个平台服务正在运行，可一键停止后重启安装`
+      : "更新已就绪，安装时应用会自动关闭并重启";
   }
 
   if (status.state === "not-available") {
-    return "没有比当前安装包更新的正式版本。";
+    return "没有比当前安装包更新的正式版本";
   }
 
-  return "检查 Windows 安装包更新。";
+  return "检查 Windows 安装包更新";
 }
 
 function updateIconClass(status: AppUpdateStatus | null, actionPending: UpdateAction | null) {
@@ -225,7 +226,7 @@ export function AppUpdateControl({
         ) {
           notifiedDownloadedVersion.current = nextStatus.latestVersion;
           toast.success(`v${nextStatus.latestVersion} 已在后台下载完成`, {
-            description: "请在平台任务结束后重启安装。",
+            description: "请在平台任务结束后重启安装",
           });
         }
       }
@@ -248,11 +249,11 @@ export function AppUpdateControl({
         if (action === "check" && nextStatus.state === "available") {
           toast.info(`发现新版本 v${nextStatus.latestVersion ?? ""}`);
         } else if (action === "check" && nextStatus.state === "not-available") {
-          toast.success("当前已是最新版本。");
+          toast.success("当前已是最新版本");
         } else if (action === "check" && nextStatus.state === "error") {
-          toast.error(nextStatus.error ?? "检查更新失败。");
+          toast.error(nextStatus.error ?? "检查更新失败");
         } else if (action === "cancel") {
-          toast.info("下载已取消，可以切换更新源后重新检查。");
+          toast.info("下载已取消，可以切换更新源后重新检查");
         }
       } catch (error) {
         toast.error(errorMessage(error));
@@ -277,7 +278,7 @@ export function AppUpdateControl({
     ? `v${status.currentVersion} 到 v${status.latestVersion}`
     : `v${status?.currentVersion ?? "--"}`;
   const downloadText = progress
-    ? `${formatBytes(progress.transferred)} / ${formatBytes(progress.total)} · ${formatBytes(progress.bytesPerSecond)}/s`
+    ? `${formatBytes(progress.transferred)} / ${formatBytes(progress.total)}，${formatBytes(progress.bytesPerSecond)}/s`
     : null;
   const sourceLocked = busy || status?.state === "installing" || status?.state === "downloaded";
 
@@ -352,7 +353,7 @@ export function AppUpdateControl({
         <div className="flex items-center justify-between gap-3 leading-5">
           <span className="text-muted-foreground">更新方式</span>
           <span className="min-w-0 truncate font-medium">
-            {status?.sourceMode === "auto" ? `自动 · ${status.source.label}` : "手动固定"}
+            {status?.sourceMode === "auto" ? `自动，${status.source.label}` : "手动固定"}
           </span>
         </div>
         {status?.lastCheckedAt ? (
@@ -394,18 +395,20 @@ export function AppUpdateControl({
                 if (value) changeUpdateSource(value as AppUpdateSourceSelection);
               }}
             >
-              <SelectTrigger id="app-update-source" size="sm" className="w-48 bg-background">
+              <SelectTrigger id="app-update-source" className="w-48">
                 <SelectValue>
                   {status.sourceMode === "auto" ? "自动选择（推荐）" : status.source.label}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent align="end" positionerClassName="z-[100001]" className="max-w-64">
-                <SelectItem value="auto">自动选择（推荐）</SelectItem>
-                {status.sources.map((source) => (
-                  <SelectItem key={source.id} value={source.id}>
-                    {source.label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectItem value="auto">自动选择（推荐）</SelectItem>
+                  {status.sources.map((source) => (
+                    <SelectItem key={source.id} value={source.id}>
+                      {source.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -554,7 +557,7 @@ export function AppUpdateControl({
             <AlertDialogDescription>
               将停止当前运行的 {status?.runningPlatformCount ?? 0} 个平台服务。
               正在处理的上传或发布任务会中断；随后应用将立即重启并安装
-              {status?.latestVersion ? ` v${status.latestVersion}` : "新版本"}。
+              {status?.latestVersion ? ` v${status.latestVersion}` : "新版本"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -75,7 +75,7 @@ export function WechatServiceControlPage() {
       startDisabled={accountsLoading || accountsError !== null || selectedIds.length === 0}
       onToggle={() => void toggleService()}
       beforeBrowserInstances={
-        <AccountSelection runtimes={status.videoAccounts.map(a => ({ ...a, accountId: a.videoAccountId }))}
+        <AccountSelection controls={wechatVideoService.accountControl} runtimes={status.videoAccounts.map(a => ({ ...a, accountId: a.videoAccountId }))}
           locked={loading || status.running}
           selection={{
             accounts: accounts.map(account => ({ accountId: account.id, accountName: account.name, status: account.status })),

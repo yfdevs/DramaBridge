@@ -82,12 +82,12 @@ async function retryFailedEpisodeRows(
     const fileName = normalizeUiText(await row.locator("td.table-name").innerText().catch(() => "未知剧集文件"));
     const attempts = retryAttemptsByFile.get(fileName) ?? 0;
     if (attempts >= maxRetryAttempts) {
-      throw new Error(`[upload-failed] 剧集视频 ${fileName}: 重试 ${attempts} 次后仍提示“未能上传”。`);
+      throw new Error(`[upload-failed] 剧集视频 ${fileName}: 重试 ${attempts} 次后仍提示“未能上传”`);
     }
 
     const retryLink = row.locator("a.action-link", { hasText: /^重试$/ }).first();
     if (await retryLink.count() === 0) {
-      throw new Error(`[upload-failed] 剧集视频 ${fileName}: 提示“未能上传”，但找不到重试按钮。`);
+      throw new Error(`[upload-failed] 剧集视频 ${fileName}: 提示“未能上传”，但找不到重试按钮`);
     }
 
     const nextAttempt = attempts + 1;
@@ -108,7 +108,7 @@ async function retryFailedEpisodeRows(
     }).then(() => true, () => false);
 
     if (!leftFailureState && nextAttempt >= maxRetryAttempts) {
-      throw new Error(`[upload-failed] 剧集视频 ${fileName}: 重试 ${nextAttempt} 次后仍提示“未能上传”。`);
+      throw new Error(`[upload-failed] 剧集视频 ${fileName}: 重试 ${nextAttempt} 次后仍提示“未能上传”`);
     }
   }
 }
@@ -203,7 +203,7 @@ async function waitForReviewConfirmStep(page: Page, timeout = 60000): Promise<st
   }
 
   throw new Error(
-    `[step-transition-failed] 点击“确认提审”后仍停留在“${lastStepText || "未知步骤"}”，未进入提审确认页。`,
+    `[step-transition-failed] 点击“确认提审”后仍停留在“${lastStepText || "未知步骤"}”，未进入提审确认页`,
   );
 }
 

@@ -1,3 +1,4 @@
+import { createAccountControl } from "@/platforms/app-runtime/service";
 import type { TaskSweepResult } from "@dramabridge/automation-logging"
 export type TaobaoDramaLoginState = "login-required" | "verification-required" | "logged-in" | "unknown"
 export type TaobaoDramaAccount = {
@@ -37,15 +38,16 @@ export type TaobaoDramaServiceStatus = {
   pid: number | null
 }
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-  if (!window.ipcRenderer) throw new Error("淘宝短剧服务仅在 Electron 应用内可用。")
+  if (!window.ipcRenderer) throw new Error("淘宝短剧服务仅在 Electron 应用内可用")
   try { return await window.ipcRenderer.invoke(channel, ...args) as T }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (message.includes("TAOBAO_DRAMA_ENABLED_ACCOUNT_NOT_FOUND")) throw Object.assign(new Error("没有获取到已启用的淘宝账号，请先在后台开启账号。"), { cause: error })
+    if (message.includes("TAOBAO_DRAMA_ENABLED_ACCOUNT_NOT_FOUND")) throw Object.assign(new Error("没有获取到已启用的淘宝账号，请先在后台开启账号"), { cause: error })
     throw Object.assign(new Error(message), { cause: error })
   }
 }
 export const taobaoDramaService = {
+  accountControl: createAccountControl("taobao-drama"),
   cleanupTasks: () => invoke<TaskSweepResult>("taobao-drama:tasks:cleanup"),
   getConfig: () => invoke<TaobaoDramaConfigResult>("taobao-drama:config:get"),
   saveConfig: (config: TaobaoDramaConfig) => invoke<TaobaoDramaConfigResult>("taobao-drama:config:save", config),

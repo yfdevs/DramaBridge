@@ -145,7 +145,7 @@ export async function loadServiceConfig(): Promise<ServiceConfig> {
   });
 
   if (videoAccounts.length === 0) {
-    throw new Error("请先在服务页面勾选需要启动的视频号账号。");
+    throw new Error("请先在服务页面勾选需要启动的视频号账号");
   }
   if (new Set(accountIds).size !== accountIds.length) {
     throw new Error("Video account list must not contain duplicate account ids.");
@@ -184,7 +184,7 @@ export function validateWechatProductionCostProofFiles(productionCost: Config["p
     || costProofFiles.length === 0
     || costProofFiles.some((file) => typeof file !== "string" || !file.trim())
   ) {
-    throw new Error("[production-cost-proof-invalid] 后端返回的剧目制作成本证明文件 productionCost.proofFiles 必须是非空文件地址数组。");
+    throw new Error("[production-cost-proof-invalid] 后端返回的剧目制作成本证明文件 productionCost.proofFiles 必须是非空文件地址数组");
   }
   return costProofFiles;
 }

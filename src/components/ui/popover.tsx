@@ -1,24 +1,14 @@
 import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
-
-import { cn } from "@/lib/utils"
+import { cn } from "cn"
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
 
-const PopoverTrigger = React.forwardRef<
-  HTMLButtonElement,
-  PopoverPrimitive.Trigger.Props
->(function PopoverTrigger(props, ref) {
-  return (
-    <PopoverPrimitive.Trigger
-      ref={ref}
-      data-slot="popover-trigger"
-      {...props}
-    />
-  )
-})
+function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
+  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
+}
 
 function PopoverContent({
   className,

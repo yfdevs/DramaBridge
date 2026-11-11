@@ -10,13 +10,13 @@ import {
 
 const section: ConfigSectionDefinition<ExternalApiConfig> = {
   title: "本机接口服务",
-  description: "供本机其他程序调用网盘下载，设置在此单独生效。",
+  description: "供本机其他程序调用网盘下载，设置在此单独生效",
   fields: [
     {
       kind: "switch",
       key: "enabled",
       label: "开启接口服务",
-      description: "开关立即生效；开启后，下次启动应用时自动启动服务。",
+      description: "开关立即生效；开启后，下次启动应用时自动启动服务",
       activeLabel: "已开启",
       inactiveLabel: "已关闭",
     },
@@ -120,7 +120,7 @@ export function ExternalApiConfiguration() {
                 "服务已关闭"
               )}
             </div>
-            <p className="text-sm text-muted-foreground">关闭服务后，已提交的下载任务继续执行。</p>
+            <p className="text-sm text-muted-foreground">关闭服务后，已提交的下载任务继续执行</p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button
                 type="button"

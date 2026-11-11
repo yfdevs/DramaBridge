@@ -1,6 +1,21 @@
 import type { IpcRendererEvent } from "electron";
 import type { PlatformId } from "@/config/navigation";
 
+export function createAccountControl(platform: PlatformId) {
+  const request = async (action: "start" | "pause", id: string, paused?: boolean) => {
+    await requireIpcRenderer("账号实例控制").invoke(
+      `${platform}:account:${action}`,
+      id,
+      ...(paused === undefined ? [] : [paused]),
+    );
+    window.dispatchEvent(new Event("app:service-changed"));
+  };
+  return {
+    start: (id: string) => request("start", id),
+    pause: (id: string, paused: boolean) => request("pause", id, paused),
+  };
+}
+
 export type AppBrowserInstanceSummary = {
   id: string;
   label: string;
@@ -87,7 +102,7 @@ export type AppUpdateInstallOptions = {
 
 function requireIpcRenderer(action: string) {
   if (!window.ipcRenderer) {
-    throw new Error(`${action}仅在 Electron 应用内可用。`);
+    throw new Error(`${action}仅在 Electron 应用内可用`);
   }
 
   return window.ipcRenderer;

@@ -12,7 +12,7 @@ export async function prepareWechatAiProductionProofMaterials(
   }
 
   if (ownership.length === 0) {
-    throw new Error("[production-proof-invalid] 开启AI内容声明后没有可用的权属图片。");
+    throw new Error("[production-proof-invalid] 开启AI内容声明后没有可用的权属图片");
   }
   const selected = ownership[randomInt(ownership.length)]!;
   config.playlet.aiProductionProofFiles = [selected.file];

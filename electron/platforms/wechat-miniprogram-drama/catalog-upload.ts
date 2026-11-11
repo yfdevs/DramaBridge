@@ -243,9 +243,9 @@ export class WechatMiniProgramCatalogUploadCoordinator {
       return this.workspace()
     })
     ipcMain.handle("wechat-miniprogram-drama:catalog-upload:task:cancel-active", async () => {
-      if (!this.activeTaskId) throw new Error("当前没有正在执行的任务。")
+      if (!this.activeTaskId) throw new Error("当前没有正在执行的任务")
       this.queueRunning = false
-      this.abortController?.abort(abortError("用户已终止当前任务。"))
+      this.abortController?.abort(abortError("用户已终止当前任务"))
       this.broadcast()
       return this.workspace()
     })
@@ -260,7 +260,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
     ipcMain.handle(
       "wechat-miniprogram-drama:catalog-upload:tasks:retry",
       (_event, ids: string[]) => {
-        if (!Array.isArray(ids)) throw new Error("批量重试参数无效。")
+        if (!Array.isArray(ids)) throw new Error("批量重试参数无效")
         const requestedIds = new Set(ids.filter((id) => typeof id === "string"))
         const retryableIds = new Set(
           this.repository.list()
@@ -271,7 +271,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
             ))
             .map((task) => task.id),
         )
-        if (retryableIds.size === 0) throw new Error("没有可重试的失败任务。")
+        if (retryableIds.size === 0) throw new Error("没有可重试的失败任务")
         for (const id of retryableIds) this.repository.retry(id)
         this.startQueue()
         return this.workspace()
@@ -307,7 +307,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
 
   async stop(): Promise<void> {
     this.queueRunning = false
-    this.abortController?.abort(abortError("应用正在退出，当前任务已中断。"))
+    this.abortController?.abort(abortError("应用正在退出，当前任务已中断"))
     await this.workerPromise?.catch(() => undefined)
     this.window?.destroy()
     this.window = null
@@ -316,15 +316,15 @@ export class WechatMiniProgramCatalogUploadCoordinator {
   private startQueue(): void {
     const settings = this.options.getSettings()
     if (!settings.localEpisodeVideoRoot.trim()) {
-      throw new Error("请先在微信小程序配置中设置剧集视频根目录。")
+      throw new Error("请先在微信小程序配置中设置剧集视频根目录")
     }
-    if (this.syncing) throw new Error("正在获取全部剧目，请等待同步完成后再开始处理。")
+    if (this.syncing) throw new Error("正在获取全部剧目，请等待同步完成后再开始处理")
     if (this.queueRunning) return
     const queuedTasks = this.repository.list().filter(
       (task) => task.state === "discovered",
     )
     if (queuedTasks.length === 0) {
-      throw new Error("没有等待处理的剧目，请先点击“获取全部剧目”。")
+      throw new Error("没有等待处理的剧目，请先点击“获取全部剧目”")
     }
     this.queueRunning = true
     this.queueError = undefined
@@ -352,7 +352,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
         if (task.targetEpisodeCount <= 0) {
           this.repository.update(task.id, {
             state: "failed",
-            error: "剧列表中的总集数无效。",
+            error: "剧列表中的总集数无效",
             finishedAt: new Date().toISOString(),
           })
         } else {
@@ -372,7 +372,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
 
   private async syncCatalog(): Promise<void> {
     if (this.queueRunning || this.activeTaskId) {
-      throw new Error("前四集与封面队列正在处理，请暂停并等待当前剧目结束后再获取全部剧目。")
+      throw new Error("前四集与封面队列正在处理，请暂停并等待当前剧目结束后再获取全部剧目")
     }
     if (this.syncPromise) return this.syncPromise
     this.syncing = true
@@ -557,7 +557,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
           || actualIndexes.some((episode, index) => episode !== expectedIndexes[index])
         ) {
           throw new Error(
-            `前${targetEpisodeCount}集下载校验失败：实际找到${actualIndexes.join("、") || "无"}。`,
+            `前${targetEpisodeCount}集下载校验失败：实际找到${actualIndexes.join("、") || "无"}`,
           )
         }
       }
@@ -570,7 +570,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
           }))[0]?.file
       if (!coverAlreadyExists && !coverFile) {
         if (!isAiPosterFallbackEnabled()) {
-          throw new Error("封面下载校验失败：百度网盘未提供海报，且全局 AI 封面兜底已关闭。")
+          throw new Error("封面下载校验失败：百度网盘未提供海报，且全局 AI 封面兜底已关闭")
         }
         let summary = task.dramaDescription?.trim()
         if (!summary) {
@@ -586,9 +586,9 @@ export class WechatMiniProgramCatalogUploadCoordinator {
         }
         const firstEpisode = localEpisodeVideos.find((episode) => episode.index === 1)
         if (!firstEpisode) {
-          throw new Error("百度网盘未提供海报，AI 兜底生成未找到已下载的第一集视频。")
+          throw new Error("百度网盘未提供海报，AI 兜底生成未找到已下载的第一集视频")
         }
-        summary ||= "接口未提供剧情简介，请结合剧名和第一集参考画面理解主要人物、时代背景、场景氛围与核心剧情冲突。"
+        summary ||= "接口未提供剧情简介，请结合剧名和第一集参考画面理解主要人物、时代背景、场景氛围与核心剧情冲突"
         logger.warn("Baidu Netdisk did not provide a poster; generating one from episode frames", {
           firstEpisode: firstEpisode.file,
           summaryLength: summary.length,
@@ -822,7 +822,7 @@ export class WechatMiniProgramCatalogUploadCoordinator {
     try {
       payload = JSON.parse(text) as ApiResponse<T>
     } catch {
-      throw new Error(`${action}：HTTP ${response.status}，接口未返回 JSON。`)
+      throw new Error(`${action}：HTTP ${response.status}，接口未返回 JSON`)
     }
     if (!response.ok || payload.code !== 0) {
       throw new Error(`${action}：${payload.message || `HTTP ${response.status}`}`)

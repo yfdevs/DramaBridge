@@ -305,10 +305,10 @@ export function selectRandomVideoFrameTimestamps(
   random: () => number = Math.random,
 ) {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-    throw new Error("[video-frame-extract-failed] 视频时长无效。");
+    throw new Error("[video-frame-extract-failed] 视频时长无效");
   }
   if (!Number.isSafeInteger(count) || count < 1) {
-    throw new Error("[video-frame-extract-failed] 截图数量必须是正整数。");
+    throw new Error("[video-frame-extract-failed] 截图数量必须是正整数");
   }
 
   const safeStart = durationSeconds * 0.1;
@@ -490,7 +490,7 @@ export async function ensureVideoMinimumDimensions(
   const minimumWidth = Math.floor(request.minimumWidth);
   const minimumHeight = Math.floor(request.minimumHeight);
   if (minimumWidth <= 0 || minimumHeight <= 0) {
-    throw new Error("[video-transcode-failed] 视频最小宽高必须为正整数。");
+    throw new Error("[video-transcode-failed] 视频最小宽高必须为正整数");
   }
   const source = await readVideoDimensions(request.inputFile, request.signal);
   if (source.width >= minimumWidth && source.height >= minimumHeight) {

@@ -7,6 +7,7 @@ import type { findOwnershipProjectProofFiles } from "@dramabridge/media-assets";
 import { loadServiceConfig } from "../shared/config.js";
 import { createLogger } from "../shared/logger.js";
 import {
+  getWechatVideoRuntimeSettings,
   configureWechatVideoRuntimeSettings,
   type WechatVideoRuntimeSettings,
 } from "../shared/runtime-settings.js";
@@ -40,13 +41,15 @@ export type EnsureBaiduNetdiskResource = (
 export type CleanupBaiduNetdiskResource = (resource: unknown) => Promise<void>;
 
 export type WechatVideoRuntime = {
+  addAccount: (id: string) => Promise<void>;
+  setAccountPaused: (id: string, paused: boolean) => void;
   getStatus: () => WechatVideoRuntimeStatus;
   focusVideoAccount: (videoAccountId: string) => Promise<void>;
   stop: () => Promise<void>;
 }
 
 export type WechatVideoRuntimeStatus = {
-  videoAccounts: VideoAccountRuntimeStatus[];
+  videoAccounts: Array<VideoAccountRuntimeStatus & { paused?: boolean }>;
 }
 
 export type WechatVideoRuntimeOptions = {
@@ -76,6 +79,7 @@ export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions
   await browserContexts.initialize();
 
   const taskService = new TaskService(browserContexts);
+  const pausedAccounts = new Set<string>();
   const taskWorkerPool = new TaskWorkerPool(
     serviceConfig,
     browserContexts,
@@ -85,6 +89,7 @@ export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions
     options.cleanupBaiduNetdiskResourceAfterTaskSuccess,
     options.classifyOwnershipLocally,
     options.taskWatchdog,
+    id => !pausedAccounts.has(id),
   );
   const idlePageRefreshService = new IdlePageRefreshService(serviceConfig, browserContexts, taskService);
   const videoAccountSyncService = new VideoAccountSyncService(
@@ -115,9 +120,21 @@ export async function startWechatVideoRuntime(options: WechatVideoRuntimeOptions
   log(options, "[runtime] started");
 
   return {
+    async addAccount(id: string) {
+      const settings = getWechatVideoRuntimeSettings();
+      const selectedVideoAccountIds = [...new Set([...settings.selectedVideoAccountIds.split(",").filter(Boolean), id])].join(",");
+      configureWechatVideoRuntimeSettings({ ...settings, selectedVideoAccountIds });
+      await videoAccountSyncService.sync();
+      if (!browserContexts.has(id)) throw new Error("账号已停用或不存在，请刷新列表");
+      await browserContexts.getOrLaunch(id);
+    },
+    setAccountPaused(id: string, paused: boolean) {
+      if (!browserContexts.has(id)) throw new Error("账号不存在");
+      if (paused) pausedAccounts.add(id); else pausedAccounts.delete(id);
+    },
     getStatus() {
       return {
-        videoAccounts: browserContexts.getRuntimeStatuses(),
+        videoAccounts: browserContexts.getRuntimeStatuses().map(account => ({ ...account, paused: pausedAccounts.has(account.videoAccountId) })),
       };
     },
     async focusVideoAccount(videoAccountId: string) {

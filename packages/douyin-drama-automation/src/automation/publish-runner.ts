@@ -581,8 +581,8 @@ export async function runDouyinDramaPublishTask(
       log(
         options,
         reset
-          ? "[douyin-drama] 已重置页面自动恢复的上次填写内容。"
-          : "[douyin-drama] 页面没有恢复旧草稿，继续填写。",
+          ? "[douyin-drama] 已重置页面自动恢复的上次填写内容"
+          : "[douyin-drama] 页面没有恢复旧草稿，继续填写",
         { accountTaskId: task.accountTaskId, reset },
         "automation",
       );
@@ -596,7 +596,7 @@ export async function runDouyinDramaPublishTask(
     if (!task.playlet.submit) {
       log(
         options,
-        "[douyin-drama] 发布脚本完成：submit=false，已填写并上传，停留在提交确认页。",
+        "[douyin-drama] 发布脚本完成：submit=false，已填写并上传，停留在提交确认页",
         { accountTaskId: task.accountTaskId, submitted: false },
         "publish",
       );
@@ -621,7 +621,7 @@ export async function runDouyinDramaPublishTask(
     });
     log(
       options,
-      "[douyin-drama] 发布脚本完成：已提交。",
+      "[douyin-drama] 发布脚本完成：已提交",
       { accountTaskId: task.accountTaskId, submitted: true },
       "publish",
     );

@@ -62,7 +62,7 @@ export function KuaishouDramaServiceControlPage() {
       startDisabled={accountsLoading || accountsError !== null || selectedIds.length === 0}
       onToggle={() => void state.toggleService()}
       beforeBrowserInstances={
-        <AccountSelection runtimes={state.status.accounts}
+        <AccountSelection controls={kuaishouDramaService.accountControl} runtimes={state.status.accounts}
           locked={state.loading || state.status.running}
           selection={{
             accounts: accounts.map(account => {

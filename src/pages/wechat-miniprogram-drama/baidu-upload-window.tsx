@@ -220,7 +220,7 @@ export function WechatMiniProgramBaiduUploadWindow() {
               <h1 className="text-base font-semibold">百度资源直传</h1>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              自动检查并下载连续剧集，只上传到当前登录账号的视频素材库，不创建剧目、不提交审核。
+              自动检查并下载连续剧集，只上传到当前登录账号的视频素材库，不创建剧目、不提交审核
             </p>
           </div>
           <Button type="button" size="sm" onClick={() => setDrawerOpen(true)}>
@@ -431,7 +431,7 @@ export function WechatMiniProgramBaiduUploadWindow() {
             <div className="max-w-sm">
               <h2 className="text-sm font-medium">还没有直传任务</h2>
               <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                新建任务时只需填写剧目名称和百度分享内容。系统会自动识别总集数并检查中间是否缺集。
+                新建任务时只需填写剧目名称和百度分享内容。系统会自动识别总集数并检查中间是否缺集
               </p>
               <Button className="mt-4" size="sm" type="button" onClick={() => setDrawerOpen(true)}>
                 新建第一个任务
@@ -442,16 +442,16 @@ export function WechatMiniProgramBaiduUploadWindow() {
       </section>
 
       <footer className="shrink-0 border-t px-5 py-2 text-[11px] text-muted-foreground">
-        关闭此窗口不会停止正在执行的任务。
+        关闭此窗口不会停止正在执行的任务
       </footer>
 
-      <Drawer direction="right" open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DrawerContent className="w-[420px] max-w-[92vw] sm:max-w-[420px] motion-reduce:transition-none">
+      <Drawer swipeDirection="right" open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DrawerContent className="[--drawer-content-width:min(420px,92vw)] data-[swipe-axis=x]:[--drawer-content-width:min(420px,92vw)] data-[swipe-axis=x]:sm:[--drawer-content-width:420px] motion-reduce:transition-none">
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleCreate}>
             <DrawerHeader className="border-b px-5 py-4">
               <DrawerTitle>新建直传任务</DrawerTitle>
               <DrawerDescription className="leading-5">
-                资源下载完成后，将按队列顺序上传到当前微信登录账号。
+                资源下载完成后，将按队列顺序上传到当前微信登录账号
               </DrawerDescription>
             </DrawerHeader>
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
@@ -481,10 +481,10 @@ export function WechatMiniProgramBaiduUploadWindow() {
               </div>
               <div className="rounded-lg bg-muted/60 px-3 py-3 text-xs leading-5 text-muted-foreground">
                 无需填写总集数。系统按第 1
-                集到识别出的最大集数检查连续性；发现缺集或重复集数时，任务会在下载前失败。
+                集到识别出的最大集数检查连续性；发现缺集或重复集数时，任务会在下载前失败
               </div>
               <div className="rounded-lg border px-3 py-3 text-xs leading-5">
-                此功能只进入微信“视频上传”页面，不会填写剧目信息，也不会提交审核。
+                此功能只进入微信“视频上传”页面，不会填写剧目信息，也不会提交审核
               </div>
             </div>
             <DrawerFooter className="border-t px-5 py-4">

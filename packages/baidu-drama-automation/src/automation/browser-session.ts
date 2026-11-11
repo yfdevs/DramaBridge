@@ -167,7 +167,7 @@ export async function waitForBaiduDramaCreatePageReady(
       page.isClosed()
     ) throw error;
 
-    warn(options, "[baidu-drama] 创建页未准备完成，刷新页面后重试一次。", { error }, "browser");
+    warn(options, "[baidu-drama] 创建页未准备完成，刷新页面后重试一次", { error }, "browser");
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
     await waitForBaiduDramaCreatePageReadyOnce(page, timeoutMs);
   }
@@ -179,7 +179,7 @@ export async function ensureBaiduDramaCreatePage(
 ) {
   await openBaiduDramaCreatePage(page);
   await waitForBaiduDramaCreatePageReady(page, undefined, options);
-  log(options, "[baidu-drama] 百度短剧创建页已就绪，开始领取任务。", undefined, "browser");
+  log(options, "[baidu-drama] 百度短剧创建页已就绪，开始领取任务", undefined, "browser");
 }
 
 export async function waitForBaiduDramaLogin(
@@ -189,7 +189,7 @@ export async function waitForBaiduDramaLogin(
 ) {
   if (baiduDramaLoginStateFromUrl(page.url()) !== "login-required") return false;
 
-  log(options, "[baidu-drama] 百度短剧平台需要登录，请在浏览器中完成登录。", undefined, "browser");
+  log(options, "[baidu-drama] 百度短剧平台需要登录，请在浏览器中完成登录", undefined, "browser");
   await page.bringToFront();
   if (!page.url().startsWith(BAIDU_DRAMA_LOGIN_URL)) {
     await page.goto(BAIDU_DRAMA_LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -199,7 +199,7 @@ export async function waitForBaiduDramaLogin(
   while (Date.now() < deadline) {
     if (baiduDramaLoginStateFromUrl(page.url()) === "logged-in") {
       await saveBaiduDramaCredentialState(context, options).catch(() => undefined);
-      log(options, "[baidu-drama] 百度短剧平台登录完成。", undefined, "browser");
+      log(options, "[baidu-drama] 百度短剧平台登录完成", undefined, "browser");
       return true;
     }
     const workbenchButton = page.getByText("去工作台", { exact: true }).first();

@@ -165,7 +165,7 @@ class DesktopWorker(vox.Worker):
         try:
             result = self.workspaces.clean_task(task['id'], pressure=shutil.disk_usage(vox.ROOT).free < MIN_FREE)
             if result['removedBytes']:
-                self.store.log(task['id'], f"临时文件已清理，释放 {result['removedBytes'] / 1024**2:.1f} MB。\n")
+                self.store.log(task['id'], f"临时文件已清理，释放 {result['removedBytes'] / 1024**2:.1f} MB\n")
             for error in result['errors']:
                 self.store.log(task['id'], '临时文件清理跳过：' + error + '\n')
         except Exception as error:

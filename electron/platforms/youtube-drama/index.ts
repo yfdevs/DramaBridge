@@ -15,6 +15,7 @@ import { resolveGlobalPlatformDirectories } from "../../global-app-config";
 import { createElectronPlatformLogger } from "../../platform-logger";
 import { dispatchInternalBaiduRequest } from "../../local-api";
 import { selectDirectory } from "../shared";
+import { youtubeMediaDirectories } from "./media-tools";
 
 type Config = YoutubeSettings & {
   pythonExecutable: string;
@@ -99,10 +100,10 @@ function options() {
       : path.join(app.getAppPath(), "packages", "youtube-automation", "python"),
     workingDirectory: directories().runDataDir,
     pythonExecutable: current.pythonExecutable,
-    mediaDirectories: [
-      path.dirname(ffmpeg.replace("app.asar", "app.asar.unpacked")),
-      path.dirname(ffprobe.replace("app.asar", "app.asar.unpacked")),
-    ],
+    mediaDirectories: youtubeMediaDirectories(
+      ffmpeg.replace("app.asar", "app.asar.unpacked"),
+      ffprobe.replace("app.asar", "app.asar.unpacked"),
+    ),
     settings: { proxy: current.proxy, paused: current.paused },
     download: async (url: string, signal: AbortSignal) => {
       const direct = session.fromPartition("youtube-drama-python-download-direct");

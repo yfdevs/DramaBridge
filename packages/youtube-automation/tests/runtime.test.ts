@@ -48,8 +48,14 @@ test(
       const inspection = (await runtime.inspectEnvironment(options)) as { python: string };
       assert.equal(typeof inspection.python, "string");
       assert.equal(runtime.status().running, false);
+      assert.equal(runtime.status().startedAt, undefined);
+      const beforeStart = Date.now();
       await runtime.start(options);
       assert.equal(runtime.status().running, true, logs.join("\n"));
+      const startedAt = runtime.status().startedAt;
+      assert.ok(startedAt && startedAt >= beforeStart && startedAt <= Date.now());
+      await runtime.start(options);
+      assert.equal(runtime.status().startedAt, startedAt);
       const initial = await runtime.request<{ tasks: unknown[]; settings: YoutubeSettings }>(
         "/api/tasks",
       );
@@ -79,7 +85,10 @@ test(
       await assert.rejects(runtime.request("/api/storage/cleanup", {}));
       await runtime.stop();
       assert.equal(runtime.status().running, false);
+      assert.equal(runtime.status().startedAt, undefined);
+      const beforeRestart = Date.now();
       await runtime.start(options);
+      assert.ok(runtime.status().startedAt! >= beforeRestart);
       const accounts = await runtime.request<{ accounts: { id: string }[] }>("/api/accounts");
       assert.ok(accounts.accounts.some((item) => item.id === account.id));
       assert.equal(

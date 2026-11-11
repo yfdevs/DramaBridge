@@ -4,7 +4,7 @@ export function KuaishouSettingsPage() {
   return (
     <PageShell
       title="平台设置"
-      description="配置快手短剧发布参数和默认规则。"
+      description="配置快手短剧发布参数和默认规则"
     />
   )
 }

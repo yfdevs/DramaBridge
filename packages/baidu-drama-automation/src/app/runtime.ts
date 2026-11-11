@@ -96,10 +96,10 @@ async function runPublishTaskWithPageRefreshRetry(
     warn(
       options,
       coverSlotNotReady
-        ? "[baidu-drama] 封面上传后未回填，刷新任务页面并从头重填一次。"
+        ? "[baidu-drama] 封面上传后未回填，刷新任务页面并从头重填一次"
         : dropdownOptionNotFound
-          ? "[baidu-drama] 页面下拉选项未加载，刷新任务页面并从头重填一次。"
-        : "[baidu-drama] 短剧信息确认弹窗未关闭，刷新任务页面并从头重试一次。",
+          ? "[baidu-drama] 页面下拉选项未加载，刷新任务页面并从头重填一次"
+        : "[baidu-drama] 短剧信息确认弹窗未关闭，刷新任务页面并从头重试一次",
       {
         accountTaskId: task.accountTaskId,
         error,
@@ -180,7 +180,7 @@ async function runTask(
   try {
     log(
       options,
-      "[baidu-drama] 任务资源准备开始：检查百度网盘与本地剧集、封面文件。",
+      "[baidu-drama] 任务资源准备开始：检查百度网盘与本地剧集、封面文件",
       { accountTaskId: task.accountTaskId },
       "task",
     );
@@ -205,7 +205,7 @@ async function runTask(
       resultJson: { message: "提交成功" },
     });
     await options.cleanupBaiduNetdiskResourceAfterTaskSuccess?.(baiduNetdiskResource).catch(
-      (error) => log(options, "[baidu-drama] 任务成功，但百度网盘剧目目录清理失败。", { error }, "task"),
+      (error) => log(options, "[baidu-drama] 任务成功，但百度网盘剧目目录清理失败", { error }, "task"),
     );
     setLastTask({
       accountTaskId: task.accountTaskId,
@@ -326,10 +326,10 @@ export async function startBaiduDramaRuntime(
         await waitForNextPoll(taskClaimResumeAt - Date.now());
         if (!running) break;
         taskClaimResumeAt = null;
-        log(options, "[baidu-drama] 每日发布额度暂停已结束，恢复领取任务。", undefined, "polling");
+        log(options, "[baidu-drama] 每日发布额度暂停已结束，恢复领取任务", undefined, "polling");
       }
       try {
-        const task = await claimNextBaiduDramaTaskApi({
+        const task = options.canClaimTask?.() === false ? null : await claimNextBaiduDramaTaskApi({
           runtimeOptions: options,
           apiConfig: options.apiConfig,
         });
@@ -343,7 +343,7 @@ export async function startBaiduDramaRuntime(
             warn(
               options,
               `[baidu-drama] 今日发布额度已用完，当前账号暂停领取任务至 ` +
-                `${new Date(taskClaimResumeAt).toLocaleString()}。`,
+                `${new Date(taskClaimResumeAt).toLocaleString()}`,
               { taskClaimResumeAt },
               "polling",
             );
@@ -379,7 +379,7 @@ export async function startBaiduDramaRuntime(
       pollTimer = null;
       wakePoll?.();
       wakePoll = null;
-      log(options, "[baidu-drama] 运行时停止。", undefined, "runtime");
+      log(options, "[baidu-drama] 运行时停止", undefined, "runtime");
       await context.close().catch(() => undefined);
       await flushBaiduDramaLogs(options);
     },

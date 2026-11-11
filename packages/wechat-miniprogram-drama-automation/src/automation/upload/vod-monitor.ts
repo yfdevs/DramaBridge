@@ -36,7 +36,7 @@ const failedUploadPattern = /上传失败|未能上传|上传异常|上传出错
 const retryStateWaitMs = 30_000;
 const missingUploadPageTimeoutMs = 30_000;
 
-function interruptionError(signal?: AbortSignal, fallback = "上传任务已终止。"): Error {
+function interruptionError(signal?: AbortSignal, fallback = "上传任务已终止"): Error {
   if (signal?.reason instanceof Error) return signal.reason;
   const error = new Error(fallback);
   error.name = "AbortError";
@@ -213,7 +213,7 @@ async function retryFailedEpisodeRows(
     const attempts = retryAttemptsByFile.get(fileName) ?? 0;
     if (attempts >= maxRetryAttempts) {
       throw new Error(
-        `[upload-failed] 剧集视频 ${fileName}: 重试 ${attempts} 次后仍显示“上传失败”。`,
+        `[upload-failed] 剧集视频 ${fileName}: 重试 ${attempts} 次后仍显示“上传失败”`,
       );
     }
 
@@ -223,7 +223,7 @@ async function retryFailedEpisodeRows(
       .first();
     if ((await retryLink.count()) === 0 || !await retryLink.isVisible().catch(() => false)) {
       throw new Error(
-        `[upload-failed] 剧集视频 ${fileName}: 页面显示“上传失败”，但找不到可点击的“重试”。`,
+        `[upload-failed] 剧集视频 ${fileName}: 页面显示“上传失败”，但找不到可点击的“重试”`,
       );
     }
 
@@ -320,7 +320,7 @@ export async function monitorEpisodeVodUploads(
     const timer = setTimeout(() => {
       finish(new Error(
         `[upload-failed] 剧集上传超时：总等待时间达到 ${Math.round(totalTimeout / 60000)} 分钟后仍未完成，`
-        + `本批次已成功 ${successesByFile.size}/${expectedCount} 个文件。`,
+        + `本批次已成功 ${successesByFile.size}/${expectedCount} 个文件`,
       ));
     }, timeout);
     const progressTimer = setInterval(() => {
@@ -332,7 +332,7 @@ export async function monitorEpisodeVodUploads(
           if (!pageProgress) {
             missingPageProgressSince ??= Date.now();
             if (Date.now() - missingPageProgressSince >= missingUploadPageTimeoutMs) {
-              finish(new Error("[upload-interrupted] 上传页面已离开或不再可用，任务已中断。"));
+              finish(new Error("[upload-interrupted] 上传页面已离开或不再可用，任务已中断"));
             }
             return;
           }
@@ -451,7 +451,7 @@ export async function monitorEpisodeVodUploads(
     };
 
     const onPageClose = () => {
-      finish(new Error("[upload-interrupted] 上传页面或浏览器已关闭，任务已中断。"));
+      finish(new Error("[upload-interrupted] 上传页面或浏览器已关闭，任务已中断"));
     };
 
     const onAbort = () => {

@@ -17,10 +17,10 @@ export async function claimNextTiktokDramaTaskApi(): Promise<ClaimedTiktokDramaT
     scheme: {
       id: "tiktok-demo-492",
       title: "黑石岛逆袭主二",
-      description: "这里填写剧集简介。",
+      description: "这里填写剧集简介",
       episodeCount: 2,
       baiduPanResourceLink:
-        "链接: https://pan.baidu.com/s/1uNpbHCXDOx3nQm-ge3rq1g?pwd=capu 提取码: capu <br/>--来自百度网盘超级会员v5的分享。",
+        "链接: https://pan.baidu.com/s/1uNpbHCXDOx3nQm-ge3rq1g?pwd=capu 提取码: capu <br/>--来自百度网盘超级会员v5的分享",
       coverFile:
         "https://misu-launch-lianshan-beijing-final.tos-cn-beijing.volces.com/drama-ai-rpa/posters/20260624/account-task-492-5da4e945eff84573acdda9ec87782835.jpg",
       targetAudience: "女性",

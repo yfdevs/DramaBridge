@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 import uuid
-from contextlib import nullcontext
+from contextlib import nullcontext, contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,7 +19,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, parse_qs
 from urllib.request import ProxyHandler, Request, build_opener
 from windows_job import ProcessJob, hidden_process_options
-from pipeline_events import parse_line, UPLOAD_STAGES
+from pipeline_events import parse_line, UPLOAD_STAGES, PREFIX, PHASE_NAMES
 from oauth_service import Authorization, save_token, test_authorization
 from task_timings import transition, update_timings
 from task_workspaces import TaskWorkspaces
@@ -126,10 +126,15 @@ class Store:
             if "timings" not in columns:
                 db.execute("ALTER TABLE tasks ADD COLUMN timings TEXT NOT NULL DEFAULT '{}'")
 
+    @contextmanager
     def connect(self):
         db = sqlite3.connect(self.path, timeout=15)
         db.row_factory = sqlite3.Row
-        return db
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def settings(self):
         with self.connect() as db:
@@ -522,10 +527,10 @@ class Worker:
                     if 'Runtime.evaluate' in message and ('超时' in message or 'timeout' in message.lower()):
                         if evaluate_retries >= 3:
                             raise RuntimeError('DramaBridge 网盘脚本 Runtime.evaluate 连续超时，已停止自动恢复；'
-                                               '请检查网盘客户端响应和登录状态，并更新 DramaBridge 的脚本超时设置。')
+                                               '请检查网盘客户端响应和登录状态，并更新 DramaBridge 的脚本超时设置')
                         evaluate_retries += 1
                         delay = 10 * 2 ** (evaluate_retries - 1)
-                        self.store.log(task['id'], f'网盘脚本超时，{delay} 秒后恢复原下载任务（{evaluate_retries}/3）。\n')
+                        self.store.log(task['id'], f'网盘脚本超时，{delay} 秒后恢复原下载任务（{evaluate_retries}/3）\n')
                         self.store.update(task['id'], status='waiting', error='等待网盘脚本恢复')
                         if self.stop.wait(delay) or self.halted(task):
                             return None
@@ -536,7 +541,7 @@ class Worker:
                     if task.get("_retry_remote") or status == "interrupted":
                         client.call("/baidu-netdisk/downloads/" + task["remote_id"] + "/retry", {})
                         task["_retry_remote"] = False
-                        self.store.log(task["id"], "已恢复百度下载任务。\n")
+                        self.store.log(task["id"], "已恢复百度下载任务\n")
                     else:
                         raise RuntimeError((remote.get("error") or {}).get("message", f"下载失败：{status}"))
             except (URLError, TimeoutError, ConnectionError, OSError) as exc:
@@ -547,11 +552,11 @@ class Worker:
             except RuntimeError as exc:
                 if 'Runtime.evaluate' in str(exc) and ('超时' in str(exc) or 'timeout' in str(exc).lower()):
                     if evaluate_retries >= 3:
-                        raise RuntimeError('DramaBridge 网盘脚本连续超时，请检查网盘客户端响应和登录状态，并更新 DramaBridge 的脚本超时设置。') from exc
+                        raise RuntimeError('DramaBridge 网盘脚本连续超时，请检查网盘客户端响应和登录状态，并更新 DramaBridge 的脚本超时设置') from exc
                     evaluate_retries += 1
                     delay = 10 * 2 ** (evaluate_retries - 1)
                     self.store.update(task['id'], status='waiting', error='等待网盘脚本恢复')
-                    self.store.log(task['id'], f'百度接口脚本超时，{delay} 秒后查询原下载任务（{evaluate_retries}/3）。\n')
+                    self.store.log(task['id'], f'百度接口脚本超时，{delay} 秒后查询原下载任务（{evaluate_retries}/3）\n')
                     if self.stop.wait(delay):
                         return None
                     continue
@@ -563,7 +568,7 @@ class Worker:
     def cleanup_finished_task(self, task):
         try:
             result = TaskWorkspaces(self.store, ROOT).clean_task(task['id'])
-            self.store.log(task['id'], f"自动清理释放 {result['removedBytes'] / 1024**2:.1f} MB。\n")
+            self.store.log(task['id'], f"自动清理释放 {result['removedBytes'] / 1024**2:.1f} MB\n")
             for error in result['errors']:
                 self.store.log(task['id'], f"自动清理异常：{error}\n")
         except Exception as exc:
@@ -688,6 +693,7 @@ class Worker:
                     break
             self.stop.wait(0.5)
         progress = None
+        next_progress_log = 0
         try:
           with process:
             # Demucs emits carriage-return progress, so read bounded chunks of lines.
@@ -697,15 +703,30 @@ class Worker:
                     break
                 if self.halted(task):
                     break
-                self.store.log(task["id"], line)
-                event = parse_line(line, progress)
+                event = None if line.lstrip().startswith('[') else parse_line(line, progress)
+                if not event:
+                    self.store.log(task["id"], line)
+                elif PREFIX not in line and time.monotonic() >= next_progress_log:
+                    parts = [PHASE_NAMES.get(event['stage'], event['stage'])]
+                    if event.get('percent') is not None:
+                        parts.append(f"{event['percent']:.1f}%")
+                    if event.get('speedText'):
+                        parts.append(event['speedText'])
+                    if event.get('etaText'):
+                        parts.append(f"预计剩余 {event['etaText']}")
+                    self.store.log(task['id'], '[进度] ' + '，'.join(parts) + '\n')
+                    next_progress_log = time.monotonic() + 15
                 if event:
                     with self.process_lock:
                         if self.halted(task):
                             break
-                        progress = event
+                        if event.get('timing') == 'finish' and progress and progress.get('stage') != event['stage']:
+                            continue
+                        progress = {**(progress or {}), **event} if progress and progress.get('stage') == event['stage'] else event
+                        if event.get('timing') == 'finish' and event.get('outcome') == 'completed':
+                            progress['percent'] = 100
                         self.store.update(task["id"], status="uploading" if event["stage"] in UPLOAD_STAGES else "processing",
-                                          progress=event)
+                                          progress=progress)
                 urls = re.findall(r"https://youtu\.be/[A-Za-z0-9_-]+", line)
                 if urls:
                     current = self.store.get(task["id"])["result"] or {"videoUrls": []}
@@ -778,12 +799,12 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("请在服务电脑完成 Google 授权")
                 values = parse_qs(urlsplit(self.path).query)
                 self.server.authorization.finish(values.get("state", [""])[0], values.get("code", [None])[0], values.get("error", [None])[0])
-                message, status = "授权信息已更新，可以关闭此页面并返回 DramaBridge。", 200
+                message, status = "授权已完成，可关闭此页面并返回 DramaBridge", 200
             except (ValueError, AttributeError):
-                message, status = "授权未更新，请返回 DramaBridge YouTube 工作台查看状态并重新授权。", 400
+                message, status = "授权失败，请返回 DramaBridge & YouTube 查看状态并重新授权", 400
             raw = ("<!doctype html><html lang=zh-CN><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
                    "<title>DramaBridge 授权</title><body style='font:16px system-ui;margin:64px auto;padding:24px;max-width:540px'>"
-                   "<h1 style='font-size:24px'>DramaBridge</h1><p>" + message + "</p>请返回 DramaBridge 桌面应用。</body></html>").encode("utf-8")
+                   "<h1 style='font-size:24px'>DramaBridge</h1><p>" + message + "</p>请返回 DramaBridge</body></html>").encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(raw)))
@@ -977,7 +998,7 @@ class InstanceLock:
                 fcntl.flock(self.file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             self.file.close()
-            print("DramaVox Web 已在运行，请打开现有服务。", flush=True)
+            print("DramaVox Web 已在运行，请打开现有服务", flush=True)
             raise SystemExit(2)
 
 
@@ -1009,8 +1030,8 @@ def main():
     thread = threading.Thread(target=worker.loop, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{args.port}"
-    mode_hint = ('后台运行中；使用 start.bat stop 停止服务。' if os.environ.get('DRAMAVOX_BACKGROUND') == '1'
-                 else '保持窗口开启；Ctrl+C 停止服务。')
+    mode_hint = ('后台运行中；使用 start.bat stop 停止服务' if os.environ.get('DRAMAVOX_BACKGROUND') == '1'
+                 else '保持窗口开启；Ctrl+C 停止服务')
     print(f"DramaVox Web: {url}\n{mode_hint}", flush=True)
     if not args.no_browser:
         import webbrowser

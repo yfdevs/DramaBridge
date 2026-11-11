@@ -97,7 +97,7 @@ export function startWechatMiniProgramDirectUploadRuntime(
     selectedPage = page
     loginState = await detectLoginState(page)
     if (taskActive && taskAuthenticated && loginState === "login-required") {
-      notifyTaskInterrupted("微信小程序登录已退出，当前上传任务已中断。")
+      notifyTaskInterrupted("微信小程序登录已退出，当前上传任务已中断")
     }
   }
 
@@ -109,7 +109,7 @@ export function startWechatMiniProgramDirectUploadRuntime(
     page.on("close", () => {
       if (selectedPage === page) {
         selectedPage = null
-        notifyTaskInterrupted("微信小程序上传页面已关闭，当前任务已中断。")
+        notifyTaskInterrupted("微信小程序上传页面已关闭，当前任务已中断")
       }
     })
     void refreshPageStatus(page)
@@ -141,7 +141,7 @@ export function startWechatMiniProgramDirectUploadRuntime(
           selectedPage = null
           loginState = "unknown"
         }
-        notifyTaskInterrupted("微信小程序上传浏览器已关闭，当前任务已中断。")
+        notifyTaskInterrupted("微信小程序上传浏览器已关闭，当前任务已中断")
       })
       for (const page of launched.pages()) bindPage(page)
       launched.on("page", bindPage)
@@ -169,7 +169,7 @@ export function startWechatMiniProgramDirectUploadRuntime(
     await waitForLoginIfNeeded(page, "百度资源直传")
     await refreshPageStatus(page)
     if (loginState !== "logged-in") {
-      throw new Error("微信小程序账号尚未完成登录。")
+      throw new Error("微信小程序账号尚未完成登录")
     }
     logger.info("百度资源直传浏览器已登录")
   }

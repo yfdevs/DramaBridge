@@ -73,6 +73,7 @@ export type TaobaoCollectionMetadata = {
 };
 
 export type TaobaoDramaRuntimeOptions = {
+  canClaimTask?: () => boolean;
   taskWatchdog?: TaskWatchdog;
   collectionUploadPlan?: TaobaoCollectionUploadPlan;
   workerId?: string;

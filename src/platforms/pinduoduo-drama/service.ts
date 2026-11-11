@@ -91,7 +91,7 @@ export type PinduoduoUploadRecordsResult = {
 
 async function invokePinduoduoDrama<T>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.ipcRenderer) {
-    throw new Error("拼多多短剧服务控制仅在 Electron 应用内可用。");
+    throw new Error("拼多多短剧服务控制仅在 Electron 应用内可用");
   }
 
   const result = await window.ipcRenderer.invoke(channel, ...args);

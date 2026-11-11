@@ -313,13 +313,13 @@ function portableDirectory(value: string | undefined, fallback: string) {
 
 function configuredDirectory(value: string) {
   if (process.platform !== "win32" && !path.isAbsolute(value) && path.win32.isAbsolute(value)) {
-    throw new Error(`当前系统无法使用 Windows 目录：${value}。请在配置中重新选择目录。`);
+    throw new Error(`当前系统无法使用 Windows 目录：${value}。请在配置中重新选择目录`);
   }
   // Never substitute a different profile/material directory for an explicit
   // global selection: a disconnected drive must be reported, not look logged out.
   if (process.platform === "win32" && path.isAbsolute(value)
     && !existsSync(path.parse(value).root)) {
-    throw new Error(`配置的目录所在磁盘不可用：${value}。请连接该磁盘或在配置中重新选择目录。`);
+    throw new Error(`配置的目录所在磁盘不可用：${value}。请连接该磁盘或在配置中重新选择目录`);
   }
   return value;
 }
@@ -349,7 +349,7 @@ export function assertGlobalDirectoriesConfigured() {
 
   if (missingDirectories.length > 0) {
     throw new Error(
-      `${GLOBAL_DIRECTORIES_REQUIRED_ERROR_CODE}: 请先在“全局配置 → 文件存储”中设置${missingDirectories.join("、")}。`,
+      `${GLOBAL_DIRECTORIES_REQUIRED_ERROR_CODE}: 请先在“全局配置 → 文件存储”中设置${missingDirectories.join("、")}`,
     );
   }
 }
@@ -422,7 +422,7 @@ async function testAiConfig(config: Partial<GlobalAppConfig>) {
       { dataUrl: `data:image/png;base64,${testImage.toString("base64")}`, type: "data-url" },
     ],
     maxTokens: 16,
-    prompt: "这是图片与文本能力连接测试。确认能读取图片后，只回复 OK。",
+    prompt: "这是图片与文本能力连接测试。确认能读取图片后，只回复 OK",
   });
 
   return {

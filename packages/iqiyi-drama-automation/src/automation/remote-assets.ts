@@ -24,7 +24,7 @@ export async function resolveIqiyiAsset(
   const normalized = reference.trim();
   if (!/^https?:\/\//i.test(normalized)) return normalized;
   if (!options.assetDownloadDir) {
-    throw new Error("爱奇艺素材下载目录未配置。");
+    throw new Error("爱奇艺素材下载目录未配置");
   }
 
   const controller = new AbortController();

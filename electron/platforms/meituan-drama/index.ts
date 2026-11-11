@@ -1,3 +1,5 @@
+import { createAccountRuntimeGroup } from "../shared/account-runtime-group";
+import { registerAccountControl } from "../shared/account-control";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
@@ -335,6 +337,10 @@ function scheduleMeituanCopyrightProofCleanup() {
 }
 
 async function startRuntime(selectedAccountIds: unknown) {
+  return createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+}
+
+async function startAccountRuntime(selectedAccountIds: unknown, canClaimTask: () => boolean) {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
 
   const config = readConfig();
@@ -348,7 +354,7 @@ async function startRuntime(selectedAccountIds: unknown) {
     startMeituanCreationRuntime,
   } = await import("@dramabridge/meituan-drama-automation");
   const availableAccounts = await fetchMeituanCreationAccounts(config.apiBaseUrl);
-  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请先选择要启动的账号");
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string")) throw new Error("请选择要启动的账号");
   const ids = new Set(selectedAccountIds);
   const accounts = availableAccounts.filter(account => ids.has(account.accountId));
   if (accounts.length !== ids.size) throw new Error("所选账号已失效，请刷新账号列表后重试");
@@ -357,6 +363,7 @@ async function startRuntime(selectedAccountIds: unknown) {
     accounts: accounts.map((account) => ({ id: account.accountId, name: account.accountName })),
   });
   return startMeituanCreationRuntime({
+        canClaimTask,
     accounts,
     apiBaseUrl: config.apiBaseUrl,
     authRoot: meituanCreationAuthRoot(),
@@ -381,6 +388,7 @@ async function startRuntime(selectedAccountIds: unknown) {
 }
 
 export function registerMeituanCreationPlatformHandlers() {
+  registerAccountControl({ platform: "meituan-drama", controller: runtimeController, start: startRuntime, status });
   registerTaskAnalyticsHandler({
     platform: "meituan-drama",
     apiBaseUrl: () => readConfig().apiBaseUrl,

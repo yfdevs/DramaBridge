@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { RuntimeInstances } from "@/pages/shared/instance-status";
 import { ServiceControlButtonPage, useServiceControl } from "@/pages/shared/service-control";
 import {
   type WechatMiniProgramServiceStatus,
@@ -70,6 +71,20 @@ export function WechatMiniProgramServiceControlPage() {
       pendingAction={pendingAction}
       running={status.running}
       onToggle={() => void toggleService()}
+      beforeBrowserInstances={
+        <RuntimeInstances
+          controls={wechatMiniProgramService.accountControl}
+          running={status.running}
+          instances={status.videoAccounts.map((account) => ({
+            id: account.videoAccountId,
+            name: account.videoAccountName,
+            launched: account.launched,
+            loginState: account.loginState,
+            pageCount: account.pageCount,
+            paused: account.paused,
+          }))}
+        />
+      }
       additionalAction={
         <div className="flex flex-wrap gap-2">
           <Button

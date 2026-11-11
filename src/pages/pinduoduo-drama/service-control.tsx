@@ -1,4 +1,4 @@
-import { CloudUpload } from "@mynaui/icons-react";
+import { SingleInstance } from "@/pages/shared/instance-status";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -62,11 +62,17 @@ export function PinduoduoDramaServiceControlPage() {
             disabled={openingRecords}
             onClick={openUploadRecords}
           >
-            <CloudUpload className="size-3.5" aria-hidden="true" />
             {openingRecords ? "打开中…" : "审核与上传状态"}
           </Button>
         }
         onToggle={() => void toggleService()}
+        beforeBrowserInstances={
+          <SingleInstance
+            running={status.running}
+            loginState={status.loginState}
+            name={status.accountProfileName || "拼多多浏览器"}
+          />
+        }
       />
     </>
   );
