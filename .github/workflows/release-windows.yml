@@ -4,6 +4,12 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      build_mac:
+        description: Also build and release the macOS Apple Silicon version
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -100,6 +106,7 @@ jobs:
 
   mac:
     needs: windows
+    if: github.event_name == 'workflow_dispatch' && inputs.build_mac
     permissions:
       contents: read
     uses: ./.github/workflows/build-macos.yml
@@ -109,11 +116,13 @@ jobs:
 
   release:
     needs: [windows, mac]
+    if: ${{ always() && !cancelled() && needs.windows.result == 'success' && (needs.mac.result == 'success' || needs.mac.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       RELEASE_VERSION: ${{ needs.windows.outputs.version }}
       RELEASE_TAG: ${{ needs.windows.outputs.tag }}
+      BUILD_MAC: ${{ needs.mac.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -132,16 +141,21 @@ jobs:
           path: .cache/release-assets
           merge-multiple: true
 
-      - name: Validate complete release files
+      - name: Validate selected platform release files
         run: |
           for file in \
             "DramaBridge-Windows-$RELEASE_VERSION-Setup.exe" \
             "DramaBridge-Windows-$RELEASE_VERSION-Setup.exe.blockmap" \
-            "latest.yml" \
-            "DramaBridge-Mac-$RELEASE_VERSION-arm64.dmg" \
-            "DramaBridge-Mac-$RELEASE_VERSION-arm64.zip"; do
+            "latest.yml"; do
             test -s ".cache/release-assets/$file" || { echo "Missing release file: $file"; exit 1; }
           done
+          if [ "$BUILD_MAC" = "true" ]; then
+            for file in \
+              "DramaBridge-Mac-$RELEASE_VERSION-arm64.dmg" \
+              "DramaBridge-Mac-$RELEASE_VERSION-arm64.zip"; do
+              test -s ".cache/release-assets/$file" || { echo "Missing release file: $file"; exit 1; }
+            done
+          fi
 
       - name: Commit shared version and tag
         run: |

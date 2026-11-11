@@ -4,6 +4,9 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { YoutubeFilterSelect, YoutubeSearchField } from "./filter-controls";
+import { YoutubeListPagination } from "./list-controls";
+import { useYoutubePagination } from "./use-youtube-pagination";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -27,6 +30,14 @@ export function YoutubeAccountsPage() {
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [editedName, setEditedName] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [authorization, setAuthorization] = useState("all");
+  const filtered = accounts.filter(
+    (account) =>
+      account.name.toLocaleLowerCase().includes(keyword.trim().toLocaleLowerCase()) &&
+      (authorization === "all" || account.authorized === (authorization === "authorized")),
+  );
+  const list = useYoutubePagination(filtered);
   const disabled = locked || !status.running;
   const add = (event: FormEvent) => {
     event.preventDefault();
@@ -39,15 +50,15 @@ export function YoutubeAccountsPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col bg-background">
       <YoutubeServiceActions model={model} title="YouTube 账号管理" />
-      <div className="mx-auto flex w-full max-w-[900px] flex-col gap-5 p-6">
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5 p-4 sm:p-6">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">账号管理</h2>
+          <h2 className="text-lg font-semibold tracking-tight">账号管理</h2>
           <p className="text-xs leading-5 text-muted-foreground">管理上传账号及 Google 授权。</p>
         </div>
         <YoutubeFeedback model={model} />
         <YoutubeServiceRequired model={model} />
-        <form onSubmit={add} className="flex flex-wrap items-end gap-3 rounded-lg border p-4">
-          <label className="grid min-w-48 flex-1 gap-2 text-xs font-medium">
+        <form onSubmit={add} className="flex flex-wrap items-end gap-3 border-b pb-5">
+          <label className="grid min-w-48 max-w-96 flex-1 gap-2 text-xs font-medium">
             账号名称
             <Input
               aria-label="新账号名称"
@@ -64,14 +75,62 @@ export function YoutubeAccountsPage() {
             添加账号
           </Button>
         </form>
-        <section aria-label="YouTube 账号列表" className="divide-y rounded-lg border">
-          {!accounts.length && (
+        <section aria-label="YouTube 账号列表">
+          <div className="flex flex-wrap items-center gap-2 border-b pb-4">
+            <YoutubeSearchField
+              label="搜索账号"
+              placeholder="搜索账号名称"
+              value={keyword}
+              onChange={(value) => {
+                setKeyword(value);
+                list.reset();
+              }}
+            />
+            <YoutubeFilterSelect
+              label="授权状态筛选"
+              caption="授权状态"
+              value={authorization}
+              onChange={(value) => {
+                setAuthorization(value);
+                list.reset();
+              }}
+              options={[
+                { value: "all", label: "" },
+                { value: "authorized", label: "已授权" },
+                { value: "unauthorized", label: "未授权" },
+              ]}
+            />
+            {(keyword || authorization !== "all") && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setKeyword("");
+                  setAuthorization("all");
+                  list.reset();
+                }}
+              >
+                清除筛选
+              </Button>
+            )}
+            <span className="ml-auto text-xs text-muted-foreground">
+              已授权 {accounts.filter((account) => account.authorized).length} / {accounts.length}
+            </span>
+          </div>
+          {!filtered.length && (
             <p className="p-8 text-center text-xs text-muted-foreground">
-              {status.running ? "暂无账号" : "启动服务后查看账号。"}
+              {keyword || authorization !== "all"
+                ? "没有符合筛选条件的账号"
+                : status.running
+                  ? "暂无账号，请先添加上传账号。"
+                  : "启动服务后查看账号。"}
             </p>
           )}
-          {accounts.map((account) => (
-            <div key={account.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
+          {list.items.map((account) => (
+            <div
+              key={account.id}
+              className="flex flex-wrap items-center justify-between gap-4 border-b px-1 py-4 last:border-b-0"
+            >
               <div className="min-w-0 flex-1 space-y-2">
                 {editing === account.id ? (
                   <div className="flex flex-wrap gap-2">
@@ -197,6 +256,7 @@ export function YoutubeAccountsPage() {
               </div>
             </div>
           ))}
+          <YoutubeListPagination list={list} />
         </section>
         {oauth && oauth.status !== "idle" && (
           <div

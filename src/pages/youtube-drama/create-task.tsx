@@ -28,7 +28,7 @@ export function YoutubeCreateTaskPage() {
   const [accountId, setAccountId] = useState("default");
   useEffect(() => {
     if (accounts.length && !accounts.some((account) => account.id === accountId))
-      setAccountId(accounts[0].id);
+      setAccountId(accounts.find((account) => account.authorized)?.id ?? accounts[0].id);
   }, [accounts, accountId]);
   const [name, setName] = useState("");
   const [share, setShare] = useState("");
@@ -69,9 +69,9 @@ export function YoutubeCreateTaskPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col bg-background">
       <YoutubeServiceActions model={model} title="添加 YouTube 任务" />
-      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 p-6">
+      <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-6 p-4 sm:p-6">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">添加任务</h2>
+          <h2 className="text-lg font-semibold tracking-tight">添加任务</h2>
           <p className="text-xs text-muted-foreground">填写素材和上传信息，加入处理队列。</p>
         </div>
         <YoutubeFeedback model={model} />
@@ -89,8 +89,8 @@ export function YoutubeCreateTaskPage() {
             完成授权。
           </p>
         )}
-        <form onSubmit={submit} className="grid content-start gap-5">
-          <label className="grid gap-1.5 text-xs font-medium">
+        <form onSubmit={submit} className="grid content-start gap-5 md:grid-cols-2">
+          <label className="grid gap-1.5 text-xs font-medium md:col-span-2">
             剧名
             <Input
               required
@@ -99,7 +99,7 @@ export function YoutubeCreateTaskPage() {
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          <label className="grid gap-1.5 text-xs font-medium">
+          <label className="grid gap-1.5 text-xs font-medium md:col-span-2">
             百度网盘分享链接及提取码
             <Textarea
               required
@@ -137,7 +137,6 @@ export function YoutubeCreateTaskPage() {
                 }}
                 options={[
                   { value: "merge", label: "合并分离" },
-                  { value: "episodes", label: "逐集分离" },
                   { value: "mute", label: "合并静音" },
                 ]}
               />
@@ -157,7 +156,7 @@ export function YoutubeCreateTaskPage() {
             </label>
           </div>
           {mode === "mute" && (
-            <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-4 border-y py-3 md:col-span-2">
               <div className="space-y-1">
                 <label htmlFor="youtube-compress" className="text-xs font-medium">
                   高画质压缩
@@ -178,7 +177,7 @@ export function YoutubeCreateTaskPage() {
               placeholder="请输入集数"
             />
           </label>
-          <Accordion className="rounded-lg border px-3">
+          <Accordion className="border-y md:col-span-2">
             <AccordionItem value="upload-info">
               <AccordionTrigger className="text-xs">
                 上传信息
@@ -220,6 +219,7 @@ export function YoutubeCreateTaskPage() {
           <Button
             size="sm"
             type="submit"
+            className="justify-self-end md:col-span-2"
             disabled={
               locked ||
               !status.running ||

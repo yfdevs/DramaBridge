@@ -60,13 +60,23 @@ export class YoutubePythonRuntime {
   }
 
   private environment(options: YoutubeRuntimeOptions): NodeJS.ProcessEnv {
-    return {
+    const environment: NodeJS.ProcessEnv = {
       ...process.env,
       PATH: [...options.mediaDirectories, process.env.PATH ?? ""].join(path.delimiter),
       PYTHONIOENCODING: "utf-8",
       PYTHONUNBUFFERED: "1",
       PYTHONDONTWRITEBYTECODE: "1",
     };
+    // Use the same isolated interpreter settings for install, inspection and service startup.
+    for (const name of Object.keys(environment)) {
+      if (
+        ["PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV", "UV_PYTHON", "UV_PROJECT_ENVIRONMENT"].includes(
+          name.toUpperCase(),
+        )
+      )
+        delete environment[name];
+    }
+    return environment;
   }
 
   async python(options: YoutubeRuntimeOptions) {
@@ -74,7 +84,8 @@ export class YoutubePythonRuntime {
     return await access(managed).then(
       () => managed,
       () => {
-        if (!options.pythonExecutable.trim()) throw new Error("请先点击“安装依赖”准备 Python 环境");
+        if (!options.pythonExecutable.trim())
+          throw new Error("尚未找到运行环境，请点击“安装环境”自动准备");
         return options.pythonExecutable;
       },
     );
@@ -98,8 +109,8 @@ export class YoutubePythonRuntime {
       let error = "";
       const timer = setTimeout(() => {
         child.kill();
-        reject(new Error("环境检查超时，请确认 Python 路径"));
-      }, 10000);
+        reject(new Error("环境检查超时，请稍后重试或查看 YouTube 日志"));
+      }, 30000);
       child.once("error", (cause) => {
         clearTimeout(timer);
         reject(cause);
@@ -523,6 +534,7 @@ export class YoutubePythonRuntime {
         ],
         60000,
       );
+      options.log(`Python 依赖验证完成，环境位置：${managed}`);
       this.state = { running: false, starting: false, installing: false };
     } catch (error) {
       const failure =

@@ -16,26 +16,33 @@ export function YoutubeWebApp() {
     <HashRouter>
       <WorkspaceToolbarProvider>
         <div className="flex min-h-svh flex-col bg-background">
-          <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b bg-background p-3">
-            <span className="px-1 text-sm font-semibold">YouTube</span>
-            <nav aria-label="YouTube 页面" className="flex gap-1">
-              {[
-                ["service", "任务列表"],
-                ["create", "添加任务"],
-                ["accounts", "账号管理"],
-              ].map(([route, label]) => (
-                <NavLink
-                  key={route}
-                  to={`/youtube-drama/${route}`}
-                  className={({ isActive }) =>
-                    `rounded-lg px-3 py-1.5 text-xs ${isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50"}`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ))}
-            </nav>
-            <WorkspaceActionHost />
+          <header className="sticky top-0 z-20 border-b bg-background">
+            <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="text-sm font-semibold tracking-tight">
+                  DramaBridge <span className="mx-2 font-normal text-muted-foreground">/</span>{" "}
+                  YouTube
+                </span>
+                <nav aria-label="YouTube 页面" className="flex gap-1">
+                  {[
+                    ["service", "任务列表"],
+                    ["create", "添加任务"],
+                    ["accounts", "账号管理"],
+                  ].map(([route, label]) => (
+                    <NavLink
+                      key={route}
+                      to={`/youtube-drama/${route}`}
+                      className={({ isActive }) =>
+                        `rounded-md px-3 py-2 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring ${isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50"}`
+                      }
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                </nav>
+              </div>
+              <WorkspaceActionHost />
+            </div>
           </header>
           <WorkspacePageActivity active>
             <Routes>

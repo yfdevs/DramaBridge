@@ -18,6 +18,7 @@ export type YoutubeStatus = {
 };
 export type YoutubeEnvironment = {
   python: string;
+  executable?: string;
   compatible: boolean;
   ready: boolean;
   modules: Record<string, boolean>;
@@ -34,6 +35,7 @@ export type YoutubeTask = {
     privacy?: string;
     mode?: string;
     compress?: boolean;
+    accountId?: string;
   };
   progress?: { percent?: number; speedText?: string; stage?: string } | null;
   error?: string | null;

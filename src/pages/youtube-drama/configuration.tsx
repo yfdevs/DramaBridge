@@ -3,15 +3,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  InputGroup,
-  InputGroupInput,
-  InputGroupAddon,
-  InputGroupButton,
-} from "@/components/ui/input-group";
 import { Badge } from "@/components/ui/badge";
 import { ConfigurationPageFrame, ConfigPanelSection } from "@/pages/shared/configuration-page";
-import { Folder, CheckCircle, DangerTriangle } from "@mynaui/icons-react";
+import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
 import {
   youtubeService,
   type YoutubeConfig,
@@ -55,26 +49,45 @@ export function YoutubeConfigurationPage() {
   const [checked, setChecked] = useState<YoutubeEnvironment | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [environmentError, setEnvironmentError] = useState("");
+  const [checkingEnvironment, setCheckingEnvironment] = useState(false);
   const wasInstalling = useRef(false);
   useEffect(() => {
     const completed = wasInstalling.current && !status.installing && !status.error;
     wasInstalling.current = status.installing;
-    if (!completed) return;
+    if (loading || status.installing || status.running) {
+      setCheckingEnvironment(false);
+      if (status.running) setEnvironmentError("");
+      return;
+    }
     let active = true;
+    setCheckingEnvironment(true);
+    setEnvironmentError("");
     void youtubeService
       .checkEnvironment()
       .then((result) => {
         if (!active) return;
         setChecked(result);
-        setNotice(result.ready ? "环境已就绪" : "依赖已安装，请查看检查结果");
+        if (completed) setNotice(result.ready ? "环境已就绪" : "依赖准备结束，请查看检查结果");
       })
       .catch((error) => {
-        if (active) setLoadError(String(error));
+        if (active) setEnvironmentError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (active) setCheckingEnvironment(false);
       });
     return () => {
       active = false;
     };
-  }, [status.installing, status.error, setNotice]);
+  }, [
+    loading,
+    status.installing,
+    status.running,
+    status.error,
+    saved.pythonExecutable,
+    metadata?.dataDirectory,
+    setNotice,
+  ]);
   const changed = JSON.stringify(config) !== JSON.stringify(saved) || proxyPort !== savedPort;
   const disabled = loading || locked || status.running;
   const apply = (result: YoutubeConfigResult) => {
@@ -113,7 +126,6 @@ export function YoutubeConfigurationPage() {
       proxy: proxyPort ? `http://127.0.0.1:${Number(proxyPort)}` : "",
     });
     apply(result);
-    setChecked(null);
   };
   const environment = status.running ? model.environment : checked;
   return (
@@ -153,39 +165,7 @@ export function YoutubeConfigurationPage() {
         </div>
       )}
       <ConfigPanelSection title="运行环境" description="">
-        <ConfigRow title="Python 启动文件" description="可选；不选则自动准备 Python 3.12。">
-          <InputGroup>
-            <InputGroupInput
-              aria-label="Python 启动文件"
-              disabled={disabled}
-              value={config.pythonExecutable}
-              onChange={(e) => {
-                setConfig({ ...config, pythonExecutable: e.target.value });
-                setChecked(null);
-              }}
-              placeholder="自动安装，无需选择"
-            />
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton
-                aria-label="选择 Python 文件"
-                disabled={disabled}
-                onClick={() =>
-                  void run(async () => {
-                    const file = await youtubeService.selectPython();
-                    if (file) {
-                      setConfig((current) => ({ ...current, pythonExecutable: file }));
-                      setChecked(null);
-                    }
-                  })
-                }
-              >
-                <Folder className="size-3.5" />
-                选择
-              </InputGroupButton>
-            </InputGroupAddon>
-          </InputGroup>
-        </ConfigRow>
-        <ConfigRow title="运行依赖" description="安装后检查是否可用。">
+        <ConfigRow title="运行环境" description="自动安装和管理，无需选择 Python。">
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -196,24 +176,25 @@ export function YoutubeConfigurationPage() {
                   if (changed) await persist();
                   await youtubeService.install();
                   setChecked(null);
-                  setNotice("依赖安装中，可查看日志。");
+                  setNotice("环境安装中，完成后会自动检查，可查看日志。");
                 })
               }
             >
-              {status.installing ? "安装中…" : "安装依赖"}
+              {status.installing ? "安装中…" : "安装环境"}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              disabled={loading || locked}
+              disabled={loading || locked || checkingEnvironment}
               onClick={() =>
                 void run(async () => {
                   if (changed && !status.running) await persist();
+                  setEnvironmentError("");
                   setChecked(await youtubeService.checkEnvironment());
                 })
               }
             >
-              {changed ? "保存并检查" : "检查环境"}
+              {checkingEnvironment ? "检查环境中…" : changed ? "保存并检查" : "检查环境"}
             </Button>
             <Button size="sm" variant="ghost" render={<Link to="/youtube-drama/logs" />}>
               查看日志
@@ -222,6 +203,11 @@ export function YoutubeConfigurationPage() {
           {status.installing && (
             <p role="status" className="text-xs text-muted-foreground">
               {status.installStage || "正在准备环境…"}
+            </p>
+          )}
+          {environmentError && (
+            <p role="alert" className="text-xs leading-5 text-destructive">
+              环境检查未完成：{environmentError}
             </p>
           )}
           {environment ? (
@@ -264,15 +250,24 @@ export function YoutubeConfigurationPage() {
                         ready ? "text-[11px]" : "text-[11px] text-amber-700 dark:text-amber-400"
                       }
                     >
-                      {ready ? "可用" : "未安装"}
+                      {ready ? "可用" : "未检测到"}
                     </Badge>
                   </div>
                 ))}
               </div>
+              {environment.executable && (
+                <p className="break-all text-[11px] leading-5 text-muted-foreground">
+                  当前 Python：{environment.executable}
+                </p>
+              )}
             </div>
           ) : (
             <p className="text-xs leading-5 text-muted-foreground">
-              点击安装依赖，自动准备 Python 和运行组件。首次安装需联网。
+              {checkingEnvironment
+                ? "正在检查已有的 Python 环境，无需重复安装。"
+                : environmentError
+                  ? "请重新检查或查看日志；只有缺少依赖时才需要安装。"
+                  : "尚未检查运行环境，请先检查已有环境。"}
             </p>
           )}
         </ConfigRow>

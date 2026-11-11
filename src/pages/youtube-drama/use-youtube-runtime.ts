@@ -25,21 +25,29 @@ export function useYoutubeRuntime() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
-    const next = await youtubeService.status();
-    setStatus(next);
-    if (!next.running) return;
-    const [taskData, accountData, env, authorization] = await Promise.all([
-      youtubeService.request<{ tasks: YoutubeTask[]; settings: { paused: boolean } }>("/api/tasks"),
-      youtubeService.request<{ accounts: YoutubeAccount[] }>("/api/accounts"),
-      youtubeService.request<YoutubeEnvironment>("/api/environment"),
-      youtubeService.request<YoutubeOauth>("/api/oauth/status"),
-    ]);
-    setTasks(taskData.tasks);
-    setPaused(taskData.settings.paused);
-    setAccounts(accountData.accounts);
-    setEnvironment(env);
-    setOauth(authorization);
+    try {
+      const next = await youtubeService.status();
+      setStatus(next);
+      if (!next.running) return;
+      const [taskData, accountData, env, authorization] = await Promise.all([
+        youtubeService.request<{ tasks: YoutubeTask[]; settings: { paused: boolean } }>(
+          "/api/tasks",
+        ),
+        youtubeService.request<{ accounts: YoutubeAccount[] }>("/api/accounts"),
+        youtubeService.request<YoutubeEnvironment>("/api/environment"),
+        youtubeService.request<YoutubeOauth>("/api/oauth/status"),
+      ]);
+      setTasks(taskData.tasks);
+      setPaused(taskData.settings.paused);
+      setAccounts(accountData.accounts);
+      setEnvironment(env);
+      setOauth(authorization);
+      setError("");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -83,6 +91,7 @@ export function useYoutubeRuntime() {
   const locked = busy || status.starting || status.installing;
   return {
     status,
+    loading,
     environment,
     tasks,
     accounts,

@@ -73,8 +73,8 @@ def validate_task(body):
     if privacy not in {"private", "unlisted", "public"}:
         raise ValueError("无效的视频可见性")
     mode = body.get("mode", "merge")
-    if mode not in {"merge", "episodes", "mute"}:
-        raise ValueError("无效的处理模式")
+    if mode not in {"merge", "mute"}:
+        raise ValueError("仅支持合并分离或合并静音，逐集分离已停用")
     tags = body.get("tags", [])
     if not isinstance(tags, list) or any(not isinstance(x, str) for x in tags) or len(",".join(tags)) > 500:
         raise ValueError("标签总长度不得超过 500 个字符")
@@ -584,6 +584,8 @@ class Worker:
         try:
             if self.halted(task):
                 return
+            if task["payload"].get("mode", "merge") not in {"merge", "mute"}:
+                raise ValueError("逐集分离已停用，请使用合并分离或合并静音重新创建任务")
             if self.store.settings()["paused"]:
                 self.store.update(task["id"], status="queued")
                 return
@@ -637,6 +639,8 @@ class Worker:
 
     def run_pipeline(self, task, local):
         payload = task["payload"]
+        if payload.get("mode", "merge") not in {"merge", "mute"}:
+            raise ValueError("逐集分离已停用，请使用合并分离或合并静音重新创建任务")
         self.store.update(task["id"], status="processing", progress=None, error=None)
         from task_workspaces import TaskWorkspaces
         workspace = TaskWorkspaces(self.store, ROOT).prepare(task['id'])

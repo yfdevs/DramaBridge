@@ -56,7 +56,7 @@ def media_available(name):
         return False
     try:
         return subprocess.run([executable, "-version"], stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL, timeout=3,
+                              stderr=subprocess.DEVNULL, timeout=10,
                               **vox.hidden_process_options()).returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
@@ -70,7 +70,8 @@ def environment_status():
         except (ImportError, ValueError):
             modules[name] = False
     ffmpeg, ffprobe = media_available('ffmpeg'), media_available('ffprobe')
-    return {'python': sys.version.split()[0], 'compatible': sys.version_info >= (3, 10),
+    return {'python': sys.version.split()[0], 'executable': sys.executable,
+            'compatible': sys.version_info >= (3, 10),
             'modules': modules, 'ffmpeg': ffmpeg, 'ffprobe': ffprobe,
             'ready': sys.version_info >= (3, 10) and all(modules.values())
                      and ffmpeg and ffprobe}
