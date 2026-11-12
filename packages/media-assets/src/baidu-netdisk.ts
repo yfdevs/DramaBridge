@@ -779,6 +779,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
   pollIntervalMs: number;
   stableCompletePolls: number;
   selectedEpisodeFiles?: SelectedEpisodeFileIdentity[];
+  episodeDownloadLimit?: number;
   signal?: AbortSignal;
   getDownloadTaskStatus?: EnsureBaiduNetdiskEpisodeVideosOptions["getDownloadTaskStatus"];
   onStableEpisodeFiles?: EnsureBaiduNetdiskEpisodeVideosOptions["onStableEpisodeFiles"];
@@ -831,6 +832,9 @@ async function waitForCompleteLocalEpisodeVideos(options: {
       options.resourceName,
       options.selectedEpisodeFiles,
     );
+    if (options.episodeDownloadLimit !== undefined) {
+      files = files.filter(file => file.index <= options.episodeDownloadLimit!);
+    }
     const newlyStableFiles: LocalEpisodeFile[] = [];
     for (const file of files) {
       const key = path.resolve(file.file).toLowerCase();
@@ -954,6 +958,9 @@ async function waitForCompleteLocalEpisodeVideos(options: {
           options.resourceName,
           options.selectedEpisodeFiles,
         );
+        if (options.episodeDownloadLimit !== undefined) {
+          files = files.filter(file => file.index <= options.episodeDownloadLimit!);
+        }
         const bestLocalSummary = episodeFileSummary(files);
         complete = !options.requireEpisodeVideos
           || isCompleteEpisodeFileSet(files, options.episodeCount);
@@ -1159,6 +1166,16 @@ export async function ensureBaiduNetdiskEpisodeVideos(
   const configuredEpisodeCount = Number(options.episodeCount);
   const hasConfiguredEpisodeCount = Number.isInteger(configuredEpisodeCount)
     && configuredEpisodeCount > 0;
+  const episodeDownloadLimit = downloadEpisodeVideos && options.episodeDownloadLimit !== undefined
+    ? Number(options.episodeDownloadLimit)
+    : undefined;
+  if (episodeDownloadLimit !== undefined
+    && (!Number.isInteger(episodeDownloadLimit) || episodeDownloadLimit <= 0)) {
+    throw new Error("仅下载前 X 集的集数必须是正整数");
+  }
+  const expectedLocalEpisodeCount = episodeDownloadLimit === undefined
+    ? configuredEpisodeCount
+    : Math.min(configuredEpisodeCount, episodeDownloadLimit);
   if (downloadEpisodeVideos && !hasConfiguredEpisodeCount && !options.inferEpisodeCount) {
     throw new Error("剧集数量必须是正整数，或启用自动识别集数")
   }
@@ -1206,7 +1223,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     &&
     (!downloadEpisodeVideos || (
       hasConfiguredEpisodeCount
-      && isCompleteEpisodeFileSet(expectedExistingEpisodes, configuredEpisodeCount)
+      && isCompleteEpisodeFileSet(expectedExistingEpisodes, expectedLocalEpisodeCount)
     ))
     && hasRequiredOwnershipMaterials(existingOwnership, ownershipRequirements)
     && existingRawOwnershipFiles.length >= requiredOwnershipFiles
@@ -1225,7 +1242,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     });
     return {
       localPath: targetLocalPath,
-      episodeCount: configuredEpisodeCount,
+      episodeCount: downloadEpisodeVideos ? expectedLocalEpisodeCount : 0,
       skippedExisting: true,
       completed: true,
     };
@@ -1235,7 +1252,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     await logEpisodeDirectoryDetails({
       root: options.localEpisodeVideoRoot,
       resourceName: options.resourceName,
-      episodeCount: configuredEpisodeCount,
+      episodeCount: expectedLocalEpisodeCount,
       reason: "启动前未发现完整文件",
       onLog: options.onLog,
     });
@@ -1292,6 +1309,10 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     throw new Error("百度网盘资源检查完成，但未能确定有效总集数")
   }
 
+  const downloadEpisodeCount = episodeDownloadLimit === undefined
+    ? resolvedEpisodeCount
+    : Math.min(resolvedEpisodeCount, episodeDownloadLimit);
+
   await options.onProgress?.({
     phase: "download-submitted",
     localPath: result.localPath,
@@ -1324,7 +1345,8 @@ export async function ensureBaiduNetdiskEpisodeVideos(
         .map((root) => path.basename(root.path))
         .filter(Boolean),
       requireAllDiscoveredAssets,
-      episodeCount: downloadEpisodeVideos ? resolvedEpisodeCount : 0,
+      episodeCount: downloadEpisodeVideos ? downloadEpisodeCount : 0,
+      episodeDownloadLimit,
       requireEpisodeVideos: downloadEpisodeVideos,
       ownershipRequirements,
       requiredOwnershipFiles,
@@ -1362,7 +1384,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
 
   return {
     localPath: completedPath,
-    episodeCount: downloadEpisodeVideos ? resolvedEpisodeCount : 0,
+    episodeCount: downloadEpisodeVideos ? downloadEpisodeCount : 0,
     skippedExisting: result.skippedExisting,
     completed: true,
   };

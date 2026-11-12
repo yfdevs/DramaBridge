@@ -3261,15 +3261,6 @@ async function submitSavedDownload(
       );
     }
   }
-  if (downloadEpisodeVideos && episodeDownloadLimit !== undefined) {
-    const limit = Number(episodeDownloadLimit);
-    remoteVideos = {
-      ...remoteVideos,
-      files: selectLeadingEpisodeFiles(remoteVideos.files, limit),
-      duplicateIndexes: remoteVideos.duplicateIndexes.filter((index) => index <= limit),
-    };
-    log(`已启用按集下载：仅下载第1-${limit}集，其他剧集不会提交到本地下载队列`);
-  }
   const remoteIndexes = [...new Set(remoteVideos.files.map((file) => file.index))].sort(
     (left, right) => left - right,
   );
@@ -3453,6 +3444,17 @@ async function submitSavedDownload(
           (problemParts.length > 0 ? `问题：${problemParts.join("；")}` : ""),
       });
     }
+  }
+  // Validate the complete source before reducing it to this download's range.
+  // Otherwise a 50-episode source limited to 30 falsely reports episodes 31-50 missing.
+  if (downloadEpisodeVideos && episodeDownloadLimit !== undefined) {
+    const limit = Number(episodeDownloadLimit);
+    remoteVideos = {
+      ...remoteVideos,
+      files: selectLeadingEpisodeFiles(remoteVideos.files, limit),
+      duplicateIndexes: remoteVideos.duplicateIndexes.filter((index) => index <= limit),
+    };
+    log(`已启用按集下载：仅下载前${remoteVideos.files.length}集，其他剧集不会提交到本地下载队列`);
   }
   const requiredJianyingImages = Math.max(
     0,

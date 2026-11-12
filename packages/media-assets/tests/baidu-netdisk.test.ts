@@ -557,3 +557,92 @@ test("limited downloads track individual episodes instead of failing on a missin
     assert.equal(checks, 4);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a 50-episode source completes a 30-episode download and reuses those files", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-limit-"));
+  const resourceName = "五十集二创测试剧";
+  const downloaded = path.join(root, "download", resourceName);
+  try {
+    const options = {
+      shareText: "https://pan.baidu.com/s/test", resourceName, localEpisodeVideoRoot: root,
+      episodeCount: 50, episodeDownloadLimit: 30, timeoutMs: 2000, pollIntervalMs: 1, stableCompletePolls: 1,
+    };
+    const result = await ensureBaiduNetdiskEpisodeVideos({
+      ...options,
+      downloadShare: async request => {
+        // Remote validation must still check the full original source.
+        assert.equal(request.expectedEpisodeCount, 50);
+        assert.equal(request.episodeDownloadLimit, 30);
+        await mkdir(downloaded, { recursive: true });
+        for (let index = 1; index <= 30; index++) {
+          await writeFile(path.join(downloaded, `第${index}集.mp4`), "video");
+        }
+        return {
+          share: { link: "https://pan.baidu.com/s/test", pwd: "", name: resourceName },
+          localPath: downloaded, completed: false, skippedExisting: false,
+        };
+      },
+    });
+    assert.equal(result.completed, true);
+    assert.equal(result.episodeCount, 30);
+    const reused = await ensureBaiduNetdiskEpisodeVideos({
+      ...options,
+      downloadShare: async () => { throw new Error("must reuse the existing 30 episodes"); },
+    });
+    assert.equal(reused.skippedExisting, true);
+    assert.equal(reused.episodeCount, 30);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("limited downloads ignore later local episodes while waiting for other materials", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-limit-extra-"));
+  const resourceName = "二创额外集测试剧";
+  const downloaded = path.join(root, "download", resourceName);
+  const stableIndexes: number[] = [];
+  try {
+    const result = await ensureBaiduNetdiskEpisodeVideos({
+      shareText: "https://pan.baidu.com/s/test", resourceName, localEpisodeVideoRoot: root,
+      episodeCount: 50, episodeDownloadLimit: 30, requiredMetadataTextFiles: 1,
+      timeoutMs: 2000, pollIntervalMs: 1, stableCompletePolls: 1,
+      onStableEpisodeFiles: files => { stableIndexes.push(...files.map(file => file.index)); },
+      downloadShare: async () => {
+        await mkdir(downloaded, { recursive: true });
+        for (let index = 1; index <= 50; index++) {
+          await writeFile(path.join(downloaded, `第${index}集.mp4`), "video");
+        }
+        return {
+          share: { link: "https://pan.baidu.com/s/test", pwd: "", name: resourceName },
+          localPath: downloaded, completed: false, skippedExisting: false,
+        };
+      },
+      getDownloadTaskStatus: async () => {
+        const metadata = path.join(root, resourceName, "海报封面", "剧情资料");
+        await mkdir(metadata, { recursive: true });
+        await writeFile(path.join(metadata, "简介.txt"), "description");
+        return { found: true, localPath: downloaded, completed: true, tasks: [] };
+      },
+    });
+    assert.equal(result.completed, true);
+    assert.equal(result.episodeCount, 30);
+    assert.deepEqual(stableIndexes.sort((a, b) => a - b), Array.from({ length: 30 }, (_, index) => index + 1));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("limited downloads still reject missing episodes in the requested range", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-limit-missing-"));
+  const resourceName = "二创缺集测试剧";
+  const downloaded = path.join(root, "download", resourceName);
+  try {
+    await mkdir(downloaded, { recursive: true });
+    for (let index = 1; index <= 29; index++) await writeFile(path.join(downloaded, `第${index}集.mp4`), "video");
+    await assert.rejects(ensureBaiduNetdiskEpisodeVideos({
+      shareText: "https://pan.baidu.com/s/test", resourceName, localEpisodeVideoRoot: root,
+      episodeCount: 50, episodeDownloadLimit: 30, timeoutMs: 2000, pollIntervalMs: 1, stableCompletePolls: 1,
+      downloadShare: async () => ({
+        share: { link: "https://pan.baidu.com/s/test", pwd: "", name: resourceName },
+        localPath: downloaded, completed: false, skippedExisting: false,
+      }),
+      getDownloadTaskStatus: async () => ({ found: true, completed: true, localPath: downloaded, tasks: [] }),
+    }), /期望30集，实际识别29集，缺少第30集/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
