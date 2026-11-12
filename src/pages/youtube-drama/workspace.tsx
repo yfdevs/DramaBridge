@@ -1,4 +1,4 @@
-import { YoutubeTaskProgress as TaskProgress } from "./task-progress";
+import { YoutubeTaskProgress as TaskProgress, youtubeDuration } from "./task-progress";
 import { ListFilterMenu } from "@/components/list-filter-menu";
 import { useMemo, useState } from "react";
 import { YoutubeAddTaskButton } from "./add-task-button";
@@ -25,13 +25,19 @@ import {
 import { YoutubeListPagination } from "./list-controls";
 import { useYoutubePagination } from "./use-youtube-pagination";
 import { YoutubeTaskDetails } from "./task-details";
-import { youtubeActiveStatuses as activeStatuses, youtubeModeLabels as modes } from "./task-status";
+import {
+  YoutubeTaskStatus,
+  youtubeActiveStatuses as activeStatuses,
+  youtubeModeLabels as modes,
+} from "./task-status";
+import { youtubeTaskElapsed } from "./task-progress-data";
 
 type TaskAction = "resume" | "retry" | "pause" | "cancel";
 function taskActions(task: YoutubeTask): TaskAction[] {
   if (task.status === "paused") return ["resume"];
   if (["failed", "cancelled"].includes(task.status)) return ["retry"];
-  if (["queued", ...activeStatuses].includes(task.status)) return ["pause", "cancel"];
+  if (task.status === "queued") return ["pause", "cancel"];
+  if (activeStatuses.includes(task.status)) return ["pause"];
   return [];
 }
 
@@ -49,7 +55,7 @@ function TaskActions({
   showDetails?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-1">
+    <div className="flex items-center justify-end gap-1">
       {showDetails && (
         <Button size="sm" variant="ghost" onClick={onDetails}>
           详情
@@ -67,7 +73,7 @@ function TaskActions({
             )
           }
         >
-          {{ resume: "恢复", retry: "重试", pause: "暂停", cancel: "取消" }[action]}
+          {{ resume: "继续", retry: "重试", pause: "暂停", cancel: "取消" }[action]}
         </Button>
       ))}
     </div>
@@ -108,18 +114,6 @@ function TaskEmptyState({
     </div>
   );
 }
-function timeText(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : date.toLocaleString("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-}
 export function YoutubeWorkspacePage() {
   const model = useYoutubeRuntime();
   const { status, tasks, accounts, paused, locked, run, loading } = model;
@@ -159,7 +153,6 @@ export function YoutubeWorkspacePage() {
     list.reset();
   };
   const selected = tasks.find((task) => task.id === selectedId) ?? null;
-  const detailColumn = isYoutubeWeb ? "hidden @min-[900px]:table-cell" : "hidden lg:table-cell";
   const accountColumn = isYoutubeWeb ? "hidden @min-[1100px]:table-cell" : "hidden xl:table-cell";
   return (
     <main
@@ -282,43 +275,33 @@ export function YoutubeWorkspacePage() {
                   <article
                     key={task.id}
                     aria-label={task.payload.resourceName}
-                    className="flex min-w-0 flex-col gap-3 py-5"
+                    className="flex min-w-0 flex-col gap-2 py-3"
                   >
                     <div className="flex min-w-0 items-start justify-between gap-3">
-                      <button
-                        className="min-w-0 break-words text-left text-sm font-medium underline-offset-4 hover:underline focus-visible:underline"
-                        onClick={() => setSelectedId(task.id)}
-                      >
-                        {task.payload.resourceName}
-                      </button>
-                      <Button size="sm" variant="ghost" onClick={() => setSelectedId(task.id)}>
-                        详情
-                      </Button>
-                    </div>
-                    {task.payload.title && task.payload.title !== task.payload.resourceName && (
-                      <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                        {task.payload.title}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>{modes[task.payload.mode ?? "merge"] ?? task.payload.mode}</span>
-                      <span>
-                        {accountNames.get(task.payload.accountId ?? "default") ?? "未指定账号"}
-                      </span>
-                      <time dateTime={task.created}>{timeText(task.created)}</time>
-                    </div>
-                    <div>
-                      <TaskProgress task={task} open={() => setSelectedId(task.id)} />
-                    </div>
-                    {taskActions(task).length > 0 && (
+                      <div className="min-w-0 flex-1">
+                        <button
+                          className="block max-w-full truncate text-left text-sm font-medium underline-offset-4 hover:underline focus-visible:underline"
+                          onClick={() => setSelectedId(task.id)}
+                        >
+                          {task.payload.resourceName}
+                        </button>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">
+                          {accountNames.get(task.payload.accountId ?? "default") ?? "未指定账号"}
+                        </p>
+                      </div>
                       <TaskActions
                         task={task}
                         disabled={locked || !status.running}
                         run={run}
                         onDetails={() => setSelectedId(task.id)}
-                        showDetails={false}
                       />
-                    )}
+                    </div>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <YoutubeTaskStatus status={task.status} />
+                      <div className="min-w-0 flex-1">
+                        <TaskProgress task={task} compact open={() => setSelectedId(task.id)} />
+                      </div>
+                    </div>
                   </article>
                 ))
               ) : (
@@ -331,72 +314,45 @@ export function YoutubeWorkspacePage() {
             className={
               isYoutubeWeb
                 ? "min-w-[480px] table-fixed text-xs"
-                : "min-w-[520px] table-fixed text-xs lg:min-w-[900px]"
+                : "min-w-[600px] table-fixed text-xs"
             }
             aria-busy={loading}
           >
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead
-                  className={
-                    isYoutubeWeb ? "w-[34%] pl-3 @min-[900px]:w-[24%]" : "w-[34%] pl-3 lg:w-[24%]"
-                  }
-                >
-                  剧名与标题
-                </TableHead>
-                <TableHead className={detailColumn}>处理方式</TableHead>
+                <TableHead className="w-[24%] pl-3">剧名</TableHead>
                 <TableHead className={accountColumn}>上传账号</TableHead>
-                <TableHead
-                  className={isYoutubeWeb ? "w-[28%] @min-[900px]:w-[20%]" : "w-[28%] lg:w-[20%]"}
-                >
-                  状态与进度
-                </TableHead>
-                <TableHead className={detailColumn}>创建时间</TableHead>
-                <TableHead className="w-44 pr-3 text-right">操作</TableHead>
+                <TableHead className="w-18">状态</TableHead>
+                <TableHead className="w-[30%]">进度</TableHead>
+                <TableHead className="w-18">耗时</TableHead>
+                <TableHead className="w-36 pr-3 text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody className="[&_tr]:border-0">
+            <TableBody className="[&_td]:py-2 [&_tr]:border-0">
               {loading
                 ? Array.from({ length: 5 }, (_, index) => (
                     <TableRow key={index}>
                       {Array.from({ length: 6 }, (_, cell) => (
-                        <TableCell
-                          key={cell}
-                          className={`p-4 ${cell === 1 || cell === 4 ? detailColumn : cell === 2 ? accountColumn : ""}`}
-                        >
+                        <TableCell key={cell} className={`px-3 ${cell === 1 ? accountColumn : ""}`}>
                           <div className="h-4 rounded bg-muted motion-safe:animate-pulse" />
                         </TableCell>
                       ))}
                     </TableRow>
                   ))
                 : list.items.map((task) => {
+                    const elapsed = youtubeTaskElapsed(task);
                     return (
                       <TableRow key={task.id}>
-                        <TableCell className="max-w-0 whitespace-normal py-4 pl-4">
+                        <TableCell className="max-w-0 pl-3">
                           <button
-                            className="max-w-full truncate text-left text-sm font-medium underline-offset-4 hover:underline focus-visible:underline"
-                            title={task.payload.resourceName}
+                            className="block max-w-full truncate text-left text-sm font-medium underline-offset-4 hover:underline focus-visible:underline"
+                            title={[task.payload.resourceName, task.payload.title, task.id]
+                              .filter(Boolean)
+                              .join("\n")}
                             onClick={() => setSelectedId(task.id)}
                           >
                             {task.payload.resourceName}
                           </button>
-                          <p
-                            className="mt-1 truncate text-xs text-muted-foreground"
-                            title={task.payload.title || task.id}
-                          >
-                            {task.payload.title && task.payload.title !== task.payload.resourceName
-                              ? task.payload.title
-                              : `编号 ${task.id}`}
-                          </p>
-                        </TableCell>
-                        <TableCell className={`${detailColumn} whitespace-normal`}>
-                          {modes[task.payload.mode ?? "merge"] ??
-                            (task.payload.mode === "episodes"
-                              ? "逐集分离（已停用）"
-                              : task.payload.mode)}
-                          {task.payload.mode === "mute" && task.payload.compress && (
-                            <p className="mt-1 text-xs text-muted-foreground">高画质压缩</p>
-                          )}
                         </TableCell>
                         <TableCell
                           className={`${accountColumn} max-w-36 truncate`}
@@ -404,14 +360,16 @@ export function YoutubeWorkspacePage() {
                         >
                           {accountNames.get(task.payload.accountId ?? "default") ?? "未指定账号"}
                         </TableCell>
-                        <TableCell className="max-w-64 whitespace-normal py-4">
-                          <TaskProgress task={task} open={() => setSelectedId(task.id)} />
+                        <TableCell>
+                          <YoutubeTaskStatus status={task.status} />
                         </TableCell>
-                        <TableCell
-                          className={`${detailColumn} tabular-nums text-muted-foreground`}
-                          title={task.created}
-                        >
-                          {timeText(task.created)}
+                        <TableCell className="min-w-0">
+                          <TaskProgress task={task} compact open={() => setSelectedId(task.id)} />
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {elapsed !== undefined && Number.isFinite(elapsed)
+                            ? youtubeDuration(elapsed)
+                            : "—"}
                         </TableCell>
                         <TableCell className="pr-3 text-right">
                           <TaskActions
@@ -435,9 +393,6 @@ export function YoutubeWorkspacePage() {
           </Table>
           <YoutubeListPagination list={list} />
         </section>
-        <p className="text-xs text-muted-foreground">
-          {status.running ? "自动更新，" : "服务已停止，"}显示最近 500 条任务
-        </p>
       </YoutubePageContent>
       <YoutubeTaskDetails
         task={selected}

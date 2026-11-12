@@ -2,6 +2,7 @@ type Entry = Record<string, any>;
 
 /** Serialized into the authenticated share page. No module-scope dependencies. */
 export async function transferNormalizedEpisodeVideos(o: {
+  bundleCovers?: { directory: string; files: Entry[] };
   versionTitle?: string; recreation?: boolean; parentDirectoryName?: string; title: string; episodeCount: number; roots: Entry[]; sharePassword?: string;
   listShare: (path: string) => Promise<Entry[]>;
   listOwn: (path: string, refresh?: boolean) => Promise<Entry[]>;
@@ -75,6 +76,27 @@ export async function transferNormalizedEpisodeVideos(o: {
   if (selected.files.some((e: Entry) => !/\.mp4$/i.test(e.name))) {
     throw new Error('选中的全集包含 MOV 文件，云端改名不能转换视频格式，已停止转存');
   }
+  // Only accept the verified cover cache belonging to this drama. Never copy
+  // arbitrary account files into a public share.
+  let bundleImages: Entry[] = [];
+  if (o.bundleCovers) {
+    const cachePrefix = '/快手_二创集合/' + o.title + '/封面缓存-';
+    const directory = o.bundleCovers.directory;
+    if (!o.recreation || o.parentDirectoryName !== '快手_二创集合'
+      || !directory.startsWith(cachePrefix) || !/^[a-f0-9]{16}-60%\/封面$/.test(directory.slice(cachePrefix.length))
+      || !o.bundleCovers.files.length) throw new Error('二创封面缓存目录无效');
+    bundleImages = await o.listOwn(directory, true);
+    if (bundleImages.length !== o.bundleCovers.files.length
+      || new Set(o.bundleCovers.files.map(name)).size !== bundleImages.length
+      || bundleImages.some(image => isDir(image) || !/\.(png|jpg|jpeg|webp|bmp)$/i.test(name(image))
+        || /[\\/]/.test(name(image)) || String(image.path) !== directory + '/' + name(image)
+        || !o.bundleCovers!.files.some(expected => name(expected) === name(image)
+          && id(expected) && id(expected) === id(image) && Number(expected.size) === Number(image.size)
+          && (expected.md5 || '') === (image.md5 || ''))))
+      throw new Error('已上传封面发生变化或不完整，未转存视频、未创建分享');
+  }
+  const videoFolderName = o.bundleCovers ? '成片' : '成片60%';
+  const videoName = (file: Entry) => o.bundleCovers ? `${file.index}.mp4` : `${o.versionTitle || o.title}-第${file.index}集.mp4`;
   const coverIds: string[] = [];
   progress(0, '转存视频');
   const parent = o.parentDirectoryName ? await o.createDirectory('/', o.parentDirectoryName) : undefined;
@@ -94,12 +116,15 @@ export async function transferNormalizedEpisodeVideos(o: {
     // Older runs may leave full sets, original filenames or unrelated materials.
     // Preserve them and build a separate, clean task folder instead of sharing them.
     const taskEntries = await o.listOwn(rootPath, true);
-    const videoDirectory = taskEntries.find(entry => name(entry) === '成片60%' && isDir(entry));
+    const videoDirectory = taskEntries.find(entry => name(entry) === videoFolderName && isDir(entry));
     const previousVideos = videoDirectory ? await o.listOwn(String(videoDirectory.path), true) : [];
-    const wantedNames = new Set(selected.files.slice(0, total).map((file: Entry) => `${o.versionTitle || o.title}-第${file.index}集.mp4`));
-    const dirty = taskEntries.some(entry => !isDir(entry) || !['封面', '成片60%'].includes(name(entry)))
+    const coverDirectory = o.bundleCovers && taskEntries.find(entry => name(entry) === '封面' && isDir(entry));
+    const previousCovers = coverDirectory ? await o.listOwn(String(coverDirectory.path), true) : [];
+    const wantedNames = new Set(selected.files.slice(0, total).map((file: Entry) => videoName(file)));
+    const dirty = previousCovers.some(entry => !bundleImages.some(image => name(image) === name(entry) && o.identical(image, entry)))
+      || taskEntries.some(entry => !isDir(entry) || !['封面', videoFolderName].includes(name(entry)))
       || previousVideos.some(entry => isDir(entry) || !wantedNames.has(name(entry))
-        || !o.identical(selected.files.find((file: Entry) => `${o.versionTitle || o.title}-第${file.index}集.mp4` === name(entry))!, entry));
+        || !o.identical(selected.files.find((file: Entry) => videoName(file) === name(entry))!, entry));
     if (dirty) {
       const clean = await o.createDirectory(rootPath.slice(0, rootPath.lastIndexOf('/')) || '/',
         (name(shareRoot) || o.versionTitle || o.title) + '-重新整理-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
@@ -110,19 +135,48 @@ export async function transferNormalizedEpisodeVideos(o: {
     }
     const cover = await o.createDirectory(rootPath, '封面');
     shareChildren.push(cover);
-    for (const image of covers) {
-      const copied = await o.transferOne(image, String(cover.path), "cover");
-      if (!o.identical(image, copied.item)) throw new Error('封面转存文件身份未确认：' + name(image));
-      coverIds.push(id(copied.item));
+    if (o.bundleCovers) {
+      progress(0, '整理原版及 AI 改名封面');
+      const coverPath = String(cover.path);
+      const existingCovers = await o.listOwn(coverPath, true);
+      if (existingCovers.some(entry => !bundleImages.some(image => name(image) === name(entry) && o.identical(image, entry))))
+        throw new Error('目标封面目录存在其他内容，未创建分享：' + coverPath);
+      for (const image of bundleImages) {
+        let target = existingCovers.find(entry => name(entry) === name(image));
+        if (!target) {
+          const params = new URLSearchParams({ opera: 'copy', async: '0', onnest: 'fail',
+            channel: 'chunlei', web: '1', app_id: '250528', clienttype: '0', bdstoken: o.token });
+          const copied = await o.request('/api/filemanager?' + params, { method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: new URLSearchParams({ filelist: JSON.stringify([{ path: image.path, dest: coverPath, newname: name(image) }]) }) });
+          const failed = (entry: Entry) => [entry.errno, entry.error_code, entry.task_errno].some(code => Number(code || 0) !== 0);
+          if (Number(copied.errno) !== 0 || copied.status === 'failed'
+            || [copied.info, copied.list].flatMap(value => Array.isArray(value) ? value : []).some(failed))
+            throw new Error('封面云端复制失败：' + name(image) + '；errno=' + copied.errno + '；重试将核验并复用已完成文件');
+          for (let attempt = 0; attempt < 20; attempt++) {
+            target = (await o.listOwn(coverPath, true)).find(entry => name(entry) === name(image));
+            if (target) break;
+            if (attempt < 19) await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        if (!target || !o.identical(image, target)) throw new Error('封面云端复制未通过内容核验：' + name(image));
+        coverIds.push(id(target));
+      }
+    } else {
+      for (const image of covers) {
+        const copied = await o.transferOne(image, String(cover.path), "cover");
+        if (!o.identical(image, copied.item)) throw new Error('封面转存文件身份未确认：' + name(image));
+        coverIds.push(id(copied.item));
+      }
     }
-    const videos = await o.createDirectory(rootPath, '成片60%');
+    const videos = await o.createDirectory(rootPath, videoFolderName);
     shareChildren.push(videos);
     rootPath = String(videos.path);
     selected.files = selected.files.slice(0, Math.ceil(o.episodeCount * 0.6));
   }
   if (!o.recreation) {
     const previous = await o.listOwn(rootPath, true);
-    const expected = new Map<string, Entry>(selected.files.map((file: Entry) => [`${o.versionTitle || o.title}-第${file.index}集.mp4`, file]));
+    const expected = new Map<string, Entry>(selected.files.map((file: Entry) => [videoName(file), file]));
     if (previous.some(entry => isDir(entry) || !expected.has(name(entry)) || !o.identical(expected.get(name(entry))!, entry))) {
       const clean = await o.createDirectory(parentPath,
         o.title + '-重新整理-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
@@ -138,7 +192,7 @@ export async function transferNormalizedEpisodeVideos(o: {
   const existing = await o.listOwn(rootPath, true);
   const confirmedTargets = new Map(existing.map(entry => [name(entry), entry]));
   for (const file of selected.files) {
-    const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
+    const targetName = videoName(file);
     const collision = existing.find(e => name(e) === targetName);
     if (collision && !o.identical(file, collision)) throw new Error('目标文件内容冲突：' + rootPath + '/' + targetName);
   }
@@ -149,7 +203,7 @@ export async function transferNormalizedEpisodeVideos(o: {
     const batch = selected.files.slice(offset, offset + batchSize);
     const pending: { file: Entry; item: Entry; targetName: string }[] = [];
     for (const file of batch) {
-      const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
+      const targetName = videoName(file);
       let target = confirmedTargets.get(targetName);
       if (!target) {
         const copied = await o.transferOne(file, rootPath);
@@ -190,7 +244,7 @@ export async function transferNormalizedEpisodeVideos(o: {
       }
     }
     for (const file of batch) {
-      const targetName = `${o.versionTitle || o.title}-第${file.index}集.mp4`;
+      const targetName = videoName(file);
       const target = confirmedTargets.get(targetName);
       if (!target || !o.identical(file, target)) throw new Error('目标视频未通过内容核验：' + targetName);
       results.push({ index: file.index, name: targetName, path: target.path, fsId: id(target), size: target.size });

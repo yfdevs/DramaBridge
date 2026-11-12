@@ -280,7 +280,7 @@ export function YoutubeCreateTaskPage({
                 取消
               </Button>
             ) : (
-              <Button size="sm" variant="ghost" render={<Link to="/youtube-drama/service" />}>
+              <Button size="sm" variant="ghost" nativeButton={false} render={<Link to="/youtube-drama/service" />}>
                 返回任务列表
               </Button>
             )}

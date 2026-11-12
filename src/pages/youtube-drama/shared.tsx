@@ -175,7 +175,7 @@ export function YoutubeServiceRequired({ model }: { model: YoutubeModel }) {
         {isYoutubeWeb ? "服务已离线，请在桌面端启动后刷新页面" : "启动服务后可管理任务和账号"}
       </p>
       {!isYoutubeWeb && (
-        <Button size="sm" variant="outline" render={<Link to="/youtube-drama/config" />}>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/youtube-drama/config" />}>
           配置环境
         </Button>
       )}
@@ -203,7 +203,7 @@ export function YoutubeEnvironmentWarning({ model }: { model: YoutubeModel }) {
           size="sm"
           variant="outline"
           className="h-7 shrink-0 text-xs"
-          render={<Link to="/youtube-drama/config" />}
+          nativeButton={false} render={<Link to="/youtube-drama/config" />}
         >
           配置环境
         </Button>

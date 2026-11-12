@@ -130,6 +130,8 @@ class DesktopWorker(vox.Worker):
 
     def run_pipeline(self, task, local):
         self.disk_failure.clear()
+        self.store.update(task['id'], progress={'stage': 'preparing', 'message': '检查磁盘空间和任务缓存'})
+        self.store.log(task['id'], '检查磁盘空间和已有缓存\n')
         self.workspaces.scan(clean=True)
         self.check_pipeline_space()
         if local.is_dir():

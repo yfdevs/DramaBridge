@@ -242,11 +242,11 @@ function taskProgressPercent(finishSize?: number, size?: number) {
     return undefined;
   }
 
-  return Math.round(Math.min(Math.max((finishSize! / size) * 100, 0), 1000)) / 10;
+  return Math.round(Math.min(Math.max((finishSize! / size) * 100, 0), 100) * 10) / 10;
 }
 
 function normalizeDownloadProgress(transferredBytes: number, totalBytes: number | undefined) {
-  if (!Number.isFinite(transferredBytes) || transferredBytes <= 0) {
+  if (!Number.isFinite(transferredBytes) || transferredBytes < 0) {
     return {
       progressPercent: undefined,
       transferredBytes: undefined,

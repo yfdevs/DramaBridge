@@ -197,7 +197,7 @@ export function YoutubeConfigurationPage() {
             >
               {checkingEnvironment ? "检查环境中…" : changed ? "保存并检查" : "检查环境"}
             </Button>
-            <Button size="sm" variant="ghost" render={<Link to="/youtube-drama/logs" />}>
+            <Button size="sm" variant="ghost" nativeButton={false} render={<Link to="/youtube-drama/logs" />}>
               查看日志
             </Button>
           </div>
@@ -340,7 +340,7 @@ export function YoutubeConfigurationPage() {
             >
               {metadata?.credentialsImported ? "更换凭据" : "导入凭据"}
             </Button>
-            <Button size="sm" variant="ghost" render={<Link to="/youtube-drama/accounts" />}>
+            <Button size="sm" variant="ghost" nativeButton={false} render={<Link to="/youtube-drama/accounts" />}>
               管理账号
             </Button>
           </div>

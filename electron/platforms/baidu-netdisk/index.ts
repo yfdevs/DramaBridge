@@ -551,6 +551,7 @@ export function kuaishouRecreationMaterialRoot() {
 }
 
 export async function uploadKuaishouRecreationVersion(options: {
+  createShare?: boolean;
   localDirectory: string; remoteDirectory: string; signal?: AbortSignal;
   preferredRemoteDirectory?: string;
   onRemoteDirectorySelected?: (directory: string) => void;
@@ -1826,7 +1827,7 @@ export async function transferWechatRecreationVideos(options: { title: string; s
  return runBaiduCdpOperationExclusive("视频号二创转存", () => transferBaiduDramaVideos({ ...options, recreation: true, parentDirectoryName: "微信视频号60%素材汇总", port: cdpPort(readConfig()) }));
 }
 
-export async function transferKuaishouRecreationVideos(options: { title: string; versionTitle: string; shareText: string; episodeCount: number; onProgress?: (progress: { completed: number; total: number; stage: string }) => void }) {
+export async function transferKuaishouRecreationVideos(options: { bundleCovers?: { directory: string; files: { server_filename: string; path: string; size: number; md5?: string; fs_id?: string | number }[] }; title: string; versionTitle: string; shareText: string; episodeCount: number; onProgress?: (progress: { completed: number; total: number; stage: string }) => void }) {
  const { transferBaiduDramaVideos } = await import("@dramabridge/baidu-netdisk-automation");
  return runBaiduCdpOperationExclusive("快手二创云端转存", () => transferBaiduDramaVideos({ ...options, recreation: true, parentDirectoryName: "快手_二创集合", port: cdpPort(readConfig()) }));
 }

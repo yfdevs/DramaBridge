@@ -265,19 +265,63 @@
 }
 
 .youtube-theme {
+  /* Radix Gray: surfaces 1–3, borders 6–7, secondary text 11, primary text 12. */
+  --background: #fcfcfc;
+  --foreground: #202020;
+  --card: #fcfcfc;
+  --card-foreground: #202020;
+  --popover: #fcfcfc;
+  --popover-foreground: #202020;
+  --primary: #202020;
+  --primary-foreground: #fcfcfc;
+  --secondary: #f0f0f0;
+  --secondary-foreground: #202020;
+  --muted: #f0f0f0;
+  --muted-foreground: #646464;
+  --accent: #f0f0f0;
+  --accent-foreground: #202020;
+  --border: #d9d9d9;
+  --input: #cecece;
+  --ring: #bbbbbb;
+  --destructive: #ce2c31;
+  --youtube-warning-text: #4f3422;
+  --youtube-success-text: #193b2d;
   color: var(--foreground);
   --color-red-300: #ff9592;
   --color-red-500: #e5484d;
   --color-red-700: #ce2c31;
   --color-amber-300: #ffca16;
   --color-amber-500: #ffc53d;
-  --color-amber-700: #915930;
+  --color-amber-700: #ab6400;
   --color-sky-300: #70b8ff;
   --color-sky-500: #0090ff;
   --color-sky-700: #0d74ce;
   --color-emerald-500: #30a46c;
   --color-slate-400: #b0b4ba;
   --color-slate-500: #60646c;
+}
+
+.dark .youtube-theme {
+  --background: #111111;
+  --foreground: #eeeeee;
+  --card: #191919;
+  --card-foreground: #eeeeee;
+  --popover: #191919;
+  --popover-foreground: #eeeeee;
+  --primary: #eeeeee;
+  --primary-foreground: #111111;
+  --secondary: #222222;
+  --secondary-foreground: #eeeeee;
+  --muted: #222222;
+  --muted-foreground: #b4b4b4;
+  --accent: #222222;
+  --accent-foreground: #eeeeee;
+  --border: #3a3a3a;
+  --input: #484848;
+  --ring: #606060;
+  --destructive: #ff9592;
+  --youtube-warning-text: #ffca16;
+  --youtube-success-text: #3dd68c;
 }
 
 .youtube-log .font-mono,

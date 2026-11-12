@@ -18,6 +18,7 @@ from windows_job import hidden_process_options
 from pipeline_events import emit, ensure_running, PipelineStopped, timed_stage, progress_context
 from ffmpeg_progress import run_ffmpeg, run_media_process, input_duration
 from merge_plan import build_merge_plan, video_differences, MERGE_PIPELINE_VERSION
+from pipeline_failure import PipelineFailure, describe_failure, emit_failure
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -743,12 +744,17 @@ def get_authenticated_service(client_secret: Path, token_path: Path, allow_inter
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
-            except RefreshError:
-                print("token 已失效，需要重新授权…")
+            except RefreshError as exc:
+                failure = describe_failure(exc, 'authorizing')
+                if getattr(exc, 'retryable', False) and failure['code'] == 'PROCESS_FAILED':
+                    failure = describe_failure('无法连接 Google，授权刷新服务暂时不可用', 'authorizing')
+                if not allow_interactive or failure['code'] != 'AUTH_INVALID':
+                    raise PipelineFailure(failure) from exc
+                print('账号授权已失效，需要重新授权…')
                 creds = None
         if not creds or not creds.valid:
             if not allow_interactive:
-                raise SystemExit("所选上传账号的授权缺失或已失效，请在服务设置中选择该账号并更新授权信息后重试")
+                raise PipelineFailure(describe_failure('所选上传账号的授权缺失或已失效', 'authorizing'))
             flow = InstalledAppFlow.from_client_secrets_file(str(client_secret), SCOPES)
             creds = flow.run_local_server(port=0)
         from oauth_service import save_token
@@ -820,8 +826,18 @@ def upload_video(youtube, file_path: Path, title: str, description: str,
                 print(f"上传出错（HTTP {e.resp.status}），{2 ** attempt} 秒后重试…")
                 time.sleep(2 ** attempt)
                 continue
-            raise SystemExit(f"上传失败（HTTP {e.resp.status}）：5xx 重试已耗尽，或存在配额/权限类错误，"
-                             "请检查网络与 YouTube API 配额后重试")
+            try:
+                provider = json.loads(e.content).get('error', {})
+                detail = ' '.join([str(provider.get('message', '')),
+                    *[str(item.get('reason', '')) for item in provider.get('errors', []) if isinstance(item, dict)]])
+            except (ValueError, TypeError, AttributeError):
+                detail = f'YouTube 返回 HTTP {e.resp.status}'
+            failure = describe_failure(detail, 'uploading')
+            if failure['code'] == 'PROCESS_FAILED':
+                failure['title'] = f'YouTube 上传失败（HTTP {e.resp.status}）'
+                failure['reason'] = f'Google 拒绝了本次上传（HTTP {e.resp.status}）。'
+                failure['action'] = '查看错误详情中的 Google 返回信息，检查账号、频道和 API 项目设置后重试。'
+            raise PipelineFailure(failure) from e
         except OSError as e:
             if attempt < retries - 1:
                 print(f"网络错误（{e}），{2 ** attempt} 秒后重试…")
@@ -1030,7 +1046,8 @@ def _main_single(video: Path, args, work_dir: Path, script_dir: Path):
 
 
 def _main_batch(directory: Path, args, work_dir: Path, script_dir: Path):
-    videos = discover_videos(directory, recursive=args.recursive)
+    with timed_stage('scanning', message='扫描下载目录，识别待处理剧集'):
+        videos = discover_videos(directory, recursive=args.recursive)
     if not videos:
         print(f"目录中没有支持的视频：{directory}")
         raise SystemExit(1)
@@ -1043,6 +1060,7 @@ def _main_batch(directory: Path, args, work_dir: Path, script_dir: Path):
         return _main_muted(directory, videos, args, work_dir, script_dir)
 
     if args.merge:
+        emit('preparing', message='检查合并、人声分离和成片缓存，确认恢复位置')
         merged = directory / f"{directory.name}_全集_人声版.mp4"
         if getattr(args, 'temporary_outputs', False):
             output_dir = work_dir / 'outputs'
@@ -1139,6 +1157,8 @@ def _main_batch(directory: Path, args, work_dir: Path, script_dir: Path):
 
 def main(argv=None, work_dir: Path | None = None):
     args = parse_args(argv)
+    emit('preparing', message='初始化处理环境，检查素材和任务工作目录')
+    print('[开始] 初始化视频处理进程', flush=True)
     if args.proxy is not None:
         apply_proxy(args.proxy)
     input_path: Path = args.input
@@ -1161,6 +1181,7 @@ def main(argv=None, work_dir: Path | None = None):
 
 
 def dispatch_input(input_path, args, work_dir, script_dir):
+    emit('preparing', message='检查 FFmpeg 和 FFprobe 是否可用')
     for tool in ('ffmpeg', 'ffprobe'):
         executable = shutil.which(tool)
         if not executable:
@@ -1180,4 +1201,11 @@ def dispatch_input(input_path, args, work_dir, script_dir):
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except PipelineStopped:
+        raise
+    except (Exception, SystemExit) as exc:
+        if not isinstance(exc, SystemExit) or exc.code not in (None, 0):
+            emit_failure(exc)
+        raise

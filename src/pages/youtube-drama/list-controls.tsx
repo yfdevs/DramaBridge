@@ -26,7 +26,7 @@ export function YoutubeListPagination({
     <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-xs">
       <p className="text-muted-foreground" aria-live="polite">
         共 {list.total} 条
-        {list.total > 0 &&
+        {list.total > list.pageSize &&
           `，当前 ${(list.page - 1) * list.pageSize + 1}–${Math.min(list.page * list.pageSize, list.total)} 条`}
       </p>
       <div className="flex flex-wrap items-center gap-3">

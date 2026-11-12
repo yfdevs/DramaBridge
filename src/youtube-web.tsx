@@ -21,24 +21,19 @@ import { useYoutubeWebTheme } from "@/platforms/youtube-drama/web-theme";
 import "./index.css";
 
 const navigation = [
-  { route: "service", label: "任务列表" },
-  { route: "accounts", label: "账号管理" },
+  { route: "service", label: "任务" },
+  { route: "accounts", label: "账号" },
 ];
 
-function WebNavigation({ mobile = false }: { mobile?: boolean }) {
+function WebNavigation() {
   return (
-    <nav
-      aria-label="YouTube 页面"
-      className={
-        mobile ? "grid grid-cols-2 gap-1 px-4 pb-3 md:hidden" : "flex flex-col gap-1 px-3 pt-1 pb-3"
-      }
-    >
+    <nav aria-label="YouTube 页面" className="flex shrink-0 items-center gap-1">
       {navigation.map(({ route, label }) => (
         <NavLink
           key={route}
           to={`/youtube-drama/${route}`}
           className={({ isActive }) =>
-            `flex min-h-8 items-center rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${mobile ? "justify-center" : "justify-start"} ${isActive ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`
+            `flex min-h-9 items-center rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${isActive ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`
           }
         >
           {label}
@@ -48,23 +43,22 @@ function WebNavigation({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
-function WebBrand({ mobile = false }: { mobile?: boolean }) {
+function WebBrand() {
   return (
     <Link
       to="/youtube-drama/service"
       aria-label="DramaBridge & YouTube 首页"
-      className={`flex min-w-0 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring ${mobile ? "md:hidden" : "px-5 py-3"}`}
+      className="flex shrink-0 items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="relative block size-10 shrink-0" aria-hidden="true">
-        <img src={appLogo} alt="" width={36} height={36} className="size-9 object-contain" />
-        <span className="absolute -bottom-0.5 -right-1 rounded-md bg-background p-0.5">
-          <img src={youtubeMark} alt="" width={20} height={15} className="h-[15px] w-5" />
-        </span>
-      </span>
-      <span className="min-w-0 text-sm font-semibold leading-5">
-        <span className="block">DramaBridge</span>
-        <span className="block text-xs font-normal text-muted-foreground">&amp; YouTube</span>
-      </span>
+      <img src={appLogo} alt="" width={28} height={28} className="size-7 object-contain" />
+      <span className="hidden text-sm font-semibold sm:inline">DramaBridge</span>
+      <img
+        src={youtubeMark}
+        alt="YouTube"
+        width={20}
+        height={15}
+        className="hidden h-[15px] w-5 sm:block"
+      />
     </Link>
   );
 }
@@ -89,18 +83,12 @@ export function YoutubeWebApp() {
       <TooltipProvider delay={120}>
         <WorkspaceToolbarProvider>
           <YoutubeCreateTaskDrawer>
-            <div className="youtube-theme grid min-h-svh min-w-0 bg-background text-foreground md:grid-cols-[224px_minmax(0,1fr)]">
-              <aside
-                aria-label="工作区导航"
-                className="sticky top-0 hidden h-svh self-start overflow-y-auto bg-muted/30 md:block"
-              >
-                <WebBrand />
-                <WebNavigation />
-              </aside>
-              <div className="flex min-w-0 flex-col">
-                <header className="sticky top-0 z-20 bg-background">
-                  <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-                    <WebBrand mobile />
+            <div className="youtube-theme flex min-h-svh min-w-0 flex-col bg-background text-foreground">
+              <div className="flex min-w-0 flex-1 flex-col">
+                <header className="sticky top-0 z-20 border-b bg-background">
+                  <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center gap-3 px-4 sm:gap-4 sm:px-6 lg:px-8">
+                    <WebBrand />
+                    <WebNavigation />
                     <div className="ml-auto flex shrink-0 items-center gap-2">
                       <WorkspaceActionHost />
                       <YoutubeAddTaskButton />
@@ -124,7 +112,6 @@ export function YoutubeWebApp() {
                       </Tooltip>
                     </div>
                   </div>
-                  <WebNavigation mobile />
                 </header>
                 <a
                   href="#youtube-web-content"

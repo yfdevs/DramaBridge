@@ -9,8 +9,8 @@ from contextvars import ContextVar
 
 PREFIX = "DRAMAVOX_EVENT "
 UPLOAD_STAGES = {"authorizing", "uploading", "thumbnail"}
-STAGES = {"muting", "compressing", "probing", "normalizing", "merging", "validating", "checking_timestamps", "extracting", "loading_model", "separating", "saving_audio", "remuxing", *UPLOAD_STAGES}
-PHASE_NAMES = {"queued": "排队等待", "downloading": "下载及重连", "preparing": "准备处理",
+STAGES = {"preparing", "scanning", "muting", "compressing", "probing", "normalizing", "merging", "validating", "checking_timestamps", "extracting", "loading_model", "separating", "saving_audio", "remuxing", *UPLOAD_STAGES}
+PHASE_NAMES = {"queued": "排队等待", "downloading": "下载及重连", "preparing": "准备处理", "scanning": "扫描素材", "waiting_resources": "等待处理资源",
                "probing": "分析素材", "normalizing": "处理片段", "merging": "合并视频", "validating": "校验成片", "checking_timestamps": "校验时间轴",
                "extracting": "提取音轨", "loading_model": "加载分离模型", "separating": "人声分离",
                "muting": "移除音轨", "compressing": "压缩视频", "saving_audio": "保存人声", "remuxing": "重混视频", "authorizing": "准备授权", "uploading": "上传视频", "thumbnail": "设置封面"}

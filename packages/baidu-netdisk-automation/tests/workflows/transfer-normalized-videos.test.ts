@@ -354,7 +354,7 @@ test('recreation isolates stale extra episodes without deleting the previous tas
     return entry;
   };
   f.options.listOwn = async path => [...directories, ...f.own].filter(item => item.path.slice(0, item.path.lastIndexOf('/')) === path);
-  f.options.listShare = async path => [f.source(1, path), f.source(2, path)];
+  f.options.listShare = async path => [1, 2].map(n => ({ ...f.source(n, path), server_filename: `第${n}集.mp4`, path: `${path}/第${n}集.mp4` }));
   f.options.transferOne = async (_source, dest) => {
     assert.match(dest, /重新整理-.*\/成片60%$/);
     assert.ok(f.own.some(item => item.fs_id === 'extra'));
@@ -379,4 +379,83 @@ test('a successful share link does not require an unused shareid field', async (
   f.options.request = async (url, init) => new URL(url, 'https://pan.baidu.com').pathname === '/share/set'
     ? { errno: 0, link: 'https://pan.baidu.com/s/1test' } : rename(url, init);
   assert.equal((await transferNormalizedEpisodeVideos(f.options)).shareUrl, 'https://pan.baidu.com/s/1test?pwd=abcd');
+});
+
+function bundleFixture() {
+  const f = fixture();
+  const directory = '/快手_二创集合/测试剧/封面缓存-0123456789abcdef-60%/封面';
+  const images = ['测试剧.jpg', '新剧.png'].map((server_filename, i) => ({ server_filename,
+    path: directory + '/' + server_filename, fs_id: 'uploaded-' + i, size: 200 + i, md5: 'image-' + i }));
+  const directories: any[] = [];
+  const calls: string[] = [];
+  Object.assign(f.options, { recreation: true, parentDirectoryName: '快手_二创集合',
+    versionTitle: '素材集合-0123456789abcdef', sharePassword: 'abcd', bundleCovers: { directory, files: images.map(e => ({ ...e })) } });
+  f.options.createDirectory = async (parent, name) => {
+    const path = parent.replace(/\/$/, '') + '/' + name;
+    let entry = directories.find(e => e.path === path);
+    if (!entry) { entry = { path, server_filename: name, fs_id: path, isdir: 1 }; directories.push(entry); }
+    return entry;
+  };
+  f.options.listOwn = async path => [...directories, ...f.own, ...images].filter(e => e.path.slice(0, e.path.lastIndexOf('/')) === path);
+  f.options.listShare = async path => [1, 2].map(n => ({ ...f.source(n, path), server_filename: `第${n}集.mp4`, path: `${path}/第${n}集.mp4` }));
+  f.options.request = async (url, init: any) => {
+    const parsed = new URL(url, 'https://pan.baidu.com');
+    if (parsed.pathname === '/share/set') {
+      calls.push('share');
+      assert.deepEqual(JSON.parse(init.body.get('fid_list')), ['/快手_二创集合/测试剧/素材集合-0123456789abcdef-60%']);
+      return { errno: 0, link: 'https://pan.baidu.com/s/1bundle' };
+    }
+    const copy = parsed.searchParams.get('opera') === 'copy';
+    calls.push(copy ? 'copy' : 'rename');
+    for (const file of JSON.parse(init.body.get('filelist'))) {
+      if (copy) {
+        const source = images.find(e => e.path === file.path)!;
+        f.own.push({ ...source, server_filename: file.newname, path: file.dest + '/' + file.newname, fs_id: 'copied-' + source.fs_id });
+      } else {
+        const target = f.own.find(e => e.path === file.path);
+        target.server_filename = file.newname;
+        target.path = target.path.slice(0, target.path.lastIndexOf('/') + 1) + file.newname;
+      }
+    }
+    return { errno: 0 };
+  };
+  return { ...f, images, calls };
+}
+
+test('bundle cloud-transfers one video set with verified original and AI covers, then resumes without copies', async () => {
+  const f = bundleFixture();
+  const result = await runInNewContext('(' + transferNormalizedEpisodeVideos.toString() + ')(o)', {
+    o: f.options, URL, URLSearchParams, console, setTimeout, __name: (value: unknown) => value,
+  });
+  assert.equal(result.shareUrl, 'https://pan.baidu.com/s/1bundle?pwd=abcd');
+  assert.deepEqual(f.own.filter(e => e.path.includes('/成片/')).map(e => e.server_filename), ['1.mp4', '2.mp4']);
+  assert.deepEqual(f.own.filter(e => e.path.includes('/封面/')).map(e => e.server_filename), ['测试剧.jpg', '新剧.png']);
+  assert.equal(f.transferred.length, 2);
+  assert.deepEqual(f.calls, ['copy', 'copy', 'rename', 'share']);
+  await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(f.transferred.length, 2);
+  assert.deepEqual(f.calls, ['copy', 'copy', 'rename', 'share', 'share']);
+});
+
+test('bundle refuses changed uploaded covers before any video transfer or sharing', async () => {
+  const f = bundleFixture();
+  f.images[1].md5 = 'changed';
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /封面发生变化/);
+  assert.equal(f.transferred.length, 0);
+  assert.deepEqual(f.calls, []);
+});
+
+test('bundle copy failure never shares and retry reuses already copied covers', async () => {
+  const f = bundleFixture();
+  const request = f.options.request;
+  let failed = false;
+  f.options.request = async (url, init) => {
+    if (!failed && f.calls.length === 1) { failed = true; return { errno: 0, info: [{ errno: -8 }] }; }
+    return request(url, init);
+  };
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /封面云端复制失败/);
+  assert.equal(f.transferred.length, 0);
+  assert.deepEqual(f.calls, ['copy']);
+  await transferNormalizedEpisodeVideos(f.options);
+  assert.deepEqual(f.calls, ['copy', 'copy', 'rename', 'share']);
 });

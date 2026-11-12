@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import uuid
+from collections import deque
 from contextlib import nullcontext, contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,6 +26,7 @@ from task_timings import transition, update_timings
 from task_workspaces import TaskWorkspaces
 from merge_plan import MERGE_PIPELINE_VERSION
 from project_paths import ROOT, credential_path, prepare_layout
+from pipeline_failure import PipelineFailure, describe_failure, parse_failure
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -231,6 +233,13 @@ class Store:
         item = dict(row)
         for key in ("payload", "progress", "result", "timings"):
             item[key] = json.loads(item[key]) if item[key] else None
+        legacy_exit = re.search(r'程序退出[，,]?\s*代码\s*(-?\d+)', item.get('error') or '')
+        if item['status'] == 'failed' and legacy_exit and not (item['progress'] or {}).get('failure'):
+            latest = (item.get('logs') or '').rsplit('开始 / 恢复任务', 1)[-1]
+            progress = item['progress'] or {}
+            failure = describe_failure(latest, progress.get('stage'), int(legacy_exit[1]))
+            item['error'] = failure['title']
+            item['progress'] = {**progress, 'failure': failure}
         if not detail:
             item.pop("logs", None)
             item["payload"].pop("shareText", None)
@@ -596,6 +605,18 @@ class Worker:
                 return
             heartbeat_thread.start()
             self.store.log(task["id"], f"\n[{now()}] 开始 / 恢复任务\n")
+            if not task['payload'].get('noUpload'):
+                self.store.update(task['id'], status='processing', progress={'stage': 'authorizing', 'message': '检查上传账号授权'})
+                check = test_authorization(self.store.account_token_path(task['payload'].get('accountId', 'default')),
+                                           self.store.settings()['proxy'])
+                if self.halted(task):
+                    return
+                if check['status'] != 'valid':
+                    failure = describe_failure(check['message'], stage='authorizing')
+                    if check['status'] == 'error' and failure['code'] == 'PROCESS_FAILED':
+                        failure['title'] = '账号授权检查未完成'
+                        failure['action'] = '检查网络、代理和授权文件后重试；本次未开始视频处理。'
+                    raise PipelineFailure(failure)
             # A failed remote task is retried at most once per explicit local attempt.
             task["_retry_remote"] = bool(task["remote_id"])
             local = Path(task["local_path"]) if task["local_path"] else None
@@ -609,7 +630,9 @@ class Worker:
                         break
             if self.halted(task):
                 return
-            self.store.update(task['id'], status='processing', progress={'stage': 'preparing', 'message': '下载完成，等待处理资源'})
+            if task['local_path']:
+                self.store.log(task['id'], '复用已下载素材，检查缓存后继续处理\n')
+            self.store.update(task['id'], status='processing', progress={'stage': 'waiting_resources', 'message': '素材已就绪，等待前一个任务释放处理资源'})
             while not self.halted(task):
                 if self.pipeline_gate.acquire(timeout=.2):
                     try:
@@ -623,7 +646,10 @@ class Worker:
         except Exception as exc:
             if not self.halted(task):
                 self.store.log(task["id"], f"任务失败：{exc}\n")
-                self.store.update(task["id"], status="failed", error=str(exc))
+                current = self.store.get(task['id'])
+                progress = current.get('progress') or {}
+                failure = exc.failure if isinstance(exc, PipelineFailure) else describe_failure(exc, progress.get('stage'))
+                self.store.update(task["id"], status="failed", error=failure['title'], progress={**progress, 'failure': failure})
         finally:
             finished = self.store.get(task['id'])
             if finished and (finished['status'] == 'completed' or
@@ -646,7 +672,9 @@ class Worker:
         payload = task["payload"]
         if payload.get("mode", "merge") not in {"merge", "mute"}:
             raise ValueError("逐集分离已停用，请使用合并分离或合并静音重新创建任务")
-        self.store.update(task["id"], status="processing", progress=None, error=None)
+        self.store.update(task["id"], status="processing",
+                          progress={'stage': 'preparing', 'message': '准备工作目录并启动视频处理进程'}, error=None)
+        self.store.log(task['id'], '准备工作目录，启动视频处理进程\n')
         from task_workspaces import TaskWorkspaces
         workspace = TaskWorkspaces(self.store, ROOT).prepare(task['id'])
         args = [sys.executable, "-u", str(ROOT / "app" / "upload_to_youtube.py"), str(local),
@@ -685,14 +713,20 @@ class Worker:
                 authorization = getattr(self, "authorization", None)
                 if not authorization or not authorization.pending():
                     self.job = ProcessJob()
-                    process = subprocess.Popen(args, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    # The desktop bridge consumes stdin on another thread. Inheriting that
+                    # Windows pipe can block CPython initialization before the first log.
+                    process = subprocess.Popen(args, cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+                                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                                text=True, encoding="utf-8", errors="replace", creationflags=flags,
                                                start_new_session=os.name != "nt")
                     self.process = process
                     self.job.assign(process)
                     break
+                self.store.update(task['id'], progress={'stage': 'preparing', 'message': '等待账号授权完成后启动处理进程'})
             self.stop.wait(0.5)
         progress = None
+        failure = None
+        output_tail = deque(maxlen=30)
         next_progress_log = 0
         try:
           with process:
@@ -703,8 +737,14 @@ class Worker:
                     break
                 if self.halted(task):
                     break
+                reported_failure = parse_failure(line)
+                if reported_failure:
+                    failure = reported_failure
+                    continue
                 event = None if line.lstrip().startswith('[') else parse_line(line, progress)
                 if not event:
+                    if line.strip():
+                        output_tail.append(line.strip())
                     self.store.log(task["id"], line)
                 elif PREFIX not in line and time.monotonic() >= next_progress_log:
                     parts = [PHASE_NAMES.get(event['stage'], event['stage'])]
@@ -741,7 +781,10 @@ class Worker:
                         self.job.close()
                         self.job = None
         if code and not self.halted(task):
-            raise RuntimeError(f"分离 / 上传程序退出，代码 {code}。请查看下方执行日志后重试")
+            if not failure or failure['code'] == 'PROCESS_FAILED':
+                failure = describe_failure('\n'.join(output_tail), (progress or {}).get('stage'), code)
+            failure = {**failure, 'stage': (progress or {}).get('stage', 'preparing'), 'exitCode': code}
+            raise PipelineFailure(failure)
 
     def shutdown(self):
         self.stop.set()

@@ -13,8 +13,8 @@ export const youtubeTaskLabels: Record<string, string> = {
 };
 
 export const youtubeModeLabels: Record<string, string> = {
-  merge: "合并并分离人声",
-  mute: "合并并静音",
+  merge: "合并人声版",
+  mute: "合并静音版",
   episodes: "逐集分离（已停用）",
 };
 

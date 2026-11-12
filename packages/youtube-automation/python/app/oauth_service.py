@@ -79,9 +79,10 @@ def test_authorization(path, proxy):
             }, timeout=(5, 10), allow_redirects=False)
             if response.status_code in {400, 401}:
                 error = response.json()
-                if isinstance(error, dict) and error.get('error') in {
-                        'invalid_grant', 'invalid_client', 'unauthorized_client'}:
-                    return result('invalid', '授权已失效或客户端凭据无效，请重新更新授权信息')
+                if isinstance(error, dict) and error.get('error') == 'invalid_grant':
+                    return result('invalid', '账号授权已失效（invalid_grant），请到账号管理更新授权')
+                if isinstance(error, dict) and error.get('error') in {'invalid_client', 'unauthorized_client'}:
+                    return result('invalid', f"Google 客户端凭据被拒绝（{error['error']}），请检查客户端凭据后重新授权")
             if response.status_code != 200:
                 return result('error', 'Google 令牌服务暂时不可用，请检查代理或稍后重试')
             refreshed = response.json()

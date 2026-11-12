@@ -14,6 +14,34 @@ import {
   listLocalOwnershipMaterials,
 } from "../src/index.js";
 
+test("native byte totals report full-scale download percentages, including zero and completion", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-progress-"));
+  const downloaded = path.join(root, "download");
+  const percentages: Array<number | undefined> = [];
+  let checks = 0;
+  try {
+    await mkdir(downloaded, { recursive: true });
+    await ensureBaiduNetdiskEpisodeVideos({
+      shareText: "https://pan.baidu.com/s/test", resourceName: "下载进度测试", localEpisodeVideoRoot: path.join(root, "output"),
+      episodeCount: 1, requiredPosterImages: 0, timeoutMs: 5000, pollIntervalMs: 1, stableCompletePolls: 1,
+      downloadShare: async () => ({
+        share: { link: "https://pan.baidu.com/s/test", pwd: "", name: "下载进度测试" },
+        localPath: downloaded, completed: false, skippedExisting: false,
+      }),
+      getDownloadTaskStatus: async () => {
+        checks++;
+        if (checks >= 3) await writeFile(path.join(downloaded, "第1集.mp4"), "video");
+        return { found: true, localPath: downloaded, completed: checks >= 3, tasks: [],
+          size: 4768412310, finishSize: checks === 1 ? 0 : checks === 2 ? 1911338651 : 4768412310 };
+      },
+      onProgress: progress => {
+        if (progress.phase === "downloading") percentages.push(progress.progressPercent);
+      },
+    });
+    assert.deepEqual(percentages.slice(0, 3), [0, 40.1, 100]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("expired and deleted Baidu shares do not retry on platform runtimes", () => {
   assert.equal(isNonRetryableBaiduNetdiskResourceError(new Error("[BAIDU_NETDISK_IDENTITY_VERIFICATION] errno=132 endpoint=/api/filemanager")), true);
   assert.equal(isNonRetryableBaiduNetdiskResourceError(new Error("[BAIDU_NETDISK_RISK_CONTROL] errno=8001 endpoint=/api/list")), true);

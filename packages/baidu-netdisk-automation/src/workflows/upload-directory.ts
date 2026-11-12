@@ -34,6 +34,7 @@ export async function uploadBaiduNetdiskDirectory(options: {
   port: number;
   localDirectory: string;
   remoteDirectory: string;
+  createShare?: boolean;
   preferredRemoteDirectory?: string;
   onRemoteDirectorySelected?: (directory: string) => void | Promise<void>;
   verifiedFiles?: RemoteVerifiedFile[];
@@ -41,7 +42,7 @@ export async function uploadBaiduNetdiskDirectory(options: {
   onFileVerified?: (file: RemoteVerifiedFile) => void;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
-}): Promise<{ remotePath: string; shareUrl: string; extractionCode: string }> {
+}): Promise<{ remotePath: string; shareUrl: string; extractionCode: string; verifiedEntries: RemoteUploadEntry[] }> {
   assertRecreationVersionDirectory(options.remoteDirectory);
   if (options.reuseSource)
     validateBaiduVersionReuse(options.reuseSource.remoteDirectory, options.remoteDirectory);
@@ -608,6 +609,7 @@ export async function uploadBaiduNetdiskDirectory(options: {
       `上传阶段统计：${filesToUpload.length} 个文件传输及校验完成，批次耗时 ${((Date.now() - batchStartedAt) / 1000).toFixed(1)} 秒`,
     );
     // Cached listings are only an optimization. Reconcile fresh directory contents before sharing.
+    const verifiedEntries: RemoteUploadEntry[] = [];
     const verifyTree = async (local: string, remote: string): Promise<void> => {
       options.signal?.throwIfAborted();
       const localEntries = await readdir(local, { withFileTypes: true });
@@ -630,11 +632,14 @@ export async function uploadBaiduNetdiskDirectory(options: {
             !(await verifyFile(file, identity))
           )
             throw new Error(`上传后文件校验失败，已停止分享：${file.path}`);
+          verifiedEntries.push(file);
         }
       }
     };
-    options.onProgress?.("复核版本目录，确认全部文件后创建分享");
+    options.onProgress?.("复核上传目录，确认全部文件");
     await verifyTree(options.localDirectory, remoteDirectory);
+    if (options.createShare === false)
+      return { remotePath: remoteDirectory, shareUrl: "", extractionCode: "", verifiedEntries };
     if (!directoryId) throw new Error("上传目录缺少文件 ID");
     options.onProgress?.("创建版本分享链接");
     const extractionCode = randomBytes(2).toString("hex");
@@ -661,6 +666,6 @@ export async function uploadBaiduNetdiskDirectory(options: {
         `上传及分享已完成，旧目录清理未完成，已保留：${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    return { remotePath: remoteDirectory, shareUrl, extractionCode };
+    return { remotePath: remoteDirectory, shareUrl, extractionCode, verifiedEntries };
   });
 }

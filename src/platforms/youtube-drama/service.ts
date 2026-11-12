@@ -27,6 +27,15 @@ export type YoutubeEnvironment = {
   ffprobe: boolean;
 };
 export type YoutubeAccount = { id: string; name: string; authorized: boolean };
+export type YoutubeTaskFailure = {
+  code: string;
+  title: string;
+  reason: string;
+  action: string;
+  detail?: string;
+  stage?: string;
+  exitCode?: number;
+};
 export type YoutubeTask = {
   id: string;
   status: string;
@@ -37,9 +46,14 @@ export type YoutubeTask = {
     mode?: string;
     compress?: boolean;
     accountId?: string;
+    accountName?: string;
+    noUpload?: boolean;
   };
   progress?: {
+    failure?: YoutubeTaskFailure;
     percent?: number | null;
+    transferredBytes?: number;
+    totalBytes?: number;
     speedText?: string;
     etaText?: string;
     etaScope?: "item";

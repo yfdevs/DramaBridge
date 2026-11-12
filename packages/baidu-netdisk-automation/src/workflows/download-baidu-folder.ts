@@ -923,6 +923,7 @@ type SavedShareResult = {
 };
 
 type SaveShareOptions = {
+  videoBundleCovers?: { directory: string; files: { server_filename: string; path: string; size: number; md5?: string; fs_id?: string | number }[] };
   videoVersionTitle?: string;
   videoRecreation?: boolean;
   normalizedVideoEpisodeCount?: number;
@@ -1741,6 +1742,7 @@ export async function saveShareToOwnNetdisk(
     // tsx development transforms may retain function-name helpers in serialized code.
     const __name = (value) => value;
     return await (${transferNormalizedEpisodeVideos.toString()})({
+      bundleCovers: ${JSON.stringify(options.videoBundleCovers)},
       versionTitle: ${JSON.stringify(options.videoVersionTitle)},
       recreation: ${JSON.stringify(options.videoRecreation ?? false)},
       parentDirectoryName: ${JSON.stringify(options.videoParentDirectoryName)},

@@ -102,6 +102,22 @@ body {
   background: transparent !important;
 }
 
+/* Portals are attached to body, outside the titlebar library's content inset. */
+body:has(.cet-titlebar) [data-slot="sheet-overlay"] {
+  top: var(--app-titlebar-height);
+}
+
+body:has(.cet-titlebar) [data-slot="sheet-content"][data-side="right"],
+body:has(.cet-titlebar) [data-slot="sheet-content"][data-side="left"] {
+  top: var(--app-titlebar-height);
+  bottom: 0;
+  height: calc(100svh - var(--app-titlebar-height));
+}
+
+body:has(.cet-titlebar) [data-slot="sheet-content"][data-side="top"] {
+  top: var(--app-titlebar-height);
+}
+
 .app-titlebar-platform-nav-host {
   position: absolute;
   inset: 0;

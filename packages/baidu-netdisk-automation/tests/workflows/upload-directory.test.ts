@@ -509,6 +509,17 @@ test(
       );
       assert.equal(copiedReceipts.length, 3);
       assert.equal(files.get(next.remotePath + "/成片/新版本-第1集.mp4")?.md5, md5(video));
+      const unshared = await uploadBaiduNetdiskDirectory({
+        ...options, localDirectory: nextLocal, remoteDirectory: next.remotePath,
+        verifiedFiles: copiedReceipts, createShare: false,
+      });
+      assert.equal(unshared.shareUrl, "");
+      assert.equal(unshared.extractionCode, "");
+      assert.equal(shares, 4, "cover preparation must not create an intermediate share");
+      assert.equal(unshared.verifiedEntries.length, 3);
+      assert.ok(unshared.verifiedEntries.every(file => file.fs_id && file.md5 && file.size > 0));
+      assert.equal(fileCommits, 3);
+
     } finally {
       for (const socket of sockets.clients) socket.terminate();
       await new Promise<void>((resolve) => sockets.close(() => server.close(() => resolve())));

@@ -3,6 +3,7 @@ import { openBaiduNetdiskSharePage, saveShareToOwnNetdisk } from './download-bai
 import { parseBaiduNetdiskShareText } from '../domain/share-text.js';
 
 export async function transferBaiduDramaVideos(options: {
+  bundleCovers?: { directory: string; files: { server_filename: string; path: string; size: number; md5?: string; fs_id?: string | number }[] };
   versionTitle?: string; recreation?: boolean; parentDirectoryName?: string; shareText: string; title: string; episodeCount: number; port: number;
   onProgress?: (progress: { completed: number; total: number; stage: string }) => void;
 }) {
@@ -10,9 +11,9 @@ export async function transferBaiduDramaVideos(options: {
     throw new Error('剧名或集数无效');
   }
   const share = { ...parseBaiduNetdiskShareText(options.shareText), name: options.title.trim() };
-  options.onProgress?.({ completed: 0, total: options.episodeCount, stage: '读取分享' });
+  options.onProgress?.({ completed: 0, total: options.recreation ? Math.ceil(options.episodeCount * 0.6) : options.episodeCount, stage: '读取分享' });
   const target = await openBaiduNetdiskSharePage(share, options.port);
-  const result = await saveShareToOwnNetdisk(target, share, { videoVersionTitle: options.versionTitle, videoRecreation: options.recreation, videoParentDirectoryName: options.parentDirectoryName, normalizedVideoEpisodeCount: options.episodeCount, videoSharePassword: randomBytes(2).toString("hex"), onVideoProgress: options.onProgress });
+  const result = await saveShareToOwnNetdisk(target, share, { videoBundleCovers: options.bundleCovers, videoVersionTitle: options.versionTitle, videoRecreation: options.recreation, videoParentDirectoryName: options.parentDirectoryName, normalizedVideoEpisodeCount: options.episodeCount, videoSharePassword: randomBytes(2).toString("hex"), onVideoProgress: options.onProgress });
   if (!result.shareUrl) throw new Error('视频已转存但未生成分享链接，请重试');
   return { shareUrl: result.shareUrl, path: result.resourceRootPath, count: result.remoteVideos.files.length };
 }

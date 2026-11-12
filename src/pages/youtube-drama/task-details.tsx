@@ -7,11 +7,13 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { CodeOutput } from "@/components/code-output";
+import { ChevronDownIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useWorkspacePageActive } from "@/components/workspace-toolbar";
 import { youtubeService, type YoutubeTask } from "@/platforms/youtube-drama/service";
 import { youtubeModeLabels } from "./task-status";
 import { YoutubeTaskProgress, youtubeDuration, youtubeStageLabels } from "./task-progress";
+import { youtubeTaskFailure } from "./task-failure";
 
 export function YoutubeTaskDetails({
   task,
@@ -57,6 +59,7 @@ export function YoutubeTaskDetails({
     };
   }, [id, running, active]);
   const current = detail?.id === id ? detail : task;
+  const failure = current ? youtubeTaskFailure(current) : null;
   return (
     <Sheet
       open={Boolean(task)}
@@ -64,81 +67,121 @@ export function YoutubeTaskDetails({
         if (!open) onClose();
       }}
     >
-      <SheetContent className="youtube-theme gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl duration-250 ease-out motion-reduce:transition-none">
-        <SheetHeader className="border-b p-5 pr-12">
-          <SheetTitle className="break-words text-lg">{task?.payload.resourceName}</SheetTitle>
-          <SheetDescription>
-            {running ? "任务详情，自动更新" : "任务详情，服务已停止"}
-          </SheetDescription>
+      <SheetContent
+        showCloseButton={false}
+        className="youtube-theme gap-0 shadow-none data-[side=right]:w-full data-[side=right]:sm:max-w-lg duration-250 ease-out motion-reduce:transition-none"
+      >
+        <SheetHeader className="shrink-0 border-b p-5">
+          <SheetTitle className="break-words text-base">{task?.payload.resourceName}</SheetTitle>
+          <SheetDescription className="sr-only">任务详情</SheetDescription>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
           {current && (
-            <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-5 gap-y-3 pb-4 text-sm">
-              <dt className="text-muted-foreground">状态</dt>
-              <dd>
+            <>
+              <section aria-label="任务进度" className="shrink-0">
                 <YoutubeTaskProgress task={current} showError={false} />
-              </dd>
-              <dt className="text-muted-foreground">处理方式</dt>
-              <dd>{youtubeModeLabels[current.payload.mode ?? "merge"] ?? current.payload.mode}</dd>
-              <dt className="text-muted-foreground">上传标题</dt>
-              <dd className="break-words">
-                {current.payload.title || current.payload.resourceName}
-              </dd>
-              <dt className="text-muted-foreground">任务编号</dt>
-              <dd className="break-all font-mono text-xs leading-5">{current.id}</dd>
-            </dl>
-          )}
-          {current?.timings?.stages && Object.keys(current.timings.stages).length > 0 && (
-            <section aria-label="阶段耗时" className="space-y-3">
-              <h3 className="text-sm font-semibold">阶段耗时</h3>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-                {Object.entries(current.timings.stages).map(([stage, timing]) => (
-                  <div key={stage} className="flex min-w-0 items-center justify-between gap-2">
-                    <dt className="text-muted-foreground">{youtubeStageLabels[stage] ?? stage}</dt>
-                    <dd className="tabular-nums">
-                      {youtubeDuration(timing.elapsedSeconds)}
-                      {timing.lastOutcome === "interrupted"
-                        ? "（中断）"
-                        : timing.lastOutcome === "failed"
-                          ? "（失败）"
-                          : ""}
-                    </dd>
-                  </div>
-                ))}
+              </section>
+              <dl className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-5 gap-y-3 text-sm">
+                <dt className="text-muted-foreground">处理方式</dt>
+                <dd>
+                  {youtubeModeLabels[current.payload.mode ?? "merge"] ?? current.payload.mode}
+                </dd>
+                {current.payload.accountName && !current.payload.noUpload && (
+                  <>
+                    <dt className="text-muted-foreground">上传账号</dt>
+                    <dd>{current.payload.accountName}</dd>
+                  </>
+                )}
+                {current.payload.title &&
+                  current.payload.title !== current.payload.resourceName && (
+                    <>
+                      <dt className="text-muted-foreground">上传标题</dt>
+                      <dd className="break-words">{current.payload.title}</dd>
+                    </>
+                  )}
               </dl>
-            </section>
+            </>
           )}
           {error && (
             <p role="alert" className="break-words text-xs text-destructive">
-              读取日志失败：{error}
+              无法刷新详情：{error}
             </p>
           )}
-          {current?.error && (
-            <p
+          {failure && (
+            <section
               role="alert"
-              className="rounded-md bg-[var(--youtube-error-bg)] p-3 text-sm leading-6 text-destructive break-words"
+              aria-label="失败原因"
+              className="shrink-0 rounded-md bg-[var(--youtube-error-bg)] p-3 text-sm leading-6 text-foreground break-words"
             >
-              {current.error}
-            </p>
+              <h3 className="font-medium text-destructive">{failure.title}</h3>
+              <p className="mt-1">{failure.reason}</p>
+              <p className="mt-2">{failure.action}</p>
+              {failure.code.startsWith("AUTH_") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3"
+                  nativeButton={false}
+                  render={<Link to="/youtube-drama/accounts" />}
+                  onClick={onClose}
+                >
+                  管理账号
+                </Button>
+              )}
+              <details className="mt-3 text-xs">
+                <summary className="cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  错误详情
+                </summary>
+                <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+                  <dt>错误类型</dt>
+                  <dd className="break-all">{failure.code}</dd>
+                  {failure.stage && (
+                    <>
+                      <dt>失败阶段</dt>
+                      <dd>{youtubeStageLabels[failure.stage] ?? failure.stage}</dd>
+                    </>
+                  )}
+                  {failure.exitCode !== undefined && (
+                    <>
+                      <dt>退出代码</dt>
+                      <dd>{failure.exitCode}</dd>
+                    </>
+                  )}
+                </dl>
+                {failure.detail && (
+                  <p className="mt-2 whitespace-pre-wrap break-words">{failure.detail}</p>
+                )}
+              </details>
+            </section>
           )}
-          <CodeOutput
-            title="执行日志"
-            value={
-              (detail?.id === id && detail?.logs) ||
-              (detail?.id === id
-                ? "暂无执行日志"
-                : running && !error
-                  ? "正在读取日志…"
-                  : "暂无日志")
-            }
-          />
-          {detail?.id === id && detail?.result != null && (
-            <CodeOutput title="处理结果" value={JSON.stringify(detail.result, null, 2)} />
+          {current && (
+            <details key={current.id} className="group shrink-0 border-t pt-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                更多信息
+                <ChevronDownIcon className="size-4 group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-3 text-xs">
+                <dt className="text-muted-foreground">任务编号</dt>
+                <dd className="break-all">{current.id}</dd>
+                <dt className="text-muted-foreground">创建时间</dt>
+                <dd>{new Date(current.created).toLocaleString("zh-CN", { hour12: false })}</dd>
+                {Object.entries(current.timings?.stages ?? {})
+                  .filter(([, timing]) => timing.elapsedSeconds >= 1)
+                  .map(([stage, timing]) => (
+                    <div key={stage} className="contents">
+                      <dt className="text-muted-foreground">
+                        {youtubeStageLabels[stage] ?? stage}
+                      </dt>
+                      <dd className="tabular-nums">{youtubeDuration(timing.elapsedSeconds)}</dd>
+                    </div>
+                  ))}
+              </dl>
+            </details>
           )}
         </div>
-        <div className="flex justify-end border-t p-4">
+        <div className="flex shrink-0 justify-end border-t p-4">
           <Button size="sm" variant="outline" onClick={onClose}>
-            关闭详情
+            关闭
           </Button>
         </div>
       </SheetContent>
