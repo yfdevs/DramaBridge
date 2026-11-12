@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

@@ -1,3 +1,4 @@
+import { useNotification } from "@/hooks/use-notification";
 import { useYoutubeRuntime } from "./use-youtube-runtime";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -12,7 +13,6 @@ import {
   type YoutubeConfigResult,
   type YoutubeEnvironment,
 } from "@/platforms/youtube-drama/service";
-import { YoutubeFeedback } from "./shared";
 
 function ConfigRow({
   title,
@@ -51,6 +51,8 @@ export function YoutubeConfigurationPage() {
   const [loadError, setLoadError] = useState("");
   const [environmentError, setEnvironmentError] = useState("");
   const [checkingEnvironment, setCheckingEnvironment] = useState(false);
+  useNotification(loadError, "error", "配置读取失败");
+  useNotification(environmentError, "error", "环境检查失败");
   const wasInstalling = useRef(false);
   useEffect(() => {
     const completed = wasInstalling.current && !status.installing && !status.error;
@@ -146,12 +148,6 @@ export function YoutubeConfigurationPage() {
         })
       }
     >
-      <YoutubeFeedback model={model} />
-      {loadError && (
-        <p role="alert" className="text-xs text-destructive">
-          {loadError}
-        </p>
-      )}
       {status.running && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2.5 text-xs">
           <span>请先停止服务，再修改配置</span>
@@ -204,11 +200,6 @@ export function YoutubeConfigurationPage() {
           {status.installing && (
             <p role="status" className="text-xs text-muted-foreground">
               {status.installStage || "正在准备环境…"}
-            </p>
-          )}
-          {environmentError && (
-            <p role="alert" className="text-xs leading-5 text-destructive">
-              环境检查未完成：{environmentError}
             </p>
           )}
           {environment ? (

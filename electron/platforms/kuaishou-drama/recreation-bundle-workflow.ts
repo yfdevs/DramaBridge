@@ -40,25 +40,54 @@ export function createRecreationBundleTransfer(deps: Dependencies): FeishuTaskTr
     if (!posters[0]) throw new Error("缺少原版封面，无法生成新标题封面");
     await mkdir(path.join(output, "封面"), { recursive: true });
     await copyFile(posters[0].file, path.join(output, "封面", `${input.title}${path.extname(posters[0].file).toLowerCase()}`));
-    for (const title of versions) {
-      progress(`AI 替换封面标题：${title}`);
-      const poster = await ensureRenamedPortraitPoster({
-        client: createConfiguredAiClient(), model: getConfiguredAiImageModel(),
-        referenceFile: posters[0].file, originalTitle: input.title, title,
-        cacheDirectory: path.join(work, ".封面缓存"),
-        retryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
-      });
-      const target = path.join(output, "封面", `${title}.png`);
-      await writeFile(target + ".tmp", poster.data);
-      await rename(target + ".tmp", target);
-    }
-    progress("上传原版及 AI 改名封面");
-    const covers = await uploadKuaishouRecreationVersion({
-      localDirectory: output, remoteDirectory: `/快手_二创集合/${input.title}/封面缓存-${key}-60%`,
-      createShare: false,
-      onProgress: message => progress(message),
+    let videoCompleted = 0;
+    let videoStage = "转存中";
+    let coverStage = "生成中";
+    const parallelProgress = () => input.onProgress({
+      stage: `视频：${videoStage} · 封面：${coverStage}`, completed: videoCompleted, total: count,
     });
-    progress("云端转存前 60% 视频");
+    // AI does not use the Baidu client. Keep its requests running while the
+    // exclusive CDP operation transfers videos; cover upload joins the CDP queue.
+    const videoPreparation = transferKuaishouRecreationVideos({
+      title: input.title, versionTitle: `素材集合-${key}`, shareText: input.shareText,
+      episodeCount: input.episodeCount, prepareBundle: true,
+      onProgress: value => {
+        videoCompleted = value.completed;
+        videoStage = value.completed === count ? "已转存" : value.stage;
+        parallelProgress();
+      },
+    });
+    const coverPreparation = (async () => {
+      for (const title of versions) {
+        coverStage = `AI 改名「${title}」`;
+        parallelProgress();
+        const poster = await ensureRenamedPortraitPoster({
+          client: createConfiguredAiClient(), model: getConfiguredAiImageModel(),
+          referenceFile: posters[0].file, originalTitle: input.title, title,
+          cacheDirectory: path.join(work, ".封面缓存"),
+          retryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
+        });
+        const target = path.join(output, "封面", `${title}.png`);
+        await writeFile(target + ".tmp", poster.data);
+        await rename(target + ".tmp", target);
+      }
+      coverStage = "上传中";
+      parallelProgress();
+      const covers = await uploadKuaishouRecreationVersion({
+        localDirectory: output, remoteDirectory: `/快手_二创集合/${input.title}/封面缓存-${key}-60%`,
+        createShare: false,
+        onProgress: () => parallelProgress(),
+      });
+      coverStage = "已就绪";
+      parallelProgress();
+      return covers;
+    })();
+    // Drain both branches on failure so retries cannot overlap leftover work.
+    const [videoResult, coverResult] = await Promise.allSettled([videoPreparation, coverPreparation]);
+    if (videoResult.status === "rejected") throw videoResult.reason;
+    if (coverResult.status === "rejected") throw coverResult.reason;
+    const covers = coverResult.value;
+    progress("核验视频和封面，生成分享链接", count);
     const result = await transferKuaishouRecreationVideos({
       title: input.title, versionTitle: `素材集合-${key}`, shareText: input.shareText,
       episodeCount: input.episodeCount,

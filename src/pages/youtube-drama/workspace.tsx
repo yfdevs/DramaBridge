@@ -17,7 +17,6 @@ import { PauseIcon, PlayIcon, RefreshCwIcon } from "lucide-react";
 import { youtubeService, isYoutubeWeb, type YoutubeTask } from "@/platforms/youtube-drama/service";
 import { useYoutubeRuntime, type YoutubeModel } from "./use-youtube-runtime";
 import {
-  YoutubeFeedback,
   YoutubeServiceActions,
   YoutubeEnvironmentWarning,
   YoutubePageContent,
@@ -93,7 +92,7 @@ function TaskEmptyState({
     <div className="py-12 text-center" role="status">
       <List aria-hidden="true" className="mx-auto mb-3 size-6 text-muted-foreground" />
       <p className="text-sm font-medium">
-        {filtered ? "没有符合条件的任务" : running ? "还没有任务" : "服务尚未启动"}
+        {filtered ? "没有符合条件的任务" : "还没有任务"}
       </p>
       <p className="mt-2 text-xs text-muted-foreground">
         {filtered
@@ -101,8 +100,8 @@ function TaskEmptyState({
           : running
             ? "添加任务后，可在这里跟踪处理与上传进度"
             : isYoutubeWeb
-              ? "请在桌面端启动服务后刷新页面"
-              : "启动 YouTube 服务后查看任务队列"}
+              ? "请在桌面端添加任务"
+              : "添加任务后，可在这里查看处理记录"}
       </p>
       {filtered ? (
         <Button className="mt-3" size="sm" variant="outline" onClick={reset}>
@@ -163,7 +162,6 @@ export function YoutubeWorkspacePage() {
         {!isYoutubeWeb && <YoutubeAddTaskButton />}
       </YoutubeServiceActions>
       <YoutubePageContent>
-        <YoutubeFeedback model={model} />
         <YoutubeEnvironmentWarning model={model} />
         {paused && status.running && (
           <p

@@ -16,6 +16,7 @@ import { createElectronPlatformLogger } from "../../platform-logger";
 import { dispatchInternalBaiduRequest } from "../../local-api";
 import { selectDirectory } from "../shared";
 import { youtubeMediaDirectories } from "./media-tools";
+import { readYoutubeSavedData } from "./saved-data";
 
 type Config = YoutubeSettings & {
   pythonExecutable: string;
@@ -121,9 +122,6 @@ function options() {
       await direct.setProxy({ mode: "direct" });
       return direct.fetch(url, { signal });
     },
-    onExit: () => {
-      void web.stop();
-    },
     netdisk: async (request: { path: string; body: Json }) => {
       const result = await dispatchInternalBaiduRequest({
         method: request.body === null ? "GET" : "POST",
@@ -145,7 +143,6 @@ export const stopYoutubeRuntime = () => {
   runtime.dispose();
 };
 export const stopYoutubeService = async () => {
-  await web.stop();
   await runtime.stop();
 };
 export const youtubeRunningCount = () => (runtime.status().running ? 1 : 0);
@@ -156,6 +153,21 @@ export const youtubeRuntimeSummary = () => ({
   webUrls: web.urls(),
 });
 export const openYoutubeLogs = () => shell.openPath(logDir());
+
+async function requestYoutubeData(route: string, body?: Json): Promise<Json> {
+  if (!runtime.status().running && body === undefined)
+    return readYoutubeSavedData(directories().runDataDir, route, { paused: config().paused }) as Json;
+  return runtime.request(route, body);
+}
+
+async function startYoutubeWeb() {
+  await web.start({
+    port: config().webPort,
+    directory: path.join(app.getAppPath(), "dist"),
+    status: () => ({ ...runtime.status(), logDir: "" }),
+    request: requestYoutubeData,
+  });
+}
 
 export function registerYoutubeHandlers() {
   const configurationResult = () => ({
@@ -168,7 +180,7 @@ export function registerYoutubeHandlers() {
   });
   ipcMain.handle("youtube-drama:config:get", configurationResult);
   ipcMain.handle("youtube-drama:environment:check", () => runtime.inspectEnvironment(options()));
-  ipcMain.handle("youtube-drama:config:save", (_event, value: Partial<Config>) => {
+  ipcMain.handle("youtube-drama:config:save", async (_event, value: Partial<Config>) => {
     if (runtime.status().running || runtime.status().starting || runtime.status().installing)
       throw new Error("请先停止 YouTube 服务，再修改配置");
     const next = validateConfig({
@@ -180,7 +192,9 @@ export function registerYoutubeHandlers() {
       proxy: typeof value.proxy === "string" ? value.proxy : config().proxy,
       webPort: typeof value.webPort === "number" ? value.webPort : config().webPort,
     });
+    const portChanged = next.webPort !== config().webPort;
     settingsStore().set("config", next);
+    if (portChanged) await web.stop();
     return configurationResult();
   });
   ipcMain.handle("youtube-drama:config:select-python", async (event) =>
@@ -240,21 +254,16 @@ export function registerYoutubeHandlers() {
     await shell.openExternal(url.href);
   });
   ipcMain.handle("youtube-drama:web:open", async (_event, url?: string) => {
+    await startYoutubeWeb();
     const target = url ?? web.urls()[0];
-    if (!target || !web.urls().includes(target)) throw new Error("请先启动 YouTube 服务");
+    if (!target || !web.urls().includes(target)) throw new Error("Web 访问地址无效，请刷新后重试");
     await shell.openExternal(target);
   });
   ipcMain.handle("youtube-drama:service:status", () => youtubeRuntimeSummary());
   ipcMain.handle("youtube-drama:service:start", async () => {
     await runtime.start(options());
     try {
-      const current = config();
-      await web.start({
-        port: current.webPort,
-        directory: path.join(app.getAppPath(), "dist"),
-        status: () => ({ ...runtime.status(), logDir: "" }),
-        request: (route, body) => runtime.request(route, body),
-      });
+      await startYoutubeWeb();
     } catch (error) {
       await runtime.stop();
       if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
@@ -282,7 +291,7 @@ export function registerYoutubeHandlers() {
     if (typeof route !== "string") throw new Error("无效的 YouTube 请求");
     if (body !== undefined && Buffer.byteLength(JSON.stringify(body)) > 65536)
       throw new Error("请求不能超过 64 KiB");
-    const result = await runtime.request(route, body);
+    const result = await requestYoutubeData(route, body);
     if (route === "/api/oauth/start") {
       const url = new URL(String((result as { url?: string }).url ?? ""));
       if (

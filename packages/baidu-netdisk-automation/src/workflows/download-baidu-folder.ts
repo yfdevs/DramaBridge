@@ -1,3 +1,4 @@
+import { normalizeBaiduMd5 } from "../domain/file-checksum.js";
 import { matchBaiduEpisodeIndex } from "./episode-index.js";
 import { transferNormalizedEpisodeVideos } from "./transfer-normalized-videos.js";
 import { mkdir, readdir } from "node:fs/promises";
@@ -923,6 +924,7 @@ type SavedShareResult = {
 };
 
 type SaveShareOptions = {
+  videoBundleMode?: boolean;
   videoBundleCovers?: { directory: string; files: { server_filename: string; path: string; size: number; md5?: string; fs_id?: string | number }[] };
   videoVersionTitle?: string;
   videoRecreation?: boolean;
@@ -1742,6 +1744,7 @@ export async function saveShareToOwnNetdisk(
     // tsx development transforms may retain function-name helpers in serialized code.
     const __name = (value) => value;
     return await (${transferNormalizedEpisodeVideos.toString()})({
+      bundleMode: ${JSON.stringify(options.videoBundleMode)},
       bundleCovers: ${JSON.stringify(options.videoBundleCovers)},
       versionTitle: ${JSON.stringify(options.videoVersionTitle)},
       recreation: ${JSON.stringify(options.videoRecreation ?? false)},
@@ -1751,6 +1754,7 @@ export async function saveShareToOwnNetdisk(
       roots: transferableFiles, listShare: fetchShareFileList, listOwn: listOwnDir,
       createDirectory: createOwnDirectory, transferOne, request: jsonFetch, token,
       identical: strictlyIdenticalFile,
+      normalizeChecksum: ${normalizeBaiduMd5.toString()},
       compare: ${compareRemoteVideoDirectoryCandidates.toString()},
       subtitlePreference: ${baiduVideoSubtitleDirectoryPreference.toString()},
       collapseAliases: ${collapseIdenticalRemoteEpisodeAliases.toString()},

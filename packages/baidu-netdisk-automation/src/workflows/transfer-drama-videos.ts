@@ -3,6 +3,7 @@ import { openBaiduNetdiskSharePage, saveShareToOwnNetdisk } from './download-bai
 import { parseBaiduNetdiskShareText } from '../domain/share-text.js';
 
 export async function transferBaiduDramaVideos(options: {
+  prepareBundle?: boolean;
   bundleCovers?: { directory: string; files: { server_filename: string; path: string; size: number; md5?: string; fs_id?: string | number }[] };
   versionTitle?: string; recreation?: boolean; parentDirectoryName?: string; shareText: string; title: string; episodeCount: number; port: number;
   onProgress?: (progress: { completed: number; total: number; stage: string }) => void;
@@ -10,10 +11,11 @@ export async function transferBaiduDramaVideos(options: {
   if (!options.title.trim() || !Number.isInteger(options.episodeCount) || options.episodeCount < 1) {
     throw new Error('剧名或集数无效');
   }
+  if (options.prepareBundle && (!options.recreation || options.bundleCovers)) throw new Error("视频预转存参数无效");
   const share = { ...parseBaiduNetdiskShareText(options.shareText), name: options.title.trim() };
   options.onProgress?.({ completed: 0, total: options.recreation ? Math.ceil(options.episodeCount * 0.6) : options.episodeCount, stage: '读取分享' });
   const target = await openBaiduNetdiskSharePage(share, options.port);
-  const result = await saveShareToOwnNetdisk(target, share, { videoBundleCovers: options.bundleCovers, videoVersionTitle: options.versionTitle, videoRecreation: options.recreation, videoParentDirectoryName: options.parentDirectoryName, normalizedVideoEpisodeCount: options.episodeCount, videoSharePassword: randomBytes(2).toString("hex"), onVideoProgress: options.onProgress });
-  if (!result.shareUrl) throw new Error('视频已转存但未生成分享链接，请重试');
-  return { shareUrl: result.shareUrl, path: result.resourceRootPath, count: result.remoteVideos.files.length };
+  const result = await saveShareToOwnNetdisk(target, share, { videoBundleMode: options.prepareBundle, videoBundleCovers: options.bundleCovers, videoVersionTitle: options.versionTitle, videoRecreation: options.recreation, videoParentDirectoryName: options.parentDirectoryName, normalizedVideoEpisodeCount: options.episodeCount, videoSharePassword: options.prepareBundle ? undefined : randomBytes(2).toString("hex"), onVideoProgress: options.onProgress });
+  if (!options.prepareBundle && !result.shareUrl) throw new Error('视频已转存但未生成分享链接，请重试');
+  return { shareUrl: result.shareUrl || "", path: result.resourceRootPath, count: result.remoteVideos.files.length };
 }

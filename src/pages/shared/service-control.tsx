@@ -1,7 +1,7 @@
 import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { SquareIcon } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 
 import { Button } from "@/components/ui/button";
 import type { TaskAnalyticsPlatform } from "@/platforms/task-analytics/service";

@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { useEffect } from "react";
 import { HashRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/notifications";
 import { MoonIcon, SunIcon } from "lucide-react";
 
 import appLogo from "@/assets/dramabridge-logo.png";
@@ -140,7 +140,7 @@ export function YoutubeWebApp() {
               </div>
             </div>
           </YoutubeCreateTaskDrawer>
-          <Toaster theme={dark ? "dark" : "light"} closeButton position="bottom-right" />
+          <Toaster theme={dark ? "dark" : "light"} position="bottom-right" />
         </WorkspaceToolbarProvider>
       </TooltipProvider>
     </HashRouter>

@@ -1,3 +1,4 @@
+import { useNotification } from "@/hooks/use-notification";
 import { RefreshCwIcon, SearchIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -8,7 +9,7 @@ import {
 } from "@/components/ui/input-group";
 import { ListFilterMenu } from "@/components/list-filter-menu";
 import { InstanceStatus } from "./instance-status";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,7 @@ export function AccountSelection({
   showRuntime?: boolean;
   lockedLabel?: string;
 }) {
+  useNotification(s.error, "error", "账号读取失败");
   const radioName = useId();
   const single = selectionMode === "single";
   const [pending, setPending] = useState<Set<string>>(() => new Set());
@@ -274,9 +276,8 @@ export function AccountSelection({
           ))}
         </div>
       ) : s.error ? (
-        <div role="alert" className="rounded-md bg-muted/40 p-5">
+        <div role="status" className="py-8 text-center">
           <p className="text-sm font-medium">无法加载账号</p>
-          <p className="mt-2 break-words text-xs text-muted-foreground">{s.error}</p>
           <Button
             size="sm"
             variant="outline"

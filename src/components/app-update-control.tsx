@@ -8,7 +8,7 @@ import {
   StopCircle,
 } from "@mynaui/icons-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {

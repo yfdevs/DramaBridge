@@ -1,3 +1,4 @@
+import { useNotification } from "@/hooks/use-notification";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AccountSelection } from "@/pages/shared/account-selection";
@@ -41,6 +42,7 @@ export function KuaishouAccountSyncPage() {
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   };
+  useNotification(error || state.error, "error", "账号同步失败");
   const locked = busy || state.running || state.stopping;
   const hasError = Boolean(error || state.error || accountsError);
   const statusLabel = state.stopping ? "正在停止" : hasError ? "连接异常" : state.running ? "同步中" : "未运行";
@@ -52,7 +54,6 @@ export function KuaishouAccountSyncPage() {
       <span className="shrink-0 text-xs text-muted-foreground">{statusLabel}</span>
     </header>
     <AccountSelection showRuntime={false} lockedLabel="停止同步后可更换账号" locked={locked} selection={{ accounts, selected, setSelected, fetching, error: accountsError, refresh }} />
-    {(error || state.error) && <p role="alert" className="break-words text-sm leading-6 text-destructive">{error || state.error}</p>}
     <section aria-label="同步进度" className="flex flex-col gap-3 border-t pt-4">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <p role="status" className="text-xs text-muted-foreground">{state.running || state.stopping ? state.message : hasError ? "同步未启动" : selected.length ? "已就绪" : "请选择来源账号"}</p>

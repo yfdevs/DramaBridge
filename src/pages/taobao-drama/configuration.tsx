@@ -9,7 +9,7 @@ import {
   type TaobaoDramaConfig,
 } from "@/platforms/taobao-drama/service"
 import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
+import { toast } from "@/components/ui/notifications"
 
 const emptyConfig: TaobaoDramaConfig = {
   accountProfileName: "default",

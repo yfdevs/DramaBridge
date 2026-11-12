@@ -349,3 +349,17 @@
     transition: none !important;
   }
 }
+
+/* Ding shares the app palette across desktop windows and the Web client. */
+html .tst-viewport {
+  --tst-radius: 12px;
+  --tst-bg: var(--popover);
+  --tst-fg: var(--popover-foreground);
+  --tst-success: light-dark(#218358, #3dd68c);
+  --tst-error: light-dark(#ce2c31, #ff9592);
+  --tst-warning: light-dark(#ad5700, #ffca16);
+  --tst-info: light-dark(#0d74ce, #70b8ff);
+  font-family: var(--font-sans);
+}
+html .tst-title, html .tst-desc { overflow-wrap: anywhere; }
+html .tst-desc { max-height: min(30vh, 200px); overflow-y: auto; }

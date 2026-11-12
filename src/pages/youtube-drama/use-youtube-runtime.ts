@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNotification } from "@/hooks/use-notification";
 import { useWorkspacePageActive } from "@/components/workspace-toolbar";
 import {
   youtubeService,
@@ -26,18 +27,21 @@ export function useYoutubeRuntime() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
+  useNotification(error || status.error, "error", "操作失败", active);
+  useNotification(notice, "success", undefined, active);
+  useNotification(oauth?.status === "error" ? oauth.message || "授权失败" : "", "error", "Google 授权失败", active);
+  useNotification(oauth?.status === "success" ? "账号授权已完成" : "", "success", undefined, active);
   const refresh = useCallback(async () => {
     try {
       const next = await youtubeService.status();
       setStatus(next);
-      if (!next.running) return;
       const [taskData, accountData, env, authorization] = await Promise.all([
         youtubeService.request<{ tasks: YoutubeTask[]; settings: { paused: boolean } }>(
           "/api/tasks",
         ),
         youtubeService.request<{ accounts: YoutubeAccount[] }>("/api/accounts"),
-        youtubeService.request<YoutubeEnvironment>("/api/environment"),
-        youtubeService.request<YoutubeOauth>("/api/oauth/status"),
+        next.running ? youtubeService.request<YoutubeEnvironment>("/api/environment") : Promise.resolve(null),
+        next.running ? youtubeService.request<YoutubeOauth>("/api/oauth/status") : Promise.resolve(null),
       ]);
       setTasks(taskData.tasks);
       setPaused(taskData.settings.paused);

@@ -7,7 +7,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppRuntimeProvider } from "@/platforms/app-runtime/context";
 import { AppTitlebarMemory } from "@/components/app-titlebar-memory";
 import { BaiduNetdiskDialogProvider } from "@/platforms/baidu-netdisk/dialog";
-import { Toaster as BaseToaster } from "@/components/ui/sonner";
+import { Toaster as BaseToaster } from "@/components/ui/notifications";
 import { useAppTheme } from "@/platforms/app-config/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppRoutes } from "@/routes/app-routes";
@@ -28,7 +28,7 @@ export default function App() {
     return (
       <TooltipProvider delay={120} closeDelay={0} timeout={250}>
         <WechatMiniProgramBaiduUploadWindow />
-        <Toaster position="bottom-right" closeButton={true} richColors />
+        <Toaster position="bottom-right" />
       </TooltipProvider>
     );
   }
@@ -36,7 +36,7 @@ export default function App() {
     return (
       <TooltipProvider delay={120} closeDelay={0} timeout={250}>
         <WechatMiniProgramCatalogUploadWindow />
-        <Toaster position="bottom-right" closeButton={true} richColors />
+        <Toaster position="bottom-right" />
       </TooltipProvider>
     );
   }
@@ -44,7 +44,7 @@ export default function App() {
     return (
       <TooltipProvider delay={120} closeDelay={0} timeout={250}>
         <PinduoduoDramaUploadRecordsPage />
-        <Toaster position="bottom-right" closeButton={true} richColors />
+        <Toaster position="bottom-right" />
       </TooltipProvider>
     );
   }
@@ -79,7 +79,7 @@ function AppContent() {
                 </div>
               </div>
             </WorkspaceToolbarProvider>
-            <Toaster position="bottom-right" closeButton={true} />
+            <Toaster position="bottom-right" />
           </SidebarProvider>
         </AppRuntimeProvider>
       </BaiduNetdiskDialogProvider>

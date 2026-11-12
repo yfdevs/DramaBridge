@@ -96,7 +96,9 @@ async function webRequest<T>(route: string, body?: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const value = await response.json();
+  const value = await response.json().catch(() => {
+    throw new Error("服务响应异常，请刷新页面后重试");
+  });
   if (!response.ok) throw new Error(value.error || "Web 请求失败");
   return value as T;
 }

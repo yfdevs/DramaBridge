@@ -20,7 +20,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 
 import { Button } from "@/components/ui/button";
 import {

@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { WorkspaceActions } from "@/components/workspace-toolbar";
-import { DangerTriangle, CheckCircle, Chrome } from "@mynaui/icons-react";
+import { DangerTriangle, Chrome } from "@mynaui/icons-react";
 import type { YoutubeModel } from "./use-youtube-runtime";
 
 export function YoutubePageContent({
@@ -76,32 +76,6 @@ export function YoutubeSelect({
     </Select>
   );
 }
-export function YoutubeFeedback({ model }: { model: YoutubeModel }) {
-  return (
-    <>
-      {(model.error || model.status.error) && (
-        <div
-          role="alert"
-          className="rounded-md bg-[var(--youtube-error-bg)] px-3 py-2.5 text-sm leading-6 text-destructive break-words"
-        >
-          {model.error || model.status.error}
-        </div>
-      )}
-      {model.notice && (
-        <div
-          role="status"
-          className="flex items-start gap-2 rounded-md bg-[var(--youtube-success-bg)] px-3 py-2.5 text-sm leading-6"
-        >
-          <CheckCircle
-            aria-hidden="true"
-            className="mt-1 size-4 shrink-0 text-[var(--youtube-success-text)]"
-          />
-          {model.notice}
-        </div>
-      )}
-    </>
-  );
-}
 export function YoutubeServiceActions({
   model,
   title,
@@ -128,7 +102,7 @@ export function YoutubeServiceActions({
         {stateLabel}
       </span>
       {children}
-      {!isYoutubeWeb && status.webUrls?.length ? (
+      {!isYoutubeWeb ? (
         <Tooltip>
           <TooltipTrigger
             render={
@@ -172,7 +146,7 @@ export function YoutubeServiceRequired({ model }: { model: YoutubeModel }) {
   return !model.status.running && !model.loading ? (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted px-3 py-3 text-sm">
       <p>
-        {isYoutubeWeb ? "服务已离线，请在桌面端启动后刷新页面" : "启动服务后可管理任务和账号"}
+        服务未启动，仍可查看任务和账号。处理任务或新增授权需启动服务
       </p>
       {!isYoutubeWeb && (
         <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/youtube-drama/config" />}>

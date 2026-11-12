@@ -1,3 +1,4 @@
+import { useNotification } from "@/hooks/use-notification";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -92,6 +93,7 @@ export function FeishuTaskMonitorPage({
   const [state, setState] = useState<FeishuRunnerState>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  useNotification(error || state?.error, "error", "任务操作失败");
   useEffect(() => {
     let alive = true;
     let pending = false;
@@ -157,14 +159,6 @@ export function FeishuTaskMonitorPage({
         </Button>
       </WorkspaceActions>
       <div className="flex w-full max-w-2xl flex-col gap-3 p-5">
-        {(error || state?.error) && (
-          <p
-            role="alert"
-            className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error || state?.error}
-          </p>
-        )}
         <FeishuTaskCard
           state={
             state ?? {

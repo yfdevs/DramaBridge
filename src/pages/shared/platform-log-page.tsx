@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 
 import { useWorkspacePageActive } from "@/components/workspace-toolbar";
 import {

@@ -1,5 +1,6 @@
+import { useNotification } from "@/hooks/use-notification";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 import { Button } from "@/components/ui/button";
 import { ConfigSection, type ConfigSectionDefinition } from "@/pages/shared/configuration-page";
 import {
@@ -39,6 +40,7 @@ export function ExternalApiConfiguration() {
   const [status, setStatus] = useState<ExternalApiStatus>({ running: false });
   const [busy, setBusy] = useState(true);
   const [loadError, setLoadError] = useState<string>();
+  useNotification(loadError || status.error, "error", "接口服务异常");
   useEffect(() => {
     let disposed = false;
     globalAppConfigService
@@ -108,11 +110,7 @@ export function ExternalApiConfiguration() {
         footer={
           <div className="flex w-full min-w-0 flex-col gap-3">
             <div role="status" aria-live="polite" className="break-words text-sm">
-              {loadError ? (
-                `配置读取失败：${loadError}`
-              ) : status.error ? (
-                <span className="text-destructive">{status.error}</span>
-              ) : status.running ? (
+              {status.running ? (
                 `运行中：${status.baseUrl}`
               ) : config.enabled ? (
                 "服务未运行"

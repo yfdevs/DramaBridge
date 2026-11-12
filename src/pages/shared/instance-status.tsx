@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 import type { AccountControls } from "./account-selection";
 
 function InstanceControlButton({

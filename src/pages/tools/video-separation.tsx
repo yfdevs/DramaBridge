@@ -1,3 +1,4 @@
+import { useNotification } from "@/hooks/use-notification";
 import { Folder } from "@mynaui/icons-react";
 import {
   InputGroup,
@@ -19,6 +20,7 @@ export function VideoSeparationPage() {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
+  useNotification(error, "error", "操作失败");
   const update = (dir: string, patch: Partial<Task>) =>
     setTasks((current) => current.map((t) => (t.id === dir ? { ...t, ...patch } : t)));
   useEffect(() => service.subscribe(value => update(value.id, {status: value.message})), []);
@@ -130,11 +132,6 @@ export function VideoSeparationPage() {
           {busy && <Button type="button" size="sm" variant="outline" onClick={async () => {try {await service.pause(!paused);setPaused(!paused);}catch(e){setError(String(e));}}}>{paused ? '继续' : '暂停'}</Button>}
         </form>
       </WorkspaceActions>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
       <div className="min-h-0 overflow-auto rounded-lg border">
         <table className="w-full text-left text-xs">
           <thead className="bg-muted text-muted-foreground">

@@ -1,6 +1,6 @@
 import { SingleInstance } from "@/pages/shared/instance-status";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 
 import { Button } from "@/components/ui/button";
 import { ServiceControlButtonPage, useServiceControl } from "@/pages/shared/service-control";

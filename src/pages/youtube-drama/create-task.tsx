@@ -13,14 +13,13 @@ import {
 } from "@/components/ui/accordion";
 import { youtubeService, isYoutubeWeb } from "@/platforms/youtube-drama/service";
 import {
-  YoutubeFeedback,
   YoutubePageContent,
   YoutubeServiceActions,
   YoutubeEnvironmentWarning,
   YoutubeSelect,
   YoutubeServiceRequired,
 } from "./shared";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/notifications";
 export function YoutubeCreateTaskPage({
   embedded = false,
   onCancel,
@@ -103,7 +102,6 @@ export function YoutubeCreateTaskPage({
     >
       {!embedded && <YoutubeServiceActions model={model} title="添加 YouTube 任务" />}
       <YoutubePageContent variant="form">
-        <YoutubeFeedback model={model} />
         <YoutubeServiceRequired model={model} />
         <YoutubeEnvironmentWarning model={model} />
         {!accounts.some((account) => account.authorized) && status.running && (

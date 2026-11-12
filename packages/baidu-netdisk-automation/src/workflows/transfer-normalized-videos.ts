@@ -2,6 +2,7 @@ type Entry = Record<string, any>;
 
 /** Serialized into the authenticated share page. No module-scope dependencies. */
 export async function transferNormalizedEpisodeVideos(o: {
+  bundleMode?: boolean;
   bundleCovers?: { directory: string; files: Entry[] };
   versionTitle?: string; recreation?: boolean; parentDirectoryName?: string; title: string; episodeCount: number; roots: Entry[]; sharePassword?: string;
   listShare: (path: string) => Promise<Entry[]>;
@@ -10,14 +11,21 @@ export async function transferNormalizedEpisodeVideos(o: {
   transferOne: (source: Entry, dest: string, materialKind?: "video" | "cover") => Promise<{ item: Entry; transferred: boolean }>;
   request: (url: string, init: unknown) => Promise<Entry>; token: string;
   identical: (a: Entry, b: Entry) => boolean;
+  normalizeChecksum: (value: unknown) => string | undefined;
   compare: (a: any, b: any) => number;
   subtitlePreference: (path: string) => number;
   collapseAliases: (files: any[]) => { files: any[] };
   episodeIndex: (name: string) => number | undefined;
 }) {
+  if (o.bundleMode && (!o.recreation || o.sharePassword)) throw new Error('视频预转存不能创建分享');
   const name = (e: Entry) => String(e.server_filename || e.filename || e.path?.split('/').pop() || '');
   const isDir = (e: Entry) => Number(e.isdir ?? e.is_dir ?? 0) === 1;
   const id = (e: Entry) => String(e.fs_id || e.fsid || e.id || '');
+  const coverChecksum = (entry: Entry) => o.normalizeChecksum(entry.md5) || o.normalizeChecksum(entry.server_md5);
+  const sameCover = (source: Entry, target: Entry) => !isDir(source) && !isDir(target)
+    && Boolean(coverChecksum(source)) && coverChecksum(source) === coverChecksum(target)
+    && Number(source.size) > 0 && Number(source.size) === Number(target.size);
+
   const total = o.recreation ? Math.ceil(o.episodeCount * 0.6) : o.episodeCount;
   const progress = (completed: number, stage: string) => console.log('[baidu-video-progress] ' + JSON.stringify({ completed, total, stage }));
   progress(0, '扫描视频');
@@ -86,17 +94,30 @@ export async function transferNormalizedEpisodeVideos(o: {
       || !directory.startsWith(cachePrefix) || !/^[a-f0-9]{16}-60%\/封面$/.test(directory.slice(cachePrefix.length))
       || !o.bundleCovers.files.length) throw new Error('二创封面缓存目录无效');
     bundleImages = await o.listOwn(directory, true);
-    if (bundleImages.length !== o.bundleCovers.files.length
-      || new Set(o.bundleCovers.files.map(name)).size !== bundleImages.length
-      || bundleImages.some(image => isDir(image) || !/\.(png|jpg|jpeg|webp|bmp)$/i.test(name(image))
-        || /[\\/]/.test(name(image)) || String(image.path) !== directory + '/' + name(image)
-        || !o.bundleCovers!.files.some(expected => name(expected) === name(image)
-          && id(expected) && id(expected) === id(image) && Number(expected.size) === Number(image.size)
-          && (expected.md5 || '') === (image.md5 || ''))))
-      throw new Error('已上传封面发生变化或不完整，未转存视频、未创建分享');
+    const expectedByName = new Map(o.bundleCovers.files.map(file => [name(file), file]));
+    const issues: string[] = [];
+    if (expectedByName.size !== o.bundleCovers.files.length) issues.push('上传回执存在重复文件名');
+    const actualNames = new Set(bundleImages.map(name));
+    const missing = [...expectedByName.keys()].filter(value => !actualNames.has(value));
+    if (missing.length) issues.push('缺少封面：' + missing.slice(0, 5).join('、'));
+    for (const image of bundleImages) {
+      const expected = expectedByName.get(name(image));
+      if (!expected) { issues.push('多余文件：' + name(image)); continue; }
+      if (isDir(image) || !/\.(png|jpg|jpeg|webp|bmp)$/i.test(name(image))
+        || /[\\/]/.test(name(image)) || String(image.path) !== directory + '/' + name(image)) {
+        issues.push('文件路径或类型不符：' + name(image)); continue;
+      }
+      if (!id(expected) || id(expected) !== id(image)) issues.push('文件 ID 变化：' + name(image));
+      else if (Number(expected.size) !== Number(image.size)) issues.push('文件大小变化：' + name(image));
+      else if (!coverChecksum(expected) || !coverChecksum(image)) issues.push('无法读取文件校验值：' + name(image));
+      else if (!sameCover(expected, image)) issues.push('文件内容变化：' + name(image));
+    }
+    if (bundleImages.length !== expectedByName.size && !issues.length) issues.push('目录返回了重复文件');
+    if (issues.length) throw new Error('封面核验未通过，未创建分享：' + issues.slice(0, 5).join('；')
+      + '。重试将核验并复用已转存视频');
   }
-  const videoFolderName = o.bundleCovers ? '成片' : '成片60%';
-  const videoName = (file: Entry) => o.bundleCovers ? `${file.index}.mp4` : `${o.versionTitle || o.title}-第${file.index}集.mp4`;
+  const videoFolderName = (o.bundleMode || o.bundleCovers) ? '成片' : '成片60%';
+  const videoName = (file: Entry) => (o.bundleMode || o.bundleCovers) ? `${file.index}.mp4` : `${o.versionTitle || o.title}-第${file.index}集.mp4`;
   const coverIds: string[] = [];
   progress(0, '转存视频');
   const parent = o.parentDirectoryName ? await o.createDirectory('/', o.parentDirectoryName) : undefined;
@@ -121,7 +142,7 @@ export async function transferNormalizedEpisodeVideos(o: {
     const coverDirectory = o.bundleCovers && taskEntries.find(entry => name(entry) === '封面' && isDir(entry));
     const previousCovers = coverDirectory ? await o.listOwn(String(coverDirectory.path), true) : [];
     const wantedNames = new Set(selected.files.slice(0, total).map((file: Entry) => videoName(file)));
-    const dirty = previousCovers.some(entry => !bundleImages.some(image => name(image) === name(entry) && o.identical(image, entry)))
+    const dirty = previousCovers.some(entry => !bundleImages.some(image => name(image) === name(entry) && sameCover(image, entry)))
       || taskEntries.some(entry => !isDir(entry) || !['封面', videoFolderName].includes(name(entry)))
       || previousVideos.some(entry => isDir(entry) || !wantedNames.has(name(entry))
         || !o.identical(selected.files.find((file: Entry) => videoName(file) === name(entry))!, entry));
@@ -139,7 +160,7 @@ export async function transferNormalizedEpisodeVideos(o: {
       progress(0, '整理原版及 AI 改名封面');
       const coverPath = String(cover.path);
       const existingCovers = await o.listOwn(coverPath, true);
-      if (existingCovers.some(entry => !bundleImages.some(image => name(image) === name(entry) && o.identical(image, entry))))
+      if (existingCovers.some(entry => !bundleImages.some(image => name(image) === name(entry) && sameCover(image, entry))))
         throw new Error('目标封面目录存在其他内容，未创建分享：' + coverPath);
       for (const image of bundleImages) {
         let target = existingCovers.find(entry => name(entry) === name(image));
@@ -159,10 +180,10 @@ export async function transferNormalizedEpisodeVideos(o: {
             if (attempt < 19) await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
-        if (!target || !o.identical(image, target)) throw new Error('封面云端复制未通过内容核验：' + name(image));
+        if (!target || !sameCover(image, target)) throw new Error('封面云端复制未通过内容核验：' + name(image));
         coverIds.push(id(target));
       }
-    } else {
+    } else if (!o.bundleMode) {
       for (const image of covers) {
         const copied = await o.transferOne(image, String(cover.path), "cover");
         if (!o.identical(image, copied.item)) throw new Error('封面转存文件身份未确认：' + name(image));

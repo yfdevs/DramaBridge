@@ -1,3 +1,4 @@
+import { normalizeBaiduMd5 } from "../../src/domain/file-checksum.js";
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
@@ -26,7 +27,7 @@ function fixture() {
         const item = own.find(e => e.path === file.path); item.server_filename = file.newname; item.path = '/测试剧/' + file.newname;
       }
       return { errno: 0 };
-    }, token: 'test', identical: areBaiduNetdiskFilesStrictlyIdentical,
+    }, token: 'test', identical: areBaiduNetdiskFilesStrictlyIdentical, normalizeChecksum: normalizeBaiduMd5,
     compare: compareRemoteVideoDirectoryCandidates, subtitlePreference: baiduVideoSubtitleDirectoryPreference,
     collapseAliases: collapseIdenticalRemoteEpisodeAliases, episodeIndex: matchBaiduEpisodeIndex,
   };
@@ -385,7 +386,7 @@ function bundleFixture() {
   const f = fixture();
   const directory = '/快手_二创集合/测试剧/封面缓存-0123456789abcdef-60%/封面';
   const images = ['测试剧.jpg', '新剧.png'].map((server_filename, i) => ({ server_filename,
-    path: directory + '/' + server_filename, fs_id: 'uploaded-' + i, size: 200 + i, md5: 'image-' + i }));
+    path: directory + '/' + server_filename, fs_id: 'uploaded-' + i, size: 200 + i, md5: String(i + 1).repeat(32) }));
   const directories: any[] = [];
   const calls: string[] = [];
   Object.assign(f.options, { recreation: true, parentDirectoryName: '快手_二创集合',
@@ -439,8 +440,8 @@ test('bundle cloud-transfers one video set with verified original and AI covers,
 
 test('bundle refuses changed uploaded covers before any video transfer or sharing', async () => {
   const f = bundleFixture();
-  f.images[1].md5 = 'changed';
-  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /封面发生变化/);
+  f.images[1].md5 = 'f'.repeat(32);
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /文件内容变化/);
   assert.equal(f.transferred.length, 0);
   assert.deepEqual(f.calls, []);
 });
@@ -458,4 +459,81 @@ test('bundle copy failure never shares and retry reuses already copied covers', 
   assert.deepEqual(f.calls, ['copy']);
   await transferNormalizedEpisodeVideos(f.options);
   assert.deepEqual(f.calls, ['copy', 'copy', 'rename', 'share']);
+});
+
+test('bundle preparation transfers videos without covers or sharing, then finalization reuses them', async () => {
+  const f = bundleFixture();
+  const bundleCovers = f.options.bundleCovers;
+  f.options.bundleMode = true;
+  f.options.bundleCovers = undefined;
+  f.options.sharePassword = undefined;
+  const prepared = await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(prepared.shareUrl, '');
+  assert.equal(f.transferred.length, 2);
+  assert.deepEqual(f.calls, ['rename']);
+  assert.ok(f.own.every(file => file.path.includes('/成片/')));
+  f.options.bundleMode = false;
+  f.options.bundleCovers = bundleCovers;
+  f.options.sharePassword = 'abcd';
+  const result = await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(result.shareUrl, 'https://pan.baidu.com/s/1bundle?pwd=abcd');
+  assert.equal(f.transferred.length, 2, 'finalization does not transfer video files again');
+  assert.deepEqual(f.calls, ['rename', 'copy', 'copy', 'share']);
+});
+
+test('video preparation refuses to create a premature share', async () => {
+  const f = bundleFixture();
+  f.options.bundleMode = true;
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /预转存不能创建分享/);
+  assert.equal(f.transferred.length, 0);
+  assert.deepEqual(f.calls, []);
+});
+
+test('bundle accepts obfuscated, uppercase and server_md5 checksums across upload, copy and retry', async () => {
+  const f = bundleFixture();
+  const plain = '74675546942e4689d71e474963be3595';
+  f.options.bundleCovers!.files[0].md5 = plain;
+  f.images[0].md5 = '950d03eeftcc98a9629d70f25eb58aa6';
+  f.options.bundleCovers!.files[1].md5 = plain.toUpperCase();
+  delete (f.images[1] as any).md5;
+  (f.images[1] as any).server_md5 = ' ' + plain.toUpperCase() + ' ';
+  const result = await runInNewContext('(' + transferNormalizedEpisodeVideos.toString() + ')({...o, normalizeChecksum: (' + normalizeBaiduMd5.toString() + ')})', {
+    o: f.options, URL, URLSearchParams, console, setTimeout, __name: (value: unknown) => value,
+  });
+  assert.ok(result.shareUrl);
+  await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(f.transferred.length, 2);
+  assert.deepEqual(f.calls, ['copy', 'copy', 'rename', 'share', 'share']);
+});
+
+for (const reason of ['missing', 'extra', 'id', 'size', 'hash', 'unknown-hash'] as const) {
+  test(`bundle preserves strict cover verification and names the problem: ${reason}`, async () => {
+    const f = bundleFixture();
+    let expected: RegExp;
+    if (reason === 'missing') { f.images.pop(); expected = /缺少封面：新剧.png/; }
+    else if (reason === 'extra') { f.images.push({ ...f.images[0], server_filename: '额外.png', path: f.options.bundleCovers!.directory + '/额外.png' }); expected = /多余文件：额外.png/; }
+    else if (reason === 'id') { f.images[0].fs_id = 'changed'; expected = /文件 ID 变化：测试剧.jpg/; }
+    else if (reason === 'size') { f.images[0].size++; expected = /文件大小变化：测试剧.jpg/; }
+    else if (reason === 'hash') { f.images[0].md5 = 'f'.repeat(32); expected = /文件内容变化：测试剧.jpg/; }
+    else { f.images[0].md5 = ''; expected = /无法读取文件校验值：测试剧.jpg/; }
+    await assert.rejects(transferNormalizedEpisodeVideos(f.options), error => {
+      assert.match(String(error), expected);
+      assert.match(String(error), /复用已转存视频/);
+      assert.doesNotMatch(String(error), /未转存视频/);
+      return true;
+    });
+    assert.deepEqual(f.calls, []);
+  });
+}
+
+test('bundle rejects different content returned by cover copy even when the file size matches', async () => {
+  const f = bundleFixture();
+  const request = f.options.request;
+  f.options.request = async (url, init) => {
+    const result = await request(url, init);
+    if (new URL(url, 'https://pan.baidu.com').searchParams.get('opera') === 'copy') f.own.at(-1).md5 = 'f'.repeat(32);
+    return result;
+  };
+  await assert.rejects(transferNormalizedEpisodeVideos(f.options), /封面云端复制未通过内容核验/);
+  assert.ok(!f.calls.includes('share'));
 });

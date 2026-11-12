@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { youtubeService, isYoutubeWeb, type YoutubeOauth } from "@/platforms/youtube-drama/service";
 import {
-  YoutubeFeedback,
   YoutubeServiceActions,
   YoutubeServiceRequired,
   YoutubePageContent,
@@ -67,22 +66,14 @@ export function YoutubeAccountsPage() {
     >
       <YoutubeServiceActions model={model} title="YouTube 账号管理" />
       <YoutubePageContent variant="accounts">
-        <YoutubeFeedback model={model} />
         <YoutubeServiceRequired model={model} />
-        {oauth && oauth.status !== "idle" && (
+        {oauth?.status === "pending" && (
           <div
             role="status"
             className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 p-3 text-xs"
           >
             <span className="min-w-0 break-words">
-              {oauth.message ||
-                ({
-                  pending: "等待 Google 授权",
-                  success: "授权已完成",
-                  error: "授权失败",
-                  cancelled: "授权已取消",
-                }[oauth.status] ??
-                  "授权状态已更新")}
+              {oauth.message || "等待 Google 授权"}
             </span>
             {oauth.status === "pending" && (
               <Button
@@ -184,14 +175,14 @@ export function YoutubeAccountsPage() {
                   },
                   options: [
                     { value: "all", label: "全部状态" },
-                    { value: "authorized", label: "已授权" },
-                    { value: "unauthorized", label: "未授权" },
+                    { value: "authorized", label: "已保存授权" },
+                    { value: "unauthorized", label: "未保存授权" },
                   ],
                 },
               ]}
             />
             <span className="ml-auto text-xs text-muted-foreground">
-              已授权 {accounts.filter((account) => account.authorized).length} / {accounts.length}
+              已保存授权 {accounts.filter((account) => account.authorized).length} / {accounts.length}
             </span>
           </div>
           {model.loading && (
@@ -205,7 +196,7 @@ export function YoutubeAccountsPage() {
                 ? "没有符合筛选条件的账号"
                 : status.running
                   ? "暂无账号，请先添加上传账号"
-                  : "启动服务后查看账号"}
+                  : "还没有账号"}
             </p>
           )}
           {list.items.map((account) => (
@@ -249,7 +240,7 @@ export function YoutubeAccountsPage() {
                       variant="secondary"
                       className={`text-xs ${account.authorized ? "bg-[var(--youtube-success-bg)] text-[var(--youtube-success-text)]" : "bg-[var(--youtube-warning-bg)] text-[var(--youtube-warning-text)]"}`}
                     >
-                      {account.authorized ? "已授权" : "未授权"}
+                      {account.authorized ? "已保存授权" : "未保存授权"}
                     </Badge>
                   </div>
                 )}
@@ -282,7 +273,8 @@ export function YoutubeAccountsPage() {
                       const result = await youtubeService.request<YoutubeOauth>("/api/oauth/test", {
                         accountId: account.id,
                       });
-                      setNotice(result.message ?? result.status);
+                      if (result.status !== "valid") throw new Error(result.message ?? "授权检查未通过");
+                      setNotice(result.message ?? "授权有效");
                     })
                   }
                 >

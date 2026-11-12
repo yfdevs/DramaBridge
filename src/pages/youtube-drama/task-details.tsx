@@ -1,3 +1,4 @@
+import { useNotification } from "@/hooks/use-notification";
 import { useEffect, useState } from "react";
 import {
   Sheet,
@@ -28,10 +29,11 @@ export function YoutubeTaskDetails({
   const [error, setError] = useState("");
   const id = task?.id;
   const active = useWorkspacePageActive();
+  useNotification(error, "error", "详情读取失败", active && Boolean(id));
   useEffect(() => {
     setDetail(null);
     setError("");
-    if (!id || !running || !active) return;
+    if (!id || !active) return;
     let disposed = false,
       busy = false;
     const load = async () => {
@@ -101,11 +103,6 @@ export function YoutubeTaskDetails({
                   )}
               </dl>
             </>
-          )}
-          {error && (
-            <p role="alert" className="break-words text-xs text-destructive">
-              无法刷新详情：{error}
-            </p>
           )}
           {failure && (
             <section
