@@ -1264,13 +1264,16 @@ export async function listLocalEpisodeFiles(options: {
 export function isCompleteEpisodeFileSet(
   files: Array<{ index: number; file: string; size?: number }>,
   episodeCount: number,
+  episodeNumbers?: number[],
 ) {
   const normalizedEpisodeCount = Number(episodeCount);
   if (!Number.isInteger(normalizedEpisodeCount) || normalizedEpisodeCount <= 0) {
     return false;
   }
 
-  const expectedIndexes = Array.from({ length: normalizedEpisodeCount }, (_, index) => index + 1);
+  const expectedIndexes = episodeNumbers ?? Array.from({ length: normalizedEpisodeCount }, (_, index) => index + 1);
+  if (expectedIndexes.length !== normalizedEpisodeCount || new Set(expectedIndexes).size !== expectedIndexes.length
+    || expectedIndexes.some(index => !Number.isSafeInteger(index) || index < 1)) return false;
   if (files.length !== expectedIndexes.length) return false;
   const actualIndexSet = new Set(files.map((file) => file.index));
   return expectedIndexes.every((index) => actualIndexSet.has(index));
@@ -1430,8 +1433,10 @@ export async function validateLocalEpisodeVideos(options: {
   localEpisodeVideoRoot: string;
   resourceName: string;
   episodeCount: number;
+  episodeNumbers?: number[];
 }) {
-  const episodes = await findLocalEpisodeVideos(options);
+  const allEpisodes = await findLocalEpisodeVideos(options);
+  const episodes = options.episodeNumbers ? allEpisodes.filter(episode => options.episodeNumbers!.includes(episode.index)) : allEpisodes;
   const duplicateIndexes = episodes
     .filter((episode, index) => index > 0 && episode.index === episodes[index - 1].index)
     .map((episode) => episode.index);
@@ -1441,14 +1446,18 @@ export async function validateLocalEpisodeVideos(options: {
     );
   }
 
-  const expectedIndexes = Array.from({ length: options.episodeCount }, (_, index) => index + 1);
+  const expectedIndexes = options.episodeNumbers
+    ? [...options.episodeNumbers].sort((a, b) => a - b)
+    : Array.from({ length: options.episodeCount }, (_, index) => index + 1);
   const actualIndexes = episodes.map((episode) => episode.index);
   if (
     actualIndexes.length !== expectedIndexes.length ||
     actualIndexes.some((value, index) => value !== expectedIndexes[index])
   ) {
     throw new Error(
-      `[local-video-invalid] 剧集文件应按文件名匹配第1集至第${options.episodeCount}集: ` +
+      (options.episodeNumbers
+        ? `[local-video-invalid] 剧集文件应按文件名匹配集号[${expectedIndexes.join(",")}]: `
+        : `[local-video-invalid] 剧集文件应按文件名匹配第1集至第${options.episodeCount}集: `) +
         `originalTitle=${options.resourceName} actual=[${actualIndexes.join(", ")}] dir=${playletDir(
           options.localEpisodeVideoRoot,
           options.resourceName,

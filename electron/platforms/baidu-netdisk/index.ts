@@ -153,6 +153,7 @@ export type BaiduNetdiskEnsureDownloadedRequest = {
   localEpisodeVideoRoot: string;
   episodeCount?: number;
   episodeDownloadLimit?: number;
+  episodeDownloadNumbers?: number[];
   inferEpisodeCount?: boolean;
   downloadEpisodeVideos?: boolean;
   downloadAssetMaterials?: boolean;
@@ -772,6 +773,11 @@ function normalizeEnsureDownloadRequest(
   const episodeDownloadLimit = request.episodeDownloadLimit === undefined
     ? undefined
     : Number(request.episodeDownloadLimit);
+  if (request.episodeDownloadNumbers !== undefined && (!Array.isArray(request.episodeDownloadNumbers)
+    || !request.episodeDownloadNumbers.length || episodeDownloadLimit !== undefined
+    || new Set(request.episodeDownloadNumbers).size !== request.episodeDownloadNumbers.length
+    || request.episodeDownloadNumbers.some(index => !Number.isSafeInteger(index) || index < 1 || index > episodeCount)))
+    throw new Error("按集补传的集号无效");
   const inferEpisodeCount = request.inferEpisodeCount === true;
   const downloadEpisodeVideos = request.downloadEpisodeVideos !== false;
 
@@ -806,6 +812,7 @@ function normalizeEnsureDownloadRequest(
       ? episodeCount
       : undefined,
     episodeDownloadLimit,
+    episodeDownloadNumbers: request.episodeDownloadNumbers,
     inferEpisodeCount,
     downloadEpisodeVideos,
     downloadAssetMaterials: request.downloadAssetMaterials,
@@ -940,6 +947,7 @@ async function importBaiduNetdiskDownloadRuntimePackage() {
       resourceName?: string;
       expectedEpisodeCount?: number;
       episodeDownloadLimit?: number;
+      episodeDownloadNumbers?: number[];
       inferEpisodeCount?: boolean;
       expectedOwnershipCounts?: {
         minimumImages?: number;
@@ -1221,6 +1229,7 @@ export async function ensureBaiduNetdiskShareDownloaded(
 
 function ensureDownloadRecordId(request: BaiduNetdiskEnsureDownloadedRequest) {
   let name = request.episodeDownloadLimit ? `${request.resourceName}\nlimit=${request.episodeDownloadLimit}` : request.resourceName;
+  if (request.episodeDownloadNumbers) name += `\nepisodes=${[...request.episodeDownloadNumbers].sort((a, b) => a - b).join(",")}`;
   if (request.requesterPlatform === "external-api") name = `external-api\n${name}`;
   if (request.requesterPlatform === "kuaishou-drama-recreation") name = `kuaishou-drama-recreation\n${name}`;
   return createRecordId(shareKeyFromText(request.shareText), name);
@@ -1346,6 +1355,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
       localEpisodeVideoRoot: request.localEpisodeVideoRoot,
       episodeCount: request.episodeCount,
       episodeDownloadLimit: request.episodeDownloadLimit,
+      episodeDownloadNumbers: request.episodeDownloadNumbers,
       downloadEpisodeVideos: request.downloadEpisodeVideos,
       downloadAssetMaterials: request.downloadAssetMaterials,
       inferEpisodeCount: request.inferEpisodeCount,
@@ -1368,6 +1378,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
             resourceName: downloadRequest.resourceName,
             expectedEpisodeCount: downloadRequest.expectedEpisodeCount,
             episodeDownloadLimit: downloadRequest.episodeDownloadLimit,
+            episodeDownloadNumbers: downloadRequest.episodeDownloadNumbers,
             inferEpisodeCount: downloadRequest.inferEpisodeCount,
             expectedOwnershipCounts: downloadRequest.expectedOwnershipCounts,
             expectedOwnershipFiles: downloadRequest.expectedOwnershipFiles,

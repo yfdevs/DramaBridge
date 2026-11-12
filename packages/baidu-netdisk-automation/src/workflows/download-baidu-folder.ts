@@ -3145,7 +3145,14 @@ export function inspectContiguousEpisodeIndexes(
 
 export function selectLeadingEpisodeFiles<
   T extends { index: number },
->(files: T[], episodeDownloadLimit?: number): T[] {
+>(files: T[], episodeDownloadLimit?: number, episodeDownloadNumbers?: number[]): T[] {
+  if (episodeDownloadNumbers !== undefined) {
+    if (episodeDownloadLimit !== undefined || !episodeDownloadNumbers.length
+      || new Set(episodeDownloadNumbers).size !== episodeDownloadNumbers.length
+      || episodeDownloadNumbers.some(index => !Number.isSafeInteger(index) || index < 1))
+      throw new Error("按集下载的集号无效");
+    return files.filter(file => episodeDownloadNumbers.includes(file.index));
+  }
   if (episodeDownloadLimit === undefined) return files;
   const limit = Number(episodeDownloadLimit);
   if (!Number.isInteger(limit) || limit <= 0) {
@@ -3174,6 +3181,7 @@ async function submitSavedDownload(
   onTemporaryTransferCreated?: BaiduNetdiskShareDownloadOptions["onTemporaryTransferCreated"],
   selectEpisodeFiles?: BaiduNetdiskShareDownloadOptions["selectEpisodeFiles"],
   signal?: AbortSignal,
+  episodeDownloadNumbers?: number[],
 ) {
   signal?.throwIfAborted();
   const saved = await saveShareToOwnNetdisk(
@@ -3372,6 +3380,7 @@ async function submitSavedDownload(
           onTemporaryTransferCreated,
           selectEpisodeFiles,
           signal,
+          episodeDownloadNumbers,
         );
       }
       const problemParts = [
@@ -3391,7 +3400,7 @@ async function submitSavedDownload(
       });
     }
     log(`已自动识别总集数：${inferredEpisodeCount}集，1-${inferredEpisodeCount}连续完整`);
-  } else if (expectedEpisodeCount !== undefined) {
+  } else if (expectedEpisodeCount !== undefined && episodeDownloadNumbers === undefined) {
     const expectedCount = Number(expectedEpisodeCount);
     const expectedIndexes =
       Number.isInteger(expectedCount) && expectedCount > 0
@@ -3431,6 +3440,7 @@ async function submitSavedDownload(
           onTemporaryTransferCreated,
           selectEpisodeFiles,
           signal,
+          episodeDownloadNumbers,
         );
       }
       const problemParts = [
@@ -3450,6 +3460,18 @@ async function submitSavedDownload(
           (problemParts.length > 0 ? `问题：${problemParts.join("；")}` : ""),
       });
     }
+  }
+  if (downloadEpisodeVideos && episodeDownloadNumbers !== undefined) {
+    if (!episodeDownloadNumbers.length || new Set(episodeDownloadNumbers).size !== episodeDownloadNumbers.length
+      || episodeDownloadLimit !== undefined || episodeDownloadNumbers.some(index => !Number.isSafeInteger(index) || index < 1
+        || (expectedEpisodeCount !== undefined && index > expectedEpisodeCount)))
+      throw new Error("按集下载的集号无效");
+    const selected = selectLeadingEpisodeFiles(remoteVideos.files, undefined, episodeDownloadNumbers);
+    const missing = episodeDownloadNumbers.filter(index => !selected.some(file => file.index === index));
+    const duplicates = remoteVideos.duplicateIndexes.filter(index => episodeDownloadNumbers.includes(index));
+    if (missing.length || duplicates.length || selected.length !== episodeDownloadNumbers.length) throw new Error(`按集补传素材不完整：缺失集号=${missing.join(',') || '无'}；重复集号=${duplicates.join(',') || '无'}`);
+    remoteVideos = { ...remoteVideos, files: selected, duplicateIndexes: duplicates };
+    log(`仅下载补传集号：${episodeDownloadNumbers.join('、')}，共${selected.length}集`);
   }
   // Validate the complete source before reducing it to this download's range.
   // Otherwise a 50-episode source limited to 30 falsely reports episodes 31-50 missing.
@@ -3548,7 +3570,7 @@ async function submitSavedDownload(
   };
   signal?.throwIfAborted();
   let downloadRoot = downloadDir;
-  const limitedEpisodeDownload = downloadEpisodeVideos && episodeDownloadLimit !== undefined;
+  const limitedEpisodeDownload = downloadEpisodeVideos && (episodeDownloadLimit !== undefined || episodeDownloadNumbers !== undefined);
   let videoSubmitted = true;
   if (limitedEpisodeDownload) {
     if (!downloadDir) throw new Error("按集下载缺少本地下载目录");
@@ -3575,7 +3597,7 @@ async function submitSavedDownload(
         );
       }
     }
-    log(`前${remoteVideos.files.length}集已逐集提交到百度网盘下载队列`);
+    log(`${remoteVideos.files.length}集已逐集提交到百度网盘下载队列`);
   } else if (downloadEpisodeVideos) {
     const nativeSubmission = await submitNativeDownloadTask(port, task);
     videoSubmitted = nativeSubmission.submitted;
@@ -3887,6 +3909,7 @@ async function downloadBaiduNetdiskSharePromise(
     options.onTemporaryTransferCreated,
     options.selectEpisodeFiles,
     options.signal,
+    options.episodeDownloadNumbers,
   );
   const resolvedDownloadRoot = downloadRoot ?? downloadDir;
   const predictedLocalPath = path.join(resolvedDownloadRoot, targetName);

@@ -27,6 +27,7 @@ export async function validateTaobaoEpisodeVideos(
     localEpisodeVideoRoot: taobaoMaterialRoot(options),
     resourceName: task.originalTitle,
     episodeCount: task.episodeCount,
+    episodeNumbers: options.collectionUploadPlan?.missingEpisodeNumbers,
   });
 }
 
@@ -56,7 +57,8 @@ export async function prepareTaobaoEpisodeVideos(
   options: TaobaoDramaRuntimeOptions,
 ) {
   await validateTaobaoEpisodeVideos(task, options);
-  const sourceEpisodes = await findTaobaoEpisodeVideos(task, options);
+  const sourceEpisodes = (await findTaobaoEpisodeVideos(task, options))
+    .filter(episode => !options.collectionUploadPlan || options.collectionUploadPlan.missingEpisodeNumbers.includes(episode.index));
   const uploadRootDir = path.join(
     options.assetDownloadDir?.trim() || os.tmpdir(),
     "taobao-video-preflight",

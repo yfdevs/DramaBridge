@@ -767,13 +767,19 @@ async function prepareCurrentEpisodeTags(scope: TaobaoDomScope) {
   return editor;
 }
 
-async function fillCurrentEpisodeDescription(scope: TaobaoDomScope, description: string) {
+export async function fillCurrentEpisodeDescription(scope: TaobaoDomScope, description: string) {
   const descriptionInput = scope
-    .locator("#root-container .short-title-form input[maxlength='30']:visible")
+    .locator("#root-container .short-title-form input:visible")
+    .or(scope.getByPlaceholder("加个标题让内容更吸引人", { exact: true }))
     .first();
-  await descriptionInput.waitFor({ state: "visible", timeout: 30_000 });
-  await descriptionInput.fill(description);
-  if (await descriptionInput.inputValue() !== description) {
+  await descriptionInput.waitFor({ state: "visible", timeout: 30_000 }).catch((error) => {
+    if (isTaobaoDetachedFrameError(error) || ownerPage(scope).isClosed()) throw error;
+    throw new Error("TAOBAO_DRAMA_VIDEO_DESCRIPTION_INPUT_NOT_FOUND: 未找到视频描述输入框，请检查当前发布页是否加载完成或已改版");
+  });
+  const maximum = Number(await descriptionInput.getAttribute("maxlength"));
+  const value = description.slice(0, Number.isSafeInteger(maximum) && maximum > 0 ? maximum : 30);
+  await descriptionInput.fill(value);
+  if (await descriptionInput.inputValue() !== value) {
     throw new Error("TAOBAO_DRAMA_VIDEO_DESCRIPTION_WRITE_FAILED");
   }
 }
@@ -970,6 +976,13 @@ export async function fillTaobaoEpisodeContentTags(
   options: TaobaoDramaRuntimeOptions = {},
 ) {
   const page = ownerPage(scope);
+  const legacyEditor = scope.locator("#root-container .richText-container [data-cangjie-content='true']:visible");
+  if (await legacyEditor.count() === 0
+    && await scope.getByText("参与话题活动", { exact: true }).isVisible().catch(() => false)
+    && await scope.getByPlaceholder("加个标题让内容更吸引人", { exact: true }).isVisible().catch(() => false)) {
+    log(options, "[taobao-drama] 新版表单仅支持官方话题活动，跳过旧版自由标签；保留视频描述、关联短剧、集号和AI声明");
+    return 0;
+  }
   const contentTags = taobaoContentTags(title, dramaTag);
   await runWithTaobaoVerificationRetry(page, options, () => prepareCurrentEpisodeTags(scope), "准备内容标签");
   for (const [tagIndex, tag] of contentTags.entries()) {
@@ -1281,7 +1294,7 @@ async function fillEpisodeMetadata(
 
       if (position === 0) {
         const tagCount = await fillTaobaoEpisodeContentTags(scope, task.title ?? task.originalTitle, metadata.dramaTag, options);
-        log(options, `[taobao-drama] 第 ${episode.index} 集检查点：${tagCount}个内容标签已完成`);
+        if (tagCount) log(options, `[taobao-drama] 第 ${episode.index} 集检查点：${tagCount}个内容标签已完成`);
 
         await runWithTaobaoVerificationRetry(
           page,
@@ -1301,11 +1314,11 @@ async function fillEpisodeMetadata(
         const activeItem = scope.locator("#publish-container .batchItemWrap-active").filter({
           has: scope.getByText(fileName, { exact: true }),
         }).first();
-        await runWithTaobaoVerificationRetry(page, options, () =>
+        if (episodes.length > 1) await runWithTaobaoVerificationRetry(page, options, () =>
           applyCurrentEpisodeToAll(scope, activeItem, options), "应用第一集信息至全部视频");
         log(
           options,
-          `[taobao-drama] 已完整填写第 ${episode.index} 集，并将标签、AI声明和合集应用至全部视频`,
+          `[taobao-drama] 已完整填写第 ${episode.index} 集` + (episodes.length > 1 ? "，并将公共信息应用至本批视频" : "，单集补传无需应用至全部"),
         );
       } else {
         await runWithTaobaoVerificationRetry(page, options, () =>

@@ -94,6 +94,7 @@ export type EnsureBaiduNetdiskEpisodeVideosOptions = {
   episodeCount?: number;
   /** Download only episodes 1..N. This is opt-in and does not change normal platform downloads. */
   episodeDownloadLimit?: number;
+  episodeDownloadNumbers?: number[];
   inferEpisodeCount?: boolean;
   downloadEpisodeVideos?: boolean;
   downloadAssetMaterials?: boolean;
@@ -118,6 +119,7 @@ export type EnsureBaiduNetdiskEpisodeVideosOptions = {
     resourceName: string;
     expectedEpisodeCount?: number;
     episodeDownloadLimit?: number;
+    episodeDownloadNumbers?: number[];
     inferEpisodeCount?: boolean;
     expectedOwnershipCounts?: OwnershipMaterialRequirements;
     expectedOwnershipFiles?: number;
@@ -780,6 +782,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
   stableCompletePolls: number;
   selectedEpisodeFiles?: SelectedEpisodeFileIdentity[];
   episodeDownloadLimit?: number;
+  episodeDownloadNumbers?: number[];
   signal?: AbortSignal;
   getDownloadTaskStatus?: EnsureBaiduNetdiskEpisodeVideosOptions["getDownloadTaskStatus"];
   onStableEpisodeFiles?: EnsureBaiduNetdiskEpisodeVideosOptions["onStableEpisodeFiles"];
@@ -832,7 +835,8 @@ async function waitForCompleteLocalEpisodeVideos(options: {
       options.resourceName,
       options.selectedEpisodeFiles,
     );
-    if (options.episodeDownloadLimit !== undefined) {
+    if (options.episodeDownloadNumbers) files = files.filter(file => options.episodeDownloadNumbers!.includes(file.index));
+    else if (options.episodeDownloadLimit !== undefined) {
       files = files.filter(file => file.index <= options.episodeDownloadLimit!);
     }
     const newlyStableFiles: LocalEpisodeFile[] = [];
@@ -858,7 +862,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
       options.onStableEpisodeFiles?.(newlyStableFiles);
     }
     let complete = !options.requireEpisodeVideos
-      || isCompleteEpisodeFileSet(files, options.episodeCount);
+      || isCompleteEpisodeFileSet(files, options.episodeCount, options.episodeDownloadNumbers);
     let ownership = await listCurrentOwnershipMaterials(
       assetLocalPaths,
       options.targetRoot,
@@ -958,12 +962,13 @@ async function waitForCompleteLocalEpisodeVideos(options: {
           options.resourceName,
           options.selectedEpisodeFiles,
         );
-        if (options.episodeDownloadLimit !== undefined) {
+        if (options.episodeDownloadNumbers) files = files.filter(file => options.episodeDownloadNumbers!.includes(file.index));
+        else if (options.episodeDownloadLimit !== undefined) {
           files = files.filter(file => file.index <= options.episodeDownloadLimit!);
         }
         const bestLocalSummary = episodeFileSummary(files);
         complete = !options.requireEpisodeVideos
-          || isCompleteEpisodeFileSet(files, options.episodeCount);
+          || isCompleteEpisodeFileSet(files, options.episodeCount, options.episodeDownloadNumbers);
         ownership = await listCurrentOwnershipMaterials(
           assetLocalPaths,
           options.targetRoot,
@@ -1173,9 +1178,14 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     && (!Number.isInteger(episodeDownloadLimit) || episodeDownloadLimit <= 0)) {
     throw new Error("仅下载前 X 集的集数必须是正整数");
   }
-  const expectedLocalEpisodeCount = episodeDownloadLimit === undefined
-    ? configuredEpisodeCount
-    : Math.min(configuredEpisodeCount, episodeDownloadLimit);
+  const episodeDownloadNumbers = options.episodeDownloadNumbers;
+  if (episodeDownloadNumbers !== undefined && (!downloadEpisodeVideos || episodeDownloadLimit !== undefined
+    || !Array.isArray(episodeDownloadNumbers) || !episodeDownloadNumbers.length
+    || new Set(episodeDownloadNumbers).size !== episodeDownloadNumbers.length
+    || episodeDownloadNumbers.some(index => !Number.isSafeInteger(index) || index < 1 || !hasConfiguredEpisodeCount || index > configuredEpisodeCount)))
+    throw new Error("按集补传的集号无效，必须在剧集范围内且不能与前 X 集限制同时使用");
+  const expectedLocalEpisodeCount = episodeDownloadNumbers?.length ?? (episodeDownloadLimit === undefined
+    ? configuredEpisodeCount : Math.min(configuredEpisodeCount, episodeDownloadLimit));
   if (downloadEpisodeVideos && !hasConfiguredEpisodeCount && !options.inferEpisodeCount) {
     throw new Error("剧集数量必须是正整数，或启用自动识别集数")
   }
@@ -1189,9 +1199,10 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     root: options.localEpisodeVideoRoot,
     resourceName: options.resourceName,
   });
-  const expectedExistingEpisodes = options.episodeDownloadLimit === undefined
-    ? existingEpisodes
-    : existingEpisodes.filter((episode) => episode.index <= options.episodeDownloadLimit!);
+  const expectedExistingEpisodes = episodeDownloadNumbers
+    ? existingEpisodes.filter(episode => episodeDownloadNumbers.includes(episode.index))
+    : episodeDownloadLimit === undefined ? existingEpisodes
+      : existingEpisodes.filter(episode => episode.index <= episodeDownloadLimit);
   const existingOwnership = await listLocalOwnershipMaterials({
     root: options.localEpisodeVideoRoot,
     resourceName: options.resourceName,
@@ -1223,7 +1234,8 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     &&
     (!downloadEpisodeVideos || (
       hasConfiguredEpisodeCount
-      && isCompleteEpisodeFileSet(expectedExistingEpisodes, expectedLocalEpisodeCount)
+      && isCompleteEpisodeFileSet(expectedExistingEpisodes, expectedLocalEpisodeCount, episodeDownloadNumbers)
+      && expectedExistingEpisodes.every(file => file.size > 0)
     ))
     && hasRequiredOwnershipMaterials(existingOwnership, ownershipRequirements)
     && existingRawOwnershipFiles.length >= requiredOwnershipFiles
@@ -1268,6 +1280,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
       ? undefined
       : configuredEpisodeCount,
     episodeDownloadLimit: options.episodeDownloadLimit,
+    episodeDownloadNumbers,
     inferEpisodeCount: options.inferEpisodeCount === true,
     expectedOwnershipCounts: {
       minimumImages: Math.max(
@@ -1309,9 +1322,8 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     throw new Error("百度网盘资源检查完成，但未能确定有效总集数")
   }
 
-  const downloadEpisodeCount = episodeDownloadLimit === undefined
-    ? resolvedEpisodeCount
-    : Math.min(resolvedEpisodeCount, episodeDownloadLimit);
+  const downloadEpisodeCount = episodeDownloadNumbers?.length ?? (episodeDownloadLimit === undefined
+    ? resolvedEpisodeCount : Math.min(resolvedEpisodeCount, episodeDownloadLimit));
 
   await options.onProgress?.({
     phase: "download-submitted",
@@ -1334,8 +1346,8 @@ export async function ensureBaiduNetdiskEpisodeVideos(
         : result.downloadRoot ?? options.sourceLocalPath,
       resourceName: options.resourceName,
       downloadTaskName: result.share.name || options.downloadTaskName || options.resourceName,
-      downloadTaskNames: options.episodeDownloadLimit !== undefined ? result.remoteVideos?.files.map(file => file.name) : undefined,
-      expectedDownloadRoot: options.episodeDownloadLimit !== undefined ? result.downloadRoot ?? options.downloadDir : undefined,
+      downloadTaskNames: (options.episodeDownloadLimit !== undefined || episodeDownloadNumbers !== undefined) ? result.remoteVideos?.files.map(file => file.name) : undefined,
+      expectedDownloadRoot: (options.episodeDownloadLimit !== undefined || episodeDownloadNumbers !== undefined) ? result.downloadRoot ?? options.downloadDir : undefined,
       expectedOwnershipImages: result.expectedOwnershipImages,
       expectedOwnershipFiles: result.expectedOwnershipFiles,
       expectedPosterImages: result.expectedPosterImages,
@@ -1347,6 +1359,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
       requireAllDiscoveredAssets,
       episodeCount: downloadEpisodeVideos ? downloadEpisodeCount : 0,
       episodeDownloadLimit,
+      episodeDownloadNumbers,
       requireEpisodeVideos: downloadEpisodeVideos,
       ownershipRequirements,
       requiredOwnershipFiles,

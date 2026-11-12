@@ -48,6 +48,7 @@ export type BaiduNetdiskShareDownloadOptions = {
   expectedEpisodeCount?: number;
   /** Download only episodes 1..N. Omit to preserve the full-directory download flow. */
   episodeDownloadLimit?: number;
+  episodeDownloadNumbers?: number[];
   inferEpisodeCount?: boolean;
   expectedOwnershipCounts?: {
     minimumImages?: number;

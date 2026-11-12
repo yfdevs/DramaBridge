@@ -214,3 +214,23 @@ test("formats Taobao description and hashtag text", () => {
     "#AI短剧 #现代 #顺手牵羊的代价",
   );
 });
+
+test("repair metadata generates episode 19 only and retains its original episode number", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "taobao-repair-metadata-"));
+  try {
+    let calls = 0;
+    const client = { generateText: async (request: { prompt: string }) => {
+      calls++;
+      assert.match(request.prompt, /本次只输出第19集到第19集/);
+      return { model: "test", text: JSON.stringify({ tag: "家庭", episodes: [{ episode: 19, summary: "拆迁款引发家庭矛盾" }] }) };
+    } } as unknown as DramaAiClient;
+    const metadata = await prepareTaobaoEpisodeMetadata({ id: "repair", originalTitle: "补传剧", episodeCount: 51,
+      summary: "拆迁款到账后，女婿擅自做主，引发一系列家庭矛盾。", baiduPanResourceLink: "https://pan.baidu.com/s/test",
+    }, { localMaterialRoot: root, aiClientFactory: () => client, collectionUploadPlan: { collectionId: "1", title: "补传剧",
+      episodeCount: 51, uploadedEpisodeNumbers: [], missingEpisodeNumbers: [19] } });
+    assert.equal(calls, 1);
+    assert.equal(metadata.episodeSummaries[18], "拆迁款引发家庭矛盾");
+    assert.equal(metadata.episodeSummaries.filter(Boolean).length, 1);
+    assert.equal(metadata.episodeSummaries.length, 51);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

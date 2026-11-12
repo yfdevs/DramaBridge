@@ -4,7 +4,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import type { Page } from "playwright";
 import { formatAutomationErrorReport } from "@dramabridge/automation-logging";
-import { fillTaobaoEpisodeContentTags, selectTaobaoContentTag } from "../../src/automation/episodes.js";
+import { fillCurrentEpisodeDescription, fillTaobaoEpisodeContentTags, selectTaobaoContentTag } from "../../src/automation/episodes.js";
 import { classifyTaobaoDramaFailStage } from "../../src/app/runtime.js";
 import { reportTaobaoAccountTaskApi } from "../../src/api/task.js";
 
@@ -456,4 +456,24 @@ test("restores the editor focus after bringing the tab forward for clipboard acc
   });
   await selectTaobaoContentTag(page, editor, tag, true, "title");
   assert.deepEqual((await searchState(page)).pastes, [tag]);
+});
+
+test("current Taobao form accepts 22-character descriptions and skips unavailable free-text tags", async (t) => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  await page.setContent(`<div id="root-container"><div class="short-title-form"><input maxlength="22" placeholder="加个标题让内容更吸引人"></div><div>参与话题活动</div><button>点击添加话题</button></div>`);
+  const description = "第19集|" + "拆迁款到账引发家庭矛盾".repeat(3);
+  await fillCurrentEpisodeDescription(page, description);
+  assert.equal(await page.getByPlaceholder("加个标题让内容更吸引人").inputValue(), description.slice(0, 22));
+  assert.equal(await fillTaobaoEpisodeContentTags(page, "补传剧", "家庭"), 0);
+  assert.equal(classifyTaobaoDramaFailStage(new Error("TAOBAO_DRAMA_VIDEO_DESCRIPTION_INPUT_NOT_FOUND")), "FILL_FORM");
+});
+
+test("legacy Taobao form keeps its 30-character description support", async (t) => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  await page.setContent(`<div id="root-container"><div class="short-title-form"><input maxlength="30"></div></div>`);
+  const description = "第19集|" + "拆迁款到账引发家庭矛盾".repeat(3);
+  await fillCurrentEpisodeDescription(page, description);
+  assert.equal(await page.locator("input").inputValue(), description.slice(0, 30));
 });

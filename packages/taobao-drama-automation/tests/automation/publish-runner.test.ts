@@ -109,3 +109,16 @@ test("a full collection finishes without navigation, downloads, AI or another up
     aiClientFactory: () => { throw new Error("must not request AI"); },
   });
 });
+
+test("repair material preparation requests missing episode 19 without forcing cover and ownership downloads", () => {
+  const request = taobaoBaiduResourceRequest({ id: "repair", originalTitle: "补传剧", episodeCount: 51,
+    summary: "任务已提供剧情简介", baiduPanResourceLink: "https://pan.baidu.com/s/test" }, {
+    localMaterialRoot: "D:\\素材", collectionUploadPlan: { collectionId: "1", title: "补传剧", episodeCount: 51,
+      uploadedEpisodeNumbers: [], missingEpisodeNumbers: [19] },
+  });
+  assert.deepEqual(request.episodeDownloadNumbers, [19]);
+  assert.equal(request.episodeCount, 51);
+  assert.equal(request.forceAssetDownload, false);
+  assert.equal(request.downloadAssetMaterials, false);
+  assert.equal(request.requireAllDiscoveredAssets, false);
+});

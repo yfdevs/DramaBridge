@@ -674,3 +674,53 @@ test("limited downloads still reject missing episodes in the requested range", a
     }), /期望30集，实际识别29集，缺少第30集/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a sparse repair reuses only episode 19 of a 51-episode drama without downloading", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "baidu-sparse-reuse-"));
+  try {
+    await mkdir(path.join(root, "补传剧"));
+    await writeFile(path.join(root, "补传剧", "第19集.mp4"), "episode19");
+    const result = await ensureBaiduNetdiskEpisodeVideos({
+      shareText: "https://pan.baidu.com/s/test", resourceName: "补传剧", localEpisodeVideoRoot: root,
+      episodeCount: 51, episodeDownloadNumbers: [19], downloadAssetMaterials: false,
+      downloadShare: async () => { throw new Error("must reuse the existing episode"); },
+    });
+    assert.equal(result.skippedExisting, true);
+    assert.equal(result.episodeCount, 1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a sparse download waits for episode 19 only, preserves its index and ignores other source episodes", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "baidu-sparse-download-"));
+  const downloaded = path.join(root, "download");
+  try {
+    await mkdir(downloaded);
+    await writeFile(path.join(downloaded, "第1集.mp4"), "episode1");
+    await writeFile(path.join(downloaded, "第19集.mp4"), "episode19");
+    const result = await ensureBaiduNetdiskEpisodeVideos({
+      shareText: "https://pan.baidu.com/s/test", resourceName: "补传剧", localEpisodeVideoRoot: path.join(root, "output"),
+      episodeCount: 51, episodeDownloadNumbers: [19], downloadAssetMaterials: false,
+      timeoutMs: 2000, pollIntervalMs: 1, stableCompletePolls: 1,
+      downloadShare: async request => {
+        assert.deepEqual(request.episodeDownloadNumbers, [19]);
+        assert.equal(request.expectedEpisodeCount, 51);
+        return { share: { link: "https://pan.baidu.com/s/test", pwd: "", name: "补传剧" },
+          localPath: downloaded, completed: true, skippedExisting: false };
+      },
+    });
+    assert.equal(result.episodeCount, 1);
+    assert.equal(result.completed, true);
+    const files = await readdir(result.localPath);
+    assert.ok(files.some(file => file.includes("第19集")));
+    assert.ok(!files.some(file => file.includes("第1集")));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+for (const numbers of [[], [0], [52], [19, 19]]) {
+  test(`rejects unsafe sparse requests before a download: ${JSON.stringify(numbers)}`, async () => {
+    await assert.rejects(ensureBaiduNetdiskEpisodeVideos({ shareText: "https://pan.baidu.com/s/test", resourceName: "补传剧",
+      localEpisodeVideoRoot: "unused", episodeCount: 51, episodeDownloadNumbers: numbers,
+      downloadShare: async () => { throw new Error("must not submit a download"); },
+    }), /按集补传的集号无效/);
+  });
+}

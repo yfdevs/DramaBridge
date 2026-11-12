@@ -29,11 +29,14 @@ export function taobaoBaiduResourceRequest(
     resourceName: task.originalTitle,
     localEpisodeVideoRoot: taobaoMaterialRoot(options),
     episodeCount: task.episodeCount,
+    episodeDownloadNumbers: options.collectionUploadPlan
+      && options.collectionUploadPlan.missingEpisodeNumbers.length < task.episodeCount
+      ? options.collectionUploadPlan.missingEpisodeNumbers : undefined,
     requiredPosterImages: 0,
     // Creating a collection also needs synopsis/poster materials when the share contains them.
-    downloadAssetMaterials: true,
-    forceAssetDownload: true,
-    requireAllDiscoveredAssets: true,
+    downloadAssetMaterials: !options.collectionUploadPlan || !task.summary?.trim(),
+    forceAssetDownload: !options.collectionUploadPlan,
+    requireAllDiscoveredAssets: !options.collectionUploadPlan,
     requiredMetadataTextFiles: 0,
   };
 }
@@ -138,9 +141,10 @@ export async function runTaobaoPublishTask(
   // Collection creation and every upload batch share this task's single tab.
   await waitForTaobaoPage(page, uploadPlan ? "batch" : "collection", options);
   await saveTaobaoCredentialState(context, options);
-  const baiduNetdiskResource = await ensureResource(task, options);
-  await validateTaobaoEpisodeVideos(task, options);
-  const metadata = await prepareTaobaoEpisodeMetadata(task, options);
+  const materialOptions = { ...options, collectionUploadPlan: uploadPlan };
+  const baiduNetdiskResource = await ensureResource(task, materialOptions);
+  await validateTaobaoEpisodeVideos(task, materialOptions);
+  const metadata = await prepareTaobaoEpisodeMetadata(task, materialOptions);
   if (!uploadPlan) {
     const collectionMetadata = createTaobaoCollectionMetadata(task, metadata);
     const coverFile = await prepareTaobaoCollectionCover(task, collectionMetadata, options);

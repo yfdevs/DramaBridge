@@ -161,11 +161,18 @@ async function generateMetadata(
   client: DramaAiClient,
   task: TaobaoBatchUploadTask,
   synopsisText?: string,
+  episodeNumbers?: number[],
 ) {
   let dramaTag = "";
   let model = "";
-  const episodeSummaries: string[] = [];
-  for (const range of taobaoEpisodeBatchRanges(task.episodeCount)) {
+  const episodeSummaries: string[] = Array(task.episodeCount).fill("");
+  const selectedRanges: Array<{ start: number; end: number }> = [];
+  for (const index of [...(episodeNumbers ?? [])].sort((a, b) => a - b)) {
+    const last = selectedRanges[selectedRanges.length - 1];
+    if (last && index === last.end + 1 && index - last.start < 50) last.end = index;
+    else selectedRanges.push({ start: index, end: index });
+  }
+  for (const range of episodeNumbers ? selectedRanges : taobaoEpisodeBatchRanges(task.episodeCount)) {
     let lastError: unknown;
     let generated: Pick<TaobaoEpisodeMetadata, "dramaTag" | "episodeSummaries"> | undefined;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -189,7 +196,7 @@ async function generateMetadata(
       }
     }
     if (!generated) throw lastError;
-    episodeSummaries.push(...generated.episodeSummaries);
+    generated.episodeSummaries.forEach((summary, index) => { episodeSummaries[range.start - 1 + index] = summary; });
   }
   return { dramaTag, episodeSummaries, model };
 }
@@ -201,7 +208,9 @@ export async function prepareTaobaoEpisodeMetadata(
   if (
     task.dramaTag
     && task.episodeSummaries?.length === task.episodeCount
-    && task.episodeSummaries.every((summary) => summary.trim())
+    && (options.collectionUploadPlan?.missingEpisodeNumbers
+      ? options.collectionUploadPlan.missingEpisodeNumbers.every(index => task.episodeSummaries![index - 1]?.trim())
+      : task.episodeSummaries.every((summary) => summary.trim()))
   ) {
     log(options, `[taobao-drama] 使用数据库中已缓存的标签和 ${task.episodeCount} 集概括`);
     return {
@@ -219,14 +228,16 @@ export async function prepareTaobaoEpisodeMetadata(
     : synopsis.text
       ? `[taobao-drama] 已读取简介资料：${synopsis.source}`
       : "[taobao-drama] 任务未提供简介，也未找到可读取的简介文件，将使用剧名和百度链接生成文案");
-  const generated = await generateMetadata(options.aiClientFactory(), task, synopsis.text);
+  const generated = await generateMetadata(options.aiClientFactory(), task, synopsis.text,
+    options.collectionUploadPlan && options.collectionUploadPlan.missingEpisodeNumbers.length < task.episodeCount
+      ? options.collectionUploadPlan.missingEpisodeNumbers : undefined);
   const metadata: TaobaoEpisodeMetadata = {
     dramaTag: generated.dramaTag,
     episodeSummaries: generated.episodeSummaries,
     synopsisText: synopsis.text,
     synopsisSource: synopsis.source,
   };
-  log(options, `[taobao-drama] AI 文案生成完成：标签=${metadata.dramaTag}，集数=${metadata.episodeSummaries.length}，模型=${generated.model}`);
+  log(options, `[taobao-drama] AI 文案生成完成：标签=${metadata.dramaTag}，集数=${options.collectionUploadPlan?.missingEpisodeNumbers.length ?? metadata.episodeSummaries.length}，模型=${generated.model}`);
   return metadata;
 }
 

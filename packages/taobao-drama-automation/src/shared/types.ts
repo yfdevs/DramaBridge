@@ -106,6 +106,7 @@ export type TaobaoDramaRuntimeOptions = {
     resourceName: string;
     localEpisodeVideoRoot: string;
     episodeCount: number;
+    episodeDownloadNumbers?: number[];
     requiredPosterImages?: number;
     downloadAssetMaterials?: boolean;
     forceAssetDownload?: boolean;

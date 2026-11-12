@@ -37,7 +37,7 @@ export function taobaoDownloadInfrastructurePauseReason(error: unknown): string 
 
 export function classifyTaobaoDramaFailStage(error: unknown): TaobaoDramaTaskFailStage {
   const message = errorMessage(error);
-  if (/TAOBAO_DRAMA_CONTENT_TAG_/.test(message)) return "FILL_FORM";
+  if (/TAOBAO_DRAMA_CONTENT_TAG_|TAOBAO_DRAMA_VIDEO_DESCRIPTION_/.test(message)) return "FILL_FORM";
   if (/LOGIN|登录|校验/i.test(message)) return "LOGIN";
   if (/FIELD|TEXTBOX|SELECT|COLLECTION_FORM|CONTENT_TAG|字段|表单|内容标签/i.test(message)) return "FILL_FORM";
   // The task API has no DOWNLOAD stage. Treat source downloads as file preparation/upload failures.

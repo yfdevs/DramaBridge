@@ -551,3 +551,11 @@ test("prefers the directory with the most episodes over a one-episode valid sequ
   candidates.sort(compareRemoteVideoDirectoryCandidates);
   assert.equal(candidates[0]?.path, "/山风吹醒少年心/胖子有字");
 });
+
+test("native sparse selection downloads the missing episode rather than episodes 1 through 19", () => {
+  const files = Array.from({ length: 51 }, (_, index) => ({ index: index + 1, name: `第${index + 1}集.mp4` }));
+  assert.deepEqual(selectLeadingEpisodeFiles(files, undefined, [19]), [files[18]]);
+  assert.deepEqual(selectLeadingEpisodeFiles(files, undefined, [19, 51]), [files[18], files[50]]);
+  for (const numbers of [[], [0], [19, 19]]) assert.throws(() => selectLeadingEpisodeFiles(files, undefined, numbers), /集号无效/);
+  assert.throws(() => selectLeadingEpisodeFiles(files, 19, [19]), /集号无效/);
+});
