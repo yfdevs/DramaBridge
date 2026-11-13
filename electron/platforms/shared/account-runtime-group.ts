@@ -17,15 +17,17 @@ export function accountIds(value: unknown): string[] {
 export async function createAccountRuntimeGroup<S extends Status>(
   input: unknown,
   factory: (id: string, canClaimTask: () => boolean) => Promise<Runtime<S>>,
+  options: { parallelStartup?: boolean } = {},
 ) {
   const runtimes = new Map<string, Runtime<S>>();
   const paused = new Set<string>();
   const accountErrors: Record<string, string> = {};
   let stopped = false;
-  let queue: Promise<unknown> = Promise.resolve();
+  const queues = new Map<string, Promise<unknown>>();
   const addAccount = (id: string) => {
     accountIds([id]);
-    const operation = queue.then(async () => {
+    const queueKey = options.parallelStartup ? id : "all";
+    const operation = (queues.get(queueKey) ?? Promise.resolve()).then(async () => {
       if (stopped) throw new Error("服务正在停止，请稍后重试");
       if (
         runtimes
@@ -45,17 +47,22 @@ export async function createAccountRuntimeGroup<S extends Status>(
       runtimes.set(id, runtime);
       delete accountErrors[id];
     });
-    queue = operation.catch(() => undefined);
+    const settled = operation.catch(() => undefined);
+    queues.set(queueKey, settled);
+    void settled.then(() => { if (queues.get(queueKey) === settled) queues.delete(queueKey); });
     return operation;
   };
   try {
-    for (const id of accountIds(input)) {
+    const initialize = async (id: string) => {
       try {
         await addAccount(id);
       } catch (error) {
         accountErrors[id] = error instanceof Error ? error.message : String(error);
       }
-    }
+    };
+    const ids = accountIds(input);
+    if (options.parallelStartup) await Promise.all(ids.map(initialize));
+    else for (const id of ids) await initialize(id);
     if (!runtimes.size) throw new Error(Object.values(accountErrors).join("；"));
   } catch (error) {
     stopped = true;
@@ -93,7 +100,7 @@ export async function createAccountRuntimeGroup<S extends Status>(
     },
     async stop() {
       stopped = true;
-      await queue;
+      await Promise.all([...queues.values()]);
       await Promise.allSettled([...runtimes.values()].map((runtime) => runtime.stop()));
       paused.clear();
     },

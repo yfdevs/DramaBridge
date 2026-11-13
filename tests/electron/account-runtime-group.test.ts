@@ -2,6 +2,37 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createAccountRuntimeGroup } from "../../electron/platforms/shared/account-runtime-group";
 
+test("parallel account startup opens every sibling before an earlier account finishes login", { timeout: 3000 }, async () => {
+  const started: string[] = [], stopped: string[] = [];
+  let finishLogin!: () => void;
+  const login = new Promise<void>(resolve => { finishLogin = resolve; });
+  let siblingsOpened!: () => void;
+  const opened = new Promise<void>(resolve => { siblingsOpened = resolve; });
+  const counts = new Map<string, number>();
+  const factory = async (id: string) => {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+    started.push(id);
+    if (id === "waiting-login") await login;
+    if (id === "ready") siblingsOpened();
+    if (id === "broken") throw new Error("browser failed");
+    return {
+      getStatus: () => ({ running: true, accounts: [{ accountId: id, launched: true }] }),
+      stop: async () => { stopped.push(id); },
+    };
+  };
+  const starting = createAccountRuntimeGroup(["waiting-login", "broken", "ready"], factory, { parallelStartup: true });
+  try {
+    await opened;
+    assert.deepEqual(started, ["waiting-login", "broken", "ready"]);
+  } finally { finishLogin(); }
+  const group = await starting;
+  assert.equal(group.getStatus().running, true);
+  await Promise.all([group.addAccount("extra"), group.addAccount("extra")]);
+  assert.equal(counts.get("extra"), 1);
+  await group.stop();
+  assert.deepEqual(stopped.sort(), ["extra", "ready", "waiting-login"]);
+});
+
 test("adding and pausing accounts preserves sibling runtimes and existing work", async () => {
   const started: string[] = [],
     stopped: string[] = [];

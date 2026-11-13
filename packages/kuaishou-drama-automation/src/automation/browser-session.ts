@@ -1,5 +1,4 @@
-import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { persistKuaishouCredentials } from "./shared-browser.js";
 import {
   cleanupAutomationLogFiles,
   createAutomationLogger,
@@ -53,8 +52,7 @@ export async function saveCredentialState(
     return;
   }
 
-  await mkdir(dirname(options.credentialStatePath), { recursive: true });
-  await context.storageState({ path: options.credentialStatePath });
+  await persistKuaishouCredentials(context, options.credentialStatePath);
   log(options, `[kuaishou-drama] credential snapshot saved: ${options.credentialStatePath}`);
 }
 

@@ -28,7 +28,7 @@ export async function stopKuaishouAccountSync() {
 }
 
 export function registerKuaishouAccountSyncHandlers(options: {
-  prepare: (id: string) => Promise<SyncSourceAccount & { credentialStatePath: string }>;
+  prepare: (id: string) => Promise<SyncSourceAccount & { credentialStatePath: string; userDataDir: string }>;
 }) {
   ipcMain.handle("kuaishou-drama:account-sync:status", () => ({ ...state }));
   ipcMain.handle("kuaishou-drama:account-sync:stop", async () => { await stopKuaishouAccountSync(); return { ...state }; });
@@ -42,23 +42,23 @@ export function registerKuaishouAccountSyncHandlers(options: {
       const tables = configuredFeishuTables();
       const url = readFeishuSettings().tableUrl;
       await tables.read(url, sheetName).then(syncColumns);
-      const accounts: Array<SyncSourceAccount & { credentialStatePath: string }> = [];
+      const accounts: Array<SyncSourceAccount & { credentialStatePath: string; userDataDir: string }> = [];
       for (const id of ids) accounts.push(await options.prepare(id));
       const runtime = await import("@dramabridge/kuaishou-drama-automation");
       await close?.(); close = undefined;
       const sessions = new Map<string, Awaited<ReturnType<typeof runtime.openKuaishouAccountSync>>>();
-      close = async () => { await Promise.all([...sessions.values()].map(session => session.browser.close())); };
+      close = async () => { await Promise.all([...sessions.values()].map(session => session.close())); };
       for (const account of accounts) {
-        const session = await runtime.openKuaishouAccountSync(account.credentialStatePath);
+        const session = await runtime.openKuaishouAccountSync(account);
         sessions.set(account.accountId, session);
-        session.browser.on("disconnected", () => {
+        session.context.on("close", () => {
           if (!state.running) return;
           state.running = false; clearTimeout(timer);
           state.error = `“${account.accountName}”的同步浏览器已关闭，请重新启动同步`;
           if (!cycle) lockFeishuSettings("kuaishou-account-sync", false);
         });
       }
-      if ([...sessions.values()].some(session => !session.browser.isConnected())) throw new Error("来源账号浏览器已关闭，请重新启动同步");
+      if ([...sessions.values()].some(session => !session.isConnected())) throw new Error("来源账号浏览器已关闭，请重新启动同步");
       state = { running: true, stopping: false, message: "正在读取未同步任务", completed: 0, failed: 0, accountIds: ids };
       // Only retain results awaiting writeback within this run, never past task decisions.
       const pendingWritebacks = new Map<string, RecordEntry>();
@@ -108,6 +108,11 @@ export function registerKuaishouAccountSyncHandlers(options: {
               entry = { phase: "completed" };
               await page.close().catch(() => undefined);
             } catch (error) {
+              if (error instanceof Error && error.message.includes("[KUAISHOU_LOGIN_REQUIRED]")) {
+                state.message = `请在已打开的浏览器中登录“${account.accountName}”，登录后继续同步`;
+                await page.close().catch(() => undefined);
+                return;
+              }
               entry = { phase: "failed", error: error instanceof Error ? error.message : String(error) };
               // Failed task tabs remain open until the user stops the synchronization browser.
             }

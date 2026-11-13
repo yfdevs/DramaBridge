@@ -6,7 +6,7 @@ import {
 } from "./task-execution.js";
 import { updateKuaishouExecution, type KuaishouTaskReport } from "../shared/task-execution.js";
 import { KuaishouApiBusinessError } from "../api/task.js";
-import { launchPlatformBrowserContext } from "@dramabridge/browser-window";
+import { openKuaishouBrowserContext } from "../automation/shared-browser.js";
 import type { BrowserContext, Page } from "playwright";
 import {
   captureAutomationFailureDiagnostics,
@@ -189,8 +189,9 @@ export async function startKuaishouDramaRuntime(
 
   await cleanupOldLogFiles(options).catch(() => undefined);
   log(options, "[kuaishou-drama] starting browser");
-  context = await launchPlatformBrowserContext(userDataDir, {
-    viewport: null,
+  context = await openKuaishouBrowserContext(userDataDir, {
+    credentialStatePath: options.credentialStatePath,
+    onError: error => log(options, `[kuaishou-drama] 登录凭证保存失败：${error instanceof Error ? error.message : String(error)}`),
     headless: options.config?.browser?.headless ?? false,
     slowMo: options.config?.browser?.slowMo ?? 0,
   });

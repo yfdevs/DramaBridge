@@ -408,7 +408,7 @@ async function status(): Promise<BaiduDramaServiceStatus> {
 }
 
 async function startRuntime(selectedAccountIds: unknown) {
-  return createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask));
+  return createAccountRuntimeGroup(selectedAccountIds, (id, canClaimTask) => startAccountRuntime([id], canClaimTask), { parallelStartup: true });
 }
 
 async function startAccountRuntime(selectedAccountIds: string[], canClaimTask: () => boolean) {

@@ -1,4 +1,5 @@
-import { chromium, type Page } from "playwright";
+import type { Page } from "playwright";
+import { openKuaishouBrowserContext, persistKuaishouCredentials } from "./shared-browser.js";
 
 export function accountSyncUrl(title: string) {
   const url = new URL("https://kdj.kuaishou.com/home/content/content-management");
@@ -39,20 +40,22 @@ export function syncHistoryLabels(response: unknown): string[] {
   });
 }
 
-export async function openKuaishouAccountSync(credentialStatePath: string) {
-  const browser = await chromium.launch({ headless: false });
+export async function openKuaishouAccountSync(options: { credentialStatePath: string; userDataDir: string }) {
+  const context = await openKuaishouBrowserContext(options.userDataDir, { credentialStatePath: options.credentialStatePath });
   try {
-    const context = await browser.newContext({ storageState: credentialStatePath, viewport: { width: 1280, height: 900 } });
-    const idle = await context.newPage();
+    const idle = context.pages()[0] ?? await context.newPage();
     await idle.goto("https://kdj.kuaishou.com/home/content/content-management", { waitUntil: "domcontentloaded", timeout: 60_000 });
-    if (/passport|\/login/.test(idle.url())) throw new Error("登录状态已失效，请在实例页面重新登录");
-    return { browser, context };
-  } catch (error) { await browser.close(); throw error; }
+    await idle.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
+    // Keep the login page available even with no previous credentials. Task tabs
+    // can report login-required while the user signs in on this shared profile.
+    await persistKuaishouCredentials(context, options.credentialStatePath);
+    return { context, close: () => context.close(), isConnected: () => context.browser()?.isConnected() !== false };
+  } catch (error) { await context.close(); throw error; }
 }
 
 export async function syncKuaishouAccounts(page: Page, title: string, targets: string[], beforeSubmit: () => void, onAccepted?: () => void) {
   await page.goto(accountSyncUrl(title), { waitUntil: "domcontentloaded", timeout: 60_000 });
-  if (/passport|\/login/.test(page.url())) throw new Error("登录状态已失效，请在实例页面登录后重新启动同步");
+  if (/passport|\/login/.test(page.url())) throw new Error("[KUAISHOU_LOGIN_REQUIRED] 请先在已打开的快手浏览器中登录");
   const iframe = await page.waitForSelector("iframe#iframe-wrapper", { timeout: 30_000 });
   const content = await iframe.contentFrame();
   if (!content) throw new Error("快手内容页面尚未加载");

@@ -669,7 +669,6 @@ export function registerKuaishouDramaPlatformHandlers() {
       const account = accounts.find(account => account.accountId === id);
       if (!account) throw new Error("请选择有效的快手来源账号");
       const paths = storagePaths(readConfig(), id);
-      if (!existsSync(paths.credentialStatePath)) throw new Error(`“${account.accountName}”暂无登录凭证，请先在实例页面登录快手`);
       return { ...paths, accountId: account.accountId, accountName: account.accountName };
     },
   });
