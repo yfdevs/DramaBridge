@@ -3617,8 +3617,7 @@ async function submitSavedDownload(
     }
   }
 
-  // Download the small ownership directory as one task. Baidu's native API treats
-  // file paths as directories, so submitting individual images creates empty folders.
+  // Keep ownership images and PDFs together in their dedicated directory task.
   const ownershipTaskNames: string[] = [];
   const submittedAssetRoots = new Set<string>(
     downloadEpisodeVideos && !limitedEpisodeDownload && remoteVideos.rootPath
@@ -3695,19 +3694,19 @@ async function submitSavedDownload(
 
   for (const posterRoot of downloadAssetMaterials ? remotePosters.roots : []) {
     if (!posterRoot.path || assetRootIsCovered(posterRoot.path)) continue;
-    const mixedWithVideoRoot = shouldDownloadMixedPosterAsFile({
+    const downloadPosterFilesOnly = (!downloadEpisodeVideos && !requireAllDiscoveredAssets) || shouldDownloadMixedPosterAsFile({
       videoRootFullyDownloaded: downloadEpisodeVideos && !limitedEpisodeDownload,
       posterRoot: posterRoot.path,
       videoRoot: remoteVideos.rootPath,
       remoteVideoCount: remoteVideos.allVideoFiles.length,
     });
-    if (mixedWithVideoRoot) {
+    if (downloadPosterFilesOnly) {
       if (!assetDownloadRoot) throw new Error("下载混放海报封面时缺少本地素材目录");
       const localPosterRoot = path.join(assetDownloadRoot, "海报封面");
       await mkdir(localPosterRoot, { recursive: true });
       const localPosterCount = await countLocalPosterImages(localPosterRoot);
-      if (remotePosters.files.length > 0 && localPosterCount >= remotePosters.files.length) {
-        log("本地已有海报封面素材，跳过混放封面的重复下载");
+      if (downloadEpisodeVideos && remotePosters.files.length > 0 && localPosterCount >= remotePosters.files.length) {
+        log("本地已有海报封面素材，跳过封面的重复下载");
         continue;
       }
       for (const posterFile of remotePosters.files) {
@@ -3728,7 +3727,7 @@ async function submitSavedDownload(
           );
         }
       }
-      log(`检测到海报封面与正片混放，已自动将封面单独下载到本地目录：${localPosterRoot}`);
+      log(`已单独提交${remotePosters.files.length}张封面，不下载所在目录及视频：${localPosterRoot}`);
       continue;
     }
     if (!posterRoot.fsId) continue;
@@ -3819,6 +3818,9 @@ async function submitSavedDownload(
   return {
     downloadRoot,
     targetName: downloadTargetName,
+    posterDownload: !downloadEpisodeVideos && !requireAllDiscoveredAssets && downloadAssetMaterials && remotePosters.files.length > 0 && assetDownloadRoot
+      ? { root: path.join(assetDownloadRoot, "海报封面"), files: remotePosters.files.map(file => ({ name: file.name, size: file.size })) }
+      : undefined,
     remoteResourceRoot: {
       path: saved.resourceRootPath,
       fsId: saved.resourceRootFsId,
@@ -3889,6 +3891,7 @@ async function downloadBaiduNetdiskSharePromise(
     inferredEpisodeCount,
     remoteResourceRoot,
     temporaryTransfer,
+    posterDownload,
   } = await submitSavedDownload(
     port,
     listTarget,
@@ -3922,6 +3925,7 @@ async function downloadBaiduNetdiskSharePromise(
     },
     downloadRoot: resolvedDownloadRoot,
     localPath: predictedLocalPath,
+    posterDownload,
     remoteVideos,
     remoteOwnership,
     remotePosters,

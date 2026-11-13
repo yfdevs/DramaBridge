@@ -147,6 +147,7 @@ export const BAIDU_NETDISK_EXTERNAL_DIRECTORY = "__external_api_downloads__";
 
 export type BaiduNetdiskEnsureDownloadedRequest = {
   timeoutMs?: number;
+  pollIntervalMs?: number;
   requesterPlatform?: string;
   shareText: string;
   resourceName: string;
@@ -1368,6 +1369,7 @@ async function ensureBaiduNetdiskShareDownloadedOnce(
       requiredMetadataTextFiles: request.requiredMetadataTextFiles,
       mergeOwnershipMaterials: request.mergeOwnershipMaterials,
       timeoutMs,
+      pollIntervalMs: request.pollIntervalMs,
       downloadDir: uniqueDownloadDir,
       sourceLocalPath: request.forceRedownload ? undefined : existingRecord?.localPath,
       downloadTaskName: existingRecord?.resourceName,

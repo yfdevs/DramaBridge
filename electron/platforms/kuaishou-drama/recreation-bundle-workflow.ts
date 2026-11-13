@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
-import { ensureRenamedPortraitPoster, listLocalPosterImages } from "@dramabridge/media-assets";
+import { ensureRenamedPortraitPosters, listLocalPosterImages } from "@dramabridge/media-assets";
 import type { FeishuTaskTransfer } from "../../integrations/feishu/task-runner";
 import { validateRecreationInput } from "../../integrations/feishu/task-validation";
 
@@ -33,11 +33,13 @@ export function createRecreationBundleTransfer(deps: Dependencies): FeishuTaskTr
       requireAllDiscoveredAssets: false,
       requiredPosterImages: 1, requiredOwnershipFiles: 0,
       requiredOwnership: { minimumImages: 0 },
+      timeoutMs: 5 * 60_000, pollIntervalMs: 2_000,
     });
     const source = downloaded.localPath;
     if (!source) throw new Error("下载未返回本地素材目录");
     const posters = await listLocalPosterImages({ root: source, resourceName: input.title, rootIsResourceDir: true });
     if (!posters[0]) throw new Error("缺少原版封面，无法生成新标题封面");
+    const originalPoster = posters[0];
     await mkdir(path.join(output, "封面"), { recursive: true });
     await copyFile(posters[0].file, path.join(output, "封面", `${input.title}${path.extname(posters[0].file).toLowerCase()}`));
     let videoCompleted = 0;
@@ -58,16 +60,15 @@ export function createRecreationBundleTransfer(deps: Dependencies): FeishuTaskTr
       },
     });
     const coverPreparation = (async () => {
-      for (const title of versions) {
-        coverStage = `AI 改名「${title}」`;
-        parallelProgress();
-        const poster = await ensureRenamedPortraitPoster({
+      const posters = await ensureRenamedPortraitPosters({
           client: createConfiguredAiClient(), model: getConfiguredAiImageModel(),
-          referenceFile: posters[0].file, originalTitle: input.title, title,
+          referenceFile: originalPoster.file, originalTitle: input.title, titles: versions,
           cacheDirectory: path.join(work, ".封面缓存"),
           retryAttempts: getConfiguredAiCoverGenerationRetryAttempts(),
+          onProgress: (completed, total) => { coverStage = `AI 改名 ${completed}/${total}`; parallelProgress(); },
         });
-        const target = path.join(output, "封面", `${title}.png`);
+      for (const poster of posters) {
+        const target = path.join(output, "封面", `${poster.title}.png`);
         await writeFile(target + ".tmp", poster.data);
         await rename(target + ".tmp", target);
       }

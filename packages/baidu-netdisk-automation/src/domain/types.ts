@@ -167,6 +167,7 @@ export type BaiduNetdiskRemoteMetadataListing = {
 };
 
 export type BaiduNetdiskShareDownloadResult = {
+  posterDownload?: { root: string; files: Array<{ name: string; size?: number }> };
   share: BaiduNetdiskShareInfo;
   downloadRoot?: string;
   localPath?: string;

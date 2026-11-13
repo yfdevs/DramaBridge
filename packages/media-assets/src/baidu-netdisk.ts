@@ -1,4 +1,5 @@
 import path from "node:path";
+import sharp from "sharp";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import {
   collectEpisodeDirectorySummaries,
@@ -36,6 +37,7 @@ export type BaiduNetdiskShareInfo = {
 };
 
 export type BaiduNetdiskShareDownloadResult = {
+  posterDownload?: { root: string; files: Array<{ name: string; size?: number }> };
   share: BaiduNetdiskShareInfo;
   downloadRoot?: string;
   localPath?: string;
@@ -754,7 +756,71 @@ async function logEpisodeDirectoryDetails(options: {
   }
 }
 
+async function waitForRequiredPosters(options: Parameters<typeof waitForCompleteLocalEpisodeVideos>[0]) {
+  const download = options.posterDownload!;
+  const started = Date.now();
+  let previous = "", stable = 0, missing = 0, invalid = 0, unavailable = 0;
+  let detail = "等待客户端下载封面";
+  while (Date.now() - started < options.timeoutMs) {
+    throwIfAborted(options.signal);
+    const posters: LocalPosterImageFile[] = [];
+    const signatures: string[] = [];
+    for (const expected of download.files) {
+      if (path.basename(expected.name) !== expected.name) throw new Error("封面文件名包含无效路径");
+      const file = path.join(download.root, expected.name);
+      const info = await stat(file).catch(() => undefined);
+      if (!info?.isFile() || info.size <= 0) { detail = `封面尚未落盘：${expected.name}`; continue; }
+      if (expected.size && info.size !== expected.size) {
+        detail = `封面未下载完整：${expected.name}（${info.size}/${expected.size}字节）`; continue;
+      }
+      try {
+        const image = sharp(file);
+        const metadata = await image.metadata();
+        await image.stats(); // Decode pixels: a readable header alone does not prove completion.
+        if (!metadata.width || !metadata.height) throw new Error("图片尺寸无效");
+        posters.push({ name: expected.name, file, size: info.size, width: metadata.width, height: metadata.height });
+        signatures.push(`${file}:${info.size}:${info.mtimeMs}`);
+      } catch { detail = `封面图片不完整或已损坏：${expected.name}`; }
+    }
+    const signature = signatures.join("|");
+    stable = posters.length >= options.requiredPosterImages ? signature === previous ? stable + 1 : 1 : 0;
+    previous = signature;
+    if (stable >= options.stableCompletePolls) {
+      await standardizePosterImagesToRoot({ files: posters, targetRoot: options.targetRoot, resourceName: options.resourceName, onLog: options.onLog });
+      return playletDir(options.targetRoot, options.resourceName);
+    }
+    let status: BaiduNetdiskDownloadTaskStatus | undefined;
+    try {
+      status = await options.getDownloadTaskStatus?.({
+        targetName: download.files[0].name,
+        // A single-file lookup retains the client's original status, including pause/error.
+        expectedDownloadRoot: download.root,
+      });
+      if (options.getDownloadTaskStatus && !status) throw new Error("客户端下载状态不可用");
+      unavailable = 0;
+    } catch (error) {
+      detail = `无法读取百度网盘封面下载状态：${error instanceof Error ? error.message : String(error)}`;
+      if (++unavailable >= 3) throw new Error(`[poster-download-status] ${detail}。文件：${download.files[0].name}；下载目录：${download.root}。请检查百度网盘客户端后重试`);
+    }
+    if (status) {
+      missing = status.found ? 0 : missing + 1;
+      invalid = (status.completed || status.status === "4") && posters.length < options.requiredPosterImages ? invalid + 1 : 0;
+      if (missing >= 3) throw new Error(`[poster-download-missing] 客户端未找到封面下载任务「${download.files[0].name}」。${detail}；下载目录：${download.root}`);
+      if (invalid >= 3) throw new Error(`[poster-download-invalid] 客户端显示封面已下载完成，但${detail}；下载目录：${download.root}`);
+      const stopped = ({ "0": "已删除", "3": "已暂停", "5": "失败" } as Record<string, string>)[status.status || ""];
+      if (stopped || /暂停|失败|错误|paused|failed|error/i.test(status.status || "")) {
+        throw new Error(`[poster-download-stopped] 封面下载${stopped || status.status}：${download.files[0].name}。请在百度网盘检查此文件后重试；下载目录：${download.root}`);
+      }
+      await options.onProgress?.({ phase: "downloading", nativeStatus: status.status, localPath: download.root, speedText: status.rate, ...normalizeDownloadProgress(status.finishSize ?? 0, status.size) });
+    }
+    options.onLog?.(`[video-assets] 封面下载：${posters.length}/${options.requiredPosterImages}，${detail}`);
+    await waitWithSignal(options.pollIntervalMs, options.signal);
+  }
+  throw new Error(`[poster-download-timeout] 等待原版封面下载超时（${Math.round(options.timeoutMs / 6000) / 10}分钟）：${detail}；仅下载封面，视频在云端转存。下载目录：${download.root}`);
+}
+
 async function waitForCompleteLocalEpisodeVideos(options: {
+  posterDownload?: BaiduNetdiskShareDownloadResult["posterDownload"];
   targetRoot: string;
   resourceName: string;
   episodeCount: number;
@@ -789,6 +855,11 @@ async function waitForCompleteLocalEpisodeVideos(options: {
   onProgress?: EnsureBaiduNetdiskEpisodeVideosOptions["onProgress"];
   onLog?: EnsureBaiduNetdiskEpisodeVideosOptions["onLog"];
 }) {
+  if (options.posterDownload && !options.requireEpisodeVideos && !options.requireAllDiscoveredAssets
+    && !options.requiredOwnershipFiles && !options.requiredAiProductionProofFiles && !options.requiredMetadataTextFiles
+    && !options.ownershipRequirements.minimumImages && !options.ownershipRequirements.minimumJianyingImages) {
+    return waitForRequiredPosters(options);
+  }
   const completedDownloadStallPollLimit = 15;
   const missingNativeTaskPollLimit = 3;
   const startedAt = Date.now();
@@ -1215,10 +1286,15 @@ export async function ensureBaiduNetdiskEpisodeVideos(
     options.localEpisodeVideoRoot,
     options.resourceName,
   );
-  const existingPosters = await listLocalPosterImages({
+  let existingPosters = await listLocalPosterImages({
     root: options.localEpisodeVideoRoot,
     resourceName: options.resourceName,
   });
+  if (!downloadEpisodeVideos && requiredPosterImages > 0) {
+    existingPosters = (await Promise.all(existingPosters.map(async file => {
+      try { await sharp(file.file).stats(); return file; } catch { return undefined; }
+    }))).filter((file): file is LocalPosterImageFile => Boolean(file));
+  }
   const existingAiProductionProofs = await listLocalAiProductionProofFiles({
     root: options.localEpisodeVideoRoot,
     resourceName: options.resourceName,
@@ -1335,6 +1411,7 @@ export async function ensureBaiduNetdiskEpisodeVideos(
   let completedPath: string;
   try {
     completedPath = await waitForCompleteLocalEpisodeVideos({
+      posterDownload: result.posterDownload,
       targetRoot: options.localEpisodeVideoRoot,
       // The ownership directory is downloaded alongside the selected video directory;
       // scan the download root as well so both materials are standardized together.
@@ -1382,8 +1459,8 @@ export async function ensureBaiduNetdiskEpisodeVideos(
   } catch (error) {
     if (options.signal?.aborted && options.cancelDownloadTask) {
       await options.cancelDownloadTask({
-        targetName: result.share.name || options.downloadTaskName || options.resourceName,
-        downloadRoot: result.downloadRoot,
+        targetName: result.posterDownload?.files[0]?.name || result.share.name || options.downloadTaskName || options.resourceName,
+        downloadRoot: result.posterDownload?.root ?? result.downloadRoot,
       }).catch(() => undefined);
     }
     throw error;

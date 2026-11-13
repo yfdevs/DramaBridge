@@ -141,6 +141,9 @@ export class OpenAiCompatibleClient implements DramaAiClient {
   }
 
   async generateImage(options: ImageGenerationOptions): Promise<AiImageGenerationResult> {
+    const count = options.count ?? 1;
+    if (!Number.isInteger(count) || count < 1 || count > 15 - (options.referenceImages?.length ?? 0))
+      throw new Error("DRAMA_AI_IMAGE_COUNT_INVALID");
     const prompt = requiredValue(options.prompt, "DRAMA_AI_PROMPT_REQUIRED");
     const model = options.model?.trim() || this.model;
     const referenceImages = await Promise.all(
@@ -162,7 +165,8 @@ export class OpenAiCompatibleClient implements DramaAiClient {
             ? { image: referenceImages }
             : {}),
         size: options.size ?? "2K",
-        sequential_image_generation: "disabled",
+        sequential_image_generation: count > 1 ? "auto" : "disabled",
+        ...(count > 1 ? { sequential_image_generation_options: { max_images: count } } : {}),
         stream: false,
         response_format: "url",
         watermark: options.watermark ?? false,
@@ -183,6 +187,8 @@ export class OpenAiCompatibleClient implements DramaAiClient {
     }
 
     const providerError = await providerResponse.text().catch(() => "");
+    // Multiple prompts cannot safely fall back to OpenAI's n copies of one prompt.
+    if (count > 1) throw new Error(`DRAMA_AI_IMAGE_BATCH_FAILED: HTTP ${providerResponse.status}; ${providerError.slice(0, 500)}`);
     try {
       const fallbackSize = openAiLandscapeSize(options.size);
       if (referenceImages.length > 0) {

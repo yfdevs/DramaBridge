@@ -46,6 +46,8 @@ export interface ImageAnalysisOptions extends AiGenerationOptions {
 }
 
 export interface ImageGenerationOptions {
+  /** Maximum output images for providers supporting sequential group generation. */
+  count?: number;
   prompt: string;
   referenceImages?: readonly AiImageInput[];
   model?: string;

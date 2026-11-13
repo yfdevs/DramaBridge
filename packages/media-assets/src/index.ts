@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { DramaAiClient } from "@dramabridge/ai";
 import sharp from "sharp";
-export { ensureRenamedPortraitPoster, renamedPortraitPosterRecipe } from "./renamed-portrait-poster.js";
+export { ensureRenamedPortraitPoster, ensureRenamedPortraitPosters, renamedPortraitPosterRecipe } from "./renamed-portrait-poster.js";
 
 import { classifyOwnershipProjectProofScreenshotWithAi } from "./ownership-project-proof-ai.js";
 import { removePathWithRetry, retryFileSystemOperation } from "./filesystem-retry.js";
@@ -804,15 +804,14 @@ export async function listLocalPosterImages(options: {
     const entries = (await readdir(dir, { withFileTypes: true }).catch(() => []))
       .filter((entry) => entry.isFile() && ownershipImageExtensions.has(path.extname(entry.name).toLowerCase()))
       .sort((left, right) => left.name.localeCompare(right.name, "zh-CN", { numeric: true }));
-    const namedMatches = entries.filter((entry) => /封面|海报/.test(entry.name));
+    const namedMatches = entries.filter((entry) => /封面|海报|\bcover\b|\bposter\b/i.test(entry.name));
     const fromFileName = namedMatches.length > 0;
     let selectedEntries = namedMatches;
-    if (!fromFileName && /封面|海报/.test(path.basename(dir))) {
+    if (!fromFileName && /封面|海报|\bcover\b|\bposter\b/i.test(path.basename(dir))) {
       for (const entry of entries) {
         const metadata = await sharp(path.join(dir, entry.name)).metadata().catch(() => undefined);
-        if (metadata?.width && metadata?.height && metadata.height > metadata.width) {
-          selectedEntries = [entry];
-          break;
+        if (metadata?.width && metadata?.height) {
+          selectedEntries.push(entry);
         }
       }
     }
@@ -840,7 +839,8 @@ export async function listLocalPosterImages(options: {
     || left.name.localeCompare(right.name, "zh-CN", { numeric: true })
     || left.file.localeCompare(right.file));
   const sortedNamedCandidates = sortCandidates(namedCandidates);
-  const sortedDirectoryCandidates = sortCandidates(directoryCandidates);
+  const sortedDirectoryCandidates = sortCandidates(directoryCandidates).sort((left, right) =>
+    Number((right.height ?? 0) > (right.width ?? 0)) - Number((left.height ?? 0) > (left.width ?? 0)));
   if (options.includeAllMatches) {
     return [...sortedNamedCandidates, ...sortedDirectoryCandidates];
   }
