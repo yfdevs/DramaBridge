@@ -136,6 +136,25 @@ export function shouldDownloadMixedPosterAsFile(options: {
     && normalizeBaiduAssetPath(options.posterRoot) === normalizeBaiduAssetPath(options.videoRoot);
 }
 
+/** Serialized into the client page: do not depend on module-scope helpers. */
+export function selectBaiduPosterCandidates(options: {
+  imageNames: string[];
+  directoryName: string;
+  isResourceRoot: boolean;
+  excludedScope: boolean;
+}) {
+  const pattern = /封面|海报|(?:^|[^a-z])(?:cover|poster)(?:[^a-z]|$)/i;
+  if (options.excludedScope) return { kind: "none", names: [] as string[] };
+  const named = options.imageNames.filter(name => pattern.test(name));
+  if (named.length) return { kind: "named", names: named };
+  if (pattern.test(options.directoryName)) return { kind: "directory", names: options.imageNames.slice(0, 1) };
+  // A hash-named cover is often placed beside 视频/权属/简介.txt. Only accept
+  // one unambiguous image at the actual resource root, never arbitrary subfolders.
+  if (options.isResourceRoot && options.imageNames.length === 1)
+    return { kind: "root", names: options.imageNames };
+  return { kind: "none", names: [] as string[] };
+}
+
 export function areBaiduNetdiskFilesStrictlyIdentical(
   source: Record<string, unknown>,
   target: Record<string, unknown>,
@@ -1917,6 +1936,7 @@ export async function saveShareToOwnNetdisk(
   const classifyOwnershipProofName = ${classifyBaiduNetdiskOwnershipProofName.toString()};
   const isOwnershipProofDirectoryName = ${isBaiduNetdiskOwnershipProofDirectoryName.toString()};
   const isScreenshotCandidateDirectory = ${isBaiduNetdiskScreenshotCandidateDirectory.toString()};
+  const selectPosterCandidates = ${selectBaiduPosterCandidates.toString()};
   const episodeBaseNames = [...new Set([expectedName, sourceName, ...sourceNames, finalFileName].filter(Boolean))];
   const episodePatterns = episodeBaseNames.flatMap((baseName) => {
     const escaped = escapeRegExp(baseName);
@@ -2010,6 +2030,7 @@ export async function saveShareToOwnNetdisk(
   const ownershipRoots = new Map();
   const namedPosterFiles = new Map();
   const directoryPosterFiles = new Map();
+  const rootPosterFiles = new Map();
   const aiProductionProofFiles = new Map();
   const aiProductionProofRoots = new Map();
   const metadataTextFiles = new Map();
@@ -2043,12 +2064,14 @@ export async function saveShareToOwnNetdisk(
     const directImages = entries
       .filter((entry) => !(entry?.isdir === 1 || entry?.isdir === true) && /.(?:png|jpe?g|bmp|webp)$/i.test(itemName(entry)))
       .sort((left, right) => itemName(left).localeCompare(itemName(right), "zh-CN", { numeric: true }));
-    const namedPosterImages = directImages.filter((entry) => /封面|海报/.test(itemName(entry)));
-    const selectedPosterImages = namedPosterImages.length > 0
-      ? namedPosterImages
-      : /封面|海报/.test(String(current.name || "")) && directImages[0]
-        ? [directImages[0]]
-        : [];
+    const posterCandidates = selectPosterCandidates({
+      imageNames: directImages.map(itemName), directoryName: String(current.name || ""),
+      isResourceRoot: current.depth === 0,
+      excludedScope: currentOwnershipScope || current.aiProductionProofScope,
+    });
+    const selectedPosterNames = new Set(posterCandidates.names);
+    const selectedPosterImages = directImages.filter(entry => selectedPosterNames.has(itemName(entry)));
+    const namedPosterImages = posterCandidates.kind === "named" ? selectedPosterImages : [];
     const selectedPosterPaths = new Set(selectedPosterImages.map((entry) => itemPath(entry) || joinPath(current.path, itemName(entry))));
     const namedPosterPaths = new Set(namedPosterImages.map((entry) => itemPath(entry) || joinPath(current.path, itemName(entry))));
     const directMetadataTextEntries = entries.filter((entry) =>
@@ -2131,7 +2154,7 @@ export async function saveShareToOwnNetdisk(
             rootPath: current.path,
             rootFsId: current.fsId,
           };
-          (namedPosterPaths.has(entryPath) ? namedPosterFiles : directoryPosterFiles).set(entryPath, posterFile);
+          (namedPosterPaths.has(entryPath) ? namedPosterFiles : posterCandidates.kind === "root" ? rootPosterFiles : directoryPosterFiles).set(entryPath, posterFile);
         }
         if (currentOwnershipScope) {
           const stem = name.replace(/.[^.]+$/, "");
@@ -2300,7 +2323,8 @@ export async function saveShareToOwnNetdisk(
         || left.name.localeCompare(right.name, "zh-CN", { numeric: true })
         || left.path.localeCompare(right.path));
       const selected = sortPosters([...namedPosterFiles.values()])[0]
-        || sortPosters([...directoryPosterFiles.values()])[0];
+        || sortPosters([...directoryPosterFiles.values()])[0]
+        || sortPosters([...rootPosterFiles.values()])[0];
       return selected
         ? { files: [selected], roots: [{ path: selected.rootPath, fsId: selected.rootFsId }] }
         : { files: [], roots: [] };

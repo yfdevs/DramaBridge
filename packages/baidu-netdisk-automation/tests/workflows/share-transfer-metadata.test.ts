@@ -6,7 +6,8 @@ import { WebSocketServer } from "ws";
 import { saveShareToOwnNetdisk } from "../../src/workflows/download-baidu-folder.js";
 
 test("real injected transfer script uses fresh share metadata and rejects -9 before any cloud write", async () => {
-  for (const rootState of ["valid", "missing", "empty", "normalized"]) {
+  for (const rootState of ["valid", "missing", "empty", "normalized", "root-cover"]) {
+    const hasOwnRoot = rootState === "normalized" || rootState === "root-cover";
     const failRoot = rootState === "missing";
     const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
     await once(server, "listening");
@@ -85,16 +86,20 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
                               size: 10,
                               md5: "test-content",
                             },
+                            ...(rootState === "root-cover" ? [{ fs_id: 12, path: real + "/b45d282d3a0b4caa2413ff0af78b97d8.png",
+                              server_filename: "b45d282d3a0b4caa2413ff0af78b97d8.png", isdir: 0, size: 1400000 }] : []),
                           ],
                         }),
                       };
                     }
                     if (url.pathname === "/api/list") {
-                      if (rootState === "normalized") return { ok: true, json: async () => ({ errno: 0,
+                      if (hasOwnRoot) return { ok: true, json: async () => ({ errno: 0,
                         list: url.searchParams.get("dir") === "/"
                           ? [{ fs_id: 20, isdir: 1, path: "/" + title, server_filename: title }]
-                          : [{ fs_id: 21, isdir: 0, path: "/" + title + "/" + title + "-第1集.mp4",
-                              server_filename: title + "-第1集.mp4", size: 10, md5: "test-content" }] }) };
+                          : [{ fs_id: 21, isdir: 0, path: "/" + title + "/" + (rootState === "root-cover" ? "第1集.mp4" : title + "-第1集.mp4"),
+                              server_filename: rootState === "root-cover" ? "第1集.mp4" : title + "-第1集.mp4", size: 10, md5: "test-content" },
+                            ...(rootState === "root-cover" ? [{ fs_id: 22, isdir: 0, path: "/" + title + "/b45d282d3a0b4caa2413ff0af78b97d8.png",
+                              server_filename: "b45d282d3a0b4caa2413ff0af78b97d8.png", size: 1400000 }] : [])] }) };
                       throw new Error("confirmed correct source before transfer");
                     }
                     throw new Error("unexpected endpoint: " + url.pathname);
@@ -124,10 +129,14 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
           { name: title, link: "https://pan.baidu.com/s/1fresh", pwd: "1234" },
           rootState === "normalized" ? { normalizedVideoEpisodeCount: 1 } : {},
         );
-      if (rootState === "normalized") {
+      if (hasOwnRoot) {
         const result = await operation;
         assert.equal(result.resourceRootPath, "/" + title);
         assert.equal(result.remoteVideos.files.length, 1);
+        if (rootState === "root-cover") {
+          assert.equal(result.remotePosters.files.length, 1);
+          assert.equal(result.remotePosters.files[0].name, "b45d282d3a0b4caa2413ff0af78b97d8.png");
+        }
       } else await assert.rejects(operation,
         failRoot
           ? /errno=-9.*request_id=987/
@@ -138,9 +147,9 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
       assert.equal(writes, 0);
       assert.equal(
         calls.filter((endpoint) => endpoint === "/share/list").length,
-        ["valid", "normalized"].includes(rootState) ? 2 : 1,
+        ["valid", "normalized", "root-cover"].includes(rootState) ? 2 : 1,
       );
-      assert.equal(calls.includes("/api/list"), ["valid", "normalized"].includes(rootState));
+      assert.equal(calls.includes("/api/list"), ["valid", "normalized", "root-cover"].includes(rootState));
     } finally {
       for (const client of server.clients) client.terminate();
       await new Promise<void>((resolve, reject) =>

@@ -26,6 +26,7 @@ import {
   selectLeadingEpisodeFiles,
   shouldDownloadMixedPosterAsFile,
   shouldDownloadBaiduOwnershipDirectories,
+  selectBaiduPosterCandidates,
   validateRemoteEpisodePathSelection,
   type RemoteVideoDirectoryCandidateScore,
 } from "../../src/workflows/download-baidu-folder.js";
@@ -37,6 +38,20 @@ const cdpTarget = (id: string, url: string): CdpTarget => ({
   title: "百度网盘",
   url,
   webSocketDebuggerUrl: `ws://127.0.0.1:9337/devtools/page/${id}`,
+});
+
+test("serialized poster detection accepts the unique root cover in 一元餐盒的代价 without treating proofs or ambiguous images as covers", () => {
+  const select = runInNewContext(`(${selectBaiduPosterCandidates.toString()})`) as typeof selectBaiduPosterCandidates;
+  const hashed = "b45d282d3a0b4caa2413ff0af78b97d8.png";
+  const root = { imageNames: [hashed], directoryName: "一元餐盒的代价", isResourceRoot: true, excludedScope: false };
+  assert.equal(select(root).kind, "root");
+  assert.deepEqual([...select(root).names], [hashed]);
+  assert.equal(select({ ...root, isResourceRoot: false }).names.length, 0);
+  assert.equal(select({ ...root, excludedScope: true, directoryName: "权属", imageNames: ["海报工程截图.png"] }).names.length, 0);
+  assert.equal(select({ ...root, imageNames: [hashed, "头像.png"] }).names.length, 0);
+  assert.equal(select({ ...root, imageNames: [hashed, "cover_9x16.png"] }).kind, "named");
+  assert.deepEqual([...select({ ...root, imageNames: [hashed, "cover_9x16.png"] }).names], ["cover_9x16.png"]);
+  assert.equal(select({ ...root, directoryName: "poster", isResourceRoot: false }).kind, "directory");
 });
 
 test("serialized Baidu page name sanitization preserves full-width drama punctuation", () => {

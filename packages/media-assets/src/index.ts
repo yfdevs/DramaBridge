@@ -794,6 +794,7 @@ export async function listLocalPosterImages(options: {
   const resourceDir = options.rootIsResourceDir ? options.root : playletDir(options.root, options.resourceName);
   const namedCandidates: LocalPosterImageFile[] = [];
   const directoryCandidates: LocalPosterImageFile[] = [];
+  const rootCandidates: LocalPosterImageFile[] = [];
   const seenFiles = new Set<string>();
 
   for (const dir of await recursiveDirs(resourceDir)) {
@@ -804,10 +805,14 @@ export async function listLocalPosterImages(options: {
     const entries = (await readdir(dir, { withFileTypes: true }).catch(() => []))
       .filter((entry) => entry.isFile() && ownershipImageExtensions.has(path.extname(entry.name).toLowerCase()))
       .sort((left, right) => left.name.localeCompare(right.name, "zh-CN", { numeric: true }));
-    const namedMatches = entries.filter((entry) => /封面|海报|\bcover\b|\bposter\b/i.test(entry.name));
+    const namedMatches = entries.filter((entry) => /封面|海报|(?:^|[^a-z])(?:cover|poster)(?:[^a-z]|$)/i.test(entry.name));
     const fromFileName = namedMatches.length > 0;
+    const fromDirectory = /封面|海报|(?:^|[^a-z])(?:cover|poster)(?:[^a-z]|$)/i.test(path.basename(dir));
+    const fromRoot = !fromFileName && !fromDirectory && dir === resourceDir && entries.length === 1
+      && !isOwnershipDirectoryName(path.basename(resourceDir)) && !/ai制作证明/i.test(path.basename(resourceDir));
     let selectedEntries = namedMatches;
-    if (!fromFileName && /封面|海报|\bcover\b|\bposter\b/i.test(path.basename(dir))) {
+    if (fromRoot) selectedEntries = entries;
+    if (!fromFileName && fromDirectory) {
       for (const entry of entries) {
         const metadata = await sharp(path.join(dir, entry.name)).metadata().catch(() => undefined);
         if (metadata?.width && metadata?.height) {
@@ -822,9 +827,10 @@ export async function listLocalPosterImages(options: {
       const fileStat = await stat(file).catch(() => undefined);
       if (!fileStat?.isFile() || fileStat.size <= 0) continue;
       const metadata = await sharp(file).metadata().catch(() => undefined);
+      if (fromRoot && (!metadata?.width || !metadata?.height)) continue;
       const swapsOrientation = [5, 6, 7, 8].includes(metadata?.orientation ?? 1);
       seenFiles.add(resolved);
-      (fromFileName ? namedCandidates : directoryCandidates).push({
+      (fromFileName ? namedCandidates : fromRoot ? rootCandidates : directoryCandidates).push({
         name: entry.name,
         file,
         size: fileStat.size,
@@ -842,9 +848,9 @@ export async function listLocalPosterImages(options: {
   const sortedDirectoryCandidates = sortCandidates(directoryCandidates).sort((left, right) =>
     Number((right.height ?? 0) > (right.width ?? 0)) - Number((left.height ?? 0) > (left.width ?? 0)));
   if (options.includeAllMatches) {
-    return [...sortedNamedCandidates, ...sortedDirectoryCandidates];
+    return [...sortedNamedCandidates, ...sortedDirectoryCandidates, ...rootCandidates];
   }
-  const selected = sortedNamedCandidates[0] ?? sortedDirectoryCandidates[0];
+  const selected = sortedNamedCandidates[0] ?? sortedDirectoryCandidates[0] ?? rootCandidates[0];
   return selected ? [selected] : [];
 }
 
