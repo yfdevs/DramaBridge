@@ -1,8 +1,9 @@
 export type PinduoduoDramaLoginState = "login-required" | "logged-in" | "unknown";
 
 export type PinduoduoDramaConfig = {
+  sourceTableUrl: string;
   accountProfileName: string;
-  creatorUid: string;
+  creatorName: string;
   browserExecutablePath: string;
   headless: string;
   runDataDir: string;
@@ -20,7 +21,6 @@ export type PinduoduoDramaStoragePaths = {
   credentialStatePath: string;
   logDir: string;
   logFilePath: string;
-  databasePath: string;
 };
 
 export type PinduoduoDramaStoragePathKey =
@@ -48,6 +48,8 @@ export type PinduoduoDramaServiceStatus = {
   credentialStatePath?: string;
   logFilePath?: string;
   pid: number | null;
+  instances?: Array<{ id: string; name: string; launched: boolean; loginState: string }>;
+  accountErrors?: Record<string, string>;
 };
 
 export type PinduoduoUploadRecord = {
@@ -60,7 +62,7 @@ export type PinduoduoUploadRecord = {
   errorMessage?: string;
   attempts?: number;
   rawJson?: string;
-  resourceSource?: "LEGACY_XLSX_ORIGINAL" | "PINDUODUO_LIST";
+  resourceSource?: "FEISHU" | "LEGACY_XLSX_ORIGINAL" | "PINDUODUO_LIST";
   resourceSourceRows?: number[];
   accountProfileName?: string;
   uploadedAt?: string;
@@ -99,6 +101,9 @@ async function invokePinduoduoDrama<T>(channel: string, ...args: unknown[]): Pro
 }
 
 export const pinduoduoDramaService = {
+  testSourceTable(url: string) {
+    return invokePinduoduoDrama<{ sheetName: string; titleCount: number }>("pinduoduo-drama:config:test-source-table", url);
+  },
   getConfig() {
     return invokePinduoduoDrama<PinduoduoDramaConfigResult>("pinduoduo-drama:config:get");
   },
@@ -149,10 +154,14 @@ export const pinduoduoDramaService = {
       "pinduoduo-drama:upload-records:retry-failed",
     );
   },
-  retryUploadRecord(platformApplyId: number) {
+  retryUploadRecord(platformApplyId: number, accountName: string) {
     return invokePinduoduoDrama<{ reset: number }>(
       "pinduoduo-drama:upload-records:retry-one",
       platformApplyId,
+      accountName,
     );
+  },
+  confirmPublication(accountName: string, id: number, published: boolean) {
+    return invokePinduoduoDrama<void>("pinduoduo-drama:upload-records:confirm-publication", accountName, id, published);
   },
 };

@@ -1,17 +1,14 @@
 import type { BrowserContext, Locator, Page } from "playwright";
-import { readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { stat, readdir } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import {
   listLocalPosterImages,
   prepareCroppedImageVariant,
 } from "@dramabridge/media-assets";
 import { fetchApprovedShortplays } from "./shortplay-manage-page.js";
-import { PinduoduoUploadRecordsRepository } from "../storage/pinduoduo-upload-records-repository.js";
-import {
-  PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE,
-  PinduoduoLegacyResourceLinksRepository,
-  resolvePinduoduoResource,
-} from "../storage/pinduoduo-legacy-resource-links.js";
+import { resolvePinduoduoCreator } from "./creator-account.js";
+import type { PinduoduoUploadStore } from "../storage/upload-store.js";
 import type {
   PinduoduoUploadRecord,
   PinduoduoUploadRecordStage,
@@ -426,7 +423,7 @@ export async function createDramaAndBindAllUploadedVideos(
   await titleInput.waitFor({ state: "hidden", timeout: 30_000 });
 }
 
-export async function publishAllUploadedVideos(page: Page): Promise<void> {
+export async function publishAllUploadedVideos(page: Page, onFinalSubmit?: () => void): Promise<void> {
   const uploadedVideoCards = page.locator("p", { hasText: /^\s*文件名：/ });
   const uploadedVideoCardCount = await uploadedVideoCards.count();
   const publishButton = page
@@ -435,6 +432,7 @@ export async function publishAllUploadedVideos(page: Page): Promise<void> {
     .last();
   await publishButton.waitFor({ state: "visible", timeout: 60_000 });
   await publishButton.click({ timeout: 60_000 });
+  onFinalSubmit?.();
 
   await page.waitForTimeout(1_000);
   const incompleteWarning = page
@@ -462,6 +460,7 @@ export async function publishAllUploadedVideos(page: Page): Promise<void> {
     .first();
   if (await dialogConfirm.isVisible().catch(() => false)) {
     await dialogConfirm.click();
+    onFinalSubmit?.();
   }
 
   const successDeadline = Date.now() + 60_000;
@@ -479,7 +478,7 @@ export async function publishAllUploadedVideos(page: Page): Promise<void> {
 async function syncApprovedUploadRecords(
   page: Page,
   options: PinduoduoDramaRuntimeOptions,
-  repository: PinduoduoUploadRecordsRepository,
+  repository: PinduoduoUploadStore,
 ): Promise<{ cleaned: number; eligibleIds: Set<number>; synced: number }> {
   let pageNumber = 1;
   let cleaned = 0;
@@ -489,12 +488,12 @@ async function syncApprovedUploadRecords(
     const result = await fetchApprovedShortplays(page, options, pageNumber);
     pageNumber += 1;
     const retainedCreatedTopicIds = new Set(
-      repository.retainIncompleteCreatedTopics(result.createdTopicIds),
+      await repository.retainIncompleteCreatedTopics(result.createdTopicIds),
     );
-    cleaned += repository.deleteByPlatformApplyIds(
+    cleaned += await repository.deleteByPlatformApplyIds(
       result.createdTopicIds.filter((id) => !retainedCreatedTopicIds.has(id)),
     );
-    repository.upsertFromApprovedList(result.records);
+    await repository.upsertFromApprovedList(result.records);
     for (const record of result.records) {
       if (record.id === undefined) continue;
       eligibleIds.add(record.id);
@@ -515,16 +514,15 @@ async function syncApprovedUploadRecords(
 async function processUploadRecord(
   context: BrowserContext,
   options: PinduoduoDramaRuntimeOptions,
-  repository: PinduoduoUploadRecordsRepository,
-  legacyResourceRepository: PinduoduoLegacyResourceLinksRepository,
+  repository: PinduoduoUploadStore,
   record: PinduoduoUploadRecord,
 ): Promise<boolean> {
   throwIfRuntimeStopped(options);
   if (!options.config?.creatorUid?.trim()) {
-    repository.markFailed(
+    await repository.markFailed(
       record.platformApplyId,
       "OPEN_PAGE",
-      "未配置创作者 UID（creatorUid），无法打开发布页",
+      "尚未自动识别主播，无法打开发布页",
     );
     log(options, "error", "runtime", "approved shortplay upload skipped: creator UID missing", {
       platformApplyId: record.platformApplyId,
@@ -536,34 +534,18 @@ async function processUploadRecord(
   let stage: PinduoduoUploadRecordStage = "DOWNLOAD";
   try {
     throwIfRuntimeStopped(options);
-    repository.markDownloading(record.platformApplyId);
-    const shouldUseLegacyResource =
-      record.gmtCreate !== undefined &&
-      record.gmtCreate < PINDUODUO_PLATFORM_RESOURCE_CUTOFF_GMT_CREATE;
-    const legacyResource = shouldUseLegacyResource
-      ? legacyResourceRepository.findByTitle(record.title)
-      : undefined;
-    const resource = resolvePinduoduoResource(
-      record.title,
-      record.demoUrl,
-      record.gmtCreate,
-      legacyResource,
-    );
-    repository.markResourceSource(
-      record.platformApplyId,
-      resource.source,
-      resource.sourceRows,
-    );
-    log(options, "info", "runtime", "approved shortplay resource resolved", {
+    const shareText = await repository.resolveResource(record.platformApplyId);
+    if (!shareText.trim()) throw new Error("来源表未返回有效的全集网盘链接");
+    await repository.markDownloading(record.platformApplyId);
+    log(options, "info", "runtime", "approved shortplay full resource resolved from Feishu", {
       platformApplyId: record.platformApplyId,
       title: record.title,
-      resourceSource: resource.source,
-      sourceRows: resource.sourceRows,
+      resourceSource: "FEISHU",
     });
     let downloadPath: string | undefined;
     if (options.ensureBaiduNetdiskResource) {
       const downloadResult = await options.ensureBaiduNetdiskResource({
-        shareText: resource.shareText,
+        shareText,
         resourceName: record.title,
         localEpisodeVideoRoot: options.config?.video?.localEpisodeVideoRoot ?? "",
         episodeCount: record.episodeCount ?? 1,
@@ -581,11 +563,11 @@ async function processUploadRecord(
       downloadPath = downloadResult.localPath;
     }
     throwIfRuntimeStopped(options);
-    repository.markReady(record.platformApplyId);
+    await repository.markReady(record.platformApplyId);
 
     const files = downloadPath ? await listVideoFiles(downloadPath) : [];
     if (files.length === 0) {
-      repository.markFailed(record.platformApplyId, "DOWNLOAD", "本地下载目录中没有可上传的视频文件");
+      await repository.markFailed(record.platformApplyId, "DOWNLOAD", "本地下载目录中没有可上传的视频文件");
       log(options, "error", "runtime", "approved shortplay upload skipped: no video files", {
         platformApplyId: record.platformApplyId,
         title: record.title,
@@ -595,11 +577,17 @@ async function processUploadRecord(
     }
     assertPinduoduoEpisodeFileCount(files, record.episodeCount);
 
-    repository.markUploading(record.platformApplyId);
+    await repository.markUploading(record.platformApplyId);
     const fileBatches = splitPinduoduoVideoFiles(files);
-    const completedBatchCount = repository.prepareUploadBatches(
+    const manifest = createHash("sha256");
+    for (const file of files) {
+      const info = await stat(file);
+      manifest.update(JSON.stringify([basename(file), info.size, info.mtimeMs]));
+    }
+    const completedBatchCount = await repository.prepareUploadBatches(
       record.platformApplyId,
       fileBatches.length,
+      manifest.digest("hex"),
     );
     log(options, "info", "runtime", "approved shortplay upload batches prepared", {
       platformApplyId: record.platformApplyId,
@@ -613,6 +601,8 @@ async function processUploadRecord(
     let dramaCreatedInThisRun = false;
     for (let batchIndex = completedBatchCount; batchIndex < fileBatches.length; batchIndex += 1) {
       let uploadPage: Page | undefined;
+      let batchSucceeded = false;
+      let submittedAt = 0;
       try {
         throwIfRuntimeStopped(options);
         const batchFiles = fileBatches[batchIndex];
@@ -670,7 +660,7 @@ async function processUploadRecord(
           const errorMessage = `第 ${batchIndex + 1}/${fileBatches.length} 批视频上传失败${
             platformFailure.reasons.length > 0 ? `：${platformFailure.reasons.join("；")}` : ""
           }`;
-          repository.markRejected(record.platformApplyId, errorMessage);
+          await repository.markRejected(record.platformApplyId, errorMessage);
           log(options, "error", "runtime", "approved shortplay batch rejected by platform", {
             platformApplyId: record.platformApplyId,
             title: record.title,
@@ -742,10 +732,15 @@ async function processUploadRecord(
 
         stage = "PUBLISH";
         throwIfRuntimeStopped(options);
-        await publishAllUploadedVideos(uploadPage);
+        await repository.markPublishing(record.platformApplyId, batchIndex + 1);
+        await publishAllUploadedVideos(uploadPage, () => {
+          submittedAt = Date.now();
+          options.onFinalSubmit?.();
+        });
         await uploadPage.waitForTimeout(POST_PUBLISH_SETTLE_MS);
         throwIfRuntimeStopped(options);
-        repository.markUploadBatchPublished(record.platformApplyId, batchIndex + 1);
+        await repository.markUploadBatchPublished(record.platformApplyId, batchIndex + 1);
+        batchSucceeded = true;
         log(options, "info", "runtime", "approved shortplay batch published", {
           platformApplyId: record.platformApplyId,
           title: record.title,
@@ -754,11 +749,15 @@ async function processUploadRecord(
           fileCount: batchFiles.length,
         });
       } finally {
-        await uploadPage?.close().catch(() => undefined);
+        if (batchSucceeded || runtimeWasStopped(options)) {
+          const remaining = submittedAt ? Math.max(0, POST_PUBLISH_SETTLE_MS - (Date.now() - submittedAt)) : 0;
+          if (remaining) await new Promise(resolve => setTimeout(resolve, remaining));
+          await uploadPage?.close().catch(() => undefined);
+        }
       }
     }
 
-    repository.markUploaded(record.platformApplyId);
+    await repository.markUploaded(record.platformApplyId);
     log(options, "info", "runtime", "approved shortplay published", {
       platformApplyId: record.platformApplyId,
       title: record.title,
@@ -768,7 +767,7 @@ async function processUploadRecord(
     return true;
   } catch (error) {
     if (runtimeWasStopped(options)) {
-      repository.markInterrupted(record.platformApplyId);
+      await repository.markInterrupted(record.platformApplyId);
       log(options, "info", "runtime", "approved shortplay upload interrupted by service stop", {
         platformApplyId: record.platformApplyId,
         title: record.title,
@@ -777,7 +776,7 @@ async function processUploadRecord(
       return false;
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
-    repository.markFailed(record.platformApplyId, stage, errorMessage);
+    await repository.markFailed(record.platformApplyId, stage, errorMessage);
     log(options, "error", "runtime", "approved shortplay upload failed", {
       platformApplyId: record.platformApplyId,
       title: record.title,
@@ -793,52 +792,29 @@ export async function runApprovedShortplayCycle(
   context: BrowserContext,
   options: PinduoduoDramaRuntimeOptions,
 ): Promise<number> {
-  const repository = new PinduoduoUploadRecordsRepository(options);
-  let legacyResourceRepository: PinduoduoLegacyResourceLinksRepository | undefined;
+  const repository = options.uploadRecords;
+  if (!repository) throw new Error("拼多多必须连接飞书任务表，不能使用本地任务数据库");
+  throwIfRuntimeStopped(options);
+  const recovered = await repository.recoverInterruptedRecords();
+  if (recovered > 0) log(options, "info", "runtime", "recovered interrupted approved upload records", { recovered });
+  const { cleaned, eligibleIds, synced } = await syncApprovedUploadRecords(page, options, repository);
+  log(options, "info", "runtime", "approved upload records synced", { cleaned, synced });
+  const storedRecords = await repository.findProcessableRecords();
+  const processableRecords = storedRecords.filter(record => eligibleIds.has(record.platformApplyId));
+  log(options, "info", "runtime", "approved upload processable records", {
+    count: processableRecords.length,
+    skippedBecauseCreatedOrUnapproved: storedRecords.length - processableRecords.length,
+  });
+  // Resolve using this browser's login every cycle. Never trust an old configured UID.
+  const creator = processableRecords.length ? await resolvePinduoduoCreator(context, options) : undefined;
+  const uploadOptions: PinduoduoDramaRuntimeOptions = {
+    ...options,
+    config: { ...options.config, creatorUid: creator ? String(creator.anchor_uid) : undefined },
+  };
   let uploaded = 0;
-  try {
-    throwIfRuntimeStopped(options);
-    legacyResourceRepository = new PinduoduoLegacyResourceLinksRepository(options);
-    const recovered = repository.recoverInterruptedRecords();
-    if (recovered > 0) {
-      log(options, "info", "runtime", "recovered interrupted approved upload records", {
-        recovered,
-      });
-    }
-    const { cleaned, eligibleIds, synced } = await syncApprovedUploadRecords(
-      page,
-      options,
-      repository,
-    );
-    log(options, "info", "runtime", "approved upload records synced", { cleaned, synced });
-
-    const storedProcessableRecords = repository.findProcessableRecords();
-    const processableRecords = storedProcessableRecords.filter((record) =>
-      eligibleIds.has(record.platformApplyId),
-    );
-    log(options, "info", "runtime", "approved upload processable records", {
-      count: processableRecords.length,
-      skippedBecauseCreatedOrUnapproved:
-        storedProcessableRecords.length - processableRecords.length,
-    });
-
-    for (const record of processableRecords) {
-      if (runtimeWasStopped(options)) break;
-      if (
-        await processUploadRecord(
-          context,
-          options,
-          repository,
-          legacyResourceRepository,
-          record,
-        )
-      ) {
-        uploaded += 1;
-      }
-    }
-    return uploaded;
-  } finally {
-    legacyResourceRepository?.close();
-    repository.close();
+  for (const record of processableRecords) {
+    if (runtimeWasStopped(options)) break;
+    if (await processUploadRecord(context, uploadOptions, repository, record)) uploaded++;
   }
+  return uploaded;
 }

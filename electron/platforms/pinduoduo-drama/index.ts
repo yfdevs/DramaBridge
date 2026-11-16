@@ -25,11 +25,12 @@ import {
   RuntimeController,
   selectDirectory,
 } from "../shared";
-import { automationDatabasePath } from "../../storage/database";
-import {
-  PinduoduoApprovedUploadRecordsRepository,
-  type ListUploadRecordsFilter,
-} from "../../storage/pinduoduo-drama/upload-records-repository";
+import { configuredFeishuTables, readFeishuSettings, lockFeishuSettings } from "../../integrations/feishu";
+import { PinduoduoFeishuTables, type PinduoduoFeishuAccount } from "./feishu";
+import { PinduoduoSourceTable, validatePinduoduoSourceUrl } from "./source-table";
+import { PINDUODUO_DEFAULT_SOURCE_TABLE_URL } from "../../../src/platforms/pinduoduo-drama/defaults";
+type ListUploadRecordsFilter = { status?: string; limit?: number; offset?: number };
+type RuntimeInstance = { id: string; name: string; launched: boolean; loginState: string; activeUrl?: string };
 import {
   assertGlobalDirectoriesConfigured,
   resolveGlobalPlatformDirectories,
@@ -40,6 +41,7 @@ const uploadRecordsWindowMode = "pinduoduo-drama-upload-records";
 const uploadRecordsWindowTitle = "拼多多审核与上传状态";
 
 type PinduoduoDramaRuntimeStatus = {
+  lastError?: string;
   platform: "pinduoduo-drama";
   running: boolean;
   loginState: "login-required" | "logged-in" | "unknown";
@@ -51,6 +53,8 @@ type PinduoduoDramaRuntimeStatus = {
   accountDir?: string;
   credentialStatePath?: string;
   logFilePath?: string;
+  instances?: RuntimeInstance[];
+  accountErrors?: Record<string, string>;
 };
 
 type PinduoduoDramaRuntime = {
@@ -59,8 +63,9 @@ type PinduoduoDramaRuntime = {
 };
 
 export type PinduoduoDramaConfig = {
+  sourceTableUrl: string;
   accountProfileName: string;
-  creatorUid: string;
+  creatorName: string;
   browserExecutablePath: string;
   headless: string;
   runDataDir: string;
@@ -89,7 +94,6 @@ type PinduoduoDramaStoragePaths = {
   credentialStatePath: string;
   logDir: string;
   logFilePath: string;
-  databasePath: string;
 };
 
 type PinduoduoDramaStore = {
@@ -106,8 +110,9 @@ function defaultPinduoduoBrowserExecutablePath() {
 }
 
 const defaultPinduoduoDramaConfig: PinduoduoDramaConfig = {
+  sourceTableUrl: PINDUODUO_DEFAULT_SOURCE_TABLE_URL,
   accountProfileName: "default",
-  creatorUid: "7735796497358",
+  creatorName: "",
   browserExecutablePath: defaultPinduoduoBrowserExecutablePath(),
   headless: "false",
   runDataDir: ".drama-runs/pinduoduo-drama",
@@ -120,7 +125,7 @@ const defaultPinduoduoDramaConfig: PinduoduoDramaConfig = {
 
 const runtimeController = new RuntimeController<PinduoduoDramaRuntime>();
 let store: Store<PinduoduoDramaStore> | null = null;
-let uploadRecordsRepository: PinduoduoApprovedUploadRecordsRepository | null = null;
+let feishuSession: PinduoduoFeishuTables | undefined;
 let uploadRecordsWindow: BrowserWindow | null = null;
 
 function openUploadRecordsWindow() {
@@ -166,15 +171,14 @@ function openUploadRecordsWindow() {
 }
 
 function getUploadRecordsRepository() {
-  if (!uploadRecordsRepository) {
-    uploadRecordsRepository = new PinduoduoApprovedUploadRecordsRepository();
-  }
-
-  return uploadRecordsRepository;
+  if (feishuSession) return feishuSession;
+  const url = readFeishuSettings().tableUrl;
+  if (!url) throw new Error("请先在全局配置中设置飞书表格连接");
+  return new PinduoduoFeishuTables(configuredFeishuTables(), url, readConfig().sourceTableUrl);
 }
 
 export function getPinduoduoDramaBrowserInstanceCount() {
-  return runtimeController.current?.getStatus().running ? 1 : 0;
+  return runtimeController.current?.getStatus().instances?.filter(item => item.launched).length ?? 0;
 }
 
 export function getPinduoduoDramaRunningPlatformCount() {
@@ -190,17 +194,10 @@ export function getPinduoduoDramaPlatformRuntimeSummary() {
     platform: "pinduoduo-drama" as const,
     running,
     startedAt: runtimeController.startedAt,
-    browserInstanceCount: running ? 1 : 0,
-    browserInstances: running
-      ? [
-          {
-            id: runtimeStatus?.accountProfileName ?? "default",
-            label: runtimeStatus?.accountProfileName ?? "拼多多短剧",
-            loginState: runtimeStatus?.loginState ?? "unknown",
-            activeUrl: runtimeStatus?.activeUrl,
-          },
-        ]
-      : [],
+    browserInstanceCount: runtimeStatus?.instances?.filter(item => item.launched).length ?? 0,
+    browserInstances: (runtimeStatus?.instances ?? []).filter(item => item.launched).map(item => ({
+      id: item.id, label: item.name, loginState: item.loginState as "unknown" | "logged-in" | "login-required", activeUrl: item.activeUrl,
+    })),
     logDir: paths.logDir,
   };
 }
@@ -245,9 +242,10 @@ function normalizeConfig(
   config: Partial<PinduoduoDramaConfig> & Record<string, string | undefined>,
 ): PinduoduoDramaConfig {
   return {
+    sourceTableUrl: config.sourceTableUrl?.trim() || defaultPinduoduoDramaConfig.sourceTableUrl,
     accountProfileName:
       config.accountProfileName?.trim() || defaultPinduoduoDramaConfig.accountProfileName,
-    creatorUid: config.creatorUid?.trim() || defaultPinduoduoDramaConfig.creatorUid,
+    creatorName: config.creatorName?.trim() || defaultPinduoduoDramaConfig.creatorName,
     browserExecutablePath:
       config.browserExecutablePath?.trim() ?? defaultPinduoduoDramaConfig.browserExecutablePath,
     headless: config.headless ?? defaultPinduoduoDramaConfig.headless,
@@ -345,7 +343,6 @@ function storagePaths(config = readConfig()): PinduoduoDramaStoragePaths {
     credentialStatePath: pinduoduoDramaCredentialStatePath(config),
     logDir: pinduoduoDramaLogDir(config),
     logFilePath: pinduoduoDramaLogFile(config),
-    databasePath: automationDatabasePath(),
   };
 }
 
@@ -394,46 +391,97 @@ async function status(): Promise<PinduoduoDramaServiceStatus> {
   };
 }
 
-async function startRuntime() {
+async function startRuntime(): Promise<PinduoduoDramaRuntime> {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
-
   const config = readConfig();
-  const paths = storagePaths(config);
-  ensureStorageDirectories(paths);
-  const logRetentionDays = Math.max(1, Number.parseInt(config.logRetentionDays, 10) || 3);
-  const { startPinduoduoDramaRuntime } = await import("@dramabridge/pinduoduo-drama-automation");
-
-  return startPinduoduoDramaRuntime({
-    accountProfileName: config.accountProfileName,
-    accountDir: paths.accountDir,
-    databasePath: paths.databasePath,
-    userDataDir: paths.userDataDir,
-    credentialStatePath: paths.credentialStatePath,
-    logFilePath: paths.logFilePath,
-    logRetentionDays,
-    ensureBaiduNetdiskResource: (request: BaiduNetdiskEnsureDownloadedRequest) =>
-      ensureBaiduNetdiskShareDownloaded({
-        ...request,
-        requesterPlatform: "pinduoduo-drama",
-      }),
-    cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
-    config: {
-      creatorUid: config.creatorUid,
-      browser: {
-        executablePath: config.browserExecutablePath || undefined,
-        headless: config.headless === "true",
+  const cloud = getUploadRecordsRepository();
+  lockFeishuSettings("pinduoduo-drama", true);
+  const sessions: Array<{ account: PinduoduoFeishuAccount; runtime: PinduoduoDramaRuntime }> = [];
+  const errors: Record<string, string> = {};
+  try {
+    await cloud.prepare();
+    const accounts = (await cloud.accounts()).filter(item => item.enabled);
+    if (!accounts.length) throw new Error("请先在飞书“拼多多账号实例”中将需要运行的账号设为启用（是）");
+    feishuSession = cloud;
+    const { startPinduoduoDramaRuntime } = await import("@dramabridge/pinduoduo-drama-automation");
+    await Promise.all(accounts.map(async account => {
+      try {
+        // Stable phone identity keeps each account's login directory separate.
+        const paths = storagePaths({ ...config, accountProfileName: account.phone });
+        ensureStorageDirectories(paths);
+        const runtime = await startPinduoduoDramaRuntime({
+          accountProfileName: account.name,
+          accountPhone: account.phone,
+          accountDir: paths.accountDir,
+          userDataDir: paths.userDataDir,
+          credentialStatePath: paths.credentialStatePath,
+          logFilePath: paths.logFilePath,
+          logRetentionDays: Math.max(1, Number.parseInt(config.logRetentionDays, 10) || 3),
+          uploadRecords: cloud.forAccount(account),
+          shouldRun: () => cloud.enabled(account),
+          onLoginState: state => cloud.loginState(account, state === "logged-in" ? "已登录" : state === "login-required" ? "待登录" : "未登录"),
+          ensureBaiduNetdiskResource: (request: BaiduNetdiskEnsureDownloadedRequest) => ensureBaiduNetdiskShareDownloaded({ ...request, requesterPlatform: "pinduoduo-drama" }),
+          cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
+          config: {
+            creatorName: account.creatorName,
+            browser: { executablePath: config.browserExecutablePath || undefined, headless: config.headless === "true" },
+            taskPollIntervalMinutes: config.taskPollIntervalMinutes,
+            video: {
+              baiduNetdiskDownloadRetryAttempts: config.baiduNetdiskDownloadRetryAttempts,
+              localEpisodeVideoRoot: config.localEpisodeVideoRoot,
+              videoUploadTimeoutMinutes: config.videoUploadTimeoutMinutes,
+            },
+          },
+        });
+        sessions.push({ account, runtime });
+      } catch (error) {
+        errors[account.name] = error instanceof Error ? error.message : String(error);
+      }
+    }));
+    if (!sessions.length) throw new Error(Object.values(errors).join("；"));
+    return {
+      getStatus() {
+        const first = sessions[0]!.runtime.getStatus();
+        const instances = sessions.map(({ account, runtime }) => {
+          const state = runtime.getStatus();
+          return { id: account.phone, name: `${account.name} · ${account.creatorName}`, launched: state.running, loginState: state.loginState, activeUrl: state.activeUrl };
+        });
+        const accountErrors = { ...errors };
+        for (const session of sessions) {
+          const error = session.runtime.getStatus().lastError;
+          if (error) accountErrors[session.account.name] = error;
+        }
+        return { ...first, running: instances.some(item => item.launched), instances, accountErrors };
       },
-      taskPollIntervalMinutes: config.taskPollIntervalMinutes,
-      video: {
-        baiduNetdiskDownloadRetryAttempts: config.baiduNetdiskDownloadRetryAttempts,
-        localEpisodeVideoRoot: config.localEpisodeVideoRoot,
-        videoUploadTimeoutMinutes: config.videoUploadTimeoutMinutes,
+      async stop() {
+        try {
+          const results = await Promise.allSettled(sessions.map(async ({ account, runtime }) => {
+            await runtime.stop();
+            await cloud.loginState(account, "未登录");
+          }));
+          const failed = results.find(result => result.status === "rejected");
+          if (failed?.status === "rejected") throw failed.reason;
+        } finally {
+          lockFeishuSettings("pinduoduo-drama", false);
+          feishuSession = undefined;
+        }
       },
-    },
-  });
+    };
+  } catch (error) {
+    await Promise.allSettled(sessions.map(item => item.runtime.stop()));
+    feishuSession = undefined;
+    lockFeishuSettings("pinduoduo-drama", false);
+    throw error;
+  }
 }
 
 export function registerPinduoduoDramaPlatformHandlers() {
+  ipcMain.handle("pinduoduo-drama:config:test-source-table", async (_event, input: string) => {
+    if (typeof input !== "string") throw new Error("来源表链接无效");
+    const source = new PinduoduoSourceTable(configuredFeishuTables(), input.trim());
+    const index = await source.read();
+    return { sheetName: "拼多多-新剧", titleCount: index.size };
+  });
   registerTaskAnalyticsHandler({
     platform: "pinduoduo-drama",
     apiPrefix: "/pinduoduoDramaRpa",
@@ -451,6 +499,7 @@ export function registerPinduoduoDramaPlatformHandlers() {
     "pinduoduo-drama:config:save",
     (_event, config: PinduoduoDramaConfig): PinduoduoDramaConfigResult => {
       const nextConfig = normalizeConfig(config);
+      validatePinduoduoSourceUrl(nextConfig.sourceTableUrl);
       writeConfig(nextConfig);
       return {
         config: nextConfig,
@@ -535,28 +584,46 @@ export function registerPinduoduoDramaPlatformHandlers() {
 
   ipcMain.handle(
     "pinduoduo-drama:upload-records:list",
-    (_event, filter?: ListUploadRecordsFilter) =>
-      getUploadRecordsRepository().listUploadRecords(filter ?? {}),
+    async (_event, filter?: ListUploadRecordsFilter) => {
+      const records = await getUploadRecordsRepository().list();
+      const statuses = filter?.status?.split(",");
+      const selected = records.filter(record => !statuses || statuses.includes(record.status));
+      const limit = Math.min(500, Math.max(1, Number(filter?.limit) || 200));
+      const offset = Math.max(0, Number(filter?.offset) || 0);
+      return {
+        records: selected.slice(offset, offset + limit), total: selected.length,
+        summary: {
+          total: records.length,
+          pending: records.filter(record => record.status === "PENDING").length,
+          uploading: records.filter(record => ["DOWNLOADING", "READY", "UPLOADING"].includes(record.status)).length,
+          uploaded: records.filter(record => record.status === "UPLOADED").length,
+          failed: records.filter(record => ["FAILED", "REJECTED", "CONFIRM_REQUIRED"].includes(record.status)).length,
+        },
+      };
+    },
   );
 
   ipcMain.handle("pinduoduo-drama:upload-records:window:open", () => {
     openUploadRecordsWindow();
   });
+  ipcMain.handle("pinduoduo-drama:upload-records:confirm-publication", async (_event, account: string, id: number, published: boolean) => {
+    if (typeof account !== "string" || !account.trim() || !Number.isSafeInteger(id) || id <= 0 || typeof published !== "boolean") throw new Error("无效的发布确认参数");
+    await getUploadRecordsRepository().confirmPublication(account, id, published);
+  });
 
-  ipcMain.handle("pinduoduo-drama:upload-records:retry-failed", () => ({
-    reset: getUploadRecordsRepository().resetFailedForRetry(),
+  ipcMain.handle("pinduoduo-drama:upload-records:retry-failed", async () => ({
+    reset: await getUploadRecordsRepository().resetFailed(),
   }));
 
   ipcMain.handle(
     "pinduoduo-drama:upload-records:retry-one",
-    (_event, platformApplyId: number) => {
+    async (_event, platformApplyId: number, accountName: string) => {
       if (!Number.isSafeInteger(platformApplyId) || platformApplyId <= 0) {
         throw new Error("无效的拼多多短剧记录 ID");
       }
 
-      return {
-        reset: getUploadRecordsRepository().resetFailedRecordForRetry(platformApplyId),
-      };
+      if (typeof accountName !== "string" || !accountName.trim()) throw new Error("请选择需要重试的账号任务");
+      return { reset: await getUploadRecordsRepository().resetFailed(accountName, platformApplyId) };
     },
   );
 }

@@ -183,6 +183,8 @@ export interface PinduoduoDramaBrowserOptions {
 }
 
 export interface PinduoduoDramaConfig {
+  creatorName?: string;
+  /** Resolved from the logged-in author's list; never a user-supplied setting. */
   creatorUid?: string;
   api?: PinduoduoDramaApiConfig;
   browser?: PinduoduoDramaBrowserOptions;
@@ -200,6 +202,7 @@ export interface PinduoduoDramaConfig {
 }
 
 export type PinduoduoDramaRuntimeStatus = {
+  lastError?: string;
   platform: "pinduoduo-drama";
   running: boolean;
   loginState: PinduoduoDramaLoginState;
@@ -214,6 +217,11 @@ export type PinduoduoDramaRuntimeStatus = {
 };
 
 export type PinduoduoDramaRuntimeOptions = {
+  accountPhone?: string;
+  uploadRecords?: import("../storage/upload-store.js").PinduoduoUploadStore;
+  shouldRun?: () => Promise<boolean>;
+  onLoginState?: (state: PinduoduoDramaLoginState) => Promise<void>;
+  onFinalSubmit?: () => void;
   config?: PinduoduoDramaConfig;
   databasePath?: string;
   userDataDir?: string;

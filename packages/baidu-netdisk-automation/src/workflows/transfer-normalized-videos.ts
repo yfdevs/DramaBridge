@@ -81,9 +81,6 @@ export async function transferNormalizedEpisodeVideos(o: {
       + `；模式=${o.recreation ? '二创60%' : '全集'}；已扫描目录=${visited.size}\n`
       + (details || '未发现 MP4/MOV 视频文件'));
   }
-  if (selected.files.some((e: Entry) => !/\.mp4$/i.test(e.name))) {
-    throw new Error('选中的全集包含 MOV 文件，云端改名不能转换视频格式，已停止转存');
-  }
   // Only accept the verified cover cache belonging to this drama. Never copy
   // arbitrary account files into a public share.
   let bundleImages: Entry[] = [];
@@ -117,7 +114,13 @@ export async function transferNormalizedEpisodeVideos(o: {
       + '。重试将核验并复用已转存视频');
   }
   const videoFolderName = (o.bundleMode || o.bundleCovers) ? '成片' : '成片60%';
-  const videoName = (file: Entry) => (o.bundleMode || o.bundleCovers) ? `${file.index}.mp4` : `${o.versionTitle || o.title}-第${file.index}集.mp4`;
+  // Cloud renaming cannot transcode containers. Preserve the verified source
+  // extension, including MOV, through preparation, sharing and retry matching.
+  const videoName = (file: Entry) => {
+    const extension = String(file.name).match(/\.(mp4|mov)$/i)?.[0].toLowerCase();
+    if (!extension) throw new Error('选中的视频格式不受支持：' + file.name);
+    return (o.bundleMode || o.bundleCovers) ? `${file.index}${extension}` : `${o.versionTitle || o.title}-第${file.index}集${extension}`;
+  };
   const coverIds: string[] = [];
   progress(0, '转存视频');
   const parent = o.parentDirectoryName ? await o.createDirectory('/', o.parentDirectoryName) : undefined;

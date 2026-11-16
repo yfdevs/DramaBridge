@@ -146,16 +146,33 @@ test('final sharing validation catches unrelated files added after preflight', a
   await assert.rejects(transferNormalizedEpisodeVideos(f.options), /任务目录含有本次任务以外/);
 });
 
-test('incomplete episodes, conflicting targets and MOV never transfer files', async () => {
-  for (const reason of ['missing', 'conflict', 'mov']) {
+test('incomplete episodes and conflicting targets never transfer files', async () => {
+  for (const reason of ['missing', 'conflict']) {
     const f = fixture();
     if (reason === 'missing') f.options.episodeCount = 3;
-    if (reason === 'mov') f.options.listShare = async path => [1, 2].map(n => ({ ...f.source(n, path), server_filename: n + '.mov' }));
     if (reason === 'conflict') f.own.push({ server_filename: '测试剧-第1集.mp4', size: 101, md5: 'other' });
-    await assert.rejects(transferNormalizedEpisodeVideos(f.options), /未找到完整|内容冲突|MOV/);
+    await assert.rejects(transferNormalizedEpisodeVideos(f.options), /未找到完整|内容冲突/);
     assert.equal(f.transferred.length, 0);
   }
 });
+
+for (const formats of [['.mov', '.MOV'], ['.mp4', '.mov']]) {
+  test(`cloud renaming preserves MOV containers and safely resumes a ${formats.join('/')} video set`, async () => {
+    const f = fixture();
+    f.options.listShare = async path => formats.map((extension, index) => ({
+      ...f.source(index + 1, path), server_filename: `${index + 1}${extension}`, path: `${path}/${index + 1}${extension}`,
+    }));
+    const result = await runInNewContext('(' + transferNormalizedEpisodeVideos.toString() + ')(o)', {
+      o: f.options, URLSearchParams, console, setTimeout, __name: (value: unknown) => value,
+    });
+    const expected = formats.map((extension, index) => `/测试剧/测试剧-第${index + 1}集${extension.toLowerCase()}`);
+    assert.deepEqual(f.own.map(file => file.path), expected);
+    assert.deepEqual(Array.from(result.remoteVideos.files, (file: any) => file.name), expected.map(file => file.split('/').pop()));
+    const repeated = await transferNormalizedEpisodeVideos(f.options);
+    assert.equal(repeated.transferredItemCount, 0);
+    assert.equal(f.transferred.length, 2, 'verified MOV names must resume without duplicate transfers');
+  });
+}
 test('scan failures report mode, missing episodes, duplicates and unrecognized filenames', async () => {
   const f = fixture();
   f.options.episodeCount = 3;
@@ -479,6 +496,26 @@ test('bundle preparation transfers videos without covers or sharing, then finali
   assert.equal(result.shareUrl, 'https://pan.baidu.com/s/1bundle?pwd=abcd');
   assert.equal(f.transferred.length, 2, 'finalization does not transfer video files again');
   assert.deepEqual(f.calls, ['rename', 'copy', 'copy', 'share']);
+});
+
+test('Kuaishou bundle preparation, final sharing and resume retain mixed MOV/MP4 extensions', async () => {
+  const f = bundleFixture();
+  f.options.episodeCount = 5;
+  f.options.listShare = async path => Array.from({ length: 5 }, (_, i) => {
+    const extension = i % 2 === 0 ? '.MOV' : '.mp4';
+    return { ...f.source(i + 1, path), server_filename: `第${i + 1}集${extension}`, path: `${path}/第${i + 1}集${extension}` };
+  });
+  const covers = f.options.bundleCovers;
+  f.options.bundleMode = true; f.options.bundleCovers = undefined; f.options.sharePassword = undefined;
+  const prepared = await transferNormalizedEpisodeVideos(f.options);
+  assert.deepEqual(prepared.remoteVideos.files.map((file: any) => file.name), ['1.mov', '2.mp4', '3.mov']);
+  assert.equal(f.transferred.length, 3, 'only the leading 60% is transferred');
+  f.options.bundleMode = false; f.options.bundleCovers = covers; f.options.sharePassword = 'abcd';
+  const finalized = await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(finalized.shareUrl, 'https://pan.baidu.com/s/1bundle?pwd=abcd');
+  assert.deepEqual(f.own.filter(file => file.path.includes('/成片/')).map(file => file.server_filename), ['1.mov', '2.mp4', '3.mov']);
+  await transferNormalizedEpisodeVideos(f.options);
+  assert.equal(f.transferred.length, 3, 'finalization and repeated shares reuse the verified containers');
 });
 
 test('video preparation refuses to create a premature share', async () => {

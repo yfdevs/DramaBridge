@@ -6,3 +6,5 @@ export * from "./app/shortplay-apply.js";
 export * from "./shared/constants.js";
 export * from "./shared/logger.js";
 export * from "./shared/types.js";
+export type { PinduoduoUploadStore } from "./storage/upload-store.js";
+export type { PinduoduoUploadRecord, PinduoduoUploadRecordStage } from "./storage/pinduoduo-upload-records-types.js";

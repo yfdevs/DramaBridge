@@ -61,6 +61,39 @@ test("serialized Baidu page name sanitization preserves full-width drama punctua
   assert.equal(sanitize("剧名:第一季?", { replacement: "_" }), "剧名_第一季_");
 });
 
+test("serialized poster detection follows explicit cover ancestors without accepting character avatars or proof scopes", () => {
+  const select = runInNewContext(`(${selectBaiduPosterCandidates.toString()})`) as typeof selectBaiduPosterCandidates;
+  const base = { imageNames: ["a9f3.png", "b7c1.png"], directoryName: "原始图片", relativeDirectoryPath: "/海报/原始图片", isResourceRoot: false, excludedScope: false };
+  assert.equal(select(base).kind, "directory");
+  assert.deepEqual([...select(base).names], ["a9f3.png"]);
+  assert.equal(select({ ...base, relativeDirectoryPath: "/海报/角色头像" }).kind, "none");
+  assert.equal(select({ ...base, relativeDirectoryPath: "/海报/原始图片", excludedScope: true }).kind, "none");
+  assert.equal(select({ ...base, relativeDirectoryPath: "/其他图片/原始图片" }).kind, "none");
+});
+
+test("explicit cover filenames remain recognizable in structurally inferred screenshot folders", () => {
+  const entries = [{ name: "封面.jpg", isDirectory: false }, { name: "截图.png", isDirectory: false }];
+  assert.equal(isBaiduNetdiskScreenshotCandidateDirectory(entries, 1, "/素材"), true);
+  const select = runInNewContext(`(${selectBaiduPosterCandidates.toString()})`) as typeof selectBaiduPosterCandidates;
+  const candidate = select({ imageNames: entries.map(entry => entry.name), directoryName: "素材", isResourceRoot: false, excludedScope: false });
+  assert.equal(candidate.kind, "named");
+  assert.deepEqual([...candidate.names], ["封面.jpg"]);
+  assert.equal(select({ imageNames: entries.map(entry => entry.name), directoryName: "权属", isResourceRoot: false, excludedScope: true }).kind, "none");
+});
+
+test("mixed ownership folder nominates only a unique generated-image cover candidate", () => {
+  const select = runInNewContext(`(${selectBaiduPosterCandidates.toString()})`) as typeof selectBaiduPosterCandidates;
+  const generated = "ChatGPT Image 2026年9月17日 15_47_39.png";
+  const screenshots = ["1.png", "2.png", "3.png", "4.png", "ScreenShot_20260917.png", "微信图片_20260917.png"];
+  const base = { imageNames: [...screenshots, generated], directoryName: "权属", isResourceRoot: false, excludedScope: true, allowGeneratedInExcludedScope: true };
+  assert.equal(select(base).kind, "generated");
+  assert.deepEqual([...select(base).names], [generated]);
+  assert.equal(select({ ...base, imageNames: screenshots }).kind, "none");
+  assert.equal(select({ ...base, imageNames: ["ScreenShot_20260917.png"] }).kind, "none");
+  assert.equal(select({ ...base, imageNames: [...base.imageNames, "ChatGPT Image 2026年9月18日 10_00_00.png"] }).kind, "none");
+  assert.equal(select({ ...base, allowGeneratedInExcludedScope: false }).kind, "none");
+});
+
 test("keeps tracking the same Baidu target after extraction removes the share id", () => {
   const before = cdpTarget("share-1", "https://pan.baidu.com/s/1abc");
   const after = cdpTarget("share-1", "https://pan.baidu.com/disk/main#/index?category=all");

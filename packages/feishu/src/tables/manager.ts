@@ -96,6 +96,19 @@ export class FeishuTables {
       },
     );
   }
+  async ensureRows(table: TableSnapshot, count: number) {
+    if (count <= table.sheet.grid_properties.row_count) return;
+    await this.client.request(`/sheets/v2/spreadsheets/${table.spreadsheet}/dimension_range`, "POST", {
+      dimension: { sheetId: table.sheet.sheet_id, majorDimension: "ROWS", length: count - table.sheet.grid_properties.row_count },
+    });
+    table.sheet.grid_properties.row_count = count;
+  }
+  async hideColumn(table: TableSnapshot, column: number) {
+    await this.client.request(`/sheets/v2/spreadsheets/${table.spreadsheet}/dimension_range`, "PUT", {
+      dimension: { sheetId: table.sheet.sheet_id, majorDimension: "COLUMNS", startIndex: column, endIndex: column + 1 },
+      dimensionProperties: { visible: false },
+    });
+  }
   async markError(table: TableSnapshot, row: number, column: number, failed: boolean) {
     await this.client.request(
       `/sheets/v2/spreadsheets/${table.spreadsheet}/styles_batch_update`,

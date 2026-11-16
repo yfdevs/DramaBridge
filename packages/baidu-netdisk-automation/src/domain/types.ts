@@ -81,6 +81,8 @@ export type BaiduNetdiskShareDownloadOptions = {
 };
 
 export type BaiduNetdiskRemoteOwnershipFile = {
+  /** Selected cover must be downloaded individually into 海报封面. */
+  posterFileOnly?: boolean;
   index?: number;
   name: string;
   path: string;

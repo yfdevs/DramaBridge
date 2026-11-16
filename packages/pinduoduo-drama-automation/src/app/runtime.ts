@@ -59,18 +59,22 @@ export async function startPinduoduoDramaRuntime(
   if (!options.userDataDir) {
     throw new Error("Pinduoduo drama userDataDir is required.");
   }
+  if (!options.uploadRecords) throw new Error("请先连接拼多多飞书任务表");
 
   const userDataDir = options.userDataDir;
   let running = true;
+  let lastError: string | undefined;
   let page: Page | null = null;
   let context: BrowserContext | null = null;
   let taskLoopPromise: Promise<void> | null = null;
   let taskLoopTimer: ReturnType<typeof setTimeout> | null = null;
   let wakeTaskLoop: (() => void) | null = null;
   const stopController = new AbortController();
+  let lastSubmitAt = 0;
   const cycleOptions: PinduoduoDramaRuntimeOptions = {
     ...options,
     signal: stopController.signal,
+    onFinalSubmit: () => { lastSubmitAt = Date.now(); options.onFinalSubmit?.(); },
   };
 
   async function waitForNextTaskPoll(delayMs: number): Promise<void> {
@@ -104,28 +108,33 @@ export async function startPinduoduoDramaRuntime(
   context.on("close", () => {
     running = false;
   });
+  const labelPage = (target: Page) => {
+    target.on("domcontentloaded", () => {
+      void target.evaluate((name) => { document.title = `${name} · ${document.title}`; }, options.accountProfileName ?? "拼多多")
+        .catch(() => undefined);
+    });
+  };
+  context.on("page", labelPage);
+  context.pages().forEach(labelPage);
 
   page = context.pages()[0] ?? (await context.newPage());
-  let managePageReady = false;
-  await openShortplayManagePage(page, context, options)
-    .then(() => {
-      managePageReady = true;
-    })
-    .catch((error: unknown) => {
-      log(options, "error", "runtime", "failed to open shortplay manage page", {
-        error,
-      });
-    });
-
-  if (managePageReady && context && page) {
+  if (context && page) {
     const cyclePage = page;
     const cycleContext = context;
     taskLoopPromise = (async () => {
       while (running) {
         try {
+          if (options.shouldRun && !await options.shouldRun()) {
+            await waitForNextTaskPoll(10_000);
+            continue;
+          }
+          await openShortplayManagePage(cyclePage, cycleContext, cycleOptions);
+          await options.onLoginState?.("logged-in");
           const uploaded = await runApprovedShortplayCycle(cyclePage, cycleContext, cycleOptions);
+          lastError = undefined;
           log(options, "info", "runtime", "approved shortplay cycle completed", { uploaded });
         } catch (error: unknown) {
+          lastError = error instanceof Error ? error.message : String(error);
           if (stopController.signal.aborted) {
             log(options, "info", "runtime", "approved shortplay cycle stopped by service request");
           } else {
@@ -144,6 +153,7 @@ export async function startPinduoduoDramaRuntime(
       return {
         platform: PINDUODUO_DRAMA_PLATFORM,
         running,
+        lastError,
         loginState: pinduoduoDramaLoginStateFromUrl(activeUrl),
         activeUrl,
         manageUrl: PINDUODUO_SHORTPLAY_MANAGE_URL,
@@ -159,6 +169,8 @@ export async function startPinduoduoDramaRuntime(
       running = false;
       stopController.abort(new Error("PINDUODUO_DRAMA_RUNTIME_STOPPED"));
       stopTaskLoopWait();
+      const settleRemaining = lastSubmitAt ? Math.max(0, 10_000 - (Date.now() - lastSubmitAt)) : 0;
+      if (settleRemaining) await new Promise(resolve => setTimeout(resolve, settleRemaining));
       if (context) {
         await saveCredentialState(context, options).catch(() => undefined);
       }

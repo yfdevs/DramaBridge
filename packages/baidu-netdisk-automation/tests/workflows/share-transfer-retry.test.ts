@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import { WebSocketServer } from "ws";
 import { saveShareToOwnNetdisk } from "../../src/workflows/download-baidu-folder.js";
 
-async function transferFixture(failure: "404" | "500" | "network" | "timeout", accepted: boolean) {
+async function transferFixture(failure: "404" | "500" | "network" | "timeout", accepted: boolean, extension = ".mp4") {
   const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
   await once(server, "listening");
   const port = (server.address() as { port: number }).port;
@@ -13,8 +13,8 @@ async function transferFixture(failure: "404" | "500" | "network" | "timeout", a
   const sourcePath = "/原始素材/" + title;
   const sourceDirectory = { fs_id: 10, path: sourcePath, server_filename: title, isdir: 1 };
   const destinationDirectory = { ...sourceDirectory, fs_id: 20, path: "/" + title };
-  const sourceFile = { fs_id: 11, path: sourcePath + "/" + title + "-第1集.mp4",
-    server_filename: title + "-第1集.mp4", isdir: 0, size: 10, md5: "verified-content" };
+  const sourceFile = { fs_id: 11, path: sourcePath + "/" + title + "-第1集" + extension,
+    server_filename: title + "-第1集" + extension, isdir: 0, size: 10, md5: "verified-content" };
   let transfers = 0;
   let verificationReads = 0;
   let clock = Date.now();
@@ -82,6 +82,7 @@ async function transferFixture(failure: "404" | "500" | "network" | "timeout", a
     if (accepted) {
       const result = await operation;
       assert.equal(result.remoteVideos.files.length, 1);
+      assert.equal(result.remoteVideos.files[0].name, title + "-第1集" + extension);
       assert.equal(transfers, 1, "a verified accepted write must never be replayed after a lost response");
     } else {
       await assert.rejects(operation, /已尝试3次.*目标目录仍未发现素材/);
@@ -99,3 +100,5 @@ for (const failure of ["404", "500", "network", "timeout"] as const) {
   test(`injected transfer bounds ${failure} failures to three writes`, () => transferFixture(failure, false));
   test(`injected transfer reconciles accepted ${failure} writes before retry`, () => transferFixture(failure, true));
 }
+
+test("real injected normalized transfer admits MOV without disguising it as MP4", () => transferFixture("404", true, ".mov"));

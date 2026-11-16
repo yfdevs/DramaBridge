@@ -37,7 +37,7 @@ function statusFilterForTab(tab: StatusTab) {
     case "IN_PROGRESS":
       return "DOWNLOADING,READY,UPLOADING";
     case "FAILED":
-      return "FAILED,REJECTED";
+      return "FAILED,REJECTED,CONFIRM_REQUIRED";
     default:
       return tab;
   }
@@ -63,6 +63,8 @@ function statusText(status: string | undefined) {
       return "失败";
     case "REJECTED":
       return "平台拒绝";
+    case "CONFIRM_REQUIRED":
+      return "待确认";
     default:
       return "未知";
   }
@@ -88,7 +90,7 @@ function stageText(stage: string | undefined) {
 }
 
 function failureReason(record: PinduoduoUploadRecord) {
-  if (record.status !== "FAILED" && record.status !== "REJECTED") return "—";
+  if (!["FAILED", "REJECTED", "CONFIRM_REQUIRED"].includes(record.status ?? "")) return "—";
   const stage = stageText(record.stage);
   const message = record.errorMessage?.trim() ?? "";
   if (stage && message) return `${stage}：${message}`;
@@ -96,6 +98,7 @@ function failureReason(record: PinduoduoUploadRecord) {
 }
 
 function resourceSourceText(record: PinduoduoUploadRecord) {
+  if (record.resourceSource === "FEISHU") return "飞书全集来源表";
   if (record.resourceSource === "LEGACY_XLSX_ORIGINAL") return "历史表原链接";
   if (record.resourceSource === "PINDUODUO_LIST") return "拼多多列表链接";
   return "待解析";
@@ -134,7 +137,7 @@ function StatusBadge({ status }: { status: string | undefined }) {
       </Badge>
     );
   }
-  if (status === "FAILED" || status === "REJECTED") {
+  if (status === "FAILED" || status === "REJECTED" || status === "CONFIRM_REQUIRED") {
     return <Badge variant="destructive">{statusText(status)}</Badge>;
   }
   if (isInProgress(status)) {
@@ -237,7 +240,7 @@ export function PinduoduoDramaUploadRecordsPage() {
       setRetryingRecordId(record.platformApplyId);
 
       try {
-        const { reset } = await pinduoduoDramaService.retryUploadRecord(record.platformApplyId);
+        const { reset } = await pinduoduoDramaService.retryUploadRecord(record.platformApplyId, record.accountProfileName ?? "");
         if (reset > 0) {
           toast.success(`《${record.title}》已加入待处理队列`, {
             description: "服务会在下一轮自动重试这部剧",
@@ -256,6 +259,20 @@ export function PinduoduoDramaUploadRecordsPage() {
     })();
   };
 
+  const handleConfirmPublication = async (record: PinduoduoUploadRecord, published: boolean) => {
+    const result = published ? "已发布" : "未发布";
+    if (!window.confirm(`请先核对拼多多平台。确认“${record.accountProfileName} / ${record.title}”上次提交的这一批${result}？`)) return;
+    setRetryingRecordId(record.platformApplyId);
+    try {
+      await pinduoduoDramaService.confirmPublication(record.accountProfileName ?? "", record.platformApplyId, published);
+      await refresh(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRetryingRecordId(null);
+    }
+  };
+
   return (
     <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
       <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col">
@@ -269,7 +286,7 @@ export function PinduoduoDramaUploadRecordsPage() {
                 </span>
               </div>
               <p className="max-w-3xl text-xs leading-5 text-muted-foreground">
-                服务按配置周期同步拼多多审核列表，本窗口每 30 秒刷新下载与上传进度
+                服务按配置周期同步拼多多审核列表，任务与进度保存在飞书，本窗口每 30 秒刷新
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -363,7 +380,7 @@ export function PinduoduoDramaUploadRecordsPage() {
               </TableHeader>
               <TableBody>
                 {records.map((record) => (
-                  <TableRow key={record.platformApplyId} className="h-12">
+                  <TableRow key={`${record.accountProfileName}:${record.platformApplyId}`} className="h-12">
                     <TableCell className="max-w-0 py-2">
                       <div className="truncate text-xs font-medium" title={record.title}>
                         {record.title}
@@ -409,7 +426,12 @@ export function PinduoduoDramaUploadRecordsPage() {
                       {formatDateTime(record.updatedAt)}
                     </TableCell>
                     <TableCell className="py-2 text-right">
-                      {record.status === "FAILED" ? (
+                      {record.status === "CONFIRM_REQUIRED" ? (
+                        <div className="flex flex-col gap-1">
+                          <Button size="sm" variant="outline" disabled={retryingRecordId !== null} onClick={() => void handleConfirmPublication(record, true)}>该批已发布</Button>
+                          <Button size="sm" variant="outline" disabled={retryingRecordId !== null} onClick={() => void handleConfirmPublication(record, false)}>该批未发布</Button>
+                        </div>
+                      ) : record.status === "FAILED" ? (
                         <Button
                           type="button"
                           size="sm"

@@ -81,6 +81,7 @@ async function waitForManualLoginAndOpenShortplayManagePage(
   context: BrowserContext,
   options: PinduoduoDramaRuntimeOptions,
 ): Promise<void> {
+  await options.onLoginState?.("login-required");
   log(options, "warn", "runtime", "waiting for manual login before claiming tasks", {
     activeUrl: page.url(),
     loginExpiredUrl: PINDUODUO_LOGIN_EXPIRED_URL,

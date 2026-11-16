@@ -140,14 +140,31 @@ export function shouldDownloadMixedPosterAsFile(options: {
 export function selectBaiduPosterCandidates(options: {
   imageNames: string[];
   directoryName: string;
+  relativeDirectoryPath?: string;
   isResourceRoot: boolean;
   excludedScope: boolean;
+  allowGeneratedInExcludedScope?: boolean;
 }) {
   const pattern = /封面|海报|(?:^|[^a-z])(?:cover|poster)(?:[^a-z]|$)/i;
-  if (options.excludedScope) return { kind: "none", names: [] as string[] };
+  if (options.excludedScope) {
+    // Some shares mix a generated portrait cover with numbered ownership
+    // screenshots. Only nominate a unique, explicitly generator-named image;
+    // this is a filename candidate, not proof of the image's visual content.
+    const generated = options.allowGeneratedInExcludedScope
+      ? options.imageNames.filter(name => /^(?:ChatGPT[ _]+Image[ _]+\d{4}|Gemini_Generated_Image_|DALL[·.]?E[ _-]+\d{4})/iu.test(name))
+      : [];
+    return generated.length === 1
+      ? { kind: "generated", names: generated }
+      : { kind: "none", names: [] as string[] };
+  }
   const named = options.imageNames.filter(name => pattern.test(name));
   if (named.length) return { kind: "named", names: named };
-  if (pattern.test(options.directoryName)) return { kind: "directory", names: options.imageNames.slice(0, 1) };
+  const directoryParts = String(options.relativeDirectoryPath || options.directoryName).split(/[\\/]+/);
+  // A cover folder may contain another level such as 海报/原始图片. Do not
+  // extend this fallback to character portraits nested below the cover folder.
+  const characterScope = directoryParts.some(part => /角色头像|人物形象|主形象|演员头像|avatar/iu.test(part));
+  if (pattern.test(options.directoryName) || !characterScope && directoryParts.some(part => pattern.test(part)))
+    return { kind: "directory", names: options.imageNames.slice(0, 1) };
   // A hash-named cover is often placed beside 视频/权属/简介.txt. Only accept
   // one unambiguous image at the actual resource root, never arbitrary subfolders.
   if (options.isResourceRoot && options.imageNames.length === 1)
@@ -1520,8 +1537,8 @@ export async function saveShareToOwnNetdisk(
       && materialKind === "cover" && destinationDir.endsWith("/封面")
       && /\\.(png|jpg|jpeg|webp)$/i.test(name);
     if (${JSON.stringify(options.normalizedVideoEpisodeCount ?? 0)} > 0
-      && (itemIsDir(source) || (!/\\.mp4$/i.test(name) && !allowedCover))) {
-      throw new Error("视频转存模式禁止转存目录或非 MP4 文件：" + name);
+      && (itemIsDir(source) || (!/\\.(?:mp4|mov)$/i.test(name) && !allowedCover))) {
+      throw new Error("视频转存模式仅支持 MP4/MOV 视频及指定封面，禁止转存目录或其他文件：" + name);
     }
     const existing = await findOwnItem(destinationDir, name);
     if (existing) {
@@ -2031,6 +2048,7 @@ export async function saveShareToOwnNetdisk(
   const namedPosterFiles = new Map();
   const directoryPosterFiles = new Map();
   const rootPosterFiles = new Map();
+  const generatedPosterFiles = new Map();
   const aiProductionProofFiles = new Map();
   const aiProductionProofRoots = new Map();
   const metadataTextFiles = new Map();
@@ -2066,9 +2084,17 @@ export async function saveShareToOwnNetdisk(
       .sort((left, right) => itemName(left).localeCompare(itemName(right), "zh-CN", { numeric: true }));
     const posterCandidates = selectPosterCandidates({
       imageNames: directImages.map(itemName), directoryName: String(current.name || ""),
+      relativeDirectoryPath: current.relativePath,
       isResourceRoot: current.depth === 0,
-      excludedScope: currentOwnershipScope || current.aiProductionProofScope,
+      // The generic "two images, no video" heuristic is not proof that a named
+      // 海报/封面 file is an ownership screenshot. Keep explicit proof scopes
+      // excluded, but let explicit poster names override structural inference.
+      excludedScope: current.ownershipScope || current.aiProductionProofScope,
+      allowGeneratedInExcludedScope: current.ownershipScope && !current.aiProductionProofScope,
     });
+    if (posterCandidates.kind === "generated") {
+      console.log("[baidu] 权属目录中发现唯一生成图片海报候选（按文件名识别，非内容验证）：" + current.path + "/" + posterCandidates.names[0]);
+    }
     const selectedPosterNames = new Set(posterCandidates.names);
     const selectedPosterImages = directImages.filter(entry => selectedPosterNames.has(itemName(entry)));
     const namedPosterImages = posterCandidates.kind === "named" ? selectedPosterImages : [];
@@ -2153,8 +2179,9 @@ export async function saveShareToOwnNetdisk(
             size: Number(entry?.size) > 0 ? Number(entry.size) : undefined,
             rootPath: current.path,
             rootFsId: current.fsId,
+            posterFileOnly: posterCandidates.kind === "generated" || !/海报|封面|cover|poster/i.test(String(current.name || "")),
           };
-          (namedPosterPaths.has(entryPath) ? namedPosterFiles : posterCandidates.kind === "root" ? rootPosterFiles : directoryPosterFiles).set(entryPath, posterFile);
+          (posterCandidates.kind === "generated" ? generatedPosterFiles : namedPosterPaths.has(entryPath) ? namedPosterFiles : posterCandidates.kind === "root" ? rootPosterFiles : directoryPosterFiles).set(entryPath, posterFile);
         }
         if (currentOwnershipScope) {
           const stem = name.replace(/.[^.]+$/, "");
@@ -2324,7 +2351,8 @@ export async function saveShareToOwnNetdisk(
         || left.path.localeCompare(right.path));
       const selected = sortPosters([...namedPosterFiles.values()])[0]
         || sortPosters([...directoryPosterFiles.values()])[0]
-        || sortPosters([...rootPosterFiles.values()])[0];
+        || sortPosters([...rootPosterFiles.values()])[0]
+        || (generatedPosterFiles.size === 1 ? [...generatedPosterFiles.values()][0] : undefined);
       return selected
         ? { files: [selected], roots: [{ path: selected.rootPath, fsId: selected.rootFsId }] }
         : { files: [], roots: [] };
@@ -3717,8 +3745,12 @@ async function submitSavedDownload(
   }
 
   for (const posterRoot of downloadAssetMaterials ? remotePosters.roots : []) {
-    if (!posterRoot.path || assetRootIsCovered(posterRoot.path)) continue;
-    const downloadPosterFilesOnly = (!downloadEpisodeVideos && !requireAllDiscoveredAssets) || shouldDownloadMixedPosterAsFile({
+    if (!posterRoot.path) continue;
+    // Mixed proof folders and generic nested cover folders must not be
+    // downloaded wholesale or lose their cover meaning locally.
+    const candidateFilesOnly = remotePosters.files.some(file => file.posterFileOnly);
+    if (assetRootIsCovered(posterRoot.path) && !candidateFilesOnly) continue;
+    const downloadPosterFilesOnly = candidateFilesOnly || (!downloadEpisodeVideos && !requireAllDiscoveredAssets) || shouldDownloadMixedPosterAsFile({
       videoRootFullyDownloaded: downloadEpisodeVideos && !limitedEpisodeDownload,
       posterRoot: posterRoot.path,
       videoRoot: remoteVideos.rootPath,

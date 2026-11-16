@@ -16,6 +16,7 @@ export type PinduoduoUploadRecordStage =
   | "PUBLISH";
 
 export type PinduoduoUploadRecordResourceSource =
+  | "FEISHU"
   | "LEGACY_XLSX_ORIGINAL"
   | "PINDUODUO_LIST";
 

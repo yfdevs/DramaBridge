@@ -11,10 +11,12 @@ import {
 } from "@/platforms/pinduoduo-drama/service";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/notifications";
+import { PINDUODUO_DEFAULT_SOURCE_TABLE_URL } from "@/platforms/pinduoduo-drama/defaults";
 
 const emptyConfig: PinduoduoDramaConfig = {
+  sourceTableUrl: PINDUODUO_DEFAULT_SOURCE_TABLE_URL,
   accountProfileName: "default",
-  creatorUid: "7735796497358",
+  creatorName: "",
   browserExecutablePath: "",
   headless: "false",
   runDataDir: ".drama-runs/pinduoduo-drama",
@@ -27,19 +29,18 @@ const emptyConfig: PinduoduoDramaConfig = {
 
 const sections: ConfigSectionDefinition<PinduoduoDramaConfig>[] = [
   {
+    title: "全集素材来源",
+    description: "来源表仅需可读权限；任务状态仍写入全局飞书连接中的拼多多传剧任务表。",
+    fields: [{
+      key: "sourceTableUrl",
+      label: "来源表链接",
+      description: "读取“拼多多-新剧”，按“剧名”匹配“网盘（拼多多）”；不再使用拼多多后台的前五集链接。",
+    }],
+  },
+  {
     title: "账号与浏览器",
-    description: "账号登录信息独立保存；共享目录在全局配置中设置",
+    description: "账号、手机号和主播名称从飞书“拼多多账号实例”读取；将是否启用设为是后启动服务。飞书连接在全局配置中设置。",
     fields: [
-      {
-        key: "creatorUid",
-        label: "创作者 UID",
-        description: "用于定位当前创作者的视频上传页",
-      },
-      {
-        key: "accountProfileName",
-        label: "账号标识",
-        description: "用于区分账号，分别保存登录信息",
-      },
       {
         key: "browserExecutablePath",
         label: "浏览器路径",
@@ -134,6 +135,14 @@ export function PinduoduoDramaConfigurationPage() {
       });
     }
   };
+  const testSourceTable = async () => {
+    try {
+      const result = await pinduoduoDramaService.testSourceTable(config.sourceTableUrl);
+      toast.success("来源表读取成功", { description: `${result.sheetName}：${result.titleCount} 个剧名，仅进行读取` });
+    } catch (error) {
+      toast.error("来源表读取失败", { description: error instanceof Error ? error.message : String(error) });
+    }
+  };
 
   return (
     <ConfigurationPageFrame
@@ -151,7 +160,9 @@ export function PinduoduoDramaConfigurationPage() {
           fields={section.fields}
           section={section}
           footer={
-            section.title === "账号与浏览器" ? (
+            section.title === "全集素材来源" ? (
+              <Button disabled={loading} onClick={() => void testSourceTable()} variant="outline">测试来源表（只读）</Button>
+            ) : section.title === "账号与浏览器" ? (
               <Button disabled={loading} onClick={() => void testBrowserPath()} variant="outline">
                 测试浏览器路径
               </Button>

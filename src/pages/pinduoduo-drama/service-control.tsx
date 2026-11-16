@@ -1,4 +1,4 @@
-import { SingleInstance } from "@/pages/shared/instance-status";
+import { RuntimeInstances } from "@/pages/shared/instance-status";
 import { useState } from "react";
 import { toast } from "@/components/ui/notifications";
 
@@ -67,11 +67,15 @@ export function PinduoduoDramaServiceControlPage() {
         }
         onToggle={() => void toggleService()}
         beforeBrowserInstances={
-          <SingleInstance
+          <>
+          <RuntimeInstances
             running={status.running}
-            loginState={status.loginState}
-            name={status.accountProfileName || "拼多多浏览器"}
+            instances={status.instances ?? []}
           />
+          {Object.entries(status.accountErrors ?? {}).map(([name, error]) => (
+            <p key={name} role="status" className="text-sm text-destructive">{name}：{error}</p>
+          ))}
+          </>
         }
       />
     </>
