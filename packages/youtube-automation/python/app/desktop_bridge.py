@@ -32,7 +32,7 @@ def emit(value):
             pass
 
 
-def call_parent(kind, payload):
+def call_parent(kind, payload, timeout=35):
     request_id = uuid.uuid4().hex
     event = threading.Event()
     holder = {}
@@ -40,7 +40,7 @@ def call_parent(kind, payload):
         _pending[request_id] = (event, holder)
     try:
         emit({'kind': kind, 'id': request_id, 'payload': payload})
-        if not event.wait(35):
+        if not event.wait(timeout):
             raise RuntimeError('桌面桥接请求超时，请检查 DramaBridge 服务')
         if holder.get('error'):
             raise RuntimeError(holder['error'])
@@ -122,6 +122,14 @@ class DesktopWorker(vox.Worker):
             return super().execute(task)
         finally:
             self.cleanup_finished_task(task)
+
+    def check_browser_credentials(self, task):
+        call_parent('browser', dict(action='check', taskId=task['id'],
+                                   accountId=task['payload'].get('accountId', 'default')), timeout=180)
+
+    def apply_browser_rights(self, task, video_id):
+        call_parent('browser', dict(action='rights', taskId=task['id'], videoId=video_id,
+                                   accountId=task['payload'].get('accountId', 'default')), timeout=420)
 
     def check_pipeline_space(self):
         if self.disk_failure.is_set():

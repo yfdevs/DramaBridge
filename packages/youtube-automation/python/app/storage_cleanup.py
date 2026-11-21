@@ -1,5 +1,6 @@
 """Task-aware storage accounting and conservative retention enforcement."""
 import hashlib
+import json
 import os
 import threading
 import time
@@ -65,11 +66,18 @@ class StorageCleanup:
         # Serialize with claim/retry/create for the entire eligibility/deletion window.
         with self.lock, self.store.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            tasks = [dict(row) for row in db.execute('SELECT id,status,updated,local_path FROM tasks')]
+            tasks = [dict(row) for row in db.execute('SELECT id,status,updated,local_path,payload FROM tasks')]
+            target = next((task for task in tasks if task['id'] == task_id), None)
+            target_payload = json.loads(target['payload']) if target else {}
+            shared_resource = bool(target) and any(
+                task['id'] != task_id and task['status'] != 'deleted' and
+                any(json.loads(task['payload']).get(key) == target_payload.get(key)
+                    for key in ('resourceName', 'shareText') if target_payload.get(key))
+                for task in tasks)
             current = time.time()
             def eligible(task):
                 if task_id is not None:
-                    return task['id'] == task_id
+                    return task['id'] == task_id or task['status'] == 'deleted'
                 age = current - datetime.fromisoformat(task['updated']).timestamp()
                 return (task['status'] in {'completed', 'deleted'} and age > MIN_AGE or
                         task['status'] == 'cancelled' and age > FAILED_AGE)
@@ -107,10 +115,10 @@ class StorageCleanup:
                 if target and target['local_path']:
                     source = Path(os.path.abspath(target['local_path']))
                     # A shared source must remain intact while any other task references it.
-                    shared = any(t['id'] != task_id and t['local_path'] and
+                    shared = any(t['id'] != task_id and t['status'] != 'deleted' and t['local_path'] and
                                  (source.is_relative_to(Path(os.path.abspath(t['local_path']))) or
                                   Path(os.path.abspath(t['local_path'])).is_relative_to(source)) for t in tasks)
-                    if not shared and not linked(source):
+                    if not shared and not shared_resource and not linked(source):
                         paths = [source]
                         if source.is_dir():
                             paths.extend(f for f, _ in inventory(source)[0])
@@ -127,7 +135,8 @@ class StorageCleanup:
                           any(path.is_relative_to(self.root / name) for name in
                               ('app', 'data', 'web', 'scripts', 'tests', '.venv', 'work', '.git', 'release', 'requirements')) or
                           Path.home().is_relative_to(path) or len(path.parts) < 3)
-                candidates.append(('materials', path, not unsafe and all(eligible(t) for t in refs)))
+                selected = task_id is None or (not shared_resource and any(t['id'] == task_id for t in refs))
+                candidates.append(('materials', path, selected and not unsafe and all(eligible(t) for t in refs)))
             for kind, path, allowed in candidates:
                 try:
                     files, directories, newest = inventory(path)

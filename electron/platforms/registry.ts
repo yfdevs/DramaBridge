@@ -72,6 +72,15 @@ import {
   stopQqDramaPlatformService,
 } from "./qq-drama";
 import {
+  getWeiboDramaBrowserInstanceCount,
+  getWeiboDramaPlatformRuntimeSummary,
+  getWeiboDramaRunningPlatformCount,
+  openWeiboDramaLogDir,
+  registerWeiboDramaPlatformHandlers,
+  stopWeiboDramaPlatformRuntime,
+  stopWeiboDramaPlatformService,
+} from "./weibo-drama";
+import {
   getTaobaoDramaBrowserInstanceCount,
   getTaobaoDramaPlatformRuntimeSummary,
   getTaobaoDramaRunningPlatformCount,
@@ -206,6 +215,17 @@ const platformDefinitions = [
     getRunningPlatformCount: getQqDramaRunningPlatformCount,
     getRuntimeSummary: getQqDramaPlatformRuntimeSummary,
     openLogDir: openQqDramaLogDir,
+  },
+  {
+    id: "weibo-drama",
+    label: "微博 短剧",
+    registerHandlers: registerWeiboDramaPlatformHandlers,
+    stopRuntime: stopWeiboDramaPlatformRuntime,
+    stopService: stopWeiboDramaPlatformService,
+    getBrowserInstanceCount: getWeiboDramaBrowserInstanceCount,
+    getRunningPlatformCount: getWeiboDramaRunningPlatformCount,
+    getRuntimeSummary: getWeiboDramaPlatformRuntimeSummary,
+    openLogDir: openWeiboDramaLogDir,
   },
   {
     id: "tencent-huolong-drama",

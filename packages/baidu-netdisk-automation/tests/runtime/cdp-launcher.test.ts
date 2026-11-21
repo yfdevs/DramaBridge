@@ -39,6 +39,8 @@ test("prepares an unmodified runtime copy, preserves the installation and reuses
   const root = await mkdtemp(path.join(os.tmpdir(), "baidu-cdp-cache-"));
   try {
     const source = await fixture(root);
+    await writeFile(path.join(source.engine, "AppSettingApp.dat"), "mutable client settings");
+    await writeFile(path.join(source.engine, "menu_option.ini"), "mutable menu settings");
     const original = await readFile(source.executable);
     const originalFiles = await readdir(source.engine);
     const cache = path.join(root, "cache");
@@ -48,6 +50,11 @@ test("prepares an unmodified runtime copy, preserves the installation and reuses
     assert.deepEqual(await readFile(source.executable), original);
     assert.deepEqual(await readdir(source.engine), originalFiles);
     await assert.rejects(readFile(path.join(path.dirname(first), "users", "private-profile")), /ENOENT/);
+    assert.equal(await prepareBaiduCdpLauncher(source.executable, cache), first);
+    await assert.rejects(readFile(path.join(path.dirname(first), "AppSettingApp.dat")), /ENOENT/);
+    await assert.rejects(readFile(path.join(path.dirname(first), "menu_option.ini")), /ENOENT/);
+    await writeFile(path.join(source.engine, "AppSettingApp.dat"), "settings changed during normal startup");
+    await writeFile(path.join(source.engine, "menu_option.ini"), "menu changed");
     assert.equal(await prepareBaiduCdpLauncher(source.executable, cache), first);
     const preload = await readFile(path.join(path.dirname(first), "resources/app/preload.cjs"), "utf8");
     assert.ok(preload.includes(JSON.stringify(path.join(source.engine, "resources/app.asar/node_modules"))));

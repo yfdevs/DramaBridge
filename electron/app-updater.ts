@@ -7,6 +7,7 @@ import type { ProgressInfo, UpdateInfo } from "electron-updater";
 import { createValidatedStore } from "./core/config-store";
 import { emitIpcEvent, trpcIpc as ipcMain } from "./ipc";
 import { logMain } from "./main-logger";
+import { preferredUpdateSource } from "./core/update-source-policy";
 
 const require = createRequire(import.meta.url);
 const { gt: isVersionGreater } = require("semver") as {
@@ -25,8 +26,20 @@ const AUTOMATIC_UPDATE_RETRY_DELAYS_MS = [2, 5, 15, 30].map((minutes) => minutes
 
 const appUpdateSources = [
   {
+    id: "gh-proxy-v4",
+    label: "GH-Proxy v4（默认）",
+    description: "优先使用 v4.gh-proxy.org 下载更新",
+    url: "https://v4.gh-proxy.org/https://github.com/yfdevs/DramaBridge/releases/latest/download",
+  },
+  {
+    id: "gh-proxy-v6",
+    label: "GH-Proxy v6（备用）",
+    description: "通过 v6.gh-proxy.org 下载更新",
+    url: "https://v6.gh-proxy.org/https://github.com/yfdevs/DramaBridge/releases/latest/download",
+  },
+  {
     id: "accelerated",
-    label: "down.mxw.xx.kg（默认）",
+    label: "down.mxw.xx.kg",
     description: "通过 down.mxw.xx.kg 获取 GitHub Release，国内网络通常更快",
     url: "https://down.mxw.xx.kg/https://github.com/yfdevs/DramaBridge/releases/latest/download",
   },
@@ -182,11 +195,14 @@ function getStore() {
     store = createValidatedStore<AppUpdateStore>({
       name: "app-update-config",
       defaults: {
-        sourceId: "accelerated",
+        sourceId: "gh-proxy-v4",
         sourceMode: "auto",
         sourceHealth: {},
       },
     });
+    // Manual source selection is a session diagnostic option. Normal launches
+    // always return to automatic failover, including existing installations.
+    store.set("sourceMode", "auto");
   }
 
   return store;
@@ -370,6 +386,8 @@ function chooseBestUpdateSource(results: UpdateSourceProbeResult[]) {
   const consistentResults = results.filter(
     (result) => result.fingerprint === preferredFingerprint,
   );
+  const preferred = preferredUpdateSource(consistentResults);
+  if (preferred) return preferred;
   const ranked = consistentResults.sort((left, right) => sourceProbeScore(left) - sourceProbeScore(right));
   const best = ranked[0];
   const current = ranked.find((result) => result.source.id === getSelectedUpdateSource().id);
@@ -386,11 +404,12 @@ function isSourceCoolingDown(source: AppUpdateSource) {
 
 async function selectAutomaticUpdateSource(excluded = new Set<AppUpdateSourceId>()) {
   const availableSources = appUpdateSources.filter(
-    (source) => !excluded.has(source.id) && !isSourceCoolingDown(source),
+    (source) => ["gh-proxy-v4", "gh-proxy-v6", "github"].includes(source.id)
+      && !excluded.has(source.id) && !isSourceCoolingDown(source),
   );
   const candidates = availableSources.length > 0
     ? availableSources
-    : appUpdateSources.filter((source) => !excluded.has(source.id));
+    : appUpdateSources.filter((source) => ["gh-proxy-v4", "gh-proxy-v6", "github"].includes(source.id) && !excluded.has(source.id));
   const selected = chooseBestUpdateSource(await probeUpdateSources(candidates));
   if (!selected) {
     throw new Error("所有自动更新源当前均不可用");

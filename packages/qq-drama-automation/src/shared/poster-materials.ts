@@ -1,3 +1,4 @@
+import { cinematicPosterArtDirection } from "@dramabridge/media-assets";
 import { createHash } from "node:crypto";
 import { writeJsonAtomic } from "@dramabridge/file-utils";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -19,7 +20,7 @@ import { log } from "./logger.js";
 import type { ClaimedQqDramaTask, QqDramaRuntimeOptions } from "./types.js";
 
 const maximumFileBytes = 5_000_000;
-const promptVersion = "qq-second-version-cover-v1";
+const promptVersion = "qq-second-version-cover-v2-cinematic";
 
 const generatedCoverValidationSchema = z.object({
   mainSubjectsComplete: z.boolean(),
@@ -92,6 +93,7 @@ async function preparePrimaryPoster(
 
 function secondVersionPrompt(title: string) {
   return [
+    cinematicPosterArtDirection(),
     "参考原剧封面，重新设计一张同一部作品的商业漫剧封面",
     "保留核心人物、面部特征、服饰、时代背景、人物关系、画面比例和作品辨识度，但使用不同的构图与视觉排版，不能只替换文字",
     `新剧名必须完整、清晰、逐字准确地展示为“${title}”，不改字、不漏字`,

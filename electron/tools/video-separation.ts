@@ -4,12 +4,14 @@ import { logMain } from "../main-logger";
 import { app, dialog, shell } from "electron";
 import { emitIpcEvent, trpcIpc as ipc } from "../ipc";
 import { scanEpisodes, separateVideos } from "@dramabridge/video-separation";
+import { registerVideoCompressionHandlers } from "./video-compression";
 let running = false;
 let paused = false;
 let release: (() => void) | undefined;
 let activeId = '';
 
 export function registerVideoSeparationHandlers() {
+  registerVideoCompressionHandlers();
   ipc.handle('video-separation:pause', (_event, value: boolean) => {
     paused = value;
     if (!value) { release?.(); release = undefined; }
@@ -25,7 +27,8 @@ export function registerVideoSeparationHandlers() {
     return result.canceled ? null : result.filePaths[0];
   });
   ipc.handle('video-separation:scan', async (_event, directory: string) => ({directory, count:(await scanEpisodes(directory)).length}));
-  ipc.handle('video-separation:run', async (_event, directory: string, seconds: number, taskId: string) => {
+  ipc.handle('video-separation:run', async (_event, directory: string, seconds: number, taskId: string, mergeAndSplit = true) => {
+    if (typeof mergeAndSplit !== 'boolean') throw new Error('合并分割选项无效');
     if (running) throw new Error('已有视频任务正在处理');
     running = true; paused = false; activeId = taskId;
     try { return await separateVideos(directory, seconds, async message => {
@@ -37,7 +40,7 @@ export function registerVideoSeparationHandlers() {
     }, (message, details) => {
       console.log('[video-separation]', message, details ?? '');
       logMain('info', message, {taskId, ...details}, 'video-separation');
-    }); } catch (error) {
+    }, {mergeAndSplit}); } catch (error) {
       logMain('error', '视频分离任务失败', {taskId,directory,error:String(error)}, 'video-separation');
       throw error;
     } finally { running = false; paused = false; release?.(); release = undefined; }

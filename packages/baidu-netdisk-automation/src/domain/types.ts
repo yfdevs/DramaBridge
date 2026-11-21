@@ -153,6 +153,7 @@ export type BaiduNetdiskRemoteOwnershipListing = {
 };
 
 export type BaiduNetdiskRemotePosterListing = {
+  selection?: "unique-root-portrait";
   files: BaiduNetdiskRemoteOwnershipFile[];
   roots: Array<{ path: string; fsId?: number | string }>;
 };
@@ -169,7 +170,7 @@ export type BaiduNetdiskRemoteMetadataListing = {
 };
 
 export type BaiduNetdiskShareDownloadResult = {
-  posterDownload?: { root: string; files: Array<{ name: string; size?: number }> };
+  posterDownload?: { root: string; files: Array<{ name: string; size?: number }>; selection?: "unique-root-portrait" };
   share: BaiduNetdiskShareInfo;
   downloadRoot?: string;
   localPath?: string;

@@ -25,7 +25,7 @@ export function selectNativeDownloadStatus(list: NativeTask[], options: {
   targetName: string; expectedServerPath?: string; expectedDownloadRoot?: string; targetNames?: string[];
 }) {
   const helpers = {
-    normalized(value: unknown) { return String(value || "").replace(/\s+/g, " ").trim(); },
+    normalized(value: unknown) { return String(value || "").trim(); },
     nameFromPath(value: unknown) { return String(value || "").split(/[\\/]/).filter(Boolean).pop() || ""; },
     normalizeServerPath(value: unknown) { return "/" + String(value || "").split("/").filter(Boolean).join("/"); },
     normalizeLocalPath(value: unknown) {
@@ -37,7 +37,11 @@ export function selectNativeDownloadStatus(list: NativeTask[], options: {
     },
     complete(task: NativeTask) {
       const size = Number(task.size), finished = Number(task.finish_size);
-      return (size > 0 && finished === size) || /完成|success|finished|complete|done|已下载/i.test(String(task.status || ""));
+      const status = String(task.status || "").trim();
+      if (/未.*完成|未下载|失败|错误|取消|校验中|下载中|等待|排队|暂停|incomplete|unfinished|unsuccess|not[ _-]?(?:complete|finished|done)|fail|error|cancel|downloading|pending|queued|paused|verifying/i.test(status)) return false;
+      // A friendly status label cannot override known incomplete byte counts.
+      if (Number.isFinite(size) && size > 0 && task.finish_size != null && task.finish_size !== "") return Number.isFinite(finished) && finished === size;
+      return /^(?:已完成|下载完成|已下载|完成|success|successful|finished|complete|completed|done)$/i.test(status);
     },
   };
   const grouped = Boolean(options.targetNames?.length);

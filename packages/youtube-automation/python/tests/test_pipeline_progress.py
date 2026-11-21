@@ -19,6 +19,59 @@ import upload_to_youtube as pipeline
 
 
 class PipelineProgressTests(unittest.TestCase):
+    def test_daily_upload_quota_has_specific_guidance_but_other_429_errors_do_not(self):
+        from pipeline_failure import describe_failure
+        message = "HttpError 429: Quota exceeded for quota metric 'Video Uploads' and limit 'Video Uploads per day' of service 'youtube.googleapis.com'; rateLimitExceeded"
+        failure = describe_failure(message, stage='uploading', exit_code=1)
+        self.assertEqual(failure['code'], 'UPLOAD_DAILY_QUOTA_EXCEEDED')
+        self.assertIn('今日上传额度已用完', failure['title'])
+        self.assertIn('多个频道共用', failure['reason'])
+        self.assertIn('15:00', failure['action'])
+        self.assertIn('16:00', failure['action'])
+        self.assertEqual(failure['exitCode'], 1)
+        self.assertEqual(describe_failure('HTTP 429 rateLimitExceeded')['code'], 'PROCESS_FAILED')
+
+    def test_saved_generic_quota_failure_is_corrected_without_retrying_the_upload(self):
+        from web_service import Store
+        quota = "Quota exceeded for limit 'Video Uploads per day'"
+        row = dict(status='failed', error='视频上传失败', payload='{}', result=None, timings=None,
+                   progress=json.dumps({'stage': 'uploading', 'failure': {
+                       'code': 'PROCESS_FAILED', 'title': '视频上传失败', 'reason': '未知原因',
+                       'action': '重试', 'detail': quota, 'stage': 'uploading', 'exitCode': 1}}),
+                   logs='开始 / 恢复任务\n' + quota)
+        saved = Store.decode(row, detail=False)
+        self.assertEqual(saved['progress']['failure']['code'], 'UPLOAD_DAILY_QUOTA_EXCEEDED')
+        self.assertEqual(saved['progress']['failure']['exitCode'], 1)
+        self.assertNotIn('logs', saved)
+        # A quota failure from an earlier attempt must not replace the current error.
+        row['progress'] = json.dumps({'stage': 'uploading', 'failure': {
+            'code': 'PROCESS_FAILED', 'detail': 'new failure'}})
+        row['logs'] += '\n开始 / 恢复任务\nnew failure'
+        self.assertEqual(Store.decode(row)['progress']['failure']['code'], 'PROCESS_FAILED')
+
+    def test_legacy_session_failure_keeps_its_category_without_reusing_old_auth_errors(self):
+        from web_service import Store
+        from pipeline_failure import describe_failure
+        row = dict(status='failed', error='上传会话无法恢复', payload='{}', progress=None,
+                   result=None, timings=None, logs='开始 / 恢复任务\ninvalid_grant')
+        item = Store.decode(row)
+        failure = item['progress']['failure']
+        self.assertEqual(failure['code'], 'UPLOAD_SESSION_INVALID')
+        self.assertEqual(failure['stage'], 'uploading')
+        self.assertIn('YouTube Studio', failure['action'])
+        self.assertEqual(describe_failure('上传会话无法恢复')['code'], 'UPLOAD_SESSION_INVALID')
+
+    def test_netdisk_errors_are_not_generic_process_or_google_failures(self):
+        from pipeline_failure import describe_failure
+        cases = [('百度网盘分享页重新加载未完成，尚未确认链接失效，请重试连接', 'NETDISK_PAGE_UNCONFIRMED'),
+                 ('没有进入分享文件列表，timeout', 'NETDISK_PAGE_UNCONFIRMED'),
+                 ('分享链接不可用：分享文件已过期', 'NETDISK_SHARE_UNAVAILABLE'),
+                 ('百度网盘账号登录已过期，请在百度网盘客户端重新登录后再下载', 'NETDISK_LOGIN_REQUIRED'),
+                 ('百度网盘 CDP 连接 timeout', 'NETDISK_CONNECTION_ERROR')]
+        for message, code in cases:
+            with self.subTest(message=message):
+                self.assertEqual(describe_failure(message, stage='downloading')['code'], code)
+
     def test_failures_distinguish_authorization_network_quota_and_missing_dependencies(self):
         from pipeline_failure import describe_failure, safe_detail, parse_failure, emit_failure, PipelineFailure
         for message, code in [('invalid_grant: Token has been expired or revoked', 'AUTH_INVALID'),

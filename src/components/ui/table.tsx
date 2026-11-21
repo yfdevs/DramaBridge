@@ -1,7 +1,8 @@
 import * as React from "react"
 import { cn } from "cn"
+import { OverflowText } from "./overflow-text"
 
-function Table({ className, containerClassName, ...props }: React.ComponentProps<"table"> & { containerClassName?: string }) {
+function Table({ className, containerClassName, stickyActions = false, ...props }: React.ComponentProps<"table"> & { containerClassName?: string; stickyActions?: boolean }) {
   return (
     <div
       data-slot="table-container"
@@ -9,7 +10,7 @@ function Table({ className, containerClassName, ...props }: React.ComponentProps
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn("w-full caption-bottom text-xs leading-4 [&_[data-slot=button]]:h-6 [&_[data-slot=button]]:text-xs [&_[data-slot=button]]:gap-1 [&_[data-slot=button]_svg]:size-3.5", stickyActions && "table-sticky-actions", className)}
         {...props}
       />
     </div>
@@ -67,7 +68,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
+        "h-8 px-2 py-1 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -75,16 +76,20 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   )
 }
 
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+function TableCell({ className, children, title, ...props }: React.ComponentProps<"td">) {
+  const truncatedText = (className?.includes("truncate") || title) && (typeof children === "string" || typeof children === "number")
   return (
     <td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "px-2 py-1.5 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
-    />
+      title={truncatedText ? undefined : title}
+    >
+      {truncatedText ? <OverflowText title={title}>{children}</OverflowText> : children}
+    </td>
   )
 }
 
@@ -95,7 +100,7 @@ function TableCaption({
   return (
     <caption
       data-slot="table-caption"
-      className={cn("mt-4 text-sm text-muted-foreground", className)}
+      className={cn("mt-2 text-xs text-muted-foreground", className)}
       {...props}
     />
   )

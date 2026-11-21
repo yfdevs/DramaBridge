@@ -271,6 +271,7 @@ export type DouyinDramaRuntimeOptions = {
       minimumJianyingImages?: number;
     };
     requiredPosterImages?: number;
+    requireAllDiscoveredAssets?: boolean;
     posterFallback?: { title?: string; summary: string };
     requiredAiProductionProofFiles?: number;
     requiredMetadataTextFiles?: number;

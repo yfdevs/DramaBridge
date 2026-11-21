@@ -14,3 +14,8 @@ export function selectSyncSource(value: string, selected: SyncSourceAccount[]) {
   // Rows for unselected accounts are intentionally left for a later run.
   return byName[0];
 }
+/** Close only the page created for this task, after its submit/settle checks finish. */
+export async function runSyncTaskPage<T>(page: { close: () => Promise<unknown> }, action: () => Promise<T>): Promise<T> {
+  try { return await action(); }
+  finally { await page.close().catch(() => undefined); }
+}

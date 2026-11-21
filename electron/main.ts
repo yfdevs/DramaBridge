@@ -1,4 +1,5 @@
 import { registerVideoSeparationHandlers } from "./tools/video-separation";
+import { registerJianyingHandlers, stopJianyingProcessing } from "./tools/jianying";
 import { app, BrowserWindow, Menu } from "electron";
 import { registerFeishuTableHandlers } from "./integrations/feishu";
 
@@ -46,6 +47,7 @@ function startApplication() {
 
   initializeMainWindowIntegration();
   registerGracefulShutdown(async () => {
+    stopJianyingProcessing();
     stopLocalOwnershipOcr();
     await stopLocalApi();
     await stopAllPlatformServices();
@@ -69,6 +71,7 @@ function startApplication() {
       initializeTrpcIpc();
       registerFeishuTableHandlers();
       registerVideoSeparationHandlers();
+      registerJianyingHandlers();
       registerAppRuntimeHandlers();
       registerGlobalAppConfigHandlers({
         getRunningPlatformCount: () => getGlobalRunningPlatformStatus().running,

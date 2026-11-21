@@ -23,7 +23,7 @@ export function YoutubeListPagination({
     if (page >= 1 && page <= list.pageCount) list.setPage(page);
   };
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-xs">
+    <div className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
       <p className="text-muted-foreground" aria-live="polite">
         共 {list.total} 条
         {list.total > list.pageSize &&
@@ -44,7 +44,7 @@ export function YoutubeListPagination({
           <PaginationContent>
             <PaginationItem>
               <PaginationPrevious
-                size="sm"
+                size="icon-sm"
                 text="上一页"
                 aria-label="上一页"
                 href="#"
@@ -73,7 +73,7 @@ export function YoutubeListPagination({
             </PaginationItem>
             <PaginationItem>
               <PaginationNext
-                size="sm"
+                size="icon-sm"
                 text="下一页"
                 aria-label="下一页"
                 href="#"

@@ -3,7 +3,7 @@ import type { TableSnapshot } from "@dramabridge/feishu";
 import type { AccountSyncState } from "../../../src/platforms/kuaishou-drama/account-sync-service";
 import { trpcIpc as ipcMain } from "../../ipc";
 import { configuredFeishuTables, readFeishuSettings, lockFeishuSettings } from "../../integrations/feishu";
-import { isPendingSyncTask, selectSyncSource, type SyncSourceAccount } from "./account-sync-tasks";
+import { isPendingSyncTask, runSyncTaskPage, selectSyncSource, type SyncSourceAccount } from "./account-sync-tasks";
 
 const sheetName = "快手账号同步";
 export function syncColumns(table: TableSnapshot) {
@@ -104,17 +104,14 @@ export function registerKuaishouAccountSyncHandlers(options: {
           if (!entry) {
             const page = await sessions.get(id)!.context.newPage();
             try {
-              await runtime.syncKuaishouAccounts(page, row.values[c.title]!, runtime.parseSyncAccounts(row.values[c.targets] || ""), () => { state.message = `正在提交：${account.accountName} / ${state.current}`; }, () => { state.message = "已收到同步结果，等待页面稳定"; });
+              await runSyncTaskPage(page, async () => runtime.syncKuaishouAccounts(page, row.values[c.title]!, runtime.parseSyncAccounts(row.values[c.targets] || ""), () => { state.message = `正在提交：${account.accountName} / ${state.current}`; }, () => { state.message = "已收到同步结果，等待页面稳定"; }));
               entry = { phase: "completed" };
-              await page.close().catch(() => undefined);
             } catch (error) {
               if (error instanceof Error && error.message.includes("[KUAISHOU_LOGIN_REQUIRED]")) {
                 state.message = `请在已打开的浏览器中登录“${account.accountName}”，登录后继续同步`;
-                await page.close().catch(() => undefined);
                 return;
               }
               entry = { phase: "failed", error: error instanceof Error ? error.message : String(error) };
-              // Failed task tabs remain open until the user stops the synchronization browser.
             }
             pendingWritebacks.set(key, entry);
           }

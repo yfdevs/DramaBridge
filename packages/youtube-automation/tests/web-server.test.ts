@@ -73,6 +73,22 @@ test("Web access works without login, rejects cross-origin requests, and shares 
       body: { resourceName: "Test", noUpload: false },
     });
     const tasks = await (await request("/api/tasks")).json();
+    const largeCookie = { content: "x".repeat(70000) };
+    assert.notEqual(
+      (await request("/api/accounts/default/browser/import", largeCookie)).status,
+      200,
+    );
+    assert.notEqual((await request("/api/accounts/default/browser/import", {})).status, 200);
+    assert.equal((await request("/api/accounts/default/browser/start", {})).status, 200);
+    assert.equal(calls.at(-1)?.route, "/api/accounts/default/browser/start");
+    const previousCalls = calls.length;
+    assert.notEqual((await request("/api/tasks", largeCookie)).status, 200);
+    assert.equal(calls.length, previousCalls);
+    assert.equal(
+      (await request("/api/accounts/default/browser/import", largeCookie, "http://evil.example"))
+        .status,
+      403,
+    );
     assert.deepEqual(tasks.settings, { paused: false });
     const oauth = await (await request("/api/oauth/start", { accountId: "default" })).json();
     assert.equal(oauth.manual, true);

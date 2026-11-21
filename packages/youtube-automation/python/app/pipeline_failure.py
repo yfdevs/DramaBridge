@@ -18,6 +18,18 @@ def describe_failure(message, stage=None, exit_code=None):
     text = str(message)
     lower = text.lower()
     rules = [
+        ('UPLOAD_DAILY_QUOTA_EXCEEDED', ('video uploads per day',),
+         'YouTube 今日上传额度已用完',
+         '当前 Google API 项目的每日视频上传额度已耗尽。使用同一项目的多个频道共用这份额度。',
+         '请暂停重试，等每日额度恢复后继续。额度按美国太平洋时间午夜重置（北京时间夏令时15:00、冬令时16:00）。可在 Google Cloud 控制台查看 Video Uploads per day 配额；长期不足时申请提高配额。重新登录或换用同一项目下的频道无法恢复额度。'),
+        ('NETDISK_PAGE_UNCONFIRMED', ('尚未确认链接失效', '提取接口尚未确认', '没有进入分享文件列表'),
+         '百度网盘分享页尚未就绪', '客户端未能完成分享页加载或提取，当前结果不能证明分享已过期。', '检查百度网盘客户端连接和登录状态后重试。'),
+        ('NETDISK_SHARE_UNAVAILABLE', ('分享链接不可用：',),
+         '百度网盘分享页报告不可用', '重新加载后的分享页仍显示访问错误。', '在百度网盘客户端打开原链接，核对提取码和分享状态后重试。'),
+        ('NETDISK_LOGIN_REQUIRED', ('百度网盘账号登录已过期', '百度网盘客户端重新登录'),
+         '百度网盘需要重新登录', '客户端当前登录状态不可用。', '在百度网盘客户端重新登录后重试下载。'),
+        ('NETDISK_CONNECTION_ERROR', ('百度网盘 cdp', '百度网盘调试端口', 'baidu_cdp_'),
+         '百度网盘客户端连接失败', '无法连接客户端或客户端自动化组件尚未就绪。', '在百度网盘连接管理中重新连接客户端后重试。'),
         ('AUTH_CLIENT_INVALID', ('invalid_client', 'unauthorized_client', '客户端凭据被拒绝'),
          'Google 客户端凭据无效', 'Google 拒绝了当前客户端凭据。', '检查配置中的 Google 客户端凭据，再到账号管理更新授权。'),
         ('AUTH_INVALID', ('invalid_grant', 'token 已失效', '授权缺失或已失效', '授权已失效', '尚未保存授权', '授权文件格式无效', 'google 未接受当前令牌', '令牌已过期或客户端不匹配'),
@@ -36,8 +48,8 @@ def describe_failure(message, stage=None, exit_code=None):
          '处理环境缺少依赖', '所需的 Python 模块或媒体工具不可用。', '到配置管理检查并准备运行环境，完成后重试。'),
         ('MEDIA_INVALID', ('invalid data found', '解码校验失败', '拼接或成片校验失败', '视频缺少画面或音轨', '无法读取该格式'),
          '视频素材或成片校验失败', '素材无法正常解码，或生成的视频未通过校验。', '检查失败视频是否完整、可播放，修复或重新下载后重试。'),
-        ('UPLOAD_SESSION_INVALID', ('上传会话已失效', '无法安全恢复上传'),
-         '上传会话无法恢复', '原上传会话已失效或无法确认上传结果。', '先到 YouTube 核对是否已有该视频，避免重复上传。'),
+        ('UPLOAD_SESSION_INVALID', ('上传会话已失效', '无法安全恢复上传', '上传会话无法恢复'),
+         '上传会话无法恢复', '原上传会话已失效、未完整保存，或待上传文件已变化，无法安全续传。', '先到该账号的 YouTube Studio 核对视频是否已上传，再处理原上传会话，避免重复上传。'),
     ]
     for code, needles, title, reason, action in rules:
         if any(needle.lower() in lower for needle in needles):

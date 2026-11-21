@@ -3,6 +3,20 @@ import test from "node:test";
 import { runInNewContext } from "node:vm";
 import { decodeNativeDownloadTasks, selectNativeDownloadStatus } from "../../src/infrastructure/native-download-status.js";
 
+test("negative status words and incomplete bytes never count as completed", () => {
+  const select = runInNewContext(`(${selectNativeDownloadStatus.toString()})`) as typeof selectNativeDownloadStatus;
+  for (const status of ["未完成", "未全部完成", "下载未完成", "下载中", "paused", "incomplete", "unfinished", "not completed", "unsuccessful", "failed", "已取消"]) {
+    assert.equal(select([{name:'1.mp4',status,size:100,finish_size:100}],{targetName:'1.mp4'}).matched?.completed,false,status);
+  }
+  assert.equal(select([{name:'1.mp4',status:'completed',size:100,finish_size:99}],{targetName:'1.mp4'}).matched?.completed,false);
+  assert.equal(select([{name:'1.mp4',status:'completed',size:100,finish_size:100}],{targetName:'1.mp4'}).matched?.completed,true);
+  assert.equal(select([{name:'1.mp4',status:'completed'}],{targetName:'1.mp4'}).matched?.completed,true);
+});
+
+test("different internal filename whitespace cannot match the same task", () => {
+  assert.equal(selectNativeDownloadStatus([{name:'第  1集.mp4',size:100,finish_size:100}],{targetName:'第 1集.mp4'}).matched,undefined);
+});
+
 test("Mac status preserves case-sensitive download roots and ignores sibling tasks", () => {
   const list = [
     { name: "1.mp4", local_path: "/Users/test/Downloads/Task/1.mp4", size: 100, finish_size: 20 },

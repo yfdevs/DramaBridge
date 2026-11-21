@@ -26,11 +26,11 @@ import {
   selectDirectory,
 } from "../shared";
 import { configuredFeishuTables, readFeishuSettings, lockFeishuSettings } from "../../integrations/feishu";
-import { PinduoduoFeishuTables, type PinduoduoFeishuAccount } from "./feishu";
+import { PinduoduoFeishuTables, selectPinduoduoAccounts, type PinduoduoFeishuAccount } from "./feishu";
 import { PinduoduoSourceTable, validatePinduoduoSourceUrl } from "./source-table";
 import { PINDUODUO_DEFAULT_SOURCE_TABLE_URL } from "../../../src/platforms/pinduoduo-drama/defaults";
 type ListUploadRecordsFilter = { status?: string; limit?: number; offset?: number };
-type RuntimeInstance = { id: string; name: string; launched: boolean; loginState: string; activeUrl?: string };
+type RuntimeInstance = { id: string; name: string; launched: boolean; loginState: string; activeUrl?: string; uploadProgress?: import("@dramabridge/pinduoduo-drama-automation").PinduoduoUploadProgress };
 import {
   assertGlobalDirectoriesConfigured,
   resolveGlobalPlatformDirectories,
@@ -41,6 +41,7 @@ const uploadRecordsWindowMode = "pinduoduo-drama-upload-records";
 const uploadRecordsWindowTitle = "拼多多审核与上传状态";
 
 type PinduoduoDramaRuntimeStatus = {
+  uploadProgress?: import("@dramabridge/pinduoduo-drama-automation").PinduoduoUploadProgress;
   lastError?: string;
   platform: "pinduoduo-drama";
   running: boolean;
@@ -97,6 +98,7 @@ type PinduoduoDramaStoragePaths = {
 };
 
 type PinduoduoDramaStore = {
+  selectedAccountIds: string[];
   config: Partial<PinduoduoDramaConfig> & Record<string, string | undefined>;
 };
 
@@ -213,6 +215,7 @@ function getStore() {
     store = createValidatedStore<PinduoduoDramaStore>({
       name: "pinduoduo-drama-config",
       defaults: {
+        selectedAccountIds: [],
         config: defaultPinduoduoDramaConfig,
       },
     });
@@ -391,7 +394,10 @@ async function status(): Promise<PinduoduoDramaServiceStatus> {
   };
 }
 
-async function startRuntime(): Promise<PinduoduoDramaRuntime> {
+async function startRuntime(selectedAccountIds: unknown): Promise<PinduoduoDramaRuntime> {
+  if (!Array.isArray(selectedAccountIds) || !selectedAccountIds.length || selectedAccountIds.some(id => typeof id !== "string" || !id.trim())) {
+    throw new Error("请勾选需要启动的拼多多账号");
+  }
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
   const config = readConfig();
   const cloud = getUploadRecordsRepository();
@@ -400,8 +406,7 @@ async function startRuntime(): Promise<PinduoduoDramaRuntime> {
   const errors: Record<string, string> = {};
   try {
     await cloud.prepare();
-    const accounts = (await cloud.accounts()).filter(item => item.enabled);
-    if (!accounts.length) throw new Error("请先在飞书“拼多多账号实例”中将需要运行的账号设为启用（是）");
+    const accounts = selectPinduoduoAccounts(await cloud.accounts(), selectedAccountIds);
     feishuSession = cloud;
     const { startPinduoduoDramaRuntime } = await import("@dramabridge/pinduoduo-drama-automation");
     await Promise.all(accounts.map(async account => {
@@ -418,8 +423,7 @@ async function startRuntime(): Promise<PinduoduoDramaRuntime> {
           logFilePath: paths.logFilePath,
           logRetentionDays: Math.max(1, Number.parseInt(config.logRetentionDays, 10) || 3),
           uploadRecords: cloud.forAccount(account),
-          shouldRun: () => cloud.enabled(account),
-          onLoginState: state => cloud.loginState(account, state === "logged-in" ? "已登录" : state === "login-required" ? "待登录" : "未登录"),
+          shouldRun: () => cloud.available(account),
           ensureBaiduNetdiskResource: (request: BaiduNetdiskEnsureDownloadedRequest) => ensureBaiduNetdiskShareDownloaded({ ...request, requesterPlatform: "pinduoduo-drama" }),
           cleanupBaiduNetdiskResourceAfterTaskSuccess: cleanupBaiduNetdiskPlayletAfterTaskSuccess,
           config: {
@@ -439,12 +443,13 @@ async function startRuntime(): Promise<PinduoduoDramaRuntime> {
       }
     }));
     if (!sessions.length) throw new Error(Object.values(errors).join("；"));
+    getStore().set("selectedAccountIds", sessions.map(({ account }) => account.phone));
     return {
       getStatus() {
         const first = sessions[0]!.runtime.getStatus();
         const instances = sessions.map(({ account, runtime }) => {
           const state = runtime.getStatus();
-          return { id: account.phone, name: `${account.name} · ${account.creatorName}`, launched: state.running, loginState: state.loginState, activeUrl: state.activeUrl };
+          return { id: account.phone, name: `${account.name} · ${account.creatorName}`, launched: state.running, loginState: state.loginState, activeUrl: state.activeUrl, uploadProgress: state.uploadProgress };
         });
         const accountErrors = { ...errors };
         for (const session of sessions) {
@@ -455,9 +460,8 @@ async function startRuntime(): Promise<PinduoduoDramaRuntime> {
       },
       async stop() {
         try {
-          const results = await Promise.allSettled(sessions.map(async ({ account, runtime }) => {
+          const results = await Promise.allSettled(sessions.map(async ({ runtime }) => {
             await runtime.stop();
-            await cloud.loginState(account, "未登录");
           }));
           const failed = results.find(result => result.status === "rejected");
           if (failed?.status === "rejected") throw failed.reason;
@@ -566,14 +570,22 @@ export function registerPinduoduoDramaPlatformHandlers() {
 
   ipcMain.handle("pinduoduo-drama:service:status", () => status());
 
-  ipcMain.handle("pinduoduo-drama:service:start", async () => {
+  ipcMain.handle("pinduoduo-drama:accounts:list", async () => {
+    const accounts = await getUploadRecordsRepository().accounts();
+    return {
+      accounts: accounts.map(account => ({ accountId: account.phone, accountName: account.name, loginAccount: account.creatorName, status: "ON" })),
+      selectedAccountIds: getStore().get("selectedAccountIds", []).filter(id => accounts.some(account => account.phone === id)),
+    };
+  });
+
+  ipcMain.handle("pinduoduo-drama:service:start", async (_event, selectedAccountIds: unknown) => {
     assertGlobalDirectoriesConfigured();
     const runtime = runtimeController.current;
     if (runtime && !runtime.getStatus().running) {
       await runtimeController.stop();
     }
 
-    await runtimeController.start(startRuntime);
+    await runtimeController.start(() => startRuntime(selectedAccountIds));
     return status();
   });
 

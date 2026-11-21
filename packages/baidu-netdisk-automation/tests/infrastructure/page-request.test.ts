@@ -21,7 +21,7 @@ test("serialized page request preserves cookies, method and JSON body", async ()
   assert.equal((await request<{ errno: number }>("/api/list", { method: "POST", body: "payload" })).errno, 0);
 });
 
-test("directory HTTP 500 retries exactly three times, with no credential leakage", async () => {
+test("directory HTTP 500 retries exactly five times, with no credential leakage", async () => {
   let calls = 0;
   const request = requestInPage(async () => {
     calls++;
@@ -32,38 +32,38 @@ test("directory HTTP 500 retries exactly three times, with no credential leakage
     assert.doesNotMatch(String(error), /secret/);
     return true;
   });
-  assert.equal(calls, 3);
+  assert.equal(calls, 5);
 });
 
-test("directory retry succeeds on the third attempt", async () => {
+test("directory retry succeeds on the fifth attempt", async () => {
   let calls = 0;
-  const request = requestInPage(async () => ++calls < 3
+  const request = requestInPage(async () => ++calls < 5
     ? new Response('unavailable', { status: 503 }) : new Response('{"errno":0,"list":[]}'));
   assert.deepEqual(JSON.parse(JSON.stringify(await request('/api/list'))), { errno: 0, list: [] });
-  assert.equal(calls, 3);
+  assert.equal(calls, 5);
 });
 
-test("mixed directory errno and HTTP errors share one three-attempt budget", async () => {
+test("mixed directory errno and HTTP errors share one five-attempt budget", async () => {
   let calls = 0;
   const request = requestInPage(async () => ++calls === 1
     ? new Response('{"errno":4}') : new Response('unavailable', { status: 500 }));
   await assert.rejects(request('/api/list'), /HTTP 500/);
-  assert.equal(calls, 3);
+  assert.equal(calls, 5);
 });
 
-test("read timeout retries three times but caller cancellation is never retried", async () => {
+test("read timeout retries five times but caller cancellation is never retried", async () => {
   let calls = 0;
   const request = requestInPage(async (_, init) => {
     calls++;
     return new Promise((_, reject) => init!.signal!.addEventListener('abort', () => reject(new Error('aborted'))));
   });
   await assert.rejects(request('/api/list', {}, 'json', 10), /接口请求超时/);
-  assert.equal(calls, 3);
+  assert.equal(calls, 5);
   const controller = new AbortController();
   const pending = request('/api/list', { signal: controller.signal });
   setTimeout(() => controller.abort(new Error('user stopped')), 500);
   await assert.rejects(pending, /user stopped/);
-  assert.equal(calls, 4);
+  assert.equal(calls, 6);
 });
 
 test("page request aborts a stalled connection without replaying the operation", async () => {
@@ -138,3 +138,16 @@ test("transfer uses official XHR transport once, preserving body and credentials
   assert.equal((await request<{errno:number}>('/share/transfer',{method:'POST',body:'fsidlist=%5B1%5D'})).errno,0);
   assert.equal(sent,1);
 });
+
+for (const recover of [true, false]) {
+  test(`directory HTTP 404 ${recover ? "recovers on fifth attempt" : "stops after five attempts"}`, async () => {
+    let calls = 0;
+    const request = requestInPage(async () => {
+      calls++;
+      return recover && calls === 5 ? new Response('{"errno":0}') : new Response('missing', { status: 404 });
+    });
+    if (recover) assert.equal((await request<{ errno: number }>('/share/list')).errno, 0);
+    else await assert.rejects(request('/share/list'), /HTTP 404/);
+    assert.equal(calls, 5);
+  });
+}

@@ -31,6 +31,8 @@ export type BaiduDramaServiceStatus = {
     accountName: string
     loginAccount?: string | null
     launched: boolean
+    statusMessage?: string
+    runtimeError?: string
     loginState: BaiduDramaLoginState
     activeUrl?: string
     userDataDir: string

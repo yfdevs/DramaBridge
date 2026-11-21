@@ -163,6 +163,10 @@
 }
 
 @layer base {
+  html[data-youtube-web="true"] {
+    scrollbar-gutter: stable;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
@@ -355,11 +359,96 @@ html .tst-viewport {
   --tst-radius: 12px;
   --tst-bg: var(--popover);
   --tst-fg: var(--popover-foreground);
-  --tst-success: light-dark(#218358, #3dd68c);
-  --tst-error: light-dark(#ce2c31, #ff9592);
-  --tst-warning: light-dark(#ad5700, #ffca16);
-  --tst-info: light-dark(#0d74ce, #70b8ff);
+  --tst-success: #218358;
+  --tst-error: #ce2c31;
+  --tst-warning: #ad5700;
+  --tst-info: #0d74ce;
   font-family: var(--font-sans);
+}
+html .tst-viewport[data-theme="dark"] {
+  --tst-success: #3dd68c;
+  --tst-error: #ff9592;
+  --tst-warning: #ffca16;
+  --tst-info: #70b8ff;
+}
+@media (prefers-color-scheme: dark) {
+  html .tst-viewport[data-theme="system"] {
+    --tst-success: #3dd68c;
+    --tst-error: #ff9592;
+    --tst-warning: #ffca16;
+    --tst-info: #70b8ff;
+  }
+}
+/* Status glyphs must remain visible even when draw animations are interrupted.
+   Loading rotation is driven by Ding's Web Animations API, independently. */
+html .tst-viewport .tst[data-type] .tst-svg {
+  animation: none;
+  /* Also override Ding's WAAPI fade during loading/result changes. */
+  opacity: 1 !important;
+  scale: 1;
+  filter: none;
+  transition: none;
+}
+html .tst-viewport .tst[data-type] .tst-svg path {
+  animation: none;
+  opacity: 1;
+  scale: 1;
+  translate: none;
+  stroke-dasharray: none;
+  stroke-dashoffset: 0;
+  transition: none;
+}
+html .tst-viewport .tst[data-type="loading"] .tst-svg path:first-child {
+  stroke-dasharray: 0.28 0.72;
 }
 html .tst-title, html .tst-desc { overflow-wrap: anywhere; }
 html .tst-desc { max-height: min(30vh, 200px); overflow-y: auto; }
+
+/* Keep actions reachable while wide task tables scroll horizontally. */
+.table-sticky-actions > thead > tr > th:last-child,
+.table-sticky-actions > tbody > tr > td:last-child:not([colspan]) {
+  position: sticky;
+  right: 0;
+  text-align: left;
+  z-index: 1;
+  background-color: var(--background);
+  box-shadow: -1px 0 0 var(--border);
+}
+.table-sticky-actions > thead > tr > th:last-child {
+  z-index: 2;
+  background-color: color-mix(in oklab, var(--muted) 70%, var(--background));
+}
+.table-sticky-actions > tbody > tr:hover > td:last-child:not([colspan]),
+.table-sticky-actions > tbody > tr[data-state="selected"] > td:last-child:not([colspan]) {
+  background-color: color-mix(in oklab, var(--muted) 50%, var(--background));
+}
+
+
+/* Radix Gray steps 1, 3, 6–8, 11–12; Red 11 for errors. Scoped to compression. */
+.video-compression-theme {
+  --background: #fcfcfc;
+  --foreground: #202020;
+  --primary: #202020;
+  --primary-foreground: #fcfcfc;
+  --muted: #f0f0f0;
+  --muted-foreground: #646464;
+  --border: #d9d9d9;
+  --input: #cecece;
+  --ring: #bbbbbb;
+  --destructive: #ce2c31;
+}
+.dark .video-compression-theme {
+  --background: #111111;
+  --foreground: #eeeeee;
+  --primary: #eeeeee;
+  --primary-foreground: #111111;
+  --muted: #222222;
+  --muted-foreground: #b4b4b4;
+  --border: #3a3a3a;
+  --input: #484848;
+  --ring: #606060;
+  --destructive: #ff9592;
+}
+.video-compression-theme [data-slot="button"] {
+  transition: none;
+}

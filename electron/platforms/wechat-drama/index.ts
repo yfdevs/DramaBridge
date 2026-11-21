@@ -1,3 +1,5 @@
+import { wechatDataSyncConnectionDefaults } from "./data-sync-defaults";
+import { registerWechatDataSyncHandlers, stopWechatDataSync, getWechatDataSyncLegacyDirectory } from "./data-sync";
 import { registerAccountControl } from "../shared/account-control";
 import { normalizeFeishuPollSeconds } from "../../integrations/feishu/task-handlers";
 import { registerWechatRecreationHandlers, stopWechatRecreation } from "./netdisk";
@@ -61,6 +63,11 @@ export type WechatVideoServiceStatus = {
 export type WechatVideoConfig = {
   recreationSheetName: string;
   recreationPollSeconds: string;
+  dataSyncDownloadDirectory: string;
+  dataSyncDryRun: string;
+  dataSyncApiBaseUrl: string
+  dataSyncAdminUsername: string
+  dataSyncAdminPassword: string
   apiBaseUrl: string
   selectedVideoAccountIds: string
   videoAccountContractSubjects: string
@@ -106,6 +113,11 @@ type WechatVideoStore = {
 const defaultWechatVideoConfig: WechatVideoConfig = {
   recreationSheetName: "微信二创",
   recreationPollSeconds: "30",
+  dataSyncDownloadDirectory: "",
+  dataSyncDryRun: "false",
+  dataSyncApiBaseUrl: wechatDataSyncConnectionDefaults.dataSyncApiBaseUrl,
+  dataSyncAdminUsername: wechatDataSyncConnectionDefaults.dataSyncAdminUsername,
+  dataSyncAdminPassword: wechatDataSyncConnectionDefaults.dataSyncAdminPassword,
   apiBaseUrl: 'http://180.184.76.232:19090',
   selectedVideoAccountIds: '',
   videoAccountContractSubjects: 'MINGXINGSHUO,MISU,WEITAO,HUANZOU,XIAOSHILIU,YOUDIANNIU,ZHENCUIYIHAO,RUIXIAODOU,YUANMAN,YUNQIMANYING,MENGDONG,CHONGBAO,DOURAN',
@@ -310,6 +322,11 @@ function normalizeConfig(
   return {
     recreationSheetName: config.recreationSheetName?.trim() || "微信二创",
     recreationPollSeconds: normalizeFeishuPollSeconds(config.recreationPollSeconds),
+    dataSyncDownloadDirectory: config.dataSyncDownloadDirectory ?? getWechatDataSyncLegacyDirectory(),
+    dataSyncDryRun: config.dataSyncDryRun ?? "false",
+    dataSyncApiBaseUrl: config.dataSyncApiBaseUrl?.trim() || wechatDataSyncConnectionDefaults.dataSyncApiBaseUrl,
+    dataSyncAdminUsername: config.dataSyncAdminUsername?.trim() || wechatDataSyncConnectionDefaults.dataSyncAdminUsername,
+    dataSyncAdminPassword: config.dataSyncAdminPassword || wechatDataSyncConnectionDefaults.dataSyncAdminPassword,
     apiBaseUrl: config.apiBaseUrl ?? defaultWechatVideoConfig.apiBaseUrl,
     selectedVideoAccountIds: config.selectedVideoAccountIds ?? '',
     videoAccountContractSubjects: contractSubjectOptions
@@ -581,6 +598,7 @@ export function registerWechatVideoPlatformHandlers() {
     },
     onStarted: id => getStore().set('config', normalizeConfig({ ...readConfig(), selectedVideoAccountIds: [...new Set([...readConfig().selectedVideoAccountIds.split(',').filter(Boolean), id])].join(',') })),
   });
+  registerWechatDataSyncHandlers(readConfig);
   registerWechatRecreationHandlers(readConfig);
   ipcMain.handle("wechat-drama:tasks:cleanup", () => staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl }).sweep());
   staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl });
@@ -685,11 +703,13 @@ export function registerWechatVideoPlatformHandlers() {
 }
 
 export function stopWechatVideoPlatformRuntime() {
+  void stopWechatDataSync().catch(console.error);
   void stopWechatRecreation().catch((error) => console.error("停止飞书任务失败", error));
   runtimeController.stopInBackground()
 }
 
 export async function stopWechatVideoPlatformService() {
+  await stopWechatDataSync();
   await stopWechatRecreation();
   return runtimeController.stop()
 }

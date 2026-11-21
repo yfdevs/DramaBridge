@@ -1,3 +1,4 @@
+import { OverflowText } from "@/components/ui/overflow-text";
 import {
   CheckCircle,
   DangerTriangle,
@@ -7,7 +8,8 @@ import {
   SpinnerOne,
   StopCircle,
 } from "@mynaui/icons-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { clickUpdateVersion, subscribeUpdateSourceAccess, updateSourcesVisible } from "@/lib/update-source-access";
 import { toast } from "@/components/ui/notifications";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -23,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverHeader, PopoverTrigger } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
+import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
 import {
   Select,
   SelectContent,
@@ -77,7 +79,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function updateSummary(status: AppUpdateStatus | null) {
+function updateSummary(status: AppUpdateStatus | null, showSources = false) {
   if (!status) return "读取中";
   if (!status.enabled) return "更新不可用";
 
@@ -95,7 +97,7 @@ function updateSummary(status: AppUpdateStatus | null) {
     case "installing":
       return "正在重启安装";
     case "error":
-      return status.error ?? "更新异常";
+      return showSources ? status.error ?? "更新异常" : "更新暂时失败，请稍后重试";
     case "idle":
     default:
       return "未检查更新";
@@ -196,6 +198,7 @@ export function AppUpdateControl({
   const [actionPending, setActionPending] = useState<UpdateAction | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [installConfirmOpen, setInstallConfirmOpen] = useState(false);
+  const showSources = useSyncExternalStore(subscribeUpdateSourceAccess, updateSourcesVisible, () => false);
   const notifiedDownloadedVersion = useRef<string | null>(null);
 
   useEffect(() => {
@@ -251,19 +254,19 @@ export function AppUpdateControl({
         } else if (action === "check" && nextStatus.state === "not-available") {
           toast.success("当前已是最新版本");
         } else if (action === "check" && nextStatus.state === "error") {
-          toast.error(nextStatus.error ?? "检查更新失败");
+          toast.error(showSources ? nextStatus.error ?? "检查更新失败" : "检查更新失败，请稍后重试");
         } else if (action === "cancel") {
-          toast.info("下载已取消，可以切换更新源后重新检查");
+          toast.info("下载已取消，可以稍后继续下载");
         }
       } catch (error) {
-        toast.error(errorMessage(error));
+        toast.error(showSources ? errorMessage(error) : "更新操作未完成，请稍后重试");
       } finally {
         setActionPending(null);
       }
     })();
   };
 
-  const summary = updateSummary(status);
+  const summary = updateSummary(status, showSources);
   const description = updateDescription(status);
   const busy =
     actionPending !== null || status?.state === "checking" || status?.state === "downloading";
@@ -281,6 +284,13 @@ export function AppUpdateControl({
     ? `${formatBytes(progress.transferred)} / ${formatBytes(progress.total)}，${formatBytes(progress.bytesPerSecond)}/s`
     : null;
   const sourceLocked = busy || status?.state === "installing" || status?.state === "downloaded";
+
+  useEffect(() => {
+    if (showSources || sourceLocked || status?.sourceMode !== "manual") return;
+    let active = true;
+    void setAppUpdateSource("auto").then(next => { if (active) setStatus(next); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [showSources, sourceLocked, status?.sourceMode]);
 
   const changeUpdateSource = (selection: AppUpdateSourceSelection) => {
     if (
@@ -344,18 +354,18 @@ export function AppUpdateControl({
       >
         <div className="flex items-center justify-between gap-3 leading-5">
           <span className="text-muted-foreground">状态</span>
-          <span className="min-w-0 truncate font-medium">{summary}</span>
+          <OverflowText as="span" className="min-w-0 truncate font-medium">{summary}</OverflowText>
         </div>
         <div className="flex items-center justify-between gap-3 leading-5">
           <span className="text-muted-foreground">版本</span>
-          <span className="font-medium tabular-nums">{versionText}</span>
+          <button type="button" aria-label="版本号" onClick={() => clickUpdateVersion()} className="rounded-sm font-medium tabular-nums focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2">{versionText}</button>
         </div>
-        <div className="flex items-center justify-between gap-3 leading-5">
+        {showSources && <div className="flex items-center justify-between gap-3 leading-5">
           <span className="text-muted-foreground">更新方式</span>
-          <span className="min-w-0 truncate font-medium">
+          <OverflowText as="span" className="min-w-0 truncate font-medium">
             {status?.sourceMode === "auto" ? `自动，${status.source.label}` : "手动固定"}
-          </span>
-        </div>
+          </OverflowText>
+        </div>}
         {status?.lastCheckedAt ? (
           <div className="flex items-center justify-between gap-3 leading-5">
             <span className="text-muted-foreground">上次检查</span>
@@ -382,7 +392,7 @@ export function AppUpdateControl({
         ) : null}
       </div>
 
-      {status ? (
+      {showSources && status ? (
         <div className="grid gap-1.5">
           <div className="flex items-center justify-between gap-3">
             <label htmlFor="app-update-source" className="text-xs text-muted-foreground">
@@ -421,21 +431,20 @@ export function AppUpdateControl({
       ) : null}
 
       {progress ? (
-        <div className="grid gap-1">
-          <div className="flex items-center justify-between gap-3 text-xs leading-5">
-            <span className="text-muted-foreground">下载进度</span>
-            <span className="font-medium tabular-nums">{formatPercent(progress.percent)}</span>
+        <div className="flex items-center gap-4 py-2">
+          <AnimatedCircularProgressBar value={progress.percent}
+            gaugePrimaryColor="var(--color-sky-500)" gaugeSecondaryColor="var(--muted)"
+            className={page ? "size-24" : "size-20 text-base"} />
+          <div className="grid min-w-0 gap-1.5">
+            <span className="text-sm font-medium">{status?.state === "downloaded" ? "下载完成" : "正在下载更新"}</span>
+            {downloadText ? <span className="text-xs leading-5 text-muted-foreground tabular-nums">{downloadText}</span> : null}
           </div>
-          <Progress value={progress.percent} />
-          {downloadText ? (
-            <span className="text-xs leading-4 text-muted-foreground">{downloadText}</span>
-          ) : null}
         </div>
       ) : null}
 
       {status?.error ? (
         <div className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs leading-5 text-destructive">
-          {status.error}
+          {showSources ? status.error : "更新暂时失败，请稍后重试"}
         </div>
       ) : null}
 

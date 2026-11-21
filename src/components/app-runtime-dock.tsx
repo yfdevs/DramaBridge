@@ -1,3 +1,4 @@
+import { OverflowText } from "@/components/ui/overflow-text";
 import { Chrome, CircleDashed, Cog, Globe, Info } from "@mynaui/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -143,9 +144,9 @@ export function AppRuntimeDock() {
             />
           </span>
           <span className="flex min-w-0 items-center gap-1">
-            <span className="max-w-20 truncate font-medium leading-none">
+            <OverflowText as="span" className="max-w-20 truncate font-medium leading-none">
               {activePlatform.title}
-            </span>
+            </OverflowText>
             <span className="text-muted-foreground" aria-hidden="true">
               /
             </span>
@@ -197,9 +198,9 @@ export function AppRuntimeDock() {
         <TooltipContent side="top" sideOffset={8} className="grid max-w-64 gap-1">
           <span>{browserSummary(runtime)}</span>
           {visibleInstances.map((instance) => (
-            <span key={instance.id} className="truncate text-background/70">
+            <OverflowText as="span" key={instance.id} className="truncate text-background/70">
               {instance.label}
-            </span>
+            </OverflowText>
           ))}
         </TooltipContent>
       </Tooltip>

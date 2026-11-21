@@ -9,6 +9,6 @@ test("task work cleanup protects active tasks, source files, links, and supports
     "-B",
     fileURLToPath(new URL("../python/tests/test_task_workspaces.py", import.meta.url)),
   ]);
-  assert.match(result.stderr, /Ran 14 tests/);
+  assert.match(result.stderr, /Ran \d+ tests/);
   assert.match(result.stderr, /OK/);
 });

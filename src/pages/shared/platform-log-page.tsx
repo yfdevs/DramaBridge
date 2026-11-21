@@ -1,3 +1,4 @@
+import { OverflowText } from "@/components/ui/overflow-text";
 import { ChevronDown, ChevronRight, Folder, Pause, Play, Search, Trash } from "@mynaui/icons-react";
 import {
   memo,
@@ -130,20 +131,24 @@ const LogRow = memo(function LogRow({
           {entry.message}
         </span>
         {entry.error?.code && !expanded && (
-          <span className="mt-0.5 block truncate font-mono text-xs leading-4 text-[var(--log-error)]">
+          <OverflowText
+            as="span"
+            className="mt-0.5 block truncate font-mono text-xs leading-4 text-[var(--log-error)]"
+          >
             {entry.error.code}
             {entry.error.summary && entry.error.summary !== entry.message
               ? `，${entry.error.summary}`
               : ""}
-          </span>
+          </OverflowText>
         )}
       </span>
-      <span
+      <OverflowText
+        as="span"
         className="hidden truncate text-right font-mono text-xs font-medium text-muted-foreground/70 @min-[650px]:block"
         title={entry.scope}
       >
         {scopeLabel(entry.scope)}
-      </span>
+      </OverflowText>
       {expandable ? (
         expanded ? (
           <ChevronDown className="size-3.5 text-muted-foreground" />
@@ -246,7 +251,6 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
   const appendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const pointerScrollingRef = useRef(false);
-  const [lastSeenId, setLastSeenId] = useState(0);
 
   const identify = useCallback(
     (items: AutomationLogEntry[]) =>
@@ -345,10 +349,6 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
         (!deferredQuery || searchableText(entry).includes(deferredQuery)),
     );
   }, [deferredQuery, entries, level]);
-  useEffect(() => {
-    if (follow && !paused) setLastSeenId(entries[entries.length - 1]?.viewerId ?? 0);
-  }, [entries, follow, paused]);
-  const unread = follow ? 0 : filteredEntries.filter((entry) => entry.viewerId > lastSeenId).length;
   useEffect(() => {
     if (!follow || paused || !filteredEntries.length) return;
     const frame = requestAnimationFrame(() =>
@@ -449,13 +449,13 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
             role="status"
             aria-label={statusMessage}
           />
-          <span className="min-w-0 truncate text-xs text-muted-foreground">
+          <OverflowText as="span" className="min-w-0 truncate text-xs text-muted-foreground">
             {status === "live"
               ? paused
                 ? `已暂停${pendingCount ? `，${pendingCount} 条待更新` : ""}`
                 : "实时接收中"
               : statusMessage}
-          </span>
+          </OverflowText>
         </div>
         <div className="relative min-w-48 flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -567,9 +567,13 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
       </div>
 
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="min-w-0 truncate font-mono" title={filePath ?? undefined}>
+        <OverflowText
+          as="span"
+          className="min-w-0 truncate font-mono"
+          title={filePath ?? undefined}
+        >
           {currentFileName}
-        </span>
+        </OverflowText>
         {(query || level !== "all") && (
           <Button
             size="sm"
@@ -648,7 +652,6 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
               onClick={followLatest}
             >
               <ArrowDownIcon aria-hidden="true" />
-              {unread ? `${unread} 条新日志，回到最新` : "回到最新"}
             </Button>
           </div>
         )}

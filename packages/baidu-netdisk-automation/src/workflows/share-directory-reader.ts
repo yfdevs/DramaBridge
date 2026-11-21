@@ -88,7 +88,9 @@ export function createBaiduShareDirectoryReader(options: {
         // The root is selected with root=1; dir=/ is not a substitute for it.
         if (dir !== "/") params.set("dir", dir);
         const data = await options.request("/share/list?" + params);
-        const code = Number(data.errno ?? data.error_code ?? 0);
+        const rawCode = data.errno ?? data.error_code;
+        if (rawCode === undefined || rawCode === null || rawCode === "" || !Number.isFinite(Number(rawCode))) throw new Error("分享目录返回了不完整的响应状态：" + dir);
+        const code = Number(rawCode);
         if (code !== 0) {
           const requestId = String(data.request_id ?? data.requestid ?? "")
             .replace(/[^\w-]/g, "")
@@ -108,7 +110,7 @@ export function createBaiduShareDirectoryReader(options: {
         const fresh = list.filter(item => {
           const key = utils.fsId(item) || String(item.path || "");
           if (!key) throw new Error("分享目录条目缺少文件身份：" + dir);
-          if (seen.has(key)) return false;
+          if (seen.has(key)) throw new Error("分享目录分页重复，无法确认完整文件列表：" + dir);
           seen.add(key);
           return true;
         });

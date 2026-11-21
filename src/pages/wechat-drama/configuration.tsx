@@ -1,3 +1,4 @@
+import { toast } from "@/components/ui/notifications";
 import {
   ConfigurationPageFrame,
   ConfigSection,
@@ -9,6 +10,11 @@ import { wechatVideoService, type WechatVideoConfig } from "@/platforms/wechat-d
 const emptyConfig: WechatVideoConfig = {
   recreationSheetName: "微信二创",
   recreationPollSeconds: "30",
+  dataSyncDownloadDirectory: "",
+  dataSyncDryRun: "false",
+  dataSyncApiBaseUrl: "",
+  dataSyncAdminUsername: "",
+  dataSyncAdminPassword: "",
   apiBaseUrl: "http://180.184.76.232:19090",
   selectedVideoAccountIds: "",
   videoAccountContractSubjects:
@@ -43,6 +49,35 @@ const emptyConfig: WechatVideoConfig = {
 
 const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
   {
+    title: "数据同步后台",
+    description: "修改后，下次启动同步任务时生效",
+    fields: [
+      {
+        kind: "switch",
+        key: "dataSyncDryRun",
+        label: "导入后台",
+        description: "开启后自动入库，关闭后仅保存本地",
+        activeLabel: "导入后台",
+        inactiveLabel: "仅保存本地",
+      },
+      {
+        key: "dataSyncDownloadDirectory",
+        label: "文件保存目录",
+        directory: true,
+        placeholder: "默认使用应用数据目录",
+        description: "Excel、JSON 和 CSV 的保存位置",
+      },
+      {
+        key: "dataSyncApiBaseUrl",
+        label: "后台导入地址",
+        type: "url",
+        placeholder: "https://example.com",
+      },
+      { key: "dataSyncAdminUsername", label: "管理员账号" },
+      { key: "dataSyncAdminPassword", label: "管理员密码", type: "password" },
+    ],
+  },
+  {
     title: "二创任务",
     description: "飞书连接在全局配置中设置",
     fields: [
@@ -57,14 +92,14 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
     ],
   },
   {
-    title: "接口连接",
+    title: "发布接口",
     description: "",
     fields: [
       {
         key: "apiBaseUrl",
         label: "接口地址",
         type: "url",
-        description: "后台服务的完整地址，支持线上和测试环境",
+        description: "用于领取和回报发布任务",
       },
     ],
   },
@@ -89,7 +124,7 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
         kind: "switch",
         key: "closeFailedTaskPages",
         label: "自动关闭失败页",
-        description: "新任务开始前，关闭上次失败的页面",
+        description: "关闭失败页面；关闭此项可保留排查",
         activeLabel: "自动关闭",
         inactiveLabel: "保留页面",
       },
@@ -97,40 +132,40 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
         key: "workerEmptyClaimDelaySeconds",
         label: "无任务检查间隔",
         type: "number",
-        description: "暂时没有任务时，两次领取之间的等待时间",
+        description: "没有任务时的检查频率",
         suffix: "秒",
       },
       {
         key: "workerSlowEmptyClaimThreshold",
         label: "连续无任务次数",
         type: "number",
-        description: "连续无任务达到此次数后，使用较长的检查间隔",
+        description: "达到后降低检查频率",
       },
       {
         key: "workerSlowEmptyClaimDelaySeconds",
         label: "长时间无任务间隔",
         type: "number",
-        description: "连续多次没有任务后，两次领取之间的等待时间",
+        description: "长时间无任务时的检查频率",
         suffix: "秒",
       },
       {
         key: "videoAccountSyncIntervalSeconds",
         label: "账号同步间隔",
         type: "number",
-        description: "更新后台账号状态的间隔",
+        description: "定期更新账号状态",
         suffix: "秒",
       },
       {
         key: "materialPreparationConcurrency",
         label: "素材并行任务数",
         type: "number",
-        description: "可同时准备素材的任务数",
+        description: "同时准备多少个任务的素材",
       },
       {
         key: "taskPrefetchPerAccount",
         label: "每个账号预取任务数",
         type: "number",
-        description: "每个账号可提前领取并准备的任务数",
+        description: "提前领取的任务数",
       },
     ],
   },
@@ -142,7 +177,7 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
         key: "idlePageRefreshIntervalSeconds",
         label: "空闲刷新间隔",
         type: "number",
-        description: "无任务时，定期刷新页面以保持连接",
+        description: "空闲时定期刷新页面",
         suffix: "秒",
       },
       {
@@ -156,7 +191,7 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
         key: "idlePageRefreshJitterSeconds",
         label: "刷新随机延迟",
         type: "number",
-        description: "为刷新时间增加随机偏移，避免同时刷新",
+        description: "错开多个账号的刷新时间",
         suffix: "秒",
       },
       {
@@ -193,7 +228,7 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
         min: 1,
         step: 1,
         suffix: "张",
-        description: "需要上传的剪映权属截图数，不足时任务会提示",
+        description: "截图不足时停止任务",
       },
       {
         key: "juchuangOwnershipProofCount",
@@ -202,7 +237,7 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
         min: 1,
         step: 1,
         suffix: "张",
-        description: "需要上传的剧创权属截图数，与剪映截图分别上传",
+        description: "与剪映截图分别计算",
       },
     ],
   },
@@ -228,7 +263,7 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
         key: "episodeVideoMaxFileMegabytes",
         label: "单集大小上限",
         type: "number",
-        description: "单集超过此大小时，下载过程中提前安排压缩",
+        description: "超过此大小时压缩视频",
         suffix: "MB",
       },
       {
@@ -260,7 +295,7 @@ const sections: ConfigSectionDefinition<WechatVideoConfig>[] = [
         key: "episodeUploadWaitTimeoutSeconds",
         label: "上传时限",
         type: "number",
-        description: "等待平台完成剧集上传处理的最长时间",
+        description: "等待上传完成的最长时间",
         suffix: "秒",
       },
       {
@@ -286,6 +321,21 @@ export function WechatConfigurationPage() {
     getConfig: wechatVideoService.getConfig,
     saveConfig: wechatVideoService.saveConfig,
   });
+  const displayedConfig = {
+    ...state.config,
+    dataSyncDryRun: state.config.dataSyncDryRun === "true" ? "false" : "true",
+  };
+  const selectDirectory = async (key: keyof WechatVideoConfig) => {
+    if (key !== "dataSyncDownloadDirectory") return;
+    try {
+      const directory = await wechatVideoService.selectDataSyncDirectory(
+        state.config.dataSyncDownloadDirectory,
+      );
+      if (directory) state.updateConfig(key, directory);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  };
   return (
     <ConfigurationPageFrame
       title="视频号配置"
@@ -298,10 +348,16 @@ export function WechatConfigurationPage() {
       {sections.map((section) => (
         <ConfigSection
           key={section.title}
-          config={state.config}
+          config={displayedConfig}
           fields={section.fields}
           section={section}
-          onChange={state.updateConfig}
+          onChange={(key, value) =>
+            state.updateConfig(
+              key,
+              key === "dataSyncDryRun" ? (value === "true" ? "false" : "true") : value,
+            )
+          }
+          onSelectDirectory={(key) => void selectDirectory(key)}
         />
       ))}
     </ConfigurationPageFrame>

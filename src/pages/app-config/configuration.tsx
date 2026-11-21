@@ -13,6 +13,7 @@ import {
 } from "@/pages/shared/configuration-page";
 import { globalAppConfigService, type GlobalAppConfig } from "@/platforms/app-config/service";
 import { ExternalApiConfiguration } from "./external-api";
+import { BaiduAutoCleanupStatus } from "./baidu-auto-cleanup";
 import { FeishuGlobalConfiguration, type FeishuConfigFields } from "@/pages/feishu/tables";
 import { feishuService } from "@/platforms/feishu/service";
 
@@ -27,6 +28,7 @@ const emptyConfig: GlobalAppConfig = {
   ownershipLocalOcrEnabled: false,
   baiduNetdiskDownloadTimeoutMinutes: "60",
   baiduNetdiskCleanupPlayletAfterTaskSuccess: false,
+  baiduNetdiskAutoCleanupEnabled: false,
   runDataRoot: "",
   localMaterialRoot: "",
 };
@@ -84,9 +86,17 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
         kind: "switch",
         key: "baiduNetdiskCleanupPlayletAfterTaskSuccess",
         label: "成功后清理网盘文件",
-        description: "任一平台完成任务并保存结果后，清理本次网盘文件，保留本地文件",
+        description: "任务成功后清理本次网盘文件；开启容量自动清理时，此项不生效",
         activeLabel: "自动清理",
         inactiveLabel: "保留文件",
+      },
+      {
+        kind: "switch",
+        key: "baiduNetdiskAutoCleanupEnabled",
+        label: "容量超过 80% 自动清理",
+        description: "超过 80% 后清理所有符合条件的非当天目录，不因容量下降而停止。保留当天素材和使用中的目录；不清空回收站。",
+        activeLabel: "已开启",
+        inactiveLabel: "已关闭",
       },
     ],
   },
@@ -297,7 +307,7 @@ export function GlobalConfigurationPage() {
               : field,
           )}
           footer={
-            section.title === "AI 服务" ? (
+            section.title === "百度网盘" ? <BaiduAutoCleanupStatus enabled={String(configState.config.baiduNetdiskAutoCleanupEnabled) === "true"} /> : section.title === "AI 服务" ? (
               <div className="flex flex-wrap justify-end gap-2">
                 <Button
                   className="w-fit"

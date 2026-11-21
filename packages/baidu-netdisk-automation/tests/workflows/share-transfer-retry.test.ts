@@ -85,8 +85,8 @@ async function transferFixture(failure: "404" | "500" | "network" | "timeout", a
       assert.equal(result.remoteVideos.files[0].name, title + "-第1集" + extension);
       assert.equal(transfers, 1, "a verified accepted write must never be replayed after a lost response");
     } else {
-      await assert.rejects(operation, /已尝试3次.*目标目录仍未发现素材/);
-      assert.equal(transfers, 3, "initial call plus two retries must total exactly three writes");
+      await assert.rejects(operation, /已尝试5次.*目标目录仍未发现素材/);
+      assert.equal(transfers, 5, "initial call plus four retries must total exactly five writes");
     }
     assert.ok(verificationReads > 0, "uncertain writes must invalidate cached absence and reread destination");
   } finally {
@@ -97,7 +97,7 @@ async function transferFixture(failure: "404" | "500" | "network" | "timeout", a
 }
 
 for (const failure of ["404", "500", "network", "timeout"] as const) {
-  test(`injected transfer bounds ${failure} failures to three writes`, () => transferFixture(failure, false));
+  test(`injected transfer bounds ${failure} failures to five writes`, () => transferFixture(failure, false));
   test(`injected transfer reconciles accepted ${failure} writes before retry`, () => transferFixture(failure, true));
 }
 

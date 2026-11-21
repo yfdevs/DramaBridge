@@ -1,3 +1,4 @@
+import { cinematicPosterArtDirection } from "./poster-art-direction.js";
 import type { DramaAiClient } from "@dramabridge/ai";
 import { safeFileName } from "@dramabridge/file-utils";
 import { createHash } from "node:crypto";
@@ -5,7 +6,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
-const AI_POSTER_PROMPT_VERSION = "missing-netdisk-poster-v5-episode-frames";
+const AI_POSTER_PROMPT_VERSION = "missing-netdisk-poster-v6-cinematic";
 const activeGenerations = new Map<string, Promise<AiPosterResult>>();
 
 export type EnsureAiPosterOptions = {
@@ -44,6 +45,7 @@ function nonEmpty(value: string, code: string) {
 
 export function buildMissingPosterPrompt(title: string, summary: string, referenceImageCount = 0) {
   const prompt = [
+    cinematicPosterArtDirection(),
     "生成一张中国短剧或漫剧的高分辨率商业宣传主视觉源图",
     "根据剧名和剧情简介设计人物、场景、氛围与核心冲突，主体鲜明，构图完整",
     "主要人物、剧名和核心视觉元素尽量置于中央安全区域，四周保留可延展背景，方便不同平台后续分别制作横版、竖版和其他比例",

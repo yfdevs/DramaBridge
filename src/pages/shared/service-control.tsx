@@ -1,6 +1,5 @@
 import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { SquareIcon } from "lucide-react";
 import { toast } from "@/components/ui/notifications";
 
 import { Button } from "@/components/ui/button";
@@ -130,7 +129,7 @@ export function ServiceControlButtonPage({
   pendingAction,
   running,
   startLabel = "启动服务",
-  stopLabel = "关闭服务",
+  stopLabel = "停止",
   additionalAction,
   startDisabled = false,
   beforeBrowserInstances,
@@ -166,32 +165,18 @@ export function ServiceControlButtonPage({
           aria-pressed={running}
           aria-label={label}
           title={label}
-          className={running ? undefined : "h-7 min-w-20 gap-1.5 px-3 text-xs"}
-          size={running ? "icon-sm" : "sm"}
+          className="h-7 min-w-20 gap-1.5 px-3 text-xs"
+          size="sm"
           disabled={loading || !connected || (!running && startDisabled)}
           variant={running ? "secondary" : "default"}
           onClick={onToggle}
         >
-          {running ? <SquareIcon aria-hidden="true" /> : <span>{label}</span>}
+          {running && <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[var(--instance-ready)]" />}
+          <span>{label}</span>
         </Button>
       </WorkspaceActions>
       <div className="mx-auto flex w-full min-w-0 max-w-[1120px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span
-              aria-hidden="true"
-              className={`size-1.5 rounded-full ${running ? "bg-[var(--instance-ready)]" : "bg-muted-foreground/50"}`}
-            />
-            {pendingAction === "start"
-              ? "正在启动服务…"
-              : pendingAction === "stop"
-                ? "正在停止服务…"
-                : running
-                  ? "服务运行中"
-                  : "服务已停止"}
-          </p>
-          {additionalAction}
-        </div>
+        {additionalAction}
         {!connected && (
           <p
             role="status"

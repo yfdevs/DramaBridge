@@ -1,20 +1,61 @@
-import { mkdtemp, mkdir, writeFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readdir, rm, copyFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { resolveFfmpegExecutablePath } from '@dramabridge/media-assets';
+import { resolveFfmpegExecutablePath, resolveFfprobeExecutablePath } from '@dramabridge/media-assets';
 import { separateVideos } from '../src/index.ts';
 const root = await mkdtemp(path.join(tmpdir(),'separation-test-'));
 const source = path.join(root,'测试剧'); await mkdir(source);
 execFileSync(resolveFfmpegExecutablePath(), ['-v','error','-f','lavfi','-i','color=c=black:s=160x240:r=25','-t','5','-c:v','libx264',path.join(source,'第1集.mp4')]);
 const result = await separateVideos(source,2);
 assert.equal(result.count,2);
+function assertBitrate(file: string) {
+  const metadata = JSON.parse(execFileSync(resolveFfprobeExecutablePath(), ['-v','error','-select_streams','v:0','-show_entries','stream=bit_rate','-of','json',file], {encoding:'utf8'}));
+  assert.ok(Number(metadata.streams[0].bit_rate) >= 4_000_000, `Low video bitrate: ${file}`);
+}
+for (let i = 1; i <= result.count; i++) assertBitrate(path.join(result.output, `第${i}集.mp4`));
 await writeFile(path.join(result.output,'第2集.mp4'),'broken');
 const messages: string[] = [];
 await separateVideos(source,2,message=>{messages.push(message);});
 assert.ok(messages.some(m=>m.includes('跳过 1/2')));
 assert.ok(messages.some(m=>m.includes('补充分离 2/2')));
 assert.ok(!messages.some(m=>m.includes('正在合并')));
+// A valid-duration legacy CRF output must be regenerated rather than reused.
+execFileSync(resolveFfmpegExecutablePath(), ['-v','error','-y','-f','lavfi','-i','color=c=black:s=160x240:r=25','-t','2','-c:v','libx264',path.join(result.output,'第1集.mp4')]);
+messages.length = 0;
+await separateVideos(source,2,message=>{messages.push(message);});
+assert.ok(messages.some(m=>m.includes('补充分离 1/2')));
+assert.ok(messages.some(m=>m.includes('跳过 2/2')));
+assertBitrate(path.join(result.output,'第1集.mp4'));
+// Exercise the shortest supported split duration on static content.
+const short = await separateVideos(source,1);
+for (let i = 1; i <= short.count; i++) assertBitrate(path.join(short.output, `第${i}集.mp4`));
 console.log('Actual FFmpeg resume test passed', messages);
+// Bitrate-only processing keeps episodes separate and preserves compliant bytes.
+const bitrateSource = path.join(root, '仅码率'); await mkdir(bitrateSource);
+await copyFile(path.join(source, '第1集.mp4'), path.join(bitrateSource, '第1集.mp4'));
+await copyFile(path.join(short.output, '第1集.mp4'), path.join(bitrateSource, '第2集.mp4'));
+const originalLow = await readFile(path.join(bitrateSource, '第1集.mp4'));
+const originalHigh = await readFile(path.join(bitrateSource, '第2集.mp4'));
+messages.length = 0;
+const optimized = await separateVideos(bitrateSource, NaN, m => {messages.push(m);}, () => {}, {mergeAndSplit:false});
+assert.equal(optimized.count, 2);
+assertBitrate(path.join(optimized.output, '第1集.mp4'));
+assert.deepEqual(await readFile(path.join(optimized.output, '第2集.mp4')), originalHigh);
+assert.deepEqual(await readFile(path.join(bitrateSource, '第1集.mp4')), originalLow);
+assert.ok(messages.some(m => m.includes('正在优化码率 1/2')));
+assert.ok(messages.some(m => m.includes('码率合格，正在复制 2/2')));
+assert.ok(!messages.some(m => m.includes('合并') || m.includes('分离')));
+const durations = [1, 2].map(i => Number(execFileSync(resolveFfprobeExecutablePath(), ['-v','error','-show_entries','format=duration','-of','default=noprint_wrappers=1:nokey=1',path.join(optimized.output, `第${i}集.mp4`)], {encoding:'utf8'})));
+assert.ok(Math.abs(durations[0] - 5) <= 0.15);
+assert.ok(Math.abs(durations[1] - 1) <= 0.15);
+await writeFile(path.join(optimized.output,'第1集.mp4'), 'broken');
+messages.length = 0;
+await separateVideos(bitrateSource, 45, m => {messages.push(m);}, () => {}, {mergeAndSplit:false});
+assertBitrate(path.join(optimized.output, '第1集.mp4'));
+assert.ok(messages.some(m => m.includes('已核验并跳过 2/2')));
+await writeFile(path.join(bitrateSource,'第1集.mp4'), 'changed');
+await assert.rejects(separateVideos(bitrateSource, 45, () => {}, () => {}, {mergeAndSplit:false}), /源视频已变化/);
+console.log('Actual FFmpeg bitrate-only test passed');
 if (path.dirname(root) === tmpdir() && path.basename(root).startsWith('separation-test-')) await rm(root,{recursive:true,force:true});

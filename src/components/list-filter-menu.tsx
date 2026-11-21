@@ -1,18 +1,13 @@
-import { FunnelIcon, RotateCcwIcon } from "lucide-react";
-
+import { SlidersHorizontal, RotateCcwIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { OverflowText } from "@/components/ui/overflow-text";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 type ListFilterGroup = {
   key: string;
@@ -23,94 +18,50 @@ type ListFilterGroup = {
   onChange: (value: string) => void;
 };
 
-export function ListFilterMenu({
-  label = "筛选",
-  groups,
-}: {
+export function ListFilterMenu({ label = "筛选", groups, icon, showLabel = true }: {
   label?: string;
   groups: ListFilterGroup[];
+  icon?: ReactNode;
+  showLabel?: boolean;
 }) {
   const mobile = useIsMobile();
-  const activeCount = groups.filter((group) => group.value !== group.defaultValue).length;
-  const accessibleLabel = activeCount ? `${label}，已选 ${activeCount} 项条件` : label;
-
+  const activeCount = groups.filter(group => group.value !== group.defaultValue).length;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            type="button"
-            size="icon-sm"
-            variant={activeCount ? "secondary" : "outline"}
-            aria-label={accessibleLabel}
-            title={accessibleLabel}
-            className="relative"
-          >
-            <FunnelIcon aria-hidden="true" />
-            {activeCount > 0 && (
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs leading-4 tabular-nums text-primary-foreground"
-              >
-                {activeCount}
-              </span>
-            )}
-          </Button>
-        }
-      />
-      <DropdownMenuContent
-        aria-label={label}
-        sideOffset={6}
-        className="w-64 max-w-[calc(100vw-2rem)]"
-      >
-        {groups.map((group) => {
-          const selected = group.options.find((option) => option.value === group.value);
-          return (
-            <DropdownMenuSub key={group.key}>
-              <DropdownMenuSubTrigger className="min-h-7 gap-2 text-[0.8rem]">
-                <span>{group.label}</span>
-                <span
-                  className="ml-auto max-w-28 truncate text-xs text-muted-foreground"
-                  title={selected?.label}
-                >
-                  {selected?.label}
-                </span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent
-                aria-label={group.label}
-                side={mobile ? "bottom" : "right"}
-                alignOffset={mobile ? 0 : -3}
-                sideOffset={4}
-                className="min-w-44 max-w-[calc(100vw-2rem)]"
-              >
-                <DropdownMenuRadioGroup
-                  value={group.value}
-                  onValueChange={(value) => {
-                    if (typeof value === "string") group.onChange(value);
-                  }}
-                >
-                  {group.options.map((option) => (
-                    <DropdownMenuRadioItem
-                      key={option.value}
-                      value={option.value}
-                      className="min-h-7 text-[0.8rem]"
-                    >
-                      {option.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          );
+      <DropdownMenuTrigger render={
+        <Button type="button" size={showLabel ? "sm" : "icon-sm"}
+          variant={activeCount ? "secondary" : "outline"}
+          title={label} aria-label={label} className="h-7 gap-1.5 text-xs">
+          {icon ?? <SlidersHorizontal aria-hidden="true" />}
+          {showLabel && "筛选"}
+          {activeCount > 0 && <span className="rounded bg-foreground/10 px-1 text-xs leading-4 tabular-nums">{activeCount}</span>}
+        </Button>
+      } />
+      <DropdownMenuContent align="start" sideOffset={6} className="w-56 max-w-[calc(100vw-2rem)] p-1">
+        {groups.map(group => {
+          const selected = group.options.find(option => option.value === group.value);
+          const active = group.value !== group.defaultValue;
+          return <DropdownMenuSub key={group.key}>
+            <DropdownMenuSubTrigger className="min-h-8 gap-2 px-2 text-xs">
+              <span className={`size-1.5 shrink-0 rounded-full ${active ? "bg-primary" : "bg-transparent"}`} />
+              <span className="shrink-0">{group.label}</span>
+              <OverflowText className={`ml-auto min-w-0 flex-1 text-right text-xs ${active ? "text-foreground" : "text-muted-foreground"}`}>{selected?.label}</OverflowText>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent side={mobile ? "bottom" : "right"} sideOffset={4} alignOffset={-4}
+              className="max-h-[min(24rem,60vh)] w-max min-w-40 max-w-[min(18rem,calc(100vw-2rem))] overflow-y-auto p-1">
+              <DropdownMenuRadioGroup value={group.value} onValueChange={value => {if (typeof value === "string") group.onChange(value);}}>
+                {group.options.map(option => <DropdownMenuRadioItem key={option.value} value={option.value}
+                  closeOnClick={false} className="min-h-8 pl-2 text-xs data-checked:bg-secondary data-checked:font-medium">
+                  <OverflowText className="min-w-0 flex-1">{option.label}</OverflowText>
+                </DropdownMenuRadioItem>)}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>;
         })}
-        <DropdownMenuItem
-          disabled={!activeCount}
-          closeOnClick={false}
-          className="min-h-7 text-[0.8rem]"
-          onClick={() => groups.forEach((group) => group.onChange(group.defaultValue))}
-        >
-          <RotateCcwIcon aria-hidden="true" />
-          重置筛选
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={!activeCount} closeOnClick={false} className="min-h-8 px-2 text-xs text-muted-foreground"
+          onClick={() => groups.forEach(group => group.onChange(group.defaultValue))}>
+          <RotateCcwIcon className="size-3.5" /> 重置筛选
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

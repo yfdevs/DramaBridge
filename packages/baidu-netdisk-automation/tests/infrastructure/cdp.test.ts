@@ -3,6 +3,47 @@ import test from "node:test";
 import { WebSocketServer } from "ws";
 import { CdpPage, withPage } from "../../src/infrastructure/cdp.js";
 import { CdpTimeoutError } from "../../src/domain/errors.js";
+import { createServer } from "node:http";
+import { ensureBaiduCdpPort } from "../../src/infrastructure/cdp.js";
+import { isBaiduNetdiskCdpPort } from "../../src/runtime/baidu-netdisk-runtime.js";
+
+test("CDP identity survives transient probe failures without requiring a target list", async () => {
+  let versions = 0;
+  let lists = 0;
+  let wrongService = false;
+  const server = createServer((request, response) => {
+    response.setHeader("Content-Type", "application/json");
+    if (request.url === "/json/version") {
+      versions += 1;
+      if (versions === 1) { response.writeHead(503); response.end("busy"); return; }
+      response.end(JSON.stringify({ "User-Agent": wrongService ? "Chrome" : "baidunetdisk/8.9.7" }));
+    } else {
+      lists += 1;
+      response.writeHead(503);
+      response.end("busy");
+    }
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as { port: number }).port;
+  try {
+    await ensureBaiduCdpPort(port);
+    assert.equal(versions, 2);
+    assert.equal(lists, 0);
+    assert.equal(await isBaiduNetdiskCdpPort(port), true);
+    wrongService = true;
+    await assert.rejects(ensureBaiduCdpPort(port), error => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /BAIDU_NETDISK_CLIENT_RESTART_REQUIRED/);
+      assert.match(error.message, /顶部.*网盘.*启动并连接.*重启连接.*重试失败任务/);
+      assert.equal((error as Error & { port: number }).port, port);
+      assert.ok(error.cause, "retain the technical probe failure for diagnostics");
+      return true;
+    });
+    assert.equal(await isBaiduNetdiskCdpPort(port), false);
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});
 
 test("CDP timeouts preserve stage and duration, and a subsequent read can succeed", async () => {
   const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });

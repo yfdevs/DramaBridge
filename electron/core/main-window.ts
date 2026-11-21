@@ -8,7 +8,7 @@ import { logMain } from "../main-logger";
 import type { AppEnvironment } from "./app-environment";
 import { attachWindowToSystemTray } from "./system-tray";
 
-const minimumWindowSize = { width: 900, height: 620 };
+const minimumWindowSize = { width: 1100, height: 720 };
 
 export function initializeMainWindowIntegration() {
   setupTitlebar();

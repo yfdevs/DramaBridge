@@ -20,3 +20,5 @@ ICO/JPEG files are converted to PNG for consistent browser rendering. Original c
 | `pinduoduo-drama.png` | [Official page](https://mcn.pinduoduo.com/) | [Original image](https://mms-static.pddpic.com/home/favicon.ico) |
 
 QQ icon refreshed on 2026-11-09 from the official homepage’s linked 62×62 transparent PNG, replacing the 16×16 favicon for sharper Retina rendering.
+
+- `jianying.png`：提取自本机安装的官方剪映专业版 11.6.0.14552 `JianyingPro.exe` 应用图标，用于菜单品牌标识。

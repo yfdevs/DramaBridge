@@ -3,6 +3,19 @@ import test from "node:test";
 
 import { formatAutomationErrorReport } from "../src/index.js";
 
+test("netdisk connection reports explain recovery for new and historical port errors", () => {
+  for (const error of [
+    new Error("端口 9337 不是可用百度网盘 CDP。请在百度网盘服务页点击启动并连接"),
+    new Error("BAIDU_NETDISK_CLIENT_RESTART_REQUIRED: connection unavailable"),
+  ]) {
+    const report = formatAutomationErrorReport(error);
+    assert.match(report, /无法连接百度网盘客户端/);
+    assert.match(report, /顶部.*网盘.*连接管理/);
+    assert.match(report, /启动并连接.*重启连接.*登录.*重试失败任务/);
+    assert.doesNotMatch(report, /9337|不是可用|CDP/);
+  }
+});
+
 test("keeps report details and codes without a trailing Chinese full stop", () => {
   assert.equal(formatAutomationErrorReport("上传失败，请检查文件。"), "上传失败，请检查文件");
   assert.equal(formatAutomationErrorReport("IQIYI_DRAMA_FORM_INVALID: 演员姓名不能为空。"), "爱奇艺提交表单校验未通过：演员姓名不能为空（错误码：IQIYI_DRAMA_FORM_INVALID）");

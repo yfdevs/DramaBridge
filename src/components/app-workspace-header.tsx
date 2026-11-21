@@ -1,4 +1,5 @@
-import { WorkspaceActionHost } from "@/components/workspace-toolbar";
+import { Separator } from "@/components/ui/separator";
+import { WorkspaceActionHost, WorkspaceNavigationHost } from "@/components/workspace-toolbar";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   defaultRoute,
@@ -21,7 +22,7 @@ export function AppWorkspaceHeader() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
       {route === "app/config" && <h1 className="text-sm font-semibold">全局配置</h1>}
-      {tool && route !== "tools/video-separation" && <h1 className="px-2 text-sm font-medium">{tool.title}</h1>}
+      {tool && route !== "tools/video-separation" && route !== "tools/jianying" && <h1 className="px-2 text-sm font-medium">{tool.title}</h1>}
       {!route.startsWith("app/") && !tool && (
         <nav aria-label="当前平台页面" className="flex shrink-0 items-center gap-0.5">
           {pages.map((page) => (
@@ -40,6 +41,8 @@ export function AppWorkspaceHeader() {
           ))}
         </nav>
       )}
+      {(route === "tools/jianying" || route === "tools/video-separation") && <WorkspaceNavigationHost />}
+      {route === "tools/video-separation" && <Separator orientation="vertical" className="mx-2 h-5 data-vertical:self-center" />}
       <WorkspaceActionHost fullWidth={route === "tools/video-separation"} />
     </header>
   );

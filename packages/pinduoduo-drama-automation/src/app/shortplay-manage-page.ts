@@ -1,4 +1,5 @@
 import type { BrowserContext, Locator, Page } from "playwright";
+import PQueue from "p-queue";
 import {
   PINDUODUO_LOGIN_EXPIRED_URL,
   PINDUODUO_MCN_ORIGIN,
@@ -80,6 +81,7 @@ async function waitForManualLoginAndOpenShortplayManagePage(
   page: Page,
   context: BrowserContext,
   options: PinduoduoDramaRuntimeOptions,
+  targetUrl = PINDUODUO_SHORTPLAY_MANAGE_URL,
 ): Promise<void> {
   await options.onLoginState?.("login-required");
   log(options, "warn", "runtime", "waiting for manual login before claiming tasks", {
@@ -104,7 +106,7 @@ async function waitForManualLoginAndOpenShortplayManagePage(
       manageUrl: PINDUODUO_SHORTPLAY_MANAGE_URL,
     });
 
-    await page.goto(PINDUODUO_SHORTPLAY_MANAGE_URL, {
+    await page.goto(targetUrl, {
       waitUntil: "domcontentloaded",
       timeout: 60_000,
     });
@@ -138,11 +140,12 @@ export async function openShortplayManagePage(
   page: Page,
   context: BrowserContext,
   options: PinduoduoDramaRuntimeOptions,
+  targetUrl = PINDUODUO_SHORTPLAY_MANAGE_URL,
 ): Promise<void> {
   log(options, "info", "runtime", "opening shortplay manage page", {
-    url: PINDUODUO_SHORTPLAY_MANAGE_URL,
+    url: targetUrl,
   });
-  await page.goto(PINDUODUO_SHORTPLAY_MANAGE_URL, {
+  await page.goto(targetUrl, {
     waitUntil: "domcontentloaded",
     timeout: 60_000,
   });
@@ -154,7 +157,7 @@ export async function openShortplayManagePage(
       loginExpiredUrl: PINDUODUO_LOGIN_EXPIRED_URL,
       loginState,
     });
-    await waitForManualLoginAndOpenShortplayManagePage(page, context, options);
+    await waitForManualLoginAndOpenShortplayManagePage(page, context, options, targetUrl);
     return;
   }
 
@@ -474,6 +477,7 @@ export async function fetchSubmittedShortplayApplyRecords(
         method: "POST",
         mode: "cors",
         referrer: "https://mcn.pinduoduo.com/home/shortplayManage",
+        signal: AbortSignal.timeout(30_000),
       });
       const text = await response.text();
       let payload: unknown = text;
@@ -541,6 +545,53 @@ export type ApprovedShortplayListPage = {
   records: ShortplayApplyRecord[];
   totalCount?: number;
 };
+
+/** Only independent API reads run concurrently; browser navigation stays serial. */
+export async function collectApprovedShortplayPages(
+  load: (page: number) => Promise<ApprovedShortplayListPage>,
+  signal?: AbortSignal,
+): Promise<ApprovedShortplayListPage[]> {
+  signal?.throwIfAborted();
+  const first = await load(1);
+  if (first.page !== 1 || first.pageSize < 1) throw new Error("拼多多审核列表分页异常");
+  const pages = [first];
+  if (first.totalCount === undefined) {
+    while (pages[pages.length - 1]!.rawCount === first.pageSize) {
+      signal?.throwIfAborted();
+      const number = pages.length + 1;
+      if (number > 10_000) throw new Error("拼多多审核列表页数超出安全上限");
+      const result = await load(number);
+      if (result.page !== number || result.pageSize !== first.pageSize) throw new Error("拼多多审核列表分页异常");
+      pages.push(result);
+    }
+    return pages;
+  }
+  if (!Number.isSafeInteger(first.totalCount) || first.totalCount < 0) throw new Error("拼多多审核列表总数异常");
+  const count = Math.max(1, Math.ceil(first.totalCount / first.pageSize));
+  if (!Number.isSafeInteger(count) || count > 10_000) throw new Error("拼多多审核列表总数异常");
+  const queue = new PQueue({ concurrency: 3, intervalCap: 6, interval: 1000 });
+  try {
+    const rest: ApprovedShortplayListPage[] = [];
+    for (let start = 2; start <= count; start += 3) {
+      signal?.throwIfAborted();
+      const batch = await Promise.all(Array.from({ length: Math.min(3, count - start + 1) }, (_, i) => {
+        const number = start + i;
+        return queue.add(async () => {
+          signal?.throwIfAborted();
+          const result = await load(number);
+          if (result.page !== number || result.pageSize !== first.pageSize || result.totalCount !== first.totalCount || result.rawCount === 0)
+            throw new Error("拼多多审核列表在查询期间发生变化，请稍后重试");
+          return result;
+        });
+      }));
+      rest.push(...batch);
+    }
+    return [...pages, ...rest];
+  } finally {
+    // A rejected request must not leave queued reads using the page next cycle.
+    await queue.onIdle();
+  }
+}
 
 export async function fetchApprovedShortplays(
   page: Page,

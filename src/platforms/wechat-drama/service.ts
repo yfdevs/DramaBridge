@@ -24,6 +24,11 @@ export type WechatVideoServiceStatus = {
 export type WechatVideoConfig = {
   recreationSheetName: string;
   recreationPollSeconds: string;
+  dataSyncDownloadDirectory: string;
+  dataSyncDryRun: string;
+  dataSyncApiBaseUrl: string
+  dataSyncAdminUsername: string
+  dataSyncAdminPassword: string
   apiBaseUrl: string
   selectedVideoAccountIds: string
   videoAccountContractSubjects: string
@@ -168,6 +173,9 @@ export const wechatVideoService = {
       "wechat-drama:config:select-local-episode-video-root",
       currentPath
     )
+  },
+  selectDataSyncDirectory(currentPath?: string) {
+    return invokeWechatVideo<string | null>("wechat-drama:config:select-data-sync-directory", currentPath);
   },
   selectRunDataDir(currentPath?: string) {
     return invokeWechatVideo<string | null>(

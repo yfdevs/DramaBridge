@@ -1,11 +1,10 @@
-import { RuntimeInstances } from "@/pages/shared/instance-status";
-import { useState } from "react";
-import { toast } from "@/components/ui/notifications";
-
-import { Button } from "@/components/ui/button";
+import { AccountSelection } from "@/pages/shared/account-selection";
+import { PinduoduoUploadProgressCard } from "./upload-progress";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ServiceControlButtonPage, useServiceControl } from "@/pages/shared/service-control";
 import {
   type PinduoduoDramaServiceStatus,
+  type PinduoduoDramaAccount,
   pinduoduoDramaService,
 } from "@/platforms/pinduoduo-drama/service";
 
@@ -24,53 +23,47 @@ function successMessage(status: PinduoduoDramaServiceStatus) {
 }
 
 export function PinduoduoDramaServiceControlPage() {
-  const [openingRecords, setOpeningRecords] = useState(false);
+  const [accounts, setAccounts] = useState<PinduoduoDramaAccount[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState("");
+  const service = useMemo(() => ({ ...pinduoduoDramaService, start: () => pinduoduoDramaService.start(selectedIds) }), [selectedIds]);
   const { loading, pendingAction, status, toggleService } = useServiceControl({
     initialStatus,
-    service: pinduoduoDramaService,
+    service,
     successMessage,
   });
 
-  const openUploadRecords = () => {
-    void (async () => {
-      setOpeningRecords(true);
-      try {
-        await pinduoduoDramaService.openUploadRecordsWindow();
-      } catch (error) {
-        toast.error("审核状态窗口打开失败", {
-          description: error instanceof Error ? error.message : String(error),
-        });
-      } finally {
-        setOpeningRecords(false);
-      }
-    })();
-  };
+  const loadAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError("");
+    try {
+      const result = await pinduoduoDramaService.listAccounts();
+      setAccounts(result.accounts);
+      setSelectedIds(result.selectedAccountIds.filter(id => result.accounts.some(account => account.accountId === id)));
+    } catch (error) {
+      setAccountsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+  useEffect(() => { void loadAccounts(); }, [loadAccounts]);
 
   return (
-    <>
       <ServiceControlButtonPage
         analyticsPlatform="pinduoduo-drama"
         loading={loading}
         pendingAction={pendingAction}
         running={status.running}
-        additionalAction={
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1.5 px-3 text-xs"
-            disabled={openingRecords}
-            onClick={openUploadRecords}
-          >
-            {openingRecords ? "打开中…" : "审核与上传状态"}
-          </Button>
-        }
+        startDisabled={accountsLoading || !!accountsError || selectedIds.length === 0}
         onToggle={() => void toggleService()}
         beforeBrowserInstances={
           <>
-          <RuntimeInstances
-            running={status.running}
-            instances={status.instances ?? []}
+          <PinduoduoUploadProgressCard status={status} />
+          <AccountSelection
+            locked={loading || status.running}
+            runtimes={(status.instances ?? []).map(instance => ({ accountId: instance.id, launched: instance.launched, loginState: instance.loginState }))}
+            selection={{ accounts, selected: selectedIds, setSelected: setSelectedIds, fetching: accountsLoading, error: accountsError, refresh: loadAccounts }}
           />
           {Object.entries(status.accountErrors ?? {}).map(([name, error]) => (
             <p key={name} role="status" className="text-sm text-destructive">{name}：{error}</p>
@@ -78,6 +71,5 @@ export function PinduoduoDramaServiceControlPage() {
           </>
         }
       />
-    </>
   );
 }

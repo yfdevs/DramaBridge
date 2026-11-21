@@ -26,12 +26,14 @@ import {
   getConfiguredBaiduNetdiskDownloadTimeoutMs,
   isAiPosterFallbackEnabled,
   isBaiduNetdiskPlayletCleanupEnabled,
+  isBaiduNetdiskAutoCleanupEnabled,
   resolveGlobalPlatformDirectories,
 } from "../../global-app-config";
 import { playwrightBrowsersPath, resolveFromAppRoot, selectDirectory } from "../shared";
 import { createElectronPlatformLogger } from "../../platform-logger";
 import { runRuntimeAssetCleanup } from "../../runtime-asset-cleanup";
 import { canCleanupPlayletDirectory } from "./disk-cleanup-policy";
+import { BaiduAutoCleanup, type AutoCleanupJournal } from "./auto-cleanup";
 import { resetLocalResourceForRedownload } from "./redownload";
 
 export type BaiduNetdiskConfig = {
@@ -1038,7 +1040,17 @@ async function controlDownloadTask(targetName: string, action: "pause" | "resume
   return result;
 }
 
-async function startCdp(restart: boolean) {
+let pendingCdpStart: ReturnType<typeof startCdpOnce> | undefined;
+
+function startCdp(restart: boolean) {
+  // Startup, the connection dialog and external API share the same client.
+  // Overlapping launches can otherwise terminate each other's new process.
+  if (pendingCdpStart) return pendingCdpStart;
+  pendingCdpStart = startCdpOnce(restart).finally(() => { pendingCdpStart = undefined; });
+  return pendingCdpStart;
+}
+
+async function startCdpOnce(restart: boolean) {
   const config = readConfig();
   const { startBaiduNetdiskCdp } = await importBaiduNetdiskRuntimePackage();
 
@@ -1755,6 +1767,48 @@ function broadcastDownloadRecordsChanged() {
 }
 
 export function registerBaiduNetdiskPlatformHandlers() {
+  const cleanupStore = createValidatedStore<AutoCleanupJournal>({ name: "baidu-netdisk-auto-cleanup", defaults: { pending: null, pausedReason: "" } });
+  const autoCleanup = new BaiduAutoCleanup({
+    enabled: isBaiduNetdiskAutoCleanupEnabled,
+    ready: async () => (await status()).ready,
+    occupied: () => queuedBaiduCdpOperations > 0 || activeDownloadOperations.size > 0,
+    port: () => cdpPort(readConfig()),
+    runtime: () => import("@dramabridge/baidu-netdisk-automation"),
+    exclusive: action => runBaiduCdpOperationExclusive("网盘容量自动清理", action),
+    protectedPaths: () => getDownloadRecordsRepository().list().filter(record => record.state === "pending" || record.state === "downloading").flatMap(record => [record.remoteResourcePath, record.remoteTransferPath].filter((path): path is string => !!path)),
+    journal: () => ({ pending: cleanupStore.get("pending"), pausedReason: cleanupStore.get("pausedReason"), sweepActive: cleanupStore.get("sweepActive") }),
+    saveJournal: value => cleanupStore.set(value),
+    warn: message => baiduNetdiskLogger("storage").warn("自动清理已暂停", { message }),
+  });
+  autoCleanup.start();
+  app.on("before-quit", () => autoCleanup.stop());
+  ipcMain.handle("baidu-netdisk:auto-cleanup:status", () => autoCleanup.getStatus());
+  ipcMain.handle("baidu-netdisk:auto-cleanup:resume", () => { autoCleanup.resume(); return autoCleanup.getStatus(); });
+  type QuotaSnapshot = { used: number; total: number; checkedAt: string };
+  let quotaCache: QuotaSnapshot | null = null;
+  let nextQuotaCheck = 0;
+  let quotaPending: Promise<QuotaSnapshot | null> | undefined;
+  ipcMain.handle("baidu-netdisk:quota:get", async () => {
+    if (quotaPending) return quotaPending;
+    const recent = autoCleanup.getStatus();
+    if (recent.used !== undefined && recent.total && recent.checkedAt && Date.now() - Date.parse(recent.checkedAt) < 60_000) {
+      quotaCache = { used: recent.used, total: recent.total, checkedAt: recent.checkedAt };
+      return quotaCache;
+    }
+    if (Date.now() < nextQuotaCheck || queuedBaiduCdpOperations > 0 || activeDownloadOperations.size > 0) return quotaCache;
+    nextQuotaCheck = Date.now() + 60_000;
+    quotaPending = (async () => {
+      try {
+        if (!(await status()).ready) { quotaCache = null; return null; }
+        const runtime = await import("@dramabridge/baidu-netdisk-automation");
+        const result = await runBaiduCdpOperationExclusive("读取网盘容量", () => runtime.readBaiduCleanup(cdpPort(readConfig()), "quota"));
+        quotaCache = result.quota ? { ...result.quota, checkedAt: new Date().toISOString() } : null;
+        return quotaCache;
+      } catch { quotaCache = null; return null; }
+      finally { quotaPending = undefined; }
+    })();
+    return quotaPending;
+  });
   ipcMain.handle(
     "baidu-netdisk:config:get",
     (): BaiduNetdiskConfigResult => ({

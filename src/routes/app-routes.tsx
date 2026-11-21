@@ -1,3 +1,4 @@
+import { WechatDataSyncPage } from "@/pages/wechat-drama/data-sync";
 import { YoutubeWorkspacePage } from "@/pages/youtube-drama/workspace";
 import { YoutubeConfigurationPage } from "@/pages/youtube-drama/configuration";
 import { YoutubeAccountsPage } from "@/pages/youtube-drama/accounts";
@@ -21,6 +22,7 @@ import {
 } from "@/config/navigation";
 import { GlobalConfigurationPage } from "@/pages/app-config/configuration";
 import { VideoSeparationPage } from "@/pages/tools/video-separation";
+import { JianyingPage } from "@/pages/tools/jianying";
 import { KuaishouAnalyticsPage } from "@/pages/kuaishou-drama/analytics";
 import { KuaishouRecreationPage } from "@/pages/kuaishou-drama/recreation";
 import { KuaishouAccountSyncPage } from "@/pages/kuaishou-drama/account-sync";
@@ -30,7 +32,9 @@ import { KuaishouProjectsPage } from "@/pages/kuaishou-drama/projects";
 import { KuaishouSchedulePage } from "@/pages/kuaishou-drama/schedule";
 import { KuaishouSettingsPage } from "@/pages/kuaishou-drama/settings";
 import { QqDramaConfigurationPage } from "@/pages/qq-drama/configuration";
+import { WeiboDramaConfigurationPage } from "@/pages/weibo-drama/configuration";
 import { QqDramaServiceControlPage } from "@/pages/qq-drama/service-control";
+import { WeiboDramaServiceControlPage } from "@/pages/weibo-drama/service-control";
 import { TencentHuolongDramaConfigurationPage } from "@/pages/tencent-huolong-drama/configuration";
 import { TencentHuolongDramaServiceControlPage } from "@/pages/tencent-huolong-drama/service-control";
 import { IqiyiDramaConfigurationPage } from "@/pages/iqiyi-drama/configuration";
@@ -45,6 +49,8 @@ import { WechatPublishTasksPage } from "@/pages/wechat-drama/publish-tasks";
 import { WechatServiceControlPage } from "@/pages/wechat-drama/service-control";
 import { WechatMiniProgramConfigurationPage } from "@/pages/wechat-miniprogram-drama/configuration";
 import { WechatMiniProgramServiceControlPage } from "@/pages/wechat-miniprogram-drama/service-control";
+import { WechatMiniProgramBaiduUploadWindow } from "@/pages/wechat-miniprogram-drama/baidu-upload-window";
+import { WechatMiniProgramCatalogUploadWindow } from "@/pages/wechat-miniprogram-drama/catalog-upload-window";
 import { MeituanCreationConfigurationPage } from "@/pages/meituan-drama/configuration";
 import { MeituanCreationServiceControlPage } from "@/pages/meituan-drama/service-control";
 import { TaobaoDramaConfigurationPage } from "@/pages/taobao-drama/configuration";
@@ -60,9 +66,11 @@ const platformLogRouteComponents = Object.fromEntries(
 ) as unknown as Record<`${PlatformId}/logs`, ComponentType>;
 
 const appRouteComponents: Record<AppRoute, ComponentType> = {
+  "tools/jianying": JianyingPage,
   "tools/video-separation": VideoSeparationPage,
   "app/config": GlobalConfigurationPage,
   "app/updates": () => <AppUpdateControl page />,
+  "wechat-drama/data-sync": WechatDataSyncPage,
   "wechat-drama/publish": WechatPublishTasksPage,
   "wechat-drama/recreation": WechatRecreationTransferPage,
   "wechat-drama/config": WechatConfigurationPage,
@@ -70,6 +78,8 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "wechat-drama/service": WechatServiceControlPage,
   "wechat-miniprogram-drama/service": WechatMiniProgramServiceControlPage,
   "wechat-miniprogram-drama/config": WechatMiniProgramConfigurationPage,
+  "wechat-miniprogram-drama/baidu-upload": WechatMiniProgramBaiduUploadWindow,
+  "wechat-miniprogram-drama/catalog-upload": WechatMiniProgramCatalogUploadWindow,
   "meituan-drama/service": MeituanCreationServiceControlPage,
   "meituan-drama/config": MeituanCreationConfigurationPage,
   "taobao-drama/service": TaobaoDramaServiceControlPage,
@@ -83,7 +93,9 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "kuaishou-drama/analytics": KuaishouAnalyticsPage,
   "kuaishou-drama/settings": KuaishouSettingsPage,
   "qq-drama/service": QqDramaServiceControlPage,
+  "weibo-drama/service": WeiboDramaServiceControlPage,
   "qq-drama/config": QqDramaConfigurationPage,
+  "weibo-drama/config": WeiboDramaConfigurationPage,
   "tencent-huolong-drama/service": TencentHuolongDramaServiceControlPage,
   "tencent-huolong-drama/config": TencentHuolongDramaConfigurationPage,
   "iqiyi-drama/service": IqiyiDramaServiceControlPage,
@@ -111,6 +123,7 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "taobao-drama/statistics": () => <TaskStatisticsPage platform="taobao-drama" />,
   "kuaishou-drama/statistics": () => <TaskStatisticsPage platform="kuaishou-drama" />,
   "qq-drama/statistics": () => <TaskStatisticsPage platform="qq-drama" />,
+  "weibo-drama/statistics": () => <TaskStatisticsPage platform="weibo-drama" />,
   "tencent-huolong-drama/statistics": () => <TaskStatisticsPage platform="tencent-huolong-drama" />,
   "iqiyi-drama/statistics": () => <TaskStatisticsPage platform="iqiyi-drama" />,
   "baidu-drama/statistics": () => <TaskStatisticsPage platform="baidu-drama" />,

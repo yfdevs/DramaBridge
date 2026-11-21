@@ -1,4 +1,4 @@
-import { readdir, mkdir, readFile, stat, rename, writeFile, rm } from "node:fs/promises";
+import { readdir, mkdir, readFile, stat, rename, writeFile, rm, copyFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -21,6 +21,16 @@ export function segmentPlan(duration: number, seconds: number) {
   return Array.from({length: count}, (_, i) => ({start: i * seconds, duration: i === count - 1 ? duration - i * seconds : seconds}));
 }
 type Log = (message: string, details?: Record<string, unknown>) => void;
+const MINIMUM_VIDEO_BITRATE = 4_000_000;
+
+async function videoBitrate(file: string): Promise<number> {
+  const { stdout } = await promisify(execFile)(resolveFfprobeExecutablePath(), [
+    '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=bit_rate', '-of', 'json', file,
+  ], { windowsHide: true });
+  const value = Number(JSON.parse(stdout).streams?.[0]?.bit_rate);
+  // Fail closed: container bitrate can include audio and must not substitute for video bitrate.
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
 async function ffmpeg(args: string[], log: Log) {
   const started = Date.now();
   const executable = resolveFfmpegExecutablePath();
@@ -47,7 +57,59 @@ async function ffmpeg(args: string[], log: Log) {
     });
   });
 }
-export async function separateVideos(directory: string, seconds: number, progress: (message: string) => void | Promise<void> = () => {}, log: Log = (message, detail) => console.log("[video-separation]", message, detail ?? "")) {
+async function optimizeEpisodeBitrates(directory: string, progress: (message: string) => void | Promise<void>, log: Log) {
+  const files = await scanEpisodes(directory);
+  const sourceDirectory = path.resolve(directory);
+  const output = path.join(path.dirname(sourceDirectory), path.basename(sourceDirectory) + '-码率优化');
+  await mkdir(output, {recursive:true});
+  const work = path.join(output, '.video-separation-cache');
+  await mkdir(work, {recursive:true});
+  const manifestPath = path.join(work, 'manifest.json');
+  const fingerprint = createHash('sha256').update(JSON.stringify(await Promise.all(files.map(async file => {
+    const info = await stat(file.path);
+    return [file.path, info.size, info.mtimeMs];
+  })))).digest('hex');
+  let manifest: {fingerprint: string} | undefined;
+  try { manifest = JSON.parse(await readFile(manifestPath, 'utf8')); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('续跑记录损坏，请检查输出目录：' + output);
+  }
+  if (manifest && manifest.fingerprint !== fingerprint) throw new Error('源视频已变化，请移动已有输出目录后重新处理，避免混用旧视频');
+  await writeFile(manifestPath, JSON.stringify({fingerprint}));
+  for (const [i, file] of files.entries()) {
+    await progress(`正在检查码率 ${i+1}/${files.length}`);
+    const duration = await readVideoDurationSeconds(file.path);
+    if (!Number.isFinite(duration) || duration <= 0) throw new Error(`视频时长无效：${file.name}`);
+    const bitrate = await videoBitrate(file.path);
+    const compliant = bitrate >= MINIMUM_VIDEO_BITRATE;
+    // Preserve compliant sources byte-for-byte, including their container and filename.
+    const name = compliant ? file.name : path.parse(file.name).name + '.mp4';
+    const target = path.join(output, name);
+    const valid = async (candidate: string) => {
+      try {
+        return Math.abs(await readVideoDurationSeconds(candidate) - duration) <= 0.15
+          && await videoBitrate(candidate) >= MINIMUM_VIDEO_BITRATE;
+      } catch { return false; }
+    };
+    if (manifest && await valid(target)) {
+      await progress(`已核验并跳过 ${i+1}/${files.length}`);
+      continue;
+    }
+    await progress(`${compliant ? '码率合格，正在复制' : '正在优化码率'} ${i+1}/${files.length}`);
+    log('原视频码率检查', {file:file.name,bitrate,minimum:MINIMUM_VIDEO_BITRATE,action:compliant ? 'copy' : 'encode'});
+    const temporary = path.join(work, `${i+1}.partial${path.extname(name)}`);
+    await rm(temporary, {force:true});
+    if (compliant) await copyFile(file.path, temporary);
+    else await ffmpeg(['-i',file.path,'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','veryfast','-b:v','4500k','-minrate','4500k','-maxrate','4500k','-bufsize','4500k','-x264-params','nal-hrd=cbr:filler=1','-c:a','aac','-movflags','+faststart',temporary], log);
+    if (!await valid(temporary)) throw new Error(`视频码率或时长校验失败：${file.name}，请重试`);
+    await rm(target, {force:true});
+    await rename(temporary, target);
+  }
+  log('码率优化完成', {output,count:files.length});
+  return {output,count:files.length};
+}
+
+export async function separateVideos(directory: string, seconds: number, progress: (message: string) => void | Promise<void> = () => {}, log: Log = (message, detail) => console.log("[video-separation]", message, detail ?? ""), options: {mergeAndSplit?: boolean} = {}) {
+  if (options.mergeAndSplit === false) return optimizeEpisodeBitrates(directory, progress, log);
   const started = Date.now();
   log("任务开始", {directory,seconds});
   const runFfmpeg = (args: string[]) => ffmpeg(args, log);
@@ -161,7 +223,7 @@ export async function separateVideos(directory: string, seconds: number, progres
   const plan = segmentPlan(duration, seconds);
   for (const [i, part] of plan.entries()) {
     const target = path.join(output, `第${i+1}集.mp4`);
-    if (await validDuration(target, part.duration)) {
+    if (await validDuration(target, part.duration) && await videoBitrate(target).catch(() => 0) >= MINIMUM_VIDEO_BITRATE) {
       log("复用已有分集", {episode:i+1, total:plan.length});
       await progress(`已核验并跳过 ${i+1}/${plan.length}`);
       continue;
@@ -169,8 +231,12 @@ export async function separateVideos(directory: string, seconds: number, progres
     await progress(`正在补充分离 ${i+1}/${plan.length}`);
     const temporary = path.join(work, `第${i+1}集.partial.mp4`);
     await rm(temporary, {force:true});
-    await runFfmpeg(['-ss',String(part.start),'-i',merged,'-t',String(part.duration),'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','veryfast','-crf','18','-c:a','aac','-movflags','+faststart',temporary]);
+    // Leave headroom for short clips and VBV startup; filler keeps static scenes above the minimum.
+    await runFfmpeg(['-ss',String(part.start),'-i',merged,'-t',String(part.duration),'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','veryfast','-b:v','4500k','-minrate','4500k','-maxrate','4500k','-bufsize','4500k','-x264-params','nal-hrd=cbr:filler=1','-c:a','aac','-movflags','+faststart',temporary]);
     if (!await validDuration(temporary, part.duration)) throw new Error(`第${i+1}集时长校验失败，请重试`);
+    const bitrate = await videoBitrate(temporary);
+    log('分集码率校验', {episode:i+1, bitrate, minimum:MINIMUM_VIDEO_BITRATE});
+    if (bitrate < MINIMUM_VIDEO_BITRATE) throw new Error(`第${i+1}集视频码率不足 4 Mbps（实测 ${(bitrate / 1_000_000).toFixed(2)} Mbps），未发布该分集，请重试`);
     await rm(target, {force:true});
     await rename(temporary, target);
   }

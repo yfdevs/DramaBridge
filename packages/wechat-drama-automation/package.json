@@ -14,7 +14,7 @@
   "scripts": {
     "build": "pnpm --filter @dramabridge/axios build && vp pack",
     "check": "tsc --noEmit",
-    "test": "tsx --conditions=development --test tests/**/*.test.ts"
+    "test": "tsx --conditions=development --test tests/**/*.test.ts tests/data-sync/*.test.mjs"
   },
   "dependencies": {
     "@dramabridge/axios": "workspace:*",

@@ -10,7 +10,7 @@ export const videoSeparation = {
   browse: (directory?: string): Promise<DirectoryListing> => invoke('video-separation:browse', directory),
   choose: (): Promise<string | null> => invoke('video-separation:choose'),
   scan: (directory: string): Promise<{directory: string; count: number}> => invoke('video-separation:scan', directory),
-  run: (directory: string, seconds: number, taskId: string): Promise<{output: string; count: number}> => invoke('video-separation:run', directory, seconds, taskId),
+  run: (directory: string, seconds: number, taskId: string, mergeAndSplit = true): Promise<{output: string; count: number}> => invoke('video-separation:run', directory, seconds, taskId, mergeAndSplit),
   pause: (value: boolean) => invoke('video-separation:pause', value),
   subscribe: (callback: (value: {id: string; message: string}) => void) => {
     const listener = (_event: unknown, value: {id: string; message: string}) => callback(value);

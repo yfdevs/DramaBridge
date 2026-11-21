@@ -7,6 +7,7 @@ type Runtime = { stop(): Promise<void> };
 type AccountControl = {
   addAccount(id: string): Promise<void>;
   setAccountPaused(id: string, paused: boolean): void;
+  stopAccount?(id: string): Promise<void>;
 };
 export function registerAccountControl<T extends Runtime>({
   platform,
@@ -38,6 +39,14 @@ export function registerAccountControl<T extends Runtime>({
     const runtime = await controller.resolveStarting();
     if (!runtime) throw new Error("请先启动该账号");
     (runtime as T & AccountControl).setAccountPaused(id!, paused);
+    return status();
+  });
+  ipcMain.handle(`${platform}:account:stop`, async (_event, value: unknown) => {
+    const [id] = accountIds([value]);
+    const runtime = await controller.resolveStarting() as (T & AccountControl) | null;
+    if (!runtime) return status();
+    if (!runtime.stopAccount) throw new Error("该平台暂不支持单独关闭账号");
+    await runtime.stopAccount(id!);
     return status();
   });
 }

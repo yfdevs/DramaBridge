@@ -26,6 +26,7 @@ import type {
   WechatMiniProgramCatalogUploadTask,
 } from "../../storage/wechat-miniprogram-drama/catalog-upload-types"
 import { catalogMaterialUploadUrl } from "./catalog-upload-request"
+import { catalogEpisodeDownloadSelection, prepareCatalogEpisodeUpload } from "./catalog-upload-materials"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const windowMode = "wechat-miniprogram-catalog-upload"
@@ -528,8 +529,8 @@ export class WechatMiniProgramCatalogUploadCoordinator {
           shareText: task.baiduNetdiskUrl ?? "",
           resourceName: task.dramaName,
           localEpisodeVideoRoot: settings.localEpisodeVideoRoot,
-          episodeCount: episodeDownloadCount,
-          episodeDownloadLimit: episodeDownloadCount || undefined,
+          // Explicit episode selection validates only this upload's range.
+          ...catalogEpisodeDownloadSelection(task.episodeCount, episodeDownloadCount),
           downloadEpisodeVideos: episodeDownloadCount > 0,
           downloadAssetMaterials: downloadCover,
           requiredOwnership: { minimumImages: 0 },
@@ -768,6 +769,12 @@ export class WechatMiniProgramCatalogUploadCoordinator {
     signal: AbortSignal,
   ): Promise<MaterialView> {
     const settings = this.options.getSettings()
+    file = await prepareCatalogEpisodeUpload(
+      file,
+      path.join(resolveFromAppRoot(settings.runDataDir), "assets", "catalog-mp4"),
+      signal,
+      (message) => this.logger().info(message, { dramaId, episodeNo }),
+    )
     const url = catalogMaterialUploadUrl(settings.catalogApiBaseUrl, dramaId, {
       materialType: "EPISODE_VIDEO",
       episodeNo,

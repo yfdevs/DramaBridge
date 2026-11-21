@@ -27,6 +27,7 @@
   },
   files: ["dist", "dist-electron"],
   extraResources: [
+    { from: "packages/jianying/python", to: "jianying-automation", filter: ["**/*.py"] },
     {
       from: "packages/youtube-automation/python",
       to: "youtube-automation",
@@ -63,7 +64,7 @@
     publish: [
       {
         provider: "generic",
-        url: "https://down.mxw.xx.kg/https://github.com/yfdevs/DramaBridge/releases/latest/download",
+        url: "https://v4.gh-proxy.org/https://github.com/yfdevs/DramaBridge/releases/latest/download",
         channel: "latest",
       },
       {

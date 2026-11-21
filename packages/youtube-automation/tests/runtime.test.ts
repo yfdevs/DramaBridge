@@ -18,6 +18,13 @@ test("request routes reject external URLs and path traversal", () => {
     assert.equal(allowedYoutubeRequest(route, false), false);
   }
   assert.equal(allowedYoutubeRequest("/api/tasks/0123-abcd/pause", true), true);
+  for (const action of ["check", "start", "save", "cancel", "forget"]) {
+    assert.equal(allowedYoutubeRequest(`/api/accounts/default/browser/${action}`, true), true);
+    assert.equal(allowedYoutubeRequest(`/api/accounts/default/browser/${action}`, false), false);
+  }
+  assert.equal(allowedYoutubeRequest("/api/accounts/default/browser/export", true), false);
+  for (const action of ["import", "export"])
+    assert.equal(allowedYoutubeRequest(`/api/accounts/default/browser/${action}`, true), false);
 });
 
 test(

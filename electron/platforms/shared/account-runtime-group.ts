@@ -26,7 +26,7 @@ export async function createAccountRuntimeGroup<S extends Status>(
   const queues = new Map<string, Promise<unknown>>();
   const addAccount = (id: string) => {
     accountIds([id]);
-    const queueKey = options.parallelStartup ? id : "all";
+    const queueKey = id;
     const operation = (queues.get(queueKey) ?? Promise.resolve()).then(async () => {
       if (stopped) throw new Error("服务正在停止，请稍后重试");
       if (
@@ -71,6 +71,23 @@ export async function createAccountRuntimeGroup<S extends Status>(
   }
   return {
     addAccount,
+    async stopAccount(id: string) {
+      accountIds([id]);
+      const queueKey = id;
+      const operation = (queues.get(queueKey) ?? Promise.resolve()).then(async () => {
+        const runtime = runtimes.get(id);
+        if (!runtime) return;
+        paused.add(id);
+        await runtime.stop();
+        runtimes.delete(id);
+        paused.delete(id);
+        delete accountErrors[id];
+      });
+      const settled = operation.catch(() => undefined);
+      queues.set(queueKey, settled);
+      void settled.then(() => { if (queues.get(queueKey) === settled) queues.delete(queueKey); });
+      return operation;
+    },
     setAccountPaused(id: string, value: boolean) {
       if (
         stopped ||
@@ -93,7 +110,7 @@ export async function createAccountRuntimeGroup<S extends Status>(
         }));
       return {
         ...statuses[0]!,
-        running: !stopped && accounts.some((account) => account.launched),
+        running: !stopped && (accounts.some((account) => account.launched) || queues.size > 0),
         accounts,
         accountErrors,
       };

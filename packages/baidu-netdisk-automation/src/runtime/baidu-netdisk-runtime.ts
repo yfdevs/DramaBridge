@@ -30,7 +30,9 @@ export const baiduProcessQueryCommand = [
   "$names = @('BaiduNetdisk','BaiduNetdiskUnite');",
   // Querying multiple names directly returns exit code 1 when only one exists.
   "Get-Process | Where-Object { $names -contains $_.ProcessName } |",
-  "Select-Object -ExpandProperty ProcessName -Unique",
+  // A terminated process can remain enumerable while another process holds a
+  // handle to it. Such an entry must not block the next launch.
+  "Where-Object { $_.Refresh(); -not $_.HasExited } | Select-Object -ExpandProperty ProcessName -Unique",
 ].join(" ");
 
 export type BaiduNetdiskCdpTarget = {
@@ -96,8 +98,9 @@ export async function isBaiduNetdiskCdpPort(port = DEFAULT_BAIDU_NETDISK_CDP_POR
     const version = await getJson<{ "User-Agent"?: string }>(
       `http://${debugHost}:${port}/json/version`,
     );
-    const targets = await getBaiduNetdiskCdpTargets(port);
     const userAgent = version["User-Agent"] ?? "";
+    if (/baidunetdisk/i.test(userAgent)) return true;
+    const targets = await getBaiduNetdiskCdpTargets(port);
     const hasBaiduTarget = targets.some((target) =>
       target.url.includes("BaiduNetdisk") ||
       target.url.includes("core.asar") ||
@@ -169,26 +172,40 @@ const windowsProcessDependencies = {
   killProcess: (name: string) => execText("taskkill.exe", ["/IM", `${name}.exe`, "/T", "/F"]),
 };
 
-export async function stopBaiduNetdiskProcesses(dependencies?: typeof windowsProcessDependencies) {
+export async function stopBaiduNetdiskProcesses(dependencies?: typeof windowsProcessDependencies, timing = {
+  timeoutMs: 10_000,
+  wait: () => new Promise<void>(resolve => setTimeout(resolve, 300)),
+  now: () => Date.now(),
+}) {
   if (!dependencies && process.platform === "darwin") return stopMacBaiduNetdiskProcesses();
   dependencies ??= windowsProcessDependencies;
   let lastKillError: unknown;
-  for (const name of baiduProcessNames) {
-    // Killing the parent tree can also remove the engine process. Never reuse
-    // the process snapshot from before the previous taskkill call.
-    const runningProcesses = await dependencies.getRunningProcesses();
-    if (!runningProcesses.some((runningName) => runningName.toLowerCase() === name.toLowerCase())) continue;
-    try {
-      await dependencies.killProcess(name);
-    } catch (error) {
-      // A process can exit between discovery and taskkill, or while taskkill
-      // walks its children. The final process query determines success.
-      lastKillError = error;
+  const startedAt = timing.now();
+  let remaining: string[] = [];
+  do {
+    for (const name of baiduProcessNames) {
+      // Killing the parent tree can also remove the engine process. Never reuse
+      // the process snapshot from before the previous taskkill call.
+      const runningProcesses = await dependencies.getRunningProcesses();
+      if (!runningProcesses.some((runningName) => runningName.toLowerCase() === name.toLowerCase())) continue;
+      try {
+        await dependencies.killProcess(name);
+      } catch (error) {
+        // A process can exit between discovery and taskkill, or while taskkill
+        // walks its children. The final process query determines success.
+        lastKillError = error;
+      }
     }
-  }
-  const remaining = await dependencies.getRunningProcesses();
+    remaining = await dependencies.getRunningProcesses();
+    if (!remaining.length) return;
+    if (timing.now() - startedAt >= timing.timeoutMs) break;
+    await timing.wait();
+  } while (timing.now() - startedAt < timing.timeoutMs);
+  // Recheck after the final wait: exit may have completed at the deadline.
+  remaining = await dependencies.getRunningProcesses();
   if (remaining.length > 0) {
-    throw Object.assign(new Error(`百度网盘旧进程未能退出，重启失败（残留进程：${remaining.join("、")}）。请先退出百度网盘后再启动 CDP 模式`), { cause: lastKillError });
+    const reason = lastKillError instanceof Error ? `；结束进程失败：${lastKillError.message}` : "";
+    throw Object.assign(new Error(`百度网盘旧进程未能退出，重启失败（残留进程：${remaining.join("、")}）${reason}。请检查客户端是否以管理员身份运行或被其他程序重新拉起`), { cause: lastKillError });
   }
 }
 
@@ -261,10 +278,10 @@ async function checkBaiduNetdiskCdpStatusPromise(
     targetCount: targets.length,
     checkedAt,
     message: ready
-      ? `百度网盘 CDP 已连接，端口 ${port}`
-      : componentError || (cdpRunning ? "百度网盘调试端口已开启，正在等待客户端主窗口和下载组件就绪" : (appRunning
-        ? `百度网盘已启动，但端口 ${port} 未开启 CDP`
-        : "百度网盘未启动")),
+      ? "百度网盘已连接，可以自动下载素材"
+      : componentError || (cdpRunning ? "正在连接百度网盘，请等待客户端主窗口和下载功能就绪" : (appRunning
+        ? '百度网盘已打开，但软件尚未连接。请点击“重启连接”，完成登录后再重试任务'
+        : '百度网盘未启动。请点击“启动并连接”，完成登录后再重试任务')),
   };
 }
 

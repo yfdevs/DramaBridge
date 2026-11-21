@@ -28,6 +28,7 @@ import {
 import { log, logRemoteVideoScanDetails, warn } from "../infrastructure/logging.js";
 import {
   RemoteMaterialValidationError,
+  ShareNavigationError,
   classifyBaiduNetdiskAutomationError,
   errorMessage,
   type BaiduNetdiskAutomationError,
@@ -57,6 +58,7 @@ import { decodeNativeDownloadHistory } from "../infrastructure/native-download-h
 import { runNativeTaskOperationExclusive } from "../infrastructure/native-task-lane.js";
 import { baiduNativeTaskSnapshotExpression, isMissingBaiduRemoteObject } from "../infrastructure/native-task-snapshot.js";
 import { baiduPageRequest } from "../infrastructure/page-request.js";
+import { deleteBaiduRootDirectoryInPage } from "./delete-root-directory.js";
 
 export { DEFAULT_BAIDU_NETDISK_DOWNLOAD_DIR } from "../domain/constants.js";
 export { parseBaiduNetdiskShareText } from "../domain/share-text.js";
@@ -165,10 +167,10 @@ export function selectBaiduPosterCandidates(options: {
   const characterScope = directoryParts.some(part => /角色头像|人物形象|主形象|演员头像|avatar/iu.test(part));
   if (pattern.test(options.directoryName) || !characterScope && directoryParts.some(part => pattern.test(part)))
     return { kind: "directory", names: options.imageNames.slice(0, 1) };
-  // A hash-named cover is often placed beside 视频/权属/简介.txt. Only accept
-  // one unambiguous image at the actual resource root, never arbitrary subfolders.
-  if (options.isResourceRoot && options.imageNames.length === 1)
-    return { kind: "root", names: options.imageNames };
+  // Root images may mix hash-named editor screenshots and a real cover. Keep
+  // candidates for local dimension validation; never guess from a hash/name.
+  if (options.isResourceRoot && options.imageNames.length > 0)
+    return { kind: "root", names: options.imageNames.length === 1 && /角色|头像|avatar/iu.test(options.imageNames[0]) ? [] : options.imageNames };
   return { kind: "none", names: [] as string[] };
 }
 
@@ -333,10 +335,11 @@ export function validateRemoteEpisodePathSelection(
   return files;
 }
 
-const baiduShareFailurePattern = /提取码错误|密码错误|分享不存在|链接不存在|分享已取消|分享已过期|分享(?:的)?文件(?:已经|已)(?:被删除|过期)|文件(?:已经|已)被删除/;
-
 export function baiduShareFailureText(text: string) {
-  return text.match(baiduShareFailurePattern)?.[0] ?? "";
+  const pattern = /提取码错误|密码错误|分享不存在|链接不存在|分享已取消|分享已过期|分享(?:的)?文件(?:已经|已)(?:被删除|过期)|文件(?:已经|已)被删除/;
+  // File names and help text are not error pages.
+  return text.split(/\r?\n/).filter(line => !/\.(?:mp4|mov|txt|png|jpe?g|zip)(?:\s|$)/i.test(line))
+    .map(line => line.match(pattern)?.[0] ?? "").find(Boolean) ?? "";
 }
 
 export function isSupportedEpisodeVideoFileName(fileName: string) {
@@ -442,17 +445,17 @@ function shareId(link: string) {
   return id.replace(/^1/, "");
 }
 
-function shareIdTokens(id: string) {
-  return [id, `1${id}`, encodeURIComponent(id), encodeURIComponent(`1${id}`)].filter(Boolean);
-}
-
 function includesShareId(value: string, id: string) {
-  return shareIdTokens(id).some((token) => value.includes(token));
+  try {
+    const url = new URL(value);
+    if (url.hostname !== "pan.baidu.com") return false;
+    const actual = url.pathname.startsWith("/s/") ? url.pathname.split("/").pop()?.replace(/^1/, "") : url.searchParams.get("surl");
+    return actual === id;
+  } catch { return false; }
 }
 
 function isShareTarget(target: CdpTarget, id: string) {
-  const value = `${target.url}\n${target.title}`;
-  return value.includes("pan.baidu.com") && includesShareId(value, id);
+  return includesShareId(target.url, id);
 }
 
 function isPanTarget(target: CdpTarget) {
@@ -499,7 +502,9 @@ export function selectTrackedBaiduShareTarget(
   expectedShareId?: string,
 ) {
   const compatible = targets.filter(target => {
+    if (!isBaiduShareSurfaceUrl(target.url)) return false;
     if (!expectedShareId) return true;
+    if (new URL(target.url).pathname.startsWith('/disk/')) return false;
     try {
       const url = new URL(target.url);
       const explicit = url.pathname.startsWith("/s/")
@@ -531,6 +536,8 @@ type ShareTargetState = {
 };
 
 export type ShareReadyState = ShareTargetState & {
+  documentId?: string;
+  hasFileList?: boolean;
   text: string;
   readyState: string;
   htmlLength: number;
@@ -544,9 +551,9 @@ export type ShareReadyState = ShareTargetState & {
 /** Self-contained: also serialized into the share renderer. */
 export function isBaiduShareListReady(state: {
   url: string; text: string; needsCode: boolean; captcha: boolean;
-  failureText: string; hasShareMetadata: boolean;
+  failureText: string; hasShareMetadata: boolean; hasFileList?: boolean;
 }) {
-  if (state.needsCode || state.captcha || state.failureText || !state.hasShareMetadata) return false;
+  if (state.needsCode || state.captcha || (state.failureText && !state.hasFileList) || !state.hasShareMetadata) return false;
   try {
     const url = new URL(state.url);
     return url.hostname === "pan.baidu.com"
@@ -568,8 +575,7 @@ async function readTargetShareState(target: CdpTarget) {
 
 function shareStateMatches(state: ShareTargetState | undefined, id: string) {
   if (!state) return false;
-  const value = `${state.url}\n${state.title}`;
-  return value.includes("pan.baidu.com") && includesShareId(value, id);
+  return includesShareId(state.url, id);
 }
 
 function prioritizeTargets(targets: CdpTarget[], preferredTargets: CdpTarget[]) {
@@ -689,8 +695,11 @@ export function baiduShareCodeExpression(share: ShareInfo) {
         const currentId = current.searchParams.get('surl') || (current.pathname.startsWith('/s/') ? current.pathname.split('/').pop().replace(/^1/, '') : '');
         if (currentId && currentId !== expected) return { pending: true, detail: '分享页已被其他导航替换' };
         const text = () => document.body?.innerText || '';
-        const terminal = text().match(${baiduShareFailurePattern})?.[0];
-        if (terminal) throw new Error('分享链接不可用：' + terminal);
+        const failureText = ${baiduShareFailureText.toString()};
+        const terminal = failureText(text());
+        // Page text can still belong to the preceding navigation. The readiness
+        // poller confirms its identity and reopens once before classifying it.
+        if (terminal) return { pending: true, detail: terminal };
         if (text().includes('请输入验证码')) throw new Error('分享页要求验证码，CDP 无法自动完成');
         let detail = '';
         const controller = new AbortController();
@@ -713,8 +722,10 @@ export function baiduShareCodeExpression(share: ShareInfo) {
             return { submitted: true };
           }
           detail = String(data.errmsg || data.err_msg || data.show_msg || ('errno=' + data.errno));
-          const failure = detail.match(${baiduShareFailurePattern})?.[0];
-          if (failure) throw new Error('分享链接不可用：' + failure);
+          // Verification failures can be session/risk-control errors. Leave
+          // terminal classification to the fresh-document readiness checks.
+          const failure = failureText(detail);
+          if (failure) return { pending: true, detail: '提取接口尚未确认：' + detail };
           if (/验证码/.test(detail)) throw new Error('分享页要求验证码，CDP 无法自动完成');
         } catch (error) {
           if (/分享链接不可用|验证码/.test(String(error?.message || error))) throw error;
@@ -772,20 +783,24 @@ export function baiduShareReadyStateExpression() {
   return `
 (() => {
   const text = document.body ? document.body.innerText : "";
-  const failureText = text.match(${baiduShareFailurePattern})?.[0] || "";
+  const failure = ${baiduShareFailureText.toString()};
   const getLocal = key => { try { return globalThis.locals?.get?.(key); } catch { return undefined; } };
   const input = document.querySelector("#accessCode");
+  const fileList = getLocal('file_list') ?? globalThis.yunData?.file_list;
+  const hasFileList = Array.isArray(fileList) && fileList.length > 0;
   const ready = ${isBaiduShareListReady.toString()};
   const state = {
     url: location.href,
     title: document.title,
+    documentId: String(globalThis.performance?.timeOrigin || ''),
+    hasFileList,
     text,
     readyState: document.readyState,
     htmlLength: document.documentElement ? document.documentElement.outerHTML.length : 0,
     needsCode: location.pathname.includes("/share/init") || Boolean(input && input.getClientRects().length && document.querySelector("#submitBtn")),
     captcha: text.includes("请输入验证码"),
     readyForList: false,
-    failureText,
+    failureText: hasFileList ? '' : failure(text),
     hasShareMetadata: Boolean(getLocal("shareid") || globalThis.yunData?.shareid || globalThis.yunData?.share_id),
   };
   state.readyForList = ready(state);
@@ -806,7 +821,7 @@ async function readShareReadyState(target: CdpTarget) {
     );
   } catch (error) {
     if (isNavigationDuringEvaluate(error)) return undefined;
-    return undefined;
+    throw error;
   }
 }
 
@@ -852,21 +867,30 @@ export async function waitForShareReadyTarget(
   let lastState: ShareReadyState | undefined;
   let reopenAttempts = 0;
   let extractionAttempts = 0;
+  let failureRechecked = false;
+  let failureDocumentId: string | undefined;
+  let navigationStarted = started;
+  let failureObservation: { signature: string; time: number } | undefined;
+  let lastReadError = '';
   const trackedTargets = [...preferredTargets];
   const extracts = new Map<string, { attempts: number; time: number }>();
   const reloaded = new Set<string>();
   const reopen = async (reason: string) => {
-    if (reopenAttempts >= 2) return;
+    if (reopenAttempts >= 2) return false;
     reopenAttempts++;
     log(`分享页加载未完成，重新打开独立分享页（${reopenAttempts}/2）：${reason}`);
     try {
       const target = await runtime.reopen();
       trackedTargets.unshift(target);
       extracts.delete(target.id);
+      navigationStarted = runtime.now();
+      lastProgress = runtime.now();
+      return true;
     } catch (error) {
       log(`重新打开分享页暂未成功：${errorMessage(error)}`);
     }
     lastProgress = runtime.now();
+    return false;
   };
 
   while (runtime.now() - started < timeoutMs) {
@@ -877,8 +901,28 @@ export async function waitForShareReadyTarget(
       continue;
     }
     if (!trackedTargets.some(tracked => isSameBaiduCdpTarget(tracked, target))) trackedTargets.unshift(target);
-    const state = await runtime.read(target);
+    const state = await runtime.read(target).catch(error => {
+      lastReadError = compactText(errorMessage(error), 300);
+      return undefined;
+    });
     if (!state) {
+      // Reading the full DOM can fail in older clients while the extraction
+      // route is already known. Try the normal bounded extraction flow rather
+      // than reopening indefinitely with zero attempts. It checks captcha and
+      // the current share identity again before issuing any verification call.
+      const url = (() => { try { return new URL(target.url); } catch { return undefined; } })();
+      const previous = extracts.get(target.id);
+      if (url?.hostname === 'pan.baidu.com' && url.pathname === '/share/init'
+        && url.searchParams.get('surl') === id && runtime.now() - lastProgress >= 2000
+        && (!previous || runtime.now() - previous.time >= 5000) && (previous?.attempts ?? 0) < 2) {
+        extracts.set(target.id, { attempts: (previous?.attempts ?? 0) + 1, time: runtime.now() });
+        extractionAttempts++;
+        log('分享页状态读取未完成，按已确认的提取页地址恢复提取', { targetId: target.id, error: lastReadError });
+        await runtime.extract(target, share).catch(error => {
+          if (!isNavigationDuringEvaluate(error)) throw error;
+        });
+        lastProgress = runtime.now();
+      }
       if (runtime.now() - lastProgress >= 8000) await reopen('分享页面暂时无法读取');
       await runtime.sleep(500);
       continue;
@@ -886,18 +930,44 @@ export async function waitForShareReadyTarget(
     lastState = state;
     const signature = [target.id, state.url, state.readyState, state.needsCode, state.hasShareMetadata].join('|');
     if (signature !== lastSignature) { lastSignature = signature; lastProgress = runtime.now(); }
-    if (state.captcha) throw new Error('分享页要求验证码，CDP 无法自动完成');
-    if (state.failureText) throw new Error(`分享链接不可用：${state.failureText}`);
-
     // A target ID can survive navigation to a different share. Never accept
     // another share's metadata, or mistake the user's own disk for this list.
     const matching = selectTrackedBaiduShareTarget([{ ...target, url: state.url }], [target], id);
     if (!matching) {
+      // loadURL returns before a reused window commits the new document.
+      if (runtime.now() - navigationStarted < 8000) { await runtime.sleep(500); continue; }
       await reopen('分享标签已跳转至另一条分享链接');
-    } else if (isBaiduShareListReady(state)) {
+      await runtime.sleep(500);
+      continue;
+    }
+    if (state.captcha) throw new Error('分享页要求验证码，CDP 无法自动完成');
+    if (isBaiduShareListReady(state)) {
       log('分享文件列表已就绪', { targetId: target.id, extractionAttempts, reopenAttempts });
       return targetWithShareState(target, state);
-    } else if (state.needsCode) {
+    }
+    if (state.failureText) {
+      if (state.readyState !== 'complete') { await runtime.sleep(500); continue; }
+      const signature = `${target.id}|${state.documentId}|${state.url}|${state.failureText}`;
+      if (failureObservation?.signature !== signature) failureObservation = { signature, time: runtime.now() };
+      if (runtime.now() - failureObservation.time < 1500) { await runtime.sleep(500); continue; }
+      if (!failureRechecked && /删除|过期|取消|不存在/.test(state.failureText)) {
+        failureDocumentId = state.documentId;
+        failureRechecked = true;
+        failureObservation = undefined;
+        if (!await reopen('重新核实分享失效提示')) {
+          throw new ShareNavigationError({ message: '百度网盘分享页异常，未能重新加载核实，尚未确认链接失效' });
+        }
+        await runtime.sleep(500);
+        continue;
+      }
+      if (failureRechecked && (!state.documentId || state.documentId === failureDocumentId)) {
+        if (runtime.now() - navigationStarted < 8000) { await runtime.sleep(500); continue; }
+        throw new ShareNavigationError({ message: '百度网盘分享页重新加载未完成，尚未确认链接失效，请重试连接' });
+      }
+      throw new Error(`分享链接不可用：${state.failureText}`);
+    }
+    failureObservation = undefined;
+    if (state.needsCode) {
       const previous = extracts.get(target.id);
       if ((!previous || runtime.now() - previous.time >= 5000) && (previous?.attempts ?? 0) < 2) {
         extracts.set(target.id, { attempts: (previous?.attempts ?? 0) + 1, time: runtime.now() });
@@ -922,11 +992,12 @@ export async function waitForShareReadyTarget(
     }
     await runtime.sleep(500);
   }
+  if (lastReadError) log('分享页最后一次状态读取错误', { error: lastReadError });
   const targets = await runtime.targets().catch(() => []);
   const summary = lastState
     ? `url=${lastState.url}；readyState=${lastState.readyState}；needsCode=${lastState.needsCode}；hasShareMetadata=${lastState.hasShareMetadata}；页面文本=${compactText(lastState.text)}`
     : `当前页面=${targets.map(target => target.type + ':' + compactText(target.title || target.url, 80)).join(' | ') || '无'}`;
-  throw new Error(`没有进入分享文件列表。提取尝试=${extractionAttempts}；重新打开=${reopenAttempts}；${summary}`);
+  throw new Error(`没有进入分享文件列表。提取尝试=${extractionAttempts}；重新打开=${reopenAttempts}；${summary}${lastReadError ? '；状态读取失败=' + lastReadError : ''}`);
 }
 
 async function waitForShareList(port: number, share: ShareInfo, preferredTargets: CdpTarget[] = []) {
@@ -1555,7 +1626,7 @@ export async function saveShareToOwnNetdisk(
       path: normalizeDir(destinationDir),
     });
     const timeoutRequestIds = [];
-    for (let transferAttempt = 1; transferAttempt <= 3; transferAttempt += 1) {
+    for (let transferAttempt = 1; transferAttempt <= 5; transferAttempt += 1) {
       console.log(
         "[baidu-transfer] 提交网盘转存：" +
           name +
@@ -1594,7 +1665,7 @@ export async function saveShareToOwnNetdisk(
           console.log("[baidu-transfer] 已确认后台转存完成：" + name);
           return { item: locatedAfterTimeout, transferred: true };
         }
-        if (transferAttempt < 3) {
+        if (transferAttempt < 5) {
           console.log("[baidu-transfer] 后台暂未发现素材，准备安全重试：" + name);
           await sleep(5000);
           const locatedBeforeRetry = await findOwnItem(destinationDir, name, true);
@@ -1609,7 +1680,7 @@ export async function saveShareToOwnNetdisk(
           continue;
         }
         throw new Error(
-          "保存分享到网盘失败：已尝试3次，回查目标目录仍未发现素材" +
+          "保存分享到网盘失败：已尝试5次，回查目标目录仍未发现素材" +
             (transferred.requestFailure ? "；最后请求错误=" + transferred.requestFailure : "；errno=4") +
             (timeoutRequestIds.length > 0 ? "；request_id=" + timeoutRequestIds.join(",") : "") +
             "；目标=" +
@@ -2350,11 +2421,13 @@ export async function saveShareToOwnNetdisk(
         || left.name.localeCompare(right.name, "zh-CN", { numeric: true })
         || left.path.localeCompare(right.path));
       const selected = sortPosters([...namedPosterFiles.values()])[0]
-        || sortPosters([...directoryPosterFiles.values()])[0]
-        || sortPosters([...rootPosterFiles.values()])[0]
-        || (generatedPosterFiles.size === 1 ? [...generatedPosterFiles.values()][0] : undefined);
-      return selected
-        ? { files: [selected], roots: [{ path: selected.rootPath, fsId: selected.rootFsId }] }
+        || sortPosters([...directoryPosterFiles.values()])[0];
+      const rootCandidates = sortPosters([...rootPosterFiles.values()]);
+      const candidates = selected ? [selected] : rootCandidates.length ? rootCandidates
+        : generatedPosterFiles.size === 1 ? [...generatedPosterFiles.values()] : [];
+      return candidates.length
+        ? { files: candidates, roots: [{ path: candidates[0].rootPath, fsId: candidates[0].rootFsId }],
+            selection: !selected && rootCandidates.length > 1 ? "unique-root-portrait" : undefined }
         : { files: [], roots: [] };
     })(),
     remoteAiProductionProofs: {
@@ -2841,10 +2914,6 @@ export async function getBaiduNetdiskDownloadTaskStatus(options: {
   const size = parseTaskNumber(matched?.size);
   const finishSize = parseTaskNumber(matched?.finishSize);
   const status = matched?.status;
-  const completedBySize = size !== undefined && size > 0 && finishSize === size;
-  const completedByStatus = Boolean(
-    status && /完成|success|finished|complete|done|已下载/i.test(status),
-  );
 
   return {
     found: Boolean(matched),
@@ -2854,7 +2923,7 @@ export async function getBaiduNetdiskDownloadTaskStatus(options: {
     size,
     finishSize,
     rate: matched?.rate,
-    completed: matched?.completed ?? Boolean(matched && (completedBySize || completedByStatus)),
+    completed: matched?.completed === true,
     tasks: nativeTask?.tasks ?? [],
   };
 }
@@ -3577,6 +3646,7 @@ async function submitSavedDownload(
   }
   const requiredPosterImages = Math.max(0, expectedPosterImages ?? 0);
   log(`网盘海报封面清单：图片=${remotePosters.files.length}/${requiredPosterImages}`);
+  if (remotePosters.selection) log(`根目录存在${remotePosters.files.length}张未命名封面候选，下载后校验全部图片并选择唯一竖版图片`);
   if (remotePosters.files.length < requiredPosterImages) {
     throw new RemoteMaterialValidationError({
       material: "poster",
@@ -3874,8 +3944,8 @@ async function submitSavedDownload(
   return {
     downloadRoot,
     targetName: downloadTargetName,
-    posterDownload: !downloadEpisodeVideos && !requireAllDiscoveredAssets && downloadAssetMaterials && remotePosters.files.length > 0 && assetDownloadRoot
-      ? { root: path.join(assetDownloadRoot, "海报封面"), files: remotePosters.files.map(file => ({ name: file.name, size: file.size })) }
+    posterDownload: ((!downloadEpisodeVideos && !requireAllDiscoveredAssets) || remotePosters.selection) && downloadAssetMaterials && remotePosters.files.length > 0 && assetDownloadRoot
+      ? { root: path.join(assetDownloadRoot, "海报封面"), files: remotePosters.files.map(file => ({ name: file.name, size: file.size })), selection: remotePosters.selection }
       : undefined,
     remoteResourceRoot: {
       path: saved.resourceRootPath,
@@ -3989,7 +4059,7 @@ async function downloadBaiduNetdiskSharePromise(
     remoteMetadata,
     expectedOwnershipImages: remoteOwnership.files.length,
     expectedOwnershipFiles: remoteOwnership.allFiles.length,
-    expectedPosterImages: remotePosters.files.length,
+    expectedPosterImages: remotePosters.selection ? 1 : remotePosters.files.length,
     expectedAiProductionProofFiles: remoteAiProductionProofs.files.length,
     expectedMetadataTextFiles: remoteMetadata.textFiles.length,
     expectedMetadataFiles: remoteMetadata.files.length,
@@ -4034,72 +4104,22 @@ async function deleteBaiduNetdiskRootDirectory(options: {
 (async () => {
   const transferPath = ${JSON.stringify(transferPath)};
   const expectedFsId = ${JSON.stringify(expectedFsId)};
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const getLocal = (key) => {
     try { return globalThis.locals?.get?.(key) ?? ""; } catch { return ""; }
   };
   const token = String(
     getLocal("bdstoken") || globalThis.yunData?.bdstoken || globalThis.yunData?.bdstoken_value || "",
   );
-  const requestParams = () => new URLSearchParams({
-    channel: "chunlei",
-    web: "1",
-    app_id: "250528",
-    bdstoken: token,
-    clienttype: "0",
-    t: String(Date.now()),
+  const pageRequest = ${baiduPageRequest.toString()};
+  const removeDirectory = ${deleteBaiduRootDirectoryInPage.toString()};
+  return removeDirectory((url, init, timeoutMs) => pageRequest(url, init, "json", timeoutMs), {
+    path: transferPath,
+    fsId: expectedFsId,
+    targetLabel: ${JSON.stringify(targetLabel)},
+    token,
+    maxPages: ${OWN_NETDISK_DIR_LIST_MAX_PAGES},
+    pageSize: ${OWN_NETDISK_DIR_LIST_PAGE_SIZE},
   });
-  const readRootItem = async () => {
-    for (let page = 1; page <= ${OWN_NETDISK_DIR_LIST_MAX_PAGES}; page += 1) {
-      const params = requestParams();
-      params.set("dir", "/");
-      params.set("order", "name");
-      params.set("desc", "0");
-      params.set("showempty", "0");
-      params.set("num", String(${OWN_NETDISK_DIR_LIST_PAGE_SIZE}));
-      params.set("page", String(page));
-      const response = await fetch("/api/list?" + params.toString(), { credentials: "include" });
-      const data = await response.json();
-      if (data.errno !== 0) throw new Error("读取网盘根目录失败：errno=" + String(data.errno));
-      const list = Array.isArray(data.list) ? data.list : [];
-      const item = list.find((entry) => String(entry?.path || "") === transferPath);
-      if (item) return item;
-      if (list.length < ${OWN_NETDISK_DIR_LIST_PAGE_SIZE} && !data.has_more) break;
-    }
-    return undefined;
-  };
-
-  const item = await readRootItem();
-  if (!item) return { deleted: false, alreadyMissing: true };
-  const actualFsId = String(item?.fs_id || item?.fsid || item?.id || "");
-  if (actualFsId !== expectedFsId) {
-    throw new Error(${JSON.stringify(targetLabel)} + " fsId 已变化，拒绝删除：expected=" + expectedFsId + " actual=" + actualFsId);
-  }
-  if (!(Number(item?.isdir ?? item?.is_dir ?? 0) === 1)) {
-    throw new Error(${JSON.stringify(targetLabel)} + "路径不再是目录，拒绝删除：" + transferPath);
-  }
-
-  const params = requestParams();
-  params.set("opera", "delete");
-  params.set("async", "2");
-  params.set("onnest", "fail");
-  const body = new URLSearchParams({ filelist: JSON.stringify([transferPath]) });
-  const response = await fetch("/api/filemanager?" + params.toString(), {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
-    body,
-  });
-  const data = await response.json();
-  if (data.errno !== 0) {
-    throw new Error("删除网盘" + ${JSON.stringify(targetLabel)} + "失败：errno=" + String(data.errno) + " message=" + String(data.errmsg || data.show_msg || ""));
-  }
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await sleep(500);
-    if (!await readRootItem()) return { deleted: true, alreadyMissing: false, errno: 0 };
-  }
-  throw new Error("删除请求已提交，但" + ${JSON.stringify(targetLabel)} + "仍然存在：" + transferPath);
 })()
 `,
       30_000,

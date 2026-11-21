@@ -51,7 +51,7 @@ def ensure_running():
 def emit(stage, percent=None, **details):
     ensure_running()
     if os.environ.get("DRAMAVOX_EVENTS") == "1":
-        print(PREFIX + json.dumps({"stage": stage, "percent": percent, **details}, ensure_ascii=False), flush=True)
+        print(PREFIX + json.dumps({**current_progress(), "stage": stage, "percent": percent, **details}, ensure_ascii=False), flush=True)
 
 
 @contextmanager
@@ -76,7 +76,7 @@ def timed_stage(stage, **details):
         print(f"[{label}] {PHASE_NAMES.get(stage, stage)}，耗时 {elapsed:.2f} 秒", flush=True)
         # Do not call ensure_running here: it would mask the original exception on pause.
         if os.environ.get("DRAMAVOX_EVENTS") == "1":
-            print(PREFIX + json.dumps({"stage": stage, "timing": "finish", "elapsedSeconds": elapsed,
+            print(PREFIX + json.dumps({**current_progress(), "stage": stage, "timing": "finish", "elapsedSeconds": elapsed,
                                       "outcome": outcome}, ensure_ascii=False), flush=True)
 
 

@@ -1,3 +1,4 @@
+import { OverflowText } from "@/components/ui/overflow-text";
 import { useEffect, useState } from "react";
 import { Folder } from "@mynaui/icons-react";
 
@@ -188,7 +189,7 @@ export function BaiduNetdiskPanel() {
               aria-hidden="true"
             />
             <span className="sr-only">连接状态：</span>
-            <span className="truncate text-xs font-medium">{summary}</span>
+            <OverflowText as="span" className="truncate text-xs font-medium">{summary}</OverflowText>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Button

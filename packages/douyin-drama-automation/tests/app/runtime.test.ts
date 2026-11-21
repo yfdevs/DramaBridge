@@ -20,7 +20,7 @@ const netdiskTask = {
 
 test("passes the per-task redownload switch only to the full resource download", async () => {
   for (const enabled of [undefined, false, true]) {
-    const requests: Array<{ forceRedownload?: boolean }> = [];
+    const requests: Array<{ forceRedownload?: boolean; requireAllDiscoveredAssets?: boolean }> = [];
     const task = {
       ...netdiskTask,
       playlet: { ...netdiskTask.playlet, baiduNetdiskRedownload: enabled, summary: "简介".repeat(60), roles: [{ name: "主角", intro: "人物简介" }] },
@@ -33,6 +33,7 @@ test("passes the per-task redownload switch only to the full resource download",
       },
     });
     assert.equal(requests[0]?.forceRedownload, enabled === true);
+    assert.equal(requests[0]?.requireAllDiscoveredAssets, true);
   }
 });
 

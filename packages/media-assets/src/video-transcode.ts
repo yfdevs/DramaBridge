@@ -76,6 +76,9 @@ export type EnsureVideoMinimumDimensionsRequest = {
   outputFile: string;
   minimumWidth: number;
   minimumHeight: number;
+  minimumVideoBitrateKbps?: number;
+  playbackSpeed?: number;
+  minimumDurationSeconds?: number;
   signal?: AbortSignal;
   onLog?: (message: string) => void;
 };
@@ -493,7 +496,16 @@ export async function ensureVideoMinimumDimensions(
     throw new Error("[video-transcode-failed] 视频最小宽高必须为正整数");
   }
   const source = await readVideoDimensions(request.inputFile, request.signal);
-  if (source.width >= minimumWidth && source.height >= minimumHeight) {
+  const speed = request.playbackSpeed ?? 1;
+  if (!Number.isFinite(speed) || speed < 0.5 || speed > 2) throw new Error("无效的视频播放速度");
+  const minimumBitrate = request.minimumVideoBitrateKbps ?? 0;
+  const minimumDuration = request.minimumDurationSeconds ?? 0;
+  const metadata = minimumBitrate || minimumDuration ? await readVideoStreamMetadata(request.inputFile, request.signal) : undefined;
+  if (metadata && metadata.durationSeconds / speed < minimumDuration) {
+    throw new Error(`${path.basename(request.inputFile)}：原时长${metadata.durationSeconds.toFixed(2)}秒，${speed}倍速后仅${(metadata.durationSeconds / speed).toFixed(2)}秒，仍不足${minimumDuration}秒，请更换完整素材`);
+  }
+  if (source.width >= minimumWidth && source.height >= minimumHeight && speed === 1
+    && (!metadata || metadata.videoBitrateKbps >= minimumBitrate)) {
     return { file: request.inputFile, source, output: source, transcoded: false };
   }
 
@@ -513,17 +525,24 @@ export async function ensureVideoMinimumDimensions(
       "-map", "0:v:0",
       "-map", "0:a:0?",
       "-filter:v",
-      `scale='if(lt(iw,ih),${targetShortEdge},-2)':'if(gte(iw,ih),${targetShortEdge},-2)'`,
+      `scale='if(lt(iw,ih),max(iw,${targetShortEdge}),-2)':'if(gte(iw,ih),max(ih,${targetShortEdge}),-2)'${speed !== 1 ? `,setpts=(PTS-STARTPTS)/${speed}` : ""}`,
       "-c:v", "libx264",
       "-preset", "veryfast",
-      "-crf", "18",
+      ...(minimumBitrate ? ["-b:v", `${Math.ceil(minimumBitrate * 1.1)}k`, "-minrate", `${Math.ceil(minimumBitrate * 1.1)}k`, "-maxrate", `${Math.ceil(minimumBitrate * 1.1)}k`, "-bufsize", `${Math.ceil(minimumBitrate * 2.2)}k`, "-x264-params", "nal-hrd=cbr:force-cfr=1"] : ["-crf", "18"]),
       "-pix_fmt", "yuv420p",
       "-c:a", "aac",
       "-b:a", "128k",
+      ...(speed !== 1 ? ["-af", `asetpts=PTS-STARTPTS,atempo=${speed}`] : []),
       "-movflags", "+faststart",
       temporaryOutput,
     ], { signal: request.signal });
     const output = await readVideoDimensions(temporaryOutput, request.signal);
+    if (metadata) {
+      const verified = await readVideoStreamMetadata(temporaryOutput, request.signal);
+      if (verified.videoBitrateKbps < minimumBitrate || verified.durationSeconds < minimumDuration) {
+        throw new Error(`[video-transcode-failed] 转换结果未达标：平均视频码率${verified.videoBitrateKbps}kbps（要求≥${minimumBitrate}），时长${verified.durationSeconds.toFixed(2)}秒（要求≥${minimumDuration}）`);
+      }
+    }
     if (output.width < minimumWidth || output.height < minimumHeight) {
       throw new Error(
         `[video-transcode-failed] 转换后分辨率仍不符合要求: ` +

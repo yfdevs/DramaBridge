@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -19,6 +20,8 @@ from pipeline_events import emit, ensure_running, PipelineStopped, timed_stage, 
 from ffmpeg_progress import run_ffmpeg, run_media_process, input_duration
 from merge_plan import build_merge_plan, video_differences, MERGE_PIPELINE_VERSION
 from pipeline_failure import PipelineFailure, describe_failure, emit_failure
+from upload_recovery import file_identity, recover_upload_state, pending_result
+from oauth_service import SCOPES
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -84,7 +87,21 @@ class _UploadCheckpointTransport:
 
     def request(self, uri, method='GET', *args, **kwargs):
         ensure_running()
+        headers = kwargs.get('headers') or {}
+        prior_completion_pending = self.state.get('completion_pending', False)
+        content_range = next((str(v) for k, v in headers.items() if k.lower() == 'content-range'), '')
+        if method == 'PUT' and uri == self.state.get('uri') and not content_range.startswith('bytes */'):
+            self.state['bytes_attempted'] = True
+            match = re.fullmatch(r'bytes \d+-(\d+)/(\d+)', content_range)
+            # Missing range may mean a single full-file PUT. Treat it as final.
+            self.state['completion_pending'] = not match or int(match[1]) + 1 >= int(match[2])
+            _atomic_json(self.path, self.state)
         response, content = self.http.request(uri, method, *args, **kwargs)
+        if response.status in (404, 410) and not prior_completion_pending:
+            # A definite rejection of this first final-chunk attempt did not
+            # commit the file. A lost earlier final response remains ambiguous.
+            self.state['completion_pending'] = False
+            _atomic_json(self.path, self.state)
         if response.status in (200, 201, 308):
             if 'location' in response:
                 self.state['uri'] = response['location']
@@ -94,6 +111,9 @@ class _UploadCheckpointTransport:
                 if result.get('id'):
                     self.state['video_id'] = result['id']
                     _atomic_json(self.path, self.state)
+            elif response.status == 308:
+                self.state['completion_pending'] = False
+                _atomic_json(self.path, self.state)
         return response, content
 
 
@@ -125,6 +145,7 @@ def parse_args(argv=None):
     parser.add_argument("--no-upload", action="store_true", help="只分离重混，不上传")
     parser.add_argument("--batch", action="store_true", help="批量处理目录（输入是目录时自动启用）")
     parser.add_argument("--merge", action="store_true", help="批量处理后按集数顺序合并为一个全集视频")
+    parser.add_argument("--episodes", action="store_true", help="逐集处理并上传，标题使用剧名-第x集")
     parser.add_argument("--recursive", action="store_true", help="同时扫描输入目录中的子目录视频")
     parser.add_argument("--work-dir", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--task-id", help=argparse.SUPPRESS)
@@ -247,7 +268,40 @@ def _probe_stream_signature(path: Path):
             selected.append(stream)
     if selected:
         selected[0] = {**selected[0], "container_duration": data.get("format", {}).get("duration")}
+        _reconcile_video_duration(path, _video_signature(selected))
     return selected
+
+
+def _reconcile_video_duration(path, video):
+    """Confirm CFR packets when legacy ffprobe includes edit-list offsets in duration."""
+    rate = _rate(video.get('r_frame_rate'))
+    frames = _rate(video.get('nb_frames'))
+    duration = _rate(video.get('duration'))
+    if not rate or not frames or not duration or frames != int(frames):
+        return
+    expected = frames / rate
+    if abs(expected - duration) <= .5 / rate:
+        return
+    ensure_running()
+    probe = subprocess.run(
+        ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_packets',
+         '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', str(path)],
+        capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL,
+        **hidden_process_options(),
+    )
+    if probe.returncode or probe.stderr.strip():
+        return
+    try:
+        points = sorted(float(line.split(',')[0]) for line in probe.stdout.splitlines() if line.strip())
+    except ValueError:
+        return
+    if len(points) != int(frames) or not all(math.isfinite(p) for p in points):
+        return
+    if any(abs(point - points[0] - index / rate) > .5 / rate for index, point in enumerate(points)):
+        return
+    video['reported_duration'] = video['duration']
+    video['duration'] = str(expected)
+    video['duration_basis'] = 'verified_packet_timestamps'
 
 
 def _rate(value):
@@ -688,9 +742,6 @@ def separate_vocals(wav: Path, out_dir: Path, fast: bool = False) -> Path:
     return vocals
 
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
-
-
 def apply_proxy(proxy: str) -> None:
     """Explicit settings override inherited proxies and bypass rules; empty means direct."""
     for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
@@ -739,7 +790,13 @@ def get_authenticated_service(client_secret: Path, token_path: Path, allow_inter
 
     creds = None
     if token_path.exists():
-        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+        creds = Credentials.from_authorized_user_file(str(token_path))
+        from oauth_service import UPLOAD_SCOPES
+        upload_allowed = any(creds.has_scopes([scope]) for scope in UPLOAD_SCOPES)
+        if not upload_allowed:
+            if not allow_interactive:
+                raise PipelineFailure(describe_failure('当前授权缺少 YouTube 上传权限，请更新授权信息', 'authorizing'))
+            creds = None
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
@@ -759,7 +816,8 @@ def get_authenticated_service(client_secret: Path, token_path: Path, allow_inter
             creds = flow.run_local_server(port=0)
         from oauth_service import save_token
         save_token(token_path, json.loads(creds.to_json()))
-    return build("youtube", "v3", credentials=creds)
+    youtube = build("youtube", "v3", credentials=creds)
+    return youtube
 
 
 def upload_video(youtube, file_path: Path, title: str, description: str,
@@ -775,22 +833,26 @@ def upload_video(youtube, file_path: Path, title: str, description: str,
     ensure_running()
     emit("uploading", 0, message=title)
     total_bytes = file_path.stat().st_size
-    state = {'file': str(file_path.resolve()), 'size': total_bytes, 'mtime': file_path.stat().st_mtime_ns}
+    current = file_identity(file_path)
+    state = dict(current)
+    media = MediaFileUpload(str(file_path), chunksize=8 * 1024 * 1024, resumable=True)
+    def create_request():
+        request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+        request.headers['Slug'] = quote(file_path.name, safe='')
+        return request
+    request = create_request()
     if checkpoint_path and checkpoint_path.exists():
         try:
             saved = json.loads(checkpoint_path.read_text(encoding='utf-8'))
             if saved.get('video_id'):
                 return saved['video_id'], f"https://youtu.be/{saved['video_id']}"
-            if any(saved.get(key) != value for key, value in state.items()):
-                raise ValueError('上传文件已变化')
-            if not saved.get('uri'):
-                raise ValueError('上次上传会话创建结果不明')
-            state = saved
+            state = recover_upload_state(saved, current, request.http)
+            if state.get('video_id'):
+                _atomic_json(checkpoint_path, state)
+                return state['video_id'], f"https://youtu.be/{state['video_id']}"
         except (ValueError, OSError, AttributeError) as exc:
-            raise SystemExit(f'无法安全恢复上传：{exc}。请先在 YouTube 核对视频，避免重复上传')
+            raise pending_result('原上传记录无法读取，暂不覆盖原记录。') from exc
     started = time.monotonic()
-    media = MediaFileUpload(str(file_path), chunksize=8 * 1024 * 1024, resumable=True)
-    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     # Slug supplies the original filename separately from the video's title.
     # Percent-encode UTF-8 so Chinese names remain valid HTTP header values.
     request.headers['Slug'] = quote(file_path.name, safe='')
@@ -802,6 +864,7 @@ def upload_video(youtube, file_path: Path, title: str, description: str,
             request._in_error_state = True  # Query committed bytes (or final result) first.
             print('恢复原 YouTube 上传会话，查询服务器进度…')
     response = None
+    restarted = False
     for attempt in range(retries):
         try:
             while response is None:
@@ -820,8 +883,22 @@ def upload_video(youtube, file_path: Path, title: str, description: str,
                 _atomic_json(checkpoint_path, state)
             return response["id"], f"https://youtu.be/{response['id']}"
         except HttpError as e:
-            if checkpoint_path and e.resp.status in (404, 410):
-                raise SystemExit('原 YouTube 上传会话已失效，已停止自动新建上传。请在 YouTube 核对是否已生成视频，避免重复上传')
+            if checkpoint_path and request.resumable_uri and e.resp.status in (404, 410):
+                if restarted or attempt >= retries - 1:
+                    raise pending_result('重建上传会话后仍无法连接，请稍后重试。') from e
+                recovered = recover_upload_state(state, current, request.http)
+                if recovered.get('video_id'):
+                    _atomic_json(checkpoint_path, recovered)
+                    return recovered['video_id'], f"https://youtu.be/{recovered['video_id']}"
+                state = recovered
+                request = create_request()
+                _atomic_json(checkpoint_path, state)
+                request.http = _UploadCheckpointTransport(request.http, checkpoint_path, state)
+                if state.get('uri'):
+                    request.resumable_uri = state['uri']
+                    request._in_error_state = True
+                restarted = True
+                continue
             if e.resp.status >= 500 and attempt < retries - 1:
                 print(f"上传出错（HTTP {e.resp.status}），{2 ** attempt} 秒后重试…")
                 time.sleep(2 ** attempt)
@@ -924,8 +1001,10 @@ def _upload_processed_video(youtube, source: Path, output: Path, thumbnail_sourc
         checkpoint = log_path.parent / (log_path.stem + '-sessions') / f'{key}.json'
         if args.force_upload:
             checkpoint.unlink(missing_ok=True)
+            checkpoint.with_suffix('.rights.json').unlink(missing_ok=True)
         video_id, url = upload_video(youtube, output, title, args.description,
                                      args.tags, args.privacy, checkpoint_path=checkpoint)
+        print(f'视频已上传：{url}', flush=True)
     mark_uploaded(log_path, key, video_id)
 
     _, _, _, thumb_path = cache_paths(thumbnail_source, work_dir)
@@ -1132,26 +1211,49 @@ def _main_batch(directory: Path, args, work_dir: Path, script_dir: Path):
                                 script_dir, work_dir, upload_key)
         return merged
 
+    return _main_episodes(videos, args, work_dir, script_dir, directory.name)
+
+
+def _main_episodes(videos, args, work_dir, script_dir, default_name):
+    """Process and upload one episode at a time, preserving durable upload checkpoints."""
     outputs = []
-    for index, video in enumerate(videos, start=1):
-        print(f"\n===== 处理第 {index}/{len(videos)} 集：{video.name} =====")
-        outputs.append(process_video(video, args, work_dir))
-
-    if args.no_upload:
-        print(f"\n✅ 批量处理完成，共生成 {len(outputs)} 个视频（--no-upload，跳过上传）")
-        return outputs
-
     youtube = None
-    for video, output in zip(videos, outputs):
-        key = compute_input_hash(video)
-        if is_uploaded(_upload_log_path(args, script_dir), key) and not args.force_upload:
-            print(f"{video.name} 已上传过，跳过上传")
-            continue
-        if youtube is None:
-            youtube = _get_youtube_service(args, script_dir)
-        title = f"{args.title} - {video.stem}" if args.title else default_title(video)
-        _upload_processed_video(youtube, video, output, video, title, args,
-                                script_dir, work_dir, key)
+    total = len(videos)
+    for index, video in enumerate(videos, 1):
+        suffix = f"-第{index}集"
+        title = (args.title or default_name)[:100 - len(suffix)] + suffix
+        with progress_context(episodeIndex=index, episodeCount=total, episodeTitle=title,
+                              episodeSource=video.name, etaScope='item'):
+            emit('preparing', episodeStatus='queued', message=title)
+    for index, video in enumerate(videos, 1):
+        ensure_running()
+        suffix = f"-第{index}集"
+        title = (args.title or default_name)[:100 - len(suffix)] + suffix
+        with progress_context(episodeIndex=index, episodeCount=total, episodeTitle=title,
+                              episodeSource=video.name, etaScope='item'):
+            try:
+                key = compute_input_hash(video)
+                saved = None if args.no_upload or args.force_upload else load_uploaded_log(_upload_log_path(args, script_dir), strict=True).get(key)
+                if saved:
+                    # Upload records are written before thumbnail work; do not re-upload on resume.
+                    video_id = saved
+                    emit('preparing', 100, episodeStatus='skipped', videoUrl=f'https://youtu.be/{video_id}',
+                         message='已上传，跳过本集')
+                    continue
+                emit('preparing', episodeStatus='processing', message=title)
+                output = process_video(video, args, work_dir)
+                outputs.append(output)
+                if not args.no_upload:
+                    if youtube is None:
+                        youtube = _get_youtube_service(args, script_dir)
+                    emit('uploading', 0, episodeStatus='uploading', message=title)
+                    _upload_processed_video(youtube, video, output, video, title, args,
+                                            script_dir, work_dir, key)
+                    saved = load_uploaded_log(_upload_log_path(args, script_dir), strict=True).get(key)
+                details = {'videoUrl': f"https://youtu.be/{saved}"} if saved else {}
+                emit('preparing', 100, episodeStatus='completed', message=title, **details)
+            except (PipelineStopped, KeyboardInterrupt):
+                raise
     return outputs
 
 
@@ -1192,6 +1294,8 @@ def dispatch_input(input_path, args, work_dir, script_dir):
         print(f"[媒体工具] {version[0] if version else tool}；路径：{executable}", flush=True)
     if input_path.is_dir():
         return _main_batch(input_path, args, work_dir, script_dir)
+    if getattr(args, "episodes", False):
+        return _main_episodes([input_path], args, work_dir, script_dir, input_path.stem)
     if args.batch or args.merge:
         print("--batch/--merge 需要输入目录")
         raise SystemExit(1)

@@ -17,6 +17,7 @@ import {
   listLocalAiProductionProofFiles,
   listLocalOwnershipMaterials,
   listLocalPosterImages,
+  selectUniqueRootPortrait,
   playletDir,
   standardizeEpisodeFilesToRoot,
   standardizeOwnershipMaterialsToRoot,
@@ -37,7 +38,7 @@ export type BaiduNetdiskShareInfo = {
 };
 
 export type BaiduNetdiskShareDownloadResult = {
-  posterDownload?: { root: string; files: Array<{ name: string; size?: number }> };
+  posterDownload?: { root: string; files: Array<{ name: string; size?: number }>; selection?: "unique-root-portrait" };
   share: BaiduNetdiskShareInfo;
   downloadRoot?: string;
   localPath?: string;
@@ -469,7 +470,24 @@ async function listCurrentPosterImages(
   localPaths: string[],
   targetRoot: string,
   resourceName: string,
+  candidateDownload?: BaiduNetdiskShareDownloadResult['posterDownload'],
 ): Promise<LocalPosterImageFile[]> {
+  if (candidateDownload?.selection === 'unique-root-portrait') {
+    const candidates: LocalPosterImageFile[] = [];
+    for (const expected of candidateDownload.files) {
+      if (path.basename(expected.name) !== expected.name) throw new Error('封面候选文件名包含无效路径');
+      const file = path.join(candidateDownload.root, expected.name);
+      const info = await stat(file).catch(() => undefined);
+      if (!info?.isFile() || info.size <= 0 || expected.size && info.size !== expected.size) return [];
+      const metadata = await sharp(file).metadata().catch(() => undefined);
+      if (!metadata?.width || !metadata.height) return [];
+      try { await sharp(file).stats(); } catch { return []; }
+      const rotated = [5, 6, 7, 8].includes(metadata.orientation ?? 1);
+      candidates.push({ name: expected.name, file, size: info.size,
+        width: rotated ? metadata.height : metadata.width, height: rotated ? metadata.width : metadata.height });
+    }
+    return requireUniqueRootPortrait(candidates);
+  }
   const downloaded: LocalPosterImageFile[] = [];
   const seen = new Set<string>();
   for (const localPath of localPaths) {
@@ -494,6 +512,14 @@ async function listCurrentPosterImages(
     : downloaded.length > 0
       ? downloaded
       : listLocalPosterImages({ root: targetRoot, resourceName, includeAllMatches: true });
+}
+
+function requireUniqueRootPortrait(candidates: LocalPosterImageFile[]) {
+  const selected = selectUniqueRootPortrait(candidates);
+  if (!selected.length) throw new Error('[poster-candidates-ambiguous] 根目录图片已下载，但无法确定唯一竖版封面。'
+    + '请将封面文件名标注“封面”或“海报”后重试。候选：'
+    + candidates.map(file => `${file.name}(${file.width}×${file.height})`).join('、'));
+  return selected;
 }
 
 async function listCurrentAiProductionProofFiles(
@@ -778,21 +804,27 @@ async function waitForRequiredPosters(options: Parameters<typeof waitForComplete
         const metadata = await image.metadata();
         await image.stats(); // Decode pixels: a readable header alone does not prove completion.
         if (!metadata.width || !metadata.height) throw new Error("图片尺寸无效");
-        posters.push({ name: expected.name, file, size: info.size, width: metadata.width, height: metadata.height });
+        const rotated = [5, 6, 7, 8].includes(metadata.orientation ?? 1);
+        posters.push({ name: expected.name, file, size: info.size,
+          width: rotated ? metadata.height : metadata.width, height: rotated ? metadata.width : metadata.height });
         signatures.push(`${file}:${info.size}:${info.mtimeMs}`);
       } catch { detail = `封面图片不完整或已损坏：${expected.name}`; }
     }
     const signature = signatures.join("|");
-    stable = posters.length >= options.requiredPosterImages ? signature === previous ? stable + 1 : 1 : 0;
+    const candidatesReady = !download.selection || posters.length === download.files.length;
+    const selected = download.selection && candidatesReady ? requireUniqueRootPortrait(posters) : posters;
+    stable = candidatesReady && selected.length >= options.requiredPosterImages ? signature === previous ? stable + 1 : 1 : 0;
     previous = signature;
     if (stable >= options.stableCompletePolls) {
-      await standardizePosterImagesToRoot({ files: posters, targetRoot: options.targetRoot, resourceName: options.resourceName, onLog: options.onLog });
+      options.onLog?.(`[video-assets] 封面校验完成：候选=${posters.length}，选用=${selected.map(file => `${file.name}(${file.width}×${file.height})`).join('、')}`);
+      await standardizePosterImagesToRoot({ files: selected, targetRoot: options.targetRoot, resourceName: options.resourceName, onLog: options.onLog });
       return playletDir(options.targetRoot, options.resourceName);
     }
     let status: BaiduNetdiskDownloadTaskStatus | undefined;
+    const pendingName = download.files.find(expected => !posters.some(file => file.name === expected.name))?.name ?? download.files[0].name;
     try {
       status = await options.getDownloadTaskStatus?.({
-        targetName: download.files[0].name,
+        targetName: pendingName,
         // A single-file lookup retains the client's original status, including pause/error.
         expectedDownloadRoot: download.root,
       });
@@ -800,16 +832,16 @@ async function waitForRequiredPosters(options: Parameters<typeof waitForComplete
       unavailable = 0;
     } catch (error) {
       detail = `无法读取百度网盘封面下载状态：${error instanceof Error ? error.message : String(error)}`;
-      if (++unavailable >= 3) throw new Error(`[poster-download-status] ${detail}。文件：${download.files[0].name}；下载目录：${download.root}。请检查百度网盘客户端后重试`);
+      if (++unavailable >= 3) throw new Error(`[poster-download-status] ${detail}。文件：${pendingName}；下载目录：${download.root}。请检查百度网盘客户端后重试`);
     }
     if (status) {
       missing = status.found ? 0 : missing + 1;
-      invalid = (status.completed || status.status === "4") && posters.length < options.requiredPosterImages ? invalid + 1 : 0;
-      if (missing >= 3) throw new Error(`[poster-download-missing] 客户端未找到封面下载任务「${download.files[0].name}」。${detail}；下载目录：${download.root}`);
+      invalid = (status.completed || status.status === "4") && (!candidatesReady || posters.length < options.requiredPosterImages) ? invalid + 1 : 0;
+      if (missing >= 3) throw new Error(`[poster-download-missing] 客户端未找到封面下载任务「${pendingName}」。${detail}；下载目录：${download.root}`);
       if (invalid >= 3) throw new Error(`[poster-download-invalid] 客户端显示封面已下载完成，但${detail}；下载目录：${download.root}`);
       const stopped = ({ "0": "已删除", "3": "已暂停", "5": "失败" } as Record<string, string>)[status.status || ""];
       if (stopped || /暂停|失败|错误|paused|failed|error/i.test(status.status || "")) {
-        throw new Error(`[poster-download-stopped] 封面下载${stopped || status.status}：${download.files[0].name}。请在百度网盘检查此文件后重试；下载目录：${download.root}`);
+        throw new Error(`[poster-download-stopped] 封面下载${stopped || status.status}：${pendingName}。请在百度网盘检查此文件后重试；下载目录：${download.root}`);
       }
       await options.onProgress?.({ phase: "downloading", nativeStatus: status.status, localPath: download.root, speedText: status.rate, ...normalizeDownloadProgress(status.finishSize ?? 0, status.size) });
     }
@@ -952,7 +984,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
       options.resourceName,
     );
     let ownershipComplete = hasRequiredOwnershipMaterials(ownership, options.ownershipRequirements);
-    let posters = await listCurrentPosterImages(assetLocalPaths, options.targetRoot, options.resourceName);
+    let posters = await listCurrentPosterImages(assetLocalPaths, options.targetRoot, options.resourceName, options.posterDownload);
     let postersComplete = posters.length >= options.requiredPosterImages;
     let aiProductionProofs = await listCurrentAiProductionProofFiles(
       assetLocalPaths,
@@ -989,7 +1021,10 @@ async function waitForCompleteLocalEpisodeVideos(options: {
     if (complete && ownershipComplete && ownershipDirectoryComplete && postersComplete && posterDownloadComplete && aiProductionProofsComplete && aiProductionProofDownloadComplete && metadataComplete && nextStable.count >= options.stableCompletePolls) {
       const completedPath = await standardizeCompleteResources({
         files,
-        ownership,
+        // Keep every downloaded proof, including portrait screenshots, when the
+        // caller explicitly requests all discovered assets. Temporary sources
+        // are cleaned after this step, so excluded images would otherwise vanish.
+        ownership: options.requireAllDiscoveredAssets ? rawOwnershipFiles : ownership,
         rawOwnershipFiles: ownershipSourceFiles,
         posters,
         aiProductionProofs,
@@ -1062,6 +1097,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
           assetLocalPaths,
           options.targetRoot,
           options.resourceName,
+          options.posterDownload,
         );
         postersComplete = posters.length >= options.requiredPosterImages;
         aiProductionProofs = await listCurrentAiProductionProofFiles(
@@ -1188,7 +1224,7 @@ async function waitForCompleteLocalEpisodeVideos(options: {
         ) {
           const completedPath = await standardizeCompleteResources({
             files,
-            ownership,
+            ownership: options.requireAllDiscoveredAssets ? rawOwnershipFiles : ownership,
             rawOwnershipFiles: ownershipSourceFiles,
             posters,
             aiProductionProofs,
@@ -1307,6 +1343,8 @@ export async function ensureBaiduNetdiskEpisodeVideos(
 
   if (
     !options.forceAssetDownload
+    // Local minimum counts cannot prove that every remote asset is present.
+    && !requireAllDiscoveredAssets
     &&
     (!downloadEpisodeVideos || (
       hasConfiguredEpisodeCount
@@ -1417,7 +1455,10 @@ export async function ensureBaiduNetdiskEpisodeVideos(
       // scan the download root as well so both materials are standardized together.
       sourceLocalPath: result.localPath
         ? result.localPath
-        : result.downloadRoot ?? options.sourceLocalPath,
+        : downloadEpisodeVideos && hasConfiguredEpisodeCount
+            && isCompleteEpisodeFileSet(expectedExistingEpisodes, expectedLocalEpisodeCount, episodeDownloadNumbers)
+          ? targetLocalPath
+          : result.downloadRoot ?? options.sourceLocalPath,
       assetSourceLocalPath: result.localPath
         ? path.dirname(result.localPath)
         : result.downloadRoot ?? options.sourceLocalPath,

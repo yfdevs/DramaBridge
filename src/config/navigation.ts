@@ -8,6 +8,7 @@ export type PlatformId =
   | "meituan-drama"
   | "taobao-drama"
   | "kuaishou-drama"
+  | "weibo-drama"
   | "qq-drama"
   | "tencent-huolong-drama"
   | "iqiyi-drama"
@@ -18,17 +19,21 @@ export type PlatformId =
   | "youtube-drama";
 
 export type AppRoute =
+  | "tools/jianying"
   | "tools/video-separation"
   | `${PlatformId}/statistics`
   | `${PlatformId}/logs`
   | "app/updates"
   | "app/config"
+  | "wechat-drama/data-sync"
   | "wechat-drama/publish"
   | "wechat-drama/config"
   | "wechat-drama/accounts"
   | "wechat-drama/service"
   | "wechat-miniprogram-drama/service"
   | "wechat-miniprogram-drama/config"
+  | "wechat-miniprogram-drama/baidu-upload"
+  | "wechat-miniprogram-drama/catalog-upload"
   | "meituan-drama/service"
   | "meituan-drama/config"
   | "taobao-drama/service"
@@ -42,6 +47,8 @@ export type AppRoute =
   | "kuaishou-drama/schedule"
   | "kuaishou-drama/analytics"
   | "kuaishou-drama/settings"
+  | "weibo-drama/service"
+  | "weibo-drama/config"
   | "qq-drama/service"
   | "qq-drama/config"
   | "tencent-huolong-drama/service"
@@ -64,6 +71,7 @@ export type AppRoute =
   | "youtube-drama/accounts";
 
 const appRoutes = [
+  "tools/jianying",
   "youtube-drama/create",
   "youtube-drama/accounts",
   "youtube-drama/service",
@@ -73,6 +81,7 @@ const appRoutes = [
   "tools/video-separation",
   "app/updates",
   "app/config",
+  "wechat-drama/data-sync",
   "wechat-drama/publish",
   "wechat-drama/config",
   "wechat-drama/statistics",
@@ -81,6 +90,8 @@ const appRoutes = [
   "wechat-drama/service",
   "wechat-miniprogram-drama/service",
   "wechat-miniprogram-drama/config",
+  "wechat-miniprogram-drama/baidu-upload",
+  "wechat-miniprogram-drama/catalog-upload",
   "wechat-miniprogram-drama/statistics",
   "wechat-miniprogram-drama/logs",
   "meituan-drama/service",
@@ -102,6 +113,10 @@ const appRoutes = [
   "kuaishou-drama/schedule",
   "kuaishou-drama/analytics",
   "kuaishou-drama/settings",
+  "weibo-drama/service",
+  "weibo-drama/config",
+  "weibo-drama/statistics",
+  "weibo-drama/logs",
   "qq-drama/service",
   "qq-drama/config",
   "qq-drama/statistics",
@@ -158,7 +173,8 @@ export const defaultRoute: AppRoute = "wechat-drama/service";
 export const globalConfigRoute: AppRoute = "app/config";
 
 export const toolNavigation = [
-  { title: "视频分离", route: "tools/video-separation" },
+  { title: "剪映", route: "tools/jianying" },
+  { title: "视频处理", route: "tools/video-separation" },
 ] as const satisfies ReadonlyArray<{ title: string; route: AppRoute }>;
 
 export function routePath(route: AppRoute) {
@@ -232,6 +248,14 @@ export const platformNavigation: PlatformNavigationItem[] = [
     logoSrc: platformIcons["qq-drama"],
   },
   {
+    id: "weibo-drama",
+    title: "微博",
+    routePrefix: "weibo-drama",
+    serviceRoute: "weibo-drama/service",
+    configRoute: "weibo-drama/config",
+    logoSrc: platformIcons["weibo-drama"],
+  },
+  {
     id: "tencent-huolong-drama",
     title: "火龙漫剧",
     routePrefix: "tencent-huolong-drama",
@@ -298,6 +322,7 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "wechat-drama/service",
         icon: Terminal,
       },
+      { title: "数据同步", route: "wechat-drama/data-sync", icon: ChartBar },
       { title: "二创", route: "wechat-drama/recreation", icon: CloudUpload },
       {
         title: "配置管理",
@@ -318,6 +343,16 @@ const platformNavigationGroups: NavigationGroup[] = [
         title: "实例",
         route: "wechat-miniprogram-drama/service",
         icon: Terminal,
+      },
+      {
+        title: "百度直传",
+        route: "wechat-miniprogram-drama/baidu-upload",
+        icon: CloudUpload,
+      },
+      {
+        title: "素材入库",
+        route: "wechat-miniprogram-drama/catalog-upload",
+        icon: List,
       },
       {
         title: "配置管理",
@@ -413,6 +448,26 @@ const platformNavigationGroups: NavigationGroup[] = [
       {
         title: "发布统计",
         route: "qq-drama/statistics",
+        icon: ChartBar,
+      },
+    ],
+  },
+  {
+    title: "微博",
+    items: [
+      {
+        title: "实例",
+        route: "weibo-drama/service",
+        icon: Terminal,
+      },
+      {
+        title: "配置管理",
+        route: "weibo-drama/config",
+        icon: FineTune,
+      },
+      {
+        title: "发布统计",
+        route: "weibo-drama/statistics",
         icon: ChartBar,
       },
     ],
@@ -525,11 +580,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         title: "实例",
         route: "pinduoduo-drama/service",
         icon: Terminal,
-      },
-      {
-        title: "上传记录",
-        route: "pinduoduo-drama/records",
-        icon: CloudUpload,
       },
       {
         title: "配置管理",

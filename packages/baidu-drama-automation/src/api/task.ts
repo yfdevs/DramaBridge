@@ -21,12 +21,16 @@ export type BaiduDramaTaskApiOptions = {
   client?: BaiduDramaHttpClient;
   endpoints?: Partial<BaiduDramaTaskApiEndpoints>;
 };
+const claimOwnerSchema = z.object({ workerId: z.string().trim().min(1).max(128), attemptCount: z.coerce.number().int().positive() });
 
 export type ClaimNextBaiduDramaTaskOptions = BaiduDramaTaskApiOptions & {
+  workerId?: string;
   runtimeOptions?: BaiduDramaRuntimeOptions;
 };
 
 export type BaiduDramaTaskSuccessReport = BaiduDramaTaskApiOptions & {
+  workerId: string;
+  attemptCount: number;
   runtimeOptions?: BaiduDramaRuntimeOptions;
   accountTaskId: number;
   externalId?: string;
@@ -35,6 +39,8 @@ export type BaiduDramaTaskSuccessReport = BaiduDramaTaskApiOptions & {
 };
 
 export type BaiduDramaTaskErrorReport = BaiduDramaTaskApiOptions & {
+  workerId: string;
+  attemptCount: number;
   runtimeOptions?: BaiduDramaRuntimeOptions;
   accountTaskId: number;
   failStage: BaiduDramaTaskFailStage;
@@ -84,6 +90,8 @@ const baiduContractFileSchema = z.object({
 });
 
 const baiduDramaClaimDataSchema = z.object({
+  workerId: z.string().trim().min(1).max(128),
+  attemptCount: z.coerce.number().int().positive(),
   accountTaskId: z.coerce.number().int().positive(),
   originalTitle: requiredText,
   accountId: nullableText,
@@ -208,6 +216,8 @@ export function normalizeClaimedBaiduDramaTask(
     stringValue(baiduPlaylet.productionOrganization) ?? stringValue(payload.producerName);
 
   const result = claimedBaiduDramaTaskSchema.safeParse({
+    workerId: claimed.workerId,
+    attemptCount: claimed.attemptCount,
     accountTaskId: claimed.accountTaskId,
     dramaId: options.listedTask?.dramaId,
     originalTitle: claimed.originalTitle ?? options.listedTask?.originalTitle,
@@ -286,6 +296,8 @@ async function fetchReadyTasks(options: ClaimNextBaiduDramaTaskOptions) {
 
 async function reportBaiduDramaTask(
   report: BaiduDramaTaskApiOptions & {
+    workerId: string;
+    attemptCount: number;
     taskId: number;
     success: boolean;
     externalId?: string;
@@ -295,9 +307,12 @@ async function reportBaiduDramaTask(
     resultJson?: Record<string, unknown>;
   },
 ) {
+  claimOwnerSchema.parse(report);
   const payload = baiduDramaReportResponseSchema.parse(
     await taskClient(report).post(taskEndpoints(report).reportTask, {
       taskId: report.taskId,
+      workerId: report.workerId,
+      attemptCount: report.attemptCount,
       success: report.success,
       externalId: report.externalId,
       platformDramaId: report.platformDramaId,
@@ -317,13 +332,16 @@ async function claimTask(
   accountTaskId: number,
   listedTask?: ReadyAccountTask,
 ) {
+  const workerId = z.string().trim().min(1).max(128).parse(options.workerId ?? options.runtimeOptions?.workerId);
   const payload = baiduDramaClaimResponseSchema.parse(
     await taskClient(options).post(taskEndpoints(options).claimTask, {
       accountTaskId,
+      workerId,
     }),
   );
   assertApiSuccess(payload, "BAIDU_DRAMA_ACCOUNT_TASK_CLAIM_FAILED");
   if (!payload.data) return null;
+  if (payload.data.workerId !== workerId) throw new Error("BAIDU_DRAMA_CLAIMED_WORKER_MISMATCH");
   if (payload.data.accountTaskId !== accountTaskId) {
     throw new Error(
       `BAIDU_DRAMA_CLAIMED_TASK_ID_MISMATCH: expected=${accountTaskId} ` +
@@ -341,6 +359,8 @@ async function claimTask(
     await reportBaiduDramaTask({
       ...options,
       taskId: payload.data.accountTaskId,
+      workerId: payload.data.workerId,
+      attemptCount: payload.data.attemptCount,
       success: false,
       failStage: classifyClaimedTaskFailStage(error),
       errorMessage: message,
@@ -373,11 +393,13 @@ export async function claimNextBaiduDramaTaskApi(
   if (readyTasks.length === 0) return null;
 
   log(options.runtimeOptions ?? {}, `[baidu-drama] fetched ${readyTasks.length} READY task(s)`);
+  let claimError: unknown;
   for (const listedTask of readyTasks) {
     try {
       const claimed = await claimTask(options, listedTask.id, listedTask);
       if (claimed) return claimed;
     } catch (error) {
+      claimError = error;
       log(
         options.runtimeOptions ?? {},
         `[baidu-drama] task claim failed: accountTaskId=${listedTask.id} ` +
@@ -385,6 +407,7 @@ export async function claimNextBaiduDramaTaskApi(
       );
     }
   }
+  if (claimError) throw claimError;
   return null;
 }
 

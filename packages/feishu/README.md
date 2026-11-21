@@ -22,6 +22,6 @@
 
 来源检查点包含文档、工作表、剧名、集数、源链接、版本；回写前重新定位唯一匹配行，移动行可继续，修改/删除/重复会阻止回写。飞书 Sheets 没有按业务条件原子更新能力：请勿同时在多台设备启动同一表，处理时不要修改当前任务内容或并发排序。权限、网络和回写失败显示在页面并定期重试。
 
-认证使用官方 `https://accounts.feishu.cn/oauth/v3/token`；短期凭证按返回的 expires_in 缓存。API请求30秒超时，仅失效凭证自动刷新一次；不盲目重放不确定是否已成功的写请求。
+认证使用官方 `https://accounts.feishu.cn/oauth/v3/token`；短期凭证按返回的 expires_in 缓存。API请求30秒超时，失效凭证自动刷新一次；凭证获取和只读请求遇到临时网络故障最多尝试3次，间隔500毫秒、1500毫秒。不自动重放不确定是否已成功的写请求。
 
 验证：`pnpm --filter @dramabridge/feishu check`、`build`、`test`；根目录 `pnpm exec tsx --conditions=development --test tests/electron/kuaishou-feishu.test.ts`。

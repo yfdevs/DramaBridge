@@ -26,7 +26,21 @@ export type YoutubeEnvironment = {
   ffmpeg: boolean;
   ffprobe: boolean;
 };
-export type YoutubeAccount = { id: string; name: string; authorized: boolean };
+export type YoutubeAccount = {
+  id: string;
+  name: string;
+  authorized: boolean;
+  browser?: {
+    saved: boolean;
+    busy: boolean;
+    channelId?: string;
+    savedAt?: string;
+    checkedAt?: string;
+    needsLogin?: boolean;
+    source?: "browser" | "cookies";
+    profileId?: string;
+  };
+};
 export type YoutubeTaskFailure = {
   code: string;
   title: string;
@@ -35,6 +49,15 @@ export type YoutubeTaskFailure = {
   detail?: string;
   stage?: string;
   exitCode?: number;
+};
+export type YoutubeEpisode = {
+  index: number;
+  title?: string;
+  source?: string;
+  status: string;
+  stage?: string;
+  percent?: number | null;
+  videoUrl?: string;
 };
 export type YoutubeTask = {
   id: string;
@@ -48,6 +71,7 @@ export type YoutubeTask = {
     accountId?: string;
     accountName?: string;
     noUpload?: boolean;
+    rightsManagement?: boolean;
   };
   progress?: {
     failure?: YoutubeTaskFailure;
@@ -76,7 +100,12 @@ export type YoutubeTask = {
   };
   error?: string | null;
   logs?: string;
-  result?: Json;
+  result?: {
+    videoUrls?: string[];
+    episodes?: YoutubeEpisode[];
+    episodeCount?: number;
+    completedEpisodes?: number;
+  } | null;
   created: string;
   updated: string;
 };

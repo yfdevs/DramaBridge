@@ -76,5 +76,26 @@ test("process cleanup still rejects when taskkill fails and the process remains"
   await assert.rejects(stopBaiduNetdiskProcesses({
     getRunningProcesses: async () => ["BaiduNetdiskUnite"],
     killProcess: async () => { throw failure; },
-  }), (error: unknown) => error instanceof Error && error.cause === failure && /残留进程：BaiduNetdiskUnite/.test(error.message));
+  }, { timeoutMs: 0, wait: async () => {}, now: () => 0 }), (error: unknown) => error instanceof Error && error.cause === failure && /残留进程：BaiduNetdiskUnite/.test(error.message) && /access denied/.test(error.message));
+});
+
+test("Windows cleanup waits for delayed exit instead of rejecting a successful taskkill", async () => {
+  let running = ["BaiduNetdiskUnite"];
+  let elapsed = 0;
+  await stopBaiduNetdiskProcesses({
+    getRunningProcesses: async () => [...running],
+    killProcess: async () => "",
+  }, { timeoutMs: 1000, now: () => elapsed, wait: async () => { elapsed += 300; running = []; } });
+  assert.equal(elapsed, 300);
+});
+
+test("Windows cleanup retries an engine respawn with a bounded deadline", async () => {
+  let running = ["BaiduNetdiskUnite"];
+  let kills = 0;
+  let elapsed = 0;
+  await stopBaiduNetdiskProcesses({
+    getRunningProcesses: async () => [...running],
+    killProcess: async () => { if (++kills === 2) running = []; return ""; },
+  }, { timeoutMs: 1000, now: () => elapsed, wait: async () => { elapsed += 300; } });
+  assert.equal(kills, 2);
 });

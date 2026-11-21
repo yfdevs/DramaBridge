@@ -42,6 +42,7 @@ export type GlobalAppConfig = {
   ownershipLocalOcrEnabled: boolean;
   baiduNetdiskDownloadTimeoutMinutes: string;
   baiduNetdiskCleanupPlayletAfterTaskSuccess: boolean;
+  baiduNetdiskAutoCleanupEnabled: boolean;
   runDataRoot: string;
   localMaterialRoot: string;
 };
@@ -57,6 +58,7 @@ type StoredGlobalAppConfig = {
   ownershipLocalOcrEnabled?: boolean;
   baiduNetdiskDownloadTimeoutMinutes?: string;
   baiduNetdiskCleanupPlayletAfterTaskSuccess?: boolean;
+  baiduNetdiskAutoCleanupEnabled?: boolean;
   runDataRoot?: string;
   localMaterialRoot?: string;
 };
@@ -86,6 +88,7 @@ const defaultStoredConfig: StoredGlobalAppConfig = {
   ownershipLocalOcrEnabled: false,
   baiduNetdiskDownloadTimeoutMinutes: DEFAULT_BAIDU_NETDISK_DOWNLOAD_TIMEOUT_MINUTES,
   baiduNetdiskCleanupPlayletAfterTaskSuccess: false,
+  baiduNetdiskAutoCleanupEnabled: false,
   runDataRoot: "",
   localMaterialRoot: "",
 };
@@ -195,6 +198,7 @@ function normalizeGlobalAppConfig(config: Partial<GlobalAppConfig>): GlobalAppCo
       false,
     ),
     runDataRoot: config.runDataRoot?.trim() ?? "",
+    baiduNetdiskAutoCleanupEnabled: normalizeBoolean(config.baiduNetdiskAutoCleanupEnabled, false),
     localMaterialRoot: config.localMaterialRoot?.trim() ?? "",
   };
 }
@@ -236,6 +240,7 @@ export function readGlobalAppConfig(): GlobalAppConfig {
       false,
     ),
     runDataRoot: config.runDataRoot?.trim() ?? "",
+    baiduNetdiskAutoCleanupEnabled: normalizeBoolean(config.baiduNetdiskAutoCleanupEnabled, false),
     localMaterialRoot: config.localMaterialRoot?.trim() ?? "",
   };
 }
@@ -262,10 +267,15 @@ export function isAiPosterFallbackEnabled() {
 }
 
 export function isBaiduNetdiskPlayletCleanupEnabled() {
+  if (isBaiduNetdiskAutoCleanupEnabled()) return false;
   return normalizeBoolean(
     getStore().get("config").baiduNetdiskCleanupPlayletAfterTaskSuccess,
     false,
   );
+}
+
+export function isBaiduNetdiskAutoCleanupEnabled() {
+  return getStore().get("config").baiduNetdiskAutoCleanupEnabled === true;
 }
 
 function saveGlobalAppConfig(config: Partial<GlobalAppConfig>) {
@@ -284,6 +294,7 @@ function saveGlobalAppConfig(config: Partial<GlobalAppConfig>) {
     baiduNetdiskCleanupPlayletAfterTaskSuccess:
       normalized.baiduNetdiskCleanupPlayletAfterTaskSuccess,
     runDataRoot: normalized.runDataRoot,
+    baiduNetdiskAutoCleanupEnabled: normalized.baiduNetdiskAutoCleanupEnabled,
     localMaterialRoot: normalized.localMaterialRoot,
   });
 

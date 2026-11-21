@@ -15,6 +15,10 @@
     "build": "vp pack",
     "test": "tsx --test tests/*.test.ts"
   },
+  "dependencies": {
+    "@dramabridge/browser-window": "workspace:*",
+    "playwright": "1.61.1"
+  },
   "devDependencies": {
     "@types/node": "latest",
     "tsx": "^4.23.12",

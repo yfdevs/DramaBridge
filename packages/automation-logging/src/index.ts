@@ -301,6 +301,9 @@ function translateErrorMessage(message: string): string {
 }
 
 function translateActionableError(code: string, detail: string): string | undefined {
+  if (code === "BAIDU_NETDISK_CLIENT_RESTART_REQUIRED") {
+    return '无法连接百度网盘客户端，暂时不能下载素材。请点击软件顶部的“网盘”状态，打开连接管理，点击“启动并连接”；若客户端已打开，点击“重启连接”。完成网盘登录，确认显示“已连接”后，再重试失败任务。无需修改发布账号';
+  }
   if (code === "DOUYIN_DRAMA_DROPDOWN_NOT_CLOSED") {
     const field = detail.trim();
     return `抖音${field === "contract" ? "绑定合同" : ""}下拉列表未能关闭，自动操作已停止。`
@@ -427,6 +430,9 @@ function platformForErrorCode(code: string): string | undefined {
 function translateTechnicalDetail(detail: string): string {
   const normalized = detail.trim();
   if (!normalized) return "";
+  if (/不是可用百度网盘 CDP|百度网盘 CDP 核心页面不可用/.test(normalized)) {
+    return translateActionableError("BAIDU_NETDISK_CLIENT_RESTART_REQUIRED", "")!;
+  }
   if (
     /Target (?:page, context or browser|page|context|browser) has been closed|Target closed/i.test(
       normalized,

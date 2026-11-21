@@ -13,10 +13,8 @@ import {
 } from "../api/task.js";
 import {
   baiduDramaLoginStateFromUrl,
-  ensureBaiduDramaCreatePage,
+  prepareBaiduDramaTaskPolling,
   launchBaiduDramaBrowserContext,
-  openBaiduDramaCreatePage,
-  waitForBaiduDramaLogin,
 } from "../automation/browser-session.js";
 import { runBaiduDramaPublishTask } from "../automation/publish-runner.js";
 import { BAIDU_DRAMA_CREATE_URL, BAIDU_DRAMA_LOGIN_URL } from "../shared/constants.js";
@@ -199,6 +197,8 @@ async function runTask(
     );
     await runPublishTaskWithPageRefreshRetry(taskPage, task, options);
     await reportBaiduDramaTaskSuccessApi({
+      workerId: task.workerId,
+      attemptCount: task.attemptCount,
       runtimeOptions: options,
       apiConfig: options.apiConfig,
       accountTaskId: task.accountTaskId,
@@ -235,6 +235,8 @@ async function runTask(
       task: { accountTaskId: task.accountTaskId, title: task.originalTitle },
     });
     await reportBaiduDramaTaskErrorApi({
+      workerId: task.workerId,
+      attemptCount: task.attemptCount,
       runtimeOptions: options,
       apiConfig: options.apiConfig,
       accountTaskId: task.accountTaskId,
@@ -291,6 +293,8 @@ export async function startBaiduDramaRuntime(
   const context = await launchBaiduDramaBrowserContext(userDataDir, options);
   const page = context.pages()[0] ?? (await context.newPage());
   let running = true;
+  let statusMessage = "正在打开页面并检查登录";
+  let runtimeError: string | undefined;
   let lastTask: BaiduDramaRuntimeStatus["lastTask"];
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let wakePoll: (() => void) | null = null;
@@ -298,17 +302,6 @@ export async function startBaiduDramaRuntime(
     options.taskClaimResumeAt && options.taskClaimResumeAt > Date.now()
       ? options.taskClaimResumeAt
       : null;
-
-  try {
-    await openBaiduDramaCreatePage(page);
-    await waitForBaiduDramaLogin(page, context, options);
-    await ensureBaiduDramaCreatePage(page, options);
-  } catch (error) {
-    errorLog(options, `[baidu-drama] 运行时启动失败：${errorMessage(error)}`, { error });
-    await context.close().catch(() => undefined);
-    await flushBaiduDramaLogs(options);
-    throw error;
-  }
 
   const waitForNextPoll = async (delayMs = options.taskPollIntervalMs ?? 10_000) => {
     await new Promise<void>((resolve) => {
@@ -323,17 +316,22 @@ export async function startBaiduDramaRuntime(
   const pollLoop = async () => {
     while (running) {
       if (taskClaimResumeAt && taskClaimResumeAt > Date.now()) {
+        statusMessage = `每日额度已用完，暂停领取至 ${new Date(taskClaimResumeAt).toLocaleString()}`;
         await waitForNextPoll(taskClaimResumeAt - Date.now());
         if (!running) break;
         taskClaimResumeAt = null;
         log(options, "[baidu-drama] 每日发布额度暂停已结束，恢复领取任务", undefined, "polling");
       }
       try {
+        statusMessage = options.canClaimTask?.() === false ? "已暂停领取任务" : "正在检查待领取任务";
         const task = options.canClaimTask?.() === false ? null : await claimNextBaiduDramaTaskApi({
           runtimeOptions: options,
           apiConfig: options.apiConfig,
         });
+        if (!running) break;
+        runtimeError = undefined;
         if (task) {
+          statusMessage = `正在处理：${task.originalTitle}`;
           const dailyPublishLimitReached = await runTask(page, task, options, (value) => {
             lastTask = value;
           });
@@ -350,20 +348,48 @@ export async function startBaiduDramaRuntime(
           }
           continue;
         }
+        runtimeError = undefined;
+        statusMessage = options.canClaimTask?.() === false ? "已暂停领取任务" : "暂无可领取任务，等待下次检查";
       } catch (error) {
+        runtimeError = errorMessage(error);
+        statusMessage = "领取任务失败，将自动重试";
         warn(options, `[baidu-drama] 任务轮询失败：${errorMessage(error)}`, { error }, "polling");
       }
       if (!running) break;
       await waitForNextPoll();
     }
   };
-  void pollLoop();
+  context.on("close", () => {
+    running = false;
+    wakePoll?.();
+  });
+  // Register the browser immediately: manual login must not hold account controls.
+  void (async () => {
+    while (running) {
+      try {
+        await prepareBaiduDramaTaskPolling(page, context, options);
+        if (!running) return;
+        runtimeError = undefined;
+        await pollLoop();
+        return;
+      } catch (error) {
+        if (!running) return;
+        runtimeError = errorMessage(error);
+        statusMessage = "登录检查未完成，将保留浏览器并自动重试";
+        errorLog(options, `[baidu-drama] ${statusMessage}：${runtimeError}`, { error });
+        await flushBaiduDramaLogs(options);
+        await waitForNextPoll();
+      }
+    }
+  })();
 
   return {
     getStatus() {
       return {
         platform: "baidu-drama",
         running,
+        statusMessage: baiduDramaLoginStateFromUrl(page.url()) === "login-required" ? "等待手动登录，登录后自动领取任务" : statusMessage,
+        runtimeError,
         loginState: baiduDramaLoginStateFromUrl(page.url()),
         activeUrl: page.url(),
         createUrl: BAIDU_DRAMA_CREATE_URL,

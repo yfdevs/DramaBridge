@@ -7,6 +7,9 @@ import path from "node:path";
 import {
   YoutubePythonRuntime,
   YoutubeWebServer,
+  YoutubeBrowserSessions,
+  applyYoutubeBrowserRights,
+  type YoutubeBrowserCredential,
   type Json,
   type YoutubeSettings,
 } from "@dramabridge/youtube-automation";
@@ -14,7 +17,7 @@ import { trpcIpc as ipcMain } from "../../ipc";
 import { resolveGlobalPlatformDirectories } from "../../global-app-config";
 import { createElectronPlatformLogger } from "../../platform-logger";
 import { dispatchInternalBaiduRequest } from "../../local-api";
-import { selectDirectory } from "../shared";
+import { selectDirectory, playwrightBrowsersPath } from "../shared";
 import { youtubeMediaDirectories } from "./media-tools";
 import { readYoutubeSavedData } from "./saved-data";
 
@@ -31,6 +34,30 @@ const defaults: Config = {
 const runtime = new YoutubePythonRuntime();
 const web = new YoutubeWebServer();
 let store: Store<{ config: Config }> | undefined;
+let browserStore: Store<{ accounts: Record<string, YoutubeBrowserCredential> }> | undefined;
+function browserCredentialsStore(): Store<{ accounts: Record<string, YoutubeBrowserCredential> }> {
+  return (browserStore ??= new Store<{ accounts: Record<string, YoutubeBrowserCredential> }>({
+    name: "youtube-drama-browser-credentials",
+    defaults: { accounts: {} },
+  }));
+}
+const browserSessions = new YoutubeBrowserSessions(() => {
+  return {
+    beforeLaunch: () => {
+      process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersPath();
+    },
+    directory: path.join(directories().runDataDir, "browser-profiles-v2"),
+    proxy: config().proxy,
+    all: () => browserCredentialsStore().get("accounts"),
+    read: (id: string) => browserCredentialsStore().get("accounts")[id],
+    write: (id: string, credential: YoutubeBrowserCredential | undefined) => {
+      const accounts = { ...browserCredentialsStore().get("accounts") };
+      if (credential) accounts[id] = credential;
+      else delete accounts[id];
+      browserCredentialsStore().set("accounts", accounts);
+    },
+  };
+});
 const settingsStore = () => {
   if (!store) {
     store = new Store({ name: "youtube-drama-config", defaults: { config: defaults } });
@@ -131,6 +158,36 @@ function options() {
       });
       return result.data as Json;
     },
+    browser: async (request: {
+      action: string;
+      accountId: string;
+      taskId: string;
+      videoId?: string;
+    }) => {
+      const assertActive = async () => {
+        if (!runtime.status().running) throw new Error("YouTube 服务已停止");
+        const task = await runtime.request<{
+          status: string;
+          payload: { accountId?: string; rightsManagement?: boolean };
+        }>(`/api/tasks/${request.taskId}`);
+        if (
+          !["uploading", "processing"].includes(task.status) ||
+          !task.payload.rightsManagement ||
+          (task.payload.accountId ?? "default") !== request.accountId
+        )
+          throw new Error("任务已停止或账号不匹配，已停止网页操作");
+      };
+      await assertActive();
+      if (request.action === "check")
+        return (await browserSessions.check(request.accountId, assertActive)) as unknown as Json;
+      await browserSessions.withVideo(
+        request.accountId,
+        request.videoId!,
+        assertActive,
+        applyYoutubeBrowserRights,
+      );
+      return { saved: true };
+    },
     saveSettings: (settings: Partial<YoutubeSettings>) =>
       settingsStore().set("config", validateConfig({ ...config(), ...settings })),
     log: (line: string) =>
@@ -139,11 +196,13 @@ function options() {
 }
 
 export const stopYoutubeRuntime = () => {
+  void browserSessions.close();
   void web.stop();
   runtime.dispose();
 };
 export const stopYoutubeService = async () => {
   await runtime.stop();
+  await browserSessions.close();
 };
 export const youtubeRunningCount = () => (runtime.status().running ? 1 : 0);
 export const youtubeRuntimeSummary = () => ({
@@ -155,9 +214,65 @@ export const youtubeRuntimeSummary = () => ({
 export const openYoutubeLogs = () => shell.openPath(logDir());
 
 async function requestYoutubeData(route: string, body?: Json): Promise<Json> {
+  const browserRoute =
+    /^\/api\/accounts\/(default|[a-f0-9]{32})\/browser\/(check|start|save|cancel|forget)$/.exec(
+      route,
+    );
+  if (browserRoute) {
+    if (body === undefined) throw new Error("浏览器凭证操作需要提交请求");
+    const accountData = await runtime.request<{ accounts: { id: string }[] }>("/api/accounts");
+    const [, id, action] = browserRoute;
+    if (!accountData.accounts.some((account) => account.id === id))
+      throw new Error("YouTube 账号不存在");
+    if (action === "start") {
+      const reuseAccountId =
+        body && typeof body === "object" && !Array.isArray(body) ? body.reuseAccountId : undefined;
+      if (
+        reuseAccountId !== undefined &&
+        (typeof reuseAccountId !== "string" ||
+          !accountData.accounts.some((account) => account.id === reuseAccountId))
+      )
+        throw new Error("复用的登录账号不存在");
+      return (await browserSessions.start(
+        id,
+        reuseAccountId as string | undefined,
+      )) as unknown as Json;
+    }
+    if (action === "save") return (await browserSessions.save(id)) as unknown as Json;
+    if (action === "cancel") {
+      await browserSessions.cancel(id);
+      return { cancelled: true };
+    }
+    if (action === "forget") {
+      await browserSessions.forget(id);
+      return { cleared: true };
+    }
+    return (await browserSessions.check(id)) as unknown as Json;
+  }
   if (!runtime.status().running && body === undefined)
-    return readYoutubeSavedData(directories().runDataDir, route, { paused: config().paused }) as Json;
-  return runtime.request(route, body);
+    return attachBrowserStatus(
+      route,
+      readYoutubeSavedData(directories().runDataDir, route, { paused: config().paused }) as Json,
+    );
+  const deleting = /^\/api\/accounts\/(default|[a-f0-9]{32})\/delete$/.exec(route);
+  if (deleting && browserSessions.status(deleting[1]).busy)
+    throw new Error("浏览器正在执行任务，暂时无法删除账号");
+  const result = await runtime.request(route, body);
+  if (deleting) await browserSessions.forget(deleting[1]);
+  return attachBrowserStatus(route, result);
+}
+
+function attachBrowserStatus(route: string, value: Json): Json {
+  if (route !== "/api/accounts" || !value || typeof value !== "object" || Array.isArray(value))
+    return value;
+  const data = value as { accounts?: { id: string; [key: string]: Json }[] };
+  return {
+    ...value,
+    accounts: (data.accounts ?? []).map((account) => ({
+      ...account,
+      browser: browserSessions.status(account.id) as unknown as Json,
+    })),
+  };
 }
 
 async function startYoutubeWeb() {
@@ -289,8 +404,9 @@ export function registerYoutubeHandlers() {
   });
   ipcMain.handle("youtube-drama:api:request", async (_event, route: string, body?: Json) => {
     if (typeof route !== "string") throw new Error("无效的 YouTube 请求");
-    if (body !== undefined && Buffer.byteLength(JSON.stringify(body)) > 65536)
-      throw new Error("请求不能超过 64 KiB");
+    const bodyLimit = 65536;
+    if (body !== undefined && Buffer.byteLength(JSON.stringify(body)) > bodyLimit)
+      throw new Error("请求内容过大");
     const result = await requestYoutubeData(route, body);
     if (route === "/api/oauth/start") {
       const url = new URL(String((result as { url?: string }).url ?? ""));

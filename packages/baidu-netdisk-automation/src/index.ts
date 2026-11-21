@@ -7,3 +7,6 @@ export { uploadBaiduNetdiskDirectory } from "./workflows/upload-directory.js";
 export type { RemoteVerifiedFile } from "./workflows/upload-verification.js";
 
 export { transferBaiduDramaVideos } from "./workflows/transfer-drama-videos.js";
+export { readBaiduCleanup, deleteBaiduCleanupDirectory } from "./workflows/cleanup-account.js";
+export type { CleanupDirectory, NetdiskQuota } from "./workflows/cleanup-account.js";
+export { baiduCleanupProtection } from "./workflows/cleanup-policy.js";

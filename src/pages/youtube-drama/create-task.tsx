@@ -20,6 +20,7 @@ import {
   YoutubeServiceRequired,
 } from "./shared";
 import { toast } from "@/components/ui/notifications";
+import { useWorkspacePageActive } from "@/components/workspace-toolbar";
 export function YoutubeCreateTaskPage({
   embedded = false,
   onCancel,
@@ -50,6 +51,11 @@ export function YoutubeCreateTaskPage({
   const [privacy, setPrivacy] = useState("private");
   const [mode, setMode] = useState("merge");
   const [compress, setCompress] = useState(false);
+  const [rightsManagement, setRightsManagement] = useState(false);
+  const active = useWorkspacePageActive();
+  useEffect(() => {
+    if (!active) setRightsManagement(false);
+  }, [active]);
   const [count, setCount] = useState("");
   useEffect(() => {
     onBusyChange?.(model.busy);
@@ -62,11 +68,15 @@ export function YoutubeCreateTaskPage({
       ? "请先完成运行环境配置"
       : !accounts.some((account) => account.id === accountId && account.authorized)
         ? "请选择已授权的上传账号"
-        : !name.trim()
-          ? "请填写剧名"
-          : !share.trim()
-            ? "请填写网盘分享链接"
-            : "";
+        : rightsManagement &&
+            (!accounts.find((account) => account.id === accountId)?.browser?.saved ||
+              accounts.find((account) => account.id === accountId)?.browser?.needsLogin)
+          ? "请先在账号管理完成浏览器登录并确认保存"
+          : !name.trim()
+            ? "请填写剧名"
+            : !share.trim()
+              ? "请填写网盘分享链接"
+              : "";
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -84,6 +94,7 @@ export function YoutubeCreateTaskPage({
         mode,
         compress: mode === "mute" && compress,
         noUpload: false,
+        rightsManagement,
         accountId,
         episodeCount: count ? Number(count) : null,
         fast: false,
@@ -92,6 +103,7 @@ export function YoutubeCreateTaskPage({
       if (onCreated) onCreated();
       else navigate("/youtube-drama/service");
       setShare("");
+      setRightsManagement(false);
     });
   };
 
@@ -168,10 +180,17 @@ export function YoutubeCreateTaskPage({
                 }}
                 options={[
                   { value: "merge", label: "合并并分离人声" },
+                  { value: "episodes", label: "不合并，逐集分离并上传" },
                   { value: "mute", label: "合并并静音" },
                 ]}
               />
             </label>
+            {mode === "episodes" && (
+              <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+                按文件名中的数字顺序逐集分离人声，每集处理完成后上传。标题为“{name.trim() || "剧名"}
+                -第1集”，描述、标签和可见性应用到每集。
+              </p>
+            )}
             {mode === "mute" && (
               <div className="flex items-center justify-between gap-4 rounded-md bg-muted px-3 py-3 sm:col-span-2">
                 <div className="space-y-1">
@@ -230,6 +249,25 @@ export function YoutubeCreateTaskPage({
                 ]}
               />
             </label>
+            <div className="flex items-center justify-between gap-4 rounded-md bg-muted px-3 py-3 sm:col-span-2">
+              <div className="space-y-1">
+                <label htmlFor="youtube-rights-management" className="text-sm font-medium">
+                  上传后自动勾选版权设置
+                </label>
+                <p
+                  id="youtube-rights-description"
+                  className="text-xs leading-5 text-muted-foreground"
+                >
+                  上传完成后打开视频编辑页，使用此账号保存的浏览器登录状态勾选版权选项并保存。仅对本任务生效，默认关闭；可用选项取决于账号权限。
+                </p>
+              </div>
+              <Switch
+                id="youtube-rights-management"
+                aria-describedby="youtube-rights-description"
+                checked={rightsManagement}
+                onCheckedChange={setRightsManagement}
+              />
+            </div>
             <Accordion className="sm:col-span-2">
               <AccordionItem value="upload-info" className="border-0">
                 <AccordionTrigger className="text-sm">
@@ -243,9 +281,12 @@ export function YoutubeCreateTaskPage({
                       <Input
                         className="h-7 rounded-md"
                         maxLength={100}
+                        disabled={mode === "episodes"}
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="默认使用剧名"
+                        placeholder={
+                          mode === "episodes" ? "逐集模式自动使用剧名-第x集" : "默认使用剧名"
+                        }
                       />
                     </label>
                     <label className="grid gap-2 text-sm font-medium">
@@ -278,7 +319,12 @@ export function YoutubeCreateTaskPage({
                 取消
               </Button>
             ) : (
-              <Button size="sm" variant="ghost" nativeButton={false} render={<Link to="/youtube-drama/service" />}>
+              <Button
+                size="sm"
+                variant="ghost"
+                nativeButton={false}
+                render={<Link to="/youtube-drama/service" />}
+              >
                 返回任务列表
               </Button>
             )}

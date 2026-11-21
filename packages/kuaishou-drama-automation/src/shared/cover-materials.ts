@@ -1,3 +1,4 @@
+import { cinematicPosterArtDirection } from "@dramabridge/media-assets";
 import { createHash } from "node:crypto";
 import { writeJsonAtomic } from "@dramabridge/file-utils";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -55,8 +56,8 @@ function isTextlessVariantKind(value: string | undefined): value is KuaishouText
   return Boolean(match && Number(match[1]) >= 2);
 }
 
-const promptVersion = "kuaishou-cover-counterpart-v4-commercial-copy";
-const textlessPromptVersion = "kuaishou-textless-v2-repair-isolated-review";
+const promptVersion = "kuaishou-cover-counterpart-v5-cinematic";
+const textlessPromptVersion = "kuaishou-textless-v3-cinematic";
 const normalizationVersion = "kuaishou-cover-contain-v1";
 const maximumFileBytes = 9_500_000;
 const activeGenerations = new Map<string, Promise<string>>();
@@ -110,6 +111,7 @@ export function buildKuaishouCounterpartCoverPrompt(options: {
     ? "将竖版画面自然扩展到左右两侧，补全与原图一致的场景，必要时重新排布人物与剧名"
     : "将横版画面重新排布为竖版，优先保留主要人物的面部、上半身、关键道具和完整剧名";
   return [
+    cinematicPosterArtDirection(),
     `根据参考${sourceKind}封面，将它改造成一张可直接发布的短剧${outputKind}成品封面`,
     "保持原封面的核心人物、人物关系、面部特征、服饰、时代背景、色彩气质和作品辨识度",
     composition,
@@ -141,6 +143,7 @@ export function buildKuaishouTextlessVariantCoverPrompt(options: {
   ];
   const direction = directions[(options.variant - 2) % directions.length]!;
   return [
+    cinematicPosterArtDirection(),
     `创作一张无字影视剧照，${options.kind === "drama" ? "横向" : "竖向"}构图，画面只有人物与场景`,
     "参考图仅用于人物外貌、服饰和时代风格；不参考原图的文字、标题或海报排版",
     `故事背景（仅用于理解情节，不要把这些内容写在图上）：${options.summary.slice(0, 600)}`,

@@ -1,7 +1,10 @@
+import jianyingIcon from "@/assets/platform-icons/jianying.png";
+import { OverflowText } from "@/components/ui/overflow-text";
 import { useEffect, useState, type ComponentProps } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Circle, Cog, GitBranch, Refresh, Scissors } from "@mynaui/icons-react";
 import { version as bundledVersion } from "../../package.json";
+import { clickUpdateVersion } from "@/lib/update-source-access";
 import {
   getAppUpdateStatus,
   onAppUpdateChanged,
@@ -79,7 +82,6 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent className="app-sidebar-content gap-0 px-3 pb-4">
         <SidebarGroup className="p-0">
-          <SidebarGroupLabel className="h-7 px-3 text-[11px]">平台自动化</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
               {platformNavigation.map((item) => {
@@ -102,7 +104,9 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                         width={16}
                         height={16}
                       />
-                      <span className="min-w-0 flex-1 truncate text-[13px]">{item.title}</span>
+                      <OverflowText as="span" className="min-w-0 flex-1 truncate text-[13px]">
+                        {item.title}
+                      </OverflowText>
                       {running && (
                         <span
                           className="flex shrink-0 items-center gap-1.5 text-xs font-normal text-muted-foreground"
@@ -137,7 +141,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                     render={<NavLink to={routePath(item.route)} />}
                     className="h-8 gap-2 rounded-lg px-3"
                   >
-                    <Scissors className="size-4" aria-hidden="true" />
+                    {item.route === "tools/jianying" ? <img src={jianyingIcon} className="platform-menu-icon" alt="" aria-hidden="true" width={16} height={16} draggable={false} /> : <Scissors className="size-4" aria-hidden="true" />}
                     <span className="text-[13px]">{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -154,7 +158,10 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
             className="app-chrome-control h-7 min-w-0 justify-start gap-1.5 rounded-lg px-1.5 text-xs font-normal"
             aria-current={route === "app/updates" ? "page" : undefined}
             aria-label={`版本与更新：v${version ?? "—"}${hasUpdate ? "，有可用更新" : ""}`}
-            onClick={() => navigate(routePath("app/updates"), { state: { returnRoute } })}
+            onClick={() => {
+              clickUpdateVersion();
+              navigate(routePath("app/updates"), { state: { returnRoute } });
+            }}
           >
             <span className="relative flex size-4 shrink-0 items-center justify-center">
               {hasUpdate ? <Refresh className="size-3.5" /> : <GitBranch className="size-3.5" />}
@@ -165,7 +172,9 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
                 />
               )}
             </span>
-            <span className="truncate tabular-nums">v{version ?? "—"}</span>
+            <OverflowText as="span" className="truncate tabular-nums">
+              v{version ?? "—"}
+            </OverflowText>
           </Button>
           <div
             className="flex shrink-0 items-center gap-0.5"

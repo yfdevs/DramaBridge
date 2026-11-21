@@ -209,7 +209,13 @@ export async function selectDouyinJianyingProjectScreenshots(
     kind: "jianying" | "juchuang" | "unknown";
     material: Awaited<ReturnType<typeof listLocalOwnershipMaterials>>[number];
   }> = [];
-  for (const material of ownershipMaterials) {
+  // Explicit source labels are stronger evidence than content guesses. Select
+  // those first, so unrelated generic proofs never delay or block a complete set.
+  const namedJianying = ownershipMaterials.filter((material) =>
+    classifyOwnershipProjectProofName(`${material.file}/${material.name}`) === "jianying");
+  const candidates = [...namedJianying, ...ownershipMaterials.filter((material) =>
+    !namedJianying.includes(material))];
+  for (const material of candidates) {
     // The platform label can be on an ancestor folder rather than the direct
     // parent, e.g. 权属文件/剪映工程图/截图/1.png.
     const namedKind = classifyOwnershipProjectProofName(`${material.file}/${material.name}`);

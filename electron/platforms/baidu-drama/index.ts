@@ -3,6 +3,8 @@ import { registerAccountControl } from "../shared/account-control";
 import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
+import { randomUUID } from "node:crypto";
+import { getBaiduWorkerId } from "./worker-identity";
 import { createValidatedStore } from "../../core/config-store";
 import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import cron, { type ScheduledTask } from "node-cron";
@@ -42,6 +44,8 @@ type BaiduDramaAccount = {
 type BaiduDramaAccountRuntimeStatus = {
   platform: "baidu-drama";
   running: boolean;
+  statusMessage?: string;
+  runtimeError?: string;
   loginState: "login-required" | "logged-in" | "unknown";
   activeUrl?: string;
   createUrl: string;
@@ -106,6 +110,7 @@ type BaiduDramaStoragePaths = {
 
 export type BaiduDramaServiceStatus = BaiduDramaRuntimeStatus & { pid: number | null };
 type BaiduDramaStore = {
+  installationId?: string;
   config: Partial<BaiduDramaConfig>;
   taskClaimResumeAtByAccount?: Record<string, number>;
 };
@@ -450,6 +455,13 @@ async function startAccountRuntime(selectedAccountIds: string[], canClaimTask: (
       const paths = storagePaths(config, accountProfileName);
       ensureStorageDirectories(paths);
       const runtime = await startBaiduDramaRuntime({
+        workerId: await getBaiduWorkerId(() => {
+          const saved = getStore().get("installationId");
+          if (saved) return saved;
+          const generated = randomUUID();
+          getStore().set("installationId", generated);
+          return generated;
+        }),
         canClaimTask,
         accountProfileName,
         baiduAccountId: account.accountId,

@@ -28,7 +28,12 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
     if (length > 65536) throw new Error("请求过大");
     chunks.push(chunk);
   }
-  const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  let value: unknown;
+  try {
+    value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new Error("请求 JSON 格式无效");
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("请求格式无效");
   return value as Record<string, unknown>;
 }

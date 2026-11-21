@@ -1,7 +1,10 @@
+import { FailureTooltip } from "@/components/ui/failure-tooltip";
+import { OverflowText } from "@/components/ui/overflow-text";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { CheckCircle, Chrome, DangerTriangle } from "@mynaui/icons-react";
+import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
 import { toast } from "@/components/ui/notifications";
 
+import { WorkspaceActions, useWorkspacePageActive } from "@/components/workspace-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,14 +84,14 @@ function TaskProgress({ task }: { task: WechatMiniProgramDirectUploadTask }) {
     const total = Math.max(1, task.uploadTotalCount);
     const value = Math.round((task.uploadCompletedCount / total) * 100);
     return (
-      <div className="grid min-w-32 gap-1.5">
-        <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums">
           <span>
             上传 {task.uploadCompletedCount}/{task.uploadTotalCount}
           </span>
           <span className="text-muted-foreground">{value}%</span>
         </div>
-        <Progress aria-label={`上传进度 ${value}%`} value={value} />
+        <Progress className="min-w-8 flex-1" aria-label={`上传进度 ${value}%`} value={value} />
       </div>
     );
   }
@@ -102,6 +105,7 @@ function TaskProgress({ task }: { task: WechatMiniProgramDirectUploadTask }) {
 }
 
 export function WechatMiniProgramBaiduUploadWindow() {
+  const active = useWorkspacePageActive();
   const [workspace, setWorkspace] = useState<WechatMiniProgramDirectUploadWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -132,29 +136,6 @@ export function WechatMiniProgramBaiduUploadWindow() {
       window.clearInterval(interval);
     };
   }, [refresh]);
-
-  useEffect(() => {
-    let restoreWindowControlsTimer: number | undefined;
-    if (drawerOpen) {
-      document.documentElement.dataset.directUploadDrawerOpen = "true";
-    } else {
-      restoreWindowControlsTimer = window.setTimeout(() => {
-        delete document.documentElement.dataset.directUploadDrawerOpen;
-      }, 500);
-    }
-    return () => {
-      if (restoreWindowControlsTimer !== undefined) {
-        window.clearTimeout(restoreWindowControlsTimer);
-      }
-    };
-  }, [drawerOpen]);
-
-  useEffect(
-    () => () => {
-      delete document.documentElement.dataset.directUploadDrawerOpen;
-    },
-    [],
-  );
 
   const queuedTaskCount = useMemo(
     () => workspace?.tasks.filter((task) => task.state === "queued").length ?? 0,
@@ -208,27 +189,79 @@ export function WechatMiniProgramBaiduUploadWindow() {
 
   return (
     <main className="flex h-full min-h-0 flex-col bg-background text-foreground">
-      <header className="shrink-0 border-b bg-background px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <img
-                alt=""
-                className="size-5"
-                src={`${import.meta.env.BASE_URL}wechat-miniprogram.svg`}
-              />
-              <h1 className="text-base font-semibold">百度资源直传</h1>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              自动检查并下载连续剧集，只上传到当前登录账号的视频素材库，不创建剧目、不提交审核
-            </p>
-          </div>
-          <Button type="button" size="sm" onClick={() => setDrawerOpen(true)}>
-            新建任务
-          </Button>
-        </div>
+          <WorkspaceActions label="百度直传操作">
+            <Button type="button" size="sm" className="h-7 px-3 text-xs" aria-label="新建任务" title="新建任务" onClick={() => setDrawerOpen(true)}>新建任务</Button>
+            <Button
+              type="button"
+              size="sm" className="h-7 px-3 text-xs"
+              aria-label="打开微信浏览器" title="打开微信浏览器"
+              variant="outline"
+              disabled={pendingAction !== null}
+              onClick={() =>
+                void runAction("focus-browser", () =>
+                  wechatMiniProgramBaiduUploadService.focusBrowser(),
+                )
+              }
+            >
+              {workspace?.browser.launched ? "打开浏览器" : "微信登录"}
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-xs">
+            </Button>
+            {workspace?.browser.launched ? (
+              <Button
+                type="button"
+                size="sm" className="h-7 px-3 text-xs" aria-label="关闭浏览器" title="关闭浏览器"
+                variant="ghost"
+                disabled={pendingAction !== null || Boolean(workspace.queue.activeTaskId)}
+                onClick={() =>
+                  void runAction(
+                    "close-browser",
+                    () => wechatMiniProgramBaiduUploadService.closeBrowser(),
+                    "直传浏览器已关闭",
+                  )
+                }
+              >
+                关闭浏览器
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm" className="h-7 px-3 text-xs" aria-label={workspace?.queue.running ? "暂停接续" : "开始队列"} title={workspace?.queue.running ? "暂停接续" : "开始队列"}
+              variant={workspace?.queue.running ? "outline" : "default"}
+              disabled={
+                pendingAction !== null || (!workspace?.queue.running && queuedTaskCount === 0)
+              }
+              onClick={() =>
+                void runAction(
+                  "queue",
+                  workspace?.queue.running
+                    ? () => wechatMiniProgramBaiduUploadService.pauseQueue()
+                    : () => wechatMiniProgramBaiduUploadService.startQueue(),
+                  workspace?.queue.running ? "当前任务结束后暂停" : "队列已开始",
+                )
+              }
+            >
+              {workspace?.queue.running ? "暂停接续" : "开始队列"}
+            </Button>
+            {workspace?.queue.activeTaskId ? (
+              <Button
+                type="button"
+                size="sm" className="h-7 px-3 text-xs" aria-label="终止当前任务" title="终止当前任务"
+                variant="destructive"
+                disabled={pendingAction !== null}
+                onClick={() =>
+                  void runAction(
+                    "cancel-active",
+                    () => wechatMiniProgramBaiduUploadService.cancelActiveTask(),
+                    "当前任务已终止",
+                  )
+                }
+              >
+                终止当前任务
+              </Button>
+            ) : null}
+          </WorkspaceActions>
+      <header className="shrink-0 border-b px-5 py-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
           <span className="inline-flex items-center gap-1.5">
             <span
               aria-hidden="true"
@@ -251,96 +284,27 @@ export function WechatMiniProgramBaiduUploadWindow() {
           </span>
           <span className="text-muted-foreground">待处理 {queuedTaskCount} 个</span>
           {workspace?.queue.error ? (
-            <span className="max-w-64 truncate text-destructive" title={workspace.queue.error}>
+            <OverflowText as="span" className="max-w-64 truncate text-destructive" title={workspace.queue.error}>
               {workspace.queue.error}
-            </span>
+            </OverflowText>
           ) : null}
-          <div className="ml-auto flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              disabled={pendingAction !== null}
-              onClick={() =>
-                void runAction("focus-browser", () =>
-                  wechatMiniProgramBaiduUploadService.focusBrowser(),
-                )
-              }
-            >
-              <Chrome className="size-3.5" />
-              {workspace?.browser.launched ? "打开微信浏览器" : "打开微信登录"}
-            </Button>
-            {workspace?.browser.launched ? (
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                disabled={pendingAction !== null || Boolean(workspace.queue.activeTaskId)}
-                onClick={() =>
-                  void runAction(
-                    "close-browser",
-                    () => wechatMiniProgramBaiduUploadService.closeBrowser(),
-                    "直传浏览器已关闭",
-                  )
-                }
-              >
-                关闭浏览器
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              size="xs"
-              variant={workspace?.queue.running ? "outline" : "default"}
-              disabled={
-                pendingAction !== null || (!workspace?.queue.running && queuedTaskCount === 0)
-              }
-              onClick={() =>
-                void runAction(
-                  "queue",
-                  workspace?.queue.running
-                    ? () => wechatMiniProgramBaiduUploadService.pauseQueue()
-                    : () => wechatMiniProgramBaiduUploadService.startQueue(),
-                  workspace?.queue.running ? "当前任务结束后暂停" : "队列已开始",
-                )
-              }
-            >
-              {workspace?.queue.running ? "暂停接续" : "开始队列"}
-            </Button>
-            {workspace?.queue.activeTaskId ? (
-              <Button
-                type="button"
-                size="xs"
-                variant="destructive"
-                disabled={pendingAction !== null}
-                onClick={() =>
-                  void runAction(
-                    "cancel-active",
-                    () => wechatMiniProgramBaiduUploadService.cancelActiveTask(),
-                    "当前任务已终止",
-                  )
-                }
-              >
-                <DangerTriangle className="size-3.5" />
-                终止当前任务
-              </Button>
-            ) : null}
-          </div>
+
         </div>
       </header>
 
       <section className="min-h-0 flex-1 overflow-auto px-5 py-4">
         {workspace && workspace.tasks.length > 0 ? (
           <div className="overflow-hidden rounded-lg border">
-            <Table className="min-w-[820px] table-fixed">
+            <Table stickyActions className="min-w-[820px] table-fixed">
               <TableHeader>
                 <TableRow className="hover:bg-background">
                   <TableHead className="w-12 text-center">序号</TableHead>
                   <TableHead>剧目</TableHead>
-                  <TableHead className="w-24">集数</TableHead>
-                  <TableHead className="w-28">状态</TableHead>
+                  <TableHead className="w-16">集数</TableHead>
+                  <TableHead className="w-22">状态</TableHead>
                   <TableHead className="w-44">进度</TableHead>
                   <TableHead className="w-28">更新时间</TableHead>
-                  <TableHead className="w-32 text-right">操作</TableHead>
+                  <TableHead className="w-28 text-left">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -352,21 +316,13 @@ export function WechatMiniProgramBaiduUploadWindow() {
                         {task.queueOrder}
                       </TableCell>
                       <TableCell className="min-w-0">
-                        <div className="truncate text-sm font-medium" title={task.dramaName}>
-                          {task.dramaName}
-                        </div>
-                        <div
-                          className="mt-0.5 truncate text-[11px] text-muted-foreground"
-                          title={task.error || task.localPath}
-                        >
-                          {task.error || ""}
-                        </div>
+                        <OverflowText className="w-full text-xs font-medium">{task.dramaName}</OverflowText>
                       </TableCell>
                       <TableCell className="text-xs tabular-nums">
                         {task.inferredEpisodeCount ? `${task.inferredEpisodeCount} 集` : "自动识别"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={stateVariant(task.state)}>
+                        <FailureTooltip reason={task.error}><Badge variant={stateVariant(task.state)}>
                           {active && !["failed", "completed", "interrupted"].includes(task.state) ? (
                             <Spinner className="size-3" />
                           ) : task.state === "completed" ? (
@@ -375,7 +331,7 @@ export function WechatMiniProgramBaiduUploadWindow() {
                             <DangerTriangle className="size-3" />
                           ) : null}
                           {stateLabels[task.state]}
-                        </Badge>
+                        </Badge></FailureTooltip>
                       </TableCell>
                       <TableCell>
                         <TaskProgress task={task} />
@@ -384,7 +340,7 @@ export function WechatMiniProgramBaiduUploadWindow() {
                         {formatDateTime(task.updatedAt)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex justify-end gap-1">
+                        <div className="flex justify-start gap-1">
                           {["failed", "interrupted"].includes(task.state) ? (
                             <Button
                               type="button"
@@ -431,7 +387,7 @@ export function WechatMiniProgramBaiduUploadWindow() {
             <div className="max-w-sm">
               <h2 className="text-sm font-medium">还没有直传任务</h2>
               <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                新建任务时只需填写剧目名称和百度分享内容。系统会自动识别总集数并检查中间是否缺集
+                填写剧名和百度分享链接即可添加
               </p>
               <Button className="mt-4" size="sm" type="button" onClick={() => setDrawerOpen(true)}>
                 新建第一个任务
@@ -441,11 +397,9 @@ export function WechatMiniProgramBaiduUploadWindow() {
         )}
       </section>
 
-      <footer className="shrink-0 border-t px-5 py-2 text-[11px] text-muted-foreground">
-        关闭此窗口不会停止正在执行的任务
-      </footer>
 
-      <Drawer swipeDirection="right" open={drawerOpen} onOpenChange={setDrawerOpen}>
+
+      <Drawer swipeDirection="right" open={drawerOpen && active} onOpenChange={setDrawerOpen}>
         <DrawerContent className="[--drawer-content-width:min(420px,92vw)] data-[swipe-axis=x]:[--drawer-content-width:min(420px,92vw)] data-[swipe-axis=x]:sm:[--drawer-content-width:420px] motion-reduce:transition-none">
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleCreate}>
             <DrawerHeader className="border-b px-5 py-4">

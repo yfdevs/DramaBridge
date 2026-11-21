@@ -229,6 +229,25 @@ test("resource readiness returns when only unrequested remote ownership is incom
   }
 });
 
+test("strict asset checking rescans the share even when cached images meet the minimum", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "drama-strict-cached-proofs-"));
+  const resourceName = "苟道长生我在魔武大陆加点修仙";
+  const proofs = path.join(root, resourceName, "权属文件");
+  try {
+    await mkdir(proofs, { recursive: true });
+    await writeFile(path.join(proofs, "工程文件1.png"), Buffer.from([1]));
+    await assert.rejects(ensureBaiduNetdiskEpisodeVideos({
+      shareText: "https://pan.baidu.com/s/test", resourceName, localEpisodeVideoRoot: root,
+      episodeCount: 0, downloadEpisodeVideos: false, requiredOwnership: { minimumImages: 1 },
+      requireAllDiscoveredAssets: true,
+      downloadShare: async request => {
+        assert.equal(request.requireAllDiscoveredAssets, true);
+        throw new Error("REMOTE_RESCAN_REACHED");
+      },
+    }), /REMOTE_RESCAN_REACHED/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("requests missing Jianying proofs even when unrelated cached ownership images are plentiful", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "drama-baidu-jianying-refresh-"));
   const resourceName = "亡妻归来，替身入局";

@@ -2,7 +2,7 @@
 from collections import Counter
 from fractions import Fraction
 
-MERGE_PIPELINE_VERSION = 'merge-safe-hevc-v6'
+MERGE_PIPELINE_VERSION = 'merge-safe-cfr-v7'
 
 
 def number(value):

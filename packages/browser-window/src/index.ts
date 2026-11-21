@@ -1,4 +1,4 @@
-import { chromium, type BrowserContext, type Page } from "playwright";
+import type { chromium, BrowserContext, Page } from "playwright";
 
 type LaunchOptions = Parameters<typeof chromium.launchPersistentContext>[1];
 
@@ -7,6 +7,9 @@ export async function launchPlatformBrowserContext(
   userDataDir: string,
   options: LaunchOptions = {},
 ): Promise<BrowserContext> {
+  // A shared desktop chunk can be loaded before a platform configures its browser root.
+  // Playwright captures that root on import, so load it only at the runtime boundary.
+  const { chromium } = await import("playwright");
   const context = await chromium.launchPersistentContext(userDataDir, {
     ...options,
     ...(options.headless === false ? { viewport: null } : {}),

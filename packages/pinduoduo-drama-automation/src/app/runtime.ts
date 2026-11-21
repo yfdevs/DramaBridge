@@ -9,6 +9,7 @@ import type {
   PinduoduoDramaRuntime,
   PinduoduoDramaRuntimeOptions,
   PinduoduoDramaRuntimeStatus,
+  PinduoduoUploadProgress,
 } from "../shared/types.js";
 import { pinduoduoTaskPollIntervalMs } from "../shared/polling.js";
 import {
@@ -16,42 +17,8 @@ import {
   pinduoduoDramaLoginStateFromUrl,
   saveCredentialState,
 } from "./browser-session.js";
-import { openShortplayManagePage } from "./shortplay-manage-page.js";
 import { runApprovedShortplayCycle } from "./approved-shortplay-cycle.js";
-
-const CHINA_TIME_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
-const TASK_POLL_NIGHT_START_HOUR = 0;
-const TASK_POLL_NIGHT_END_HOUR = 8;
-
-function nextTaskPollDelayMs(options: PinduoduoDramaRuntimeOptions, date = new Date()): number {
-  const nextPoll = new Date(date.getTime() + pinduoduoTaskPollIntervalMs(options));
-  const chinaDate = new Date(nextPoll.getTime() + CHINA_TIME_UTC_OFFSET_MS);
-  const hour = chinaDate.getUTCHours();
-
-  if (hour >= TASK_POLL_NIGHT_START_HOUR && hour < TASK_POLL_NIGHT_END_HOUR) {
-    const nextChinaMorning = new Date(
-      Date.UTC(
-        chinaDate.getUTCFullYear(),
-        chinaDate.getUTCMonth(),
-        chinaDate.getUTCDate(),
-        TASK_POLL_NIGHT_END_HOUR,
-        0,
-        0,
-        0,
-      ) - CHINA_TIME_UTC_OFFSET_MS,
-    );
-    return Math.max(1_000, nextChinaMorning.getTime() - date.getTime());
-  }
-
-  return Math.max(1_000, nextPoll.getTime() - date.getTime());
-}
-
-function formatChinaTimeIso(date: Date): string {
-  const chinaDate = new Date(date.getTime() + CHINA_TIME_UTC_OFFSET_MS);
-  return `${chinaDate.toISOString().replace("Z", "")}+08:00`;
-}
-
-void formatChinaTimeIso;
+import { PinduoduoUploadQueue } from "./upload-queue.js";
 
 export async function startPinduoduoDramaRuntime(
   options: PinduoduoDramaRuntimeOptions = {},
@@ -64,16 +31,19 @@ export async function startPinduoduoDramaRuntime(
   const userDataDir = options.userDataDir;
   let running = true;
   let lastError: string | undefined;
+  let uploadProgress: PinduoduoUploadProgress | undefined;
   let page: Page | null = null;
   let context: BrowserContext | null = null;
   let taskLoopPromise: Promise<void> | null = null;
   let taskLoopTimer: ReturnType<typeof setTimeout> | null = null;
   let wakeTaskLoop: (() => void) | null = null;
   const stopController = new AbortController();
+  const uploadQueue = new PinduoduoUploadQueue(pinduoduoTaskPollIntervalMs(options));
   let lastSubmitAt = 0;
   const cycleOptions: PinduoduoDramaRuntimeOptions = {
     ...options,
     signal: stopController.signal,
+    onUploadProgress: progress => { uploadProgress = progress; options.onUploadProgress?.(progress); },
     onFinalSubmit: () => { lastSubmitAt = Date.now(); options.onFinalSubmit?.(); },
   };
 
@@ -123,17 +93,19 @@ export async function startPinduoduoDramaRuntime(
     const cycleContext = context;
     taskLoopPromise = (async () => {
       while (running) {
+        let cycleFailed = false;
         try {
           if (options.shouldRun && !await options.shouldRun()) {
             await waitForNextTaskPoll(10_000);
             continue;
           }
-          await openShortplayManagePage(cyclePage, cycleContext, cycleOptions);
-          await options.onLoginState?.("logged-in");
-          const uploaded = await runApprovedShortplayCycle(cyclePage, cycleContext, cycleOptions);
+          const uploaded = await runApprovedShortplayCycle(cyclePage, cycleContext, cycleOptions, uploadQueue);
           lastError = undefined;
           log(options, "info", "runtime", "approved shortplay cycle completed", { uploaded });
         } catch (error: unknown) {
+          cycleFailed = true;
+          uploadProgress = undefined;
+          options.onUploadProgress?.(undefined);
           lastError = error instanceof Error ? error.message : String(error);
           if (stopController.signal.aborted) {
             log(options, "info", "runtime", "approved shortplay cycle stopped by service request");
@@ -142,7 +114,7 @@ export async function startPinduoduoDramaRuntime(
           }
         }
         if (!running) break;
-        await waitForNextTaskPoll(nextTaskPollDelayMs(options));
+        await waitForNextTaskPoll(cycleFailed ? 15_000 : uploadQueue.nextDelayMs);
       }
     })();
   }
@@ -153,6 +125,7 @@ export async function startPinduoduoDramaRuntime(
       return {
         platform: PINDUODUO_DRAMA_PLATFORM,
         running,
+        uploadProgress,
         lastError,
         loginState: pinduoduoDramaLoginStateFromUrl(activeUrl),
         activeUrl,

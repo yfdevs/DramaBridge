@@ -1,3 +1,5 @@
+import { FailureTooltip } from "@/components/ui/failure-tooltip";
+import { OverflowText } from "@/components/ui/overflow-text";
 import { useCallback, useEffect, useState } from "react";
 import { Refresh } from "@mynaui/icons-react";
 import { toast } from "@/components/ui/notifications";
@@ -361,7 +363,7 @@ export function PinduoduoDramaUploadRecordsPage() {
         <section className="min-h-0 flex-1 p-6 pt-4">
           {records.length > 0 ? (
             <div className="h-full min-h-0 overflow-hidden rounded-lg border bg-background">
-              <Table
+              <Table stickyActions
                 containerClassName="h-full overflow-auto overscroll-contain"
                 className="min-w-[1160px] table-fixed"
               >
@@ -375,34 +377,36 @@ export function PinduoduoDramaUploadRecordsPage() {
                   <TableHead className="h-8 w-28 text-right">审核通过时间</TableHead>
                   <TableHead className="h-8 w-28 text-right">上传完成时间</TableHead>
                   <TableHead className="h-8 w-28 text-right">最近更新</TableHead>
-                  <TableHead className="h-8 w-24 text-right">操作</TableHead>
+                  <TableHead className="h-8 w-48 text-left">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {records.map((record) => (
-                  <TableRow key={`${record.accountProfileName}:${record.platformApplyId}`} className="h-12">
-                    <TableCell className="max-w-0 py-2">
-                      <div className="truncate text-xs font-medium" title={record.title}>
+                  <TableRow key={`${record.accountProfileName}:${record.platformApplyId}`} className="h-9">
+                    <TableCell className="max-w-0 py-1.5">
+                      <div className="flex min-w-0 items-center gap-2" title={[record.title, record.episodeCount ? `${record.episodeCount} 集` : "集数未知", record.accountProfileName].filter(Boolean).join(" · ")}>
+                      <OverflowText as="div" className="min-w-0 truncate text-xs font-medium">
                         {record.title}
-                      </div>
-                      <div className="truncate text-[11px] text-muted-foreground">
+                      </OverflowText>
+                      <OverflowText as="div" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                         {record.episodeCount ? `共 ${record.episodeCount} 集` : "集数未知"}
                         {record.accountProfileName ? `，${record.accountProfileName}` : ""}
+                      </OverflowText>
                       </div>
                     </TableCell>
-                    <TableCell className="py-2">
-                      <StatusBadge status={record.status} />
+                    <TableCell className="py-1.5">
+                      <FailureTooltip reason={["FAILED", "REJECTED"].includes(record.status ?? "") ? failureReason(record) : undefined}><StatusBadge status={record.status} /></FailureTooltip>
                     </TableCell>
-                    <TableCell className="max-w-0 py-2">
-                      <div
+                    <TableCell className="max-w-0 py-1.5">
+                      <OverflowText as="div"
                         className="truncate text-xs text-muted-foreground"
                         title={resourceSourceTitle(record)}
                       >
                         {resourceSourceText(record)}
-                      </div>
+                      </OverflowText>
                     </TableCell>
-                    <TableCell className="max-w-0 py-2">
-                      <div
+                    <TableCell className="max-w-0 py-1.5">
+                      <OverflowText as="div"
                         className={cn(
                           "truncate text-xs text-muted-foreground",
                           (record.status === "FAILED" || record.status === "REJECTED") &&
@@ -411,23 +415,23 @@ export function PinduoduoDramaUploadRecordsPage() {
                         title={failureReason(record)}
                       >
                         {failureReason(record)}
-                      </div>
+                      </OverflowText>
                     </TableCell>
-                    <TableCell className="py-2 text-right text-xs tabular-nums text-muted-foreground">
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground">
                       {record.attempts ?? 0}
                     </TableCell>
-                    <TableCell className="py-2 text-right text-[11px] tabular-nums text-muted-foreground">
+                    <TableCell className="py-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
                       {formatDateTime(record.createdAt)}
                     </TableCell>
-                    <TableCell className="py-2 text-right text-[11px] tabular-nums text-muted-foreground">
+                    <TableCell className="py-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
                       {formatDateTime(record.uploadedAt)}
                     </TableCell>
-                    <TableCell className="py-2 text-right text-[11px] tabular-nums text-muted-foreground">
+                    <TableCell className="py-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
                       {formatDateTime(record.updatedAt)}
                     </TableCell>
-                    <TableCell className="py-2 text-right">
+                    <TableCell className="py-1.5 text-right">
                       {record.status === "CONFIRM_REQUIRED" ? (
-                        <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-start gap-1">
                           <Button size="sm" variant="outline" disabled={retryingRecordId !== null} onClick={() => void handleConfirmPublication(record, true)}>该批已发布</Button>
                           <Button size="sm" variant="outline" disabled={retryingRecordId !== null} onClick={() => void handleConfirmPublication(record, false)}>该批未发布</Button>
                         </div>

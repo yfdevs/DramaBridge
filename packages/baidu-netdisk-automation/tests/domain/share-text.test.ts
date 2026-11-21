@@ -10,3 +10,8 @@ test("Baidu download names preserve the title used by platform resource readers"
   );
   assert.equal(share.name, title);
 });
+
+test("HTML-escaped query separators are normalized before opening the share", () => {
+  const result=parseBaiduNetdiskShareText('https://pan.baidu.com/s/1example?from=test&amp;pwd=k8qv');
+  assert.equal(result.pwd,'k8qv');assert.equal(result.link,'https://pan.baidu.com/s/1example?from=test&pwd=k8qv');
+});

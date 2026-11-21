@@ -118,40 +118,6 @@ body:has(.cet-titlebar) [data-slot="sheet-content"][data-side="top"] {
   top: var(--app-titlebar-height);
 }
 
-.app-titlebar-platform-nav-host {
-  position: absolute;
-  inset: 0;
-  z-index: 101;
-  pointer-events: none;
-}
-
-.app-titlebar-platform-switcher {
-  position: absolute;
-  top: calc((var(--app-titlebar-height) - 28px) / 2);
-  left: var(--app-titlebar-left-reserve);
-  display: inline-flex;
-  height: 28px;
-  align-items: center;
-  gap: 2px;
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
-}
-
-.app-titlebar-platform-button {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-md);
-  pointer-events: auto;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-
-.app-titlebar-platform-button-active {
-  border-color: color-mix(in oklch, var(--primary) 20%, transparent);
-  background: var(--card);
-  color: var(--primary);
-}
-
 .cet-titlebar .cet-control-icon {
   display: flex !important;
   align-items: center;

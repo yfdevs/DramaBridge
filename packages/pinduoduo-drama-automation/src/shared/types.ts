@@ -201,7 +201,18 @@ export interface PinduoduoDramaConfig {
   };
 }
 
+export type PinduoduoUploadProgress = {
+  title: string;
+  phase: "downloading" | "uploading" | "binding" | "publishing";
+  uploaded: number;
+  total: number;
+  published: number;
+  batch?: number;
+  batches?: number;
+};
+
 export type PinduoduoDramaRuntimeStatus = {
+  uploadProgress?: PinduoduoUploadProgress;
   lastError?: string;
   platform: "pinduoduo-drama";
   running: boolean;
@@ -217,6 +228,7 @@ export type PinduoduoDramaRuntimeStatus = {
 };
 
 export type PinduoduoDramaRuntimeOptions = {
+  onUploadProgress?: (progress: PinduoduoUploadProgress | undefined) => void;
   accountPhone?: string;
   uploadRecords?: import("../storage/upload-store.js").PinduoduoUploadStore;
   shouldRun?: () => Promise<boolean>;

@@ -14,6 +14,7 @@ export type GlobalAppConfig = {
   ownershipLocalOcrEnabled: boolean;
   baiduNetdiskDownloadTimeoutMinutes: string;
   baiduNetdiskCleanupPlayletAfterTaskSuccess: boolean;
+  baiduNetdiskAutoCleanupEnabled: boolean;
   runDataRoot: string;
   localMaterialRoot: string;
 };

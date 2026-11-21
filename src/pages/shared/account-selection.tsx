@@ -1,5 +1,6 @@
 import { useNotification } from "@/hooks/use-notification";
-import { RefreshCwIcon, SearchIcon, XIcon } from "lucide-react";
+import { RotateCwIcon, UserSearch, SlidersHorizontal, ListChecks, CheckIcon, XIcon } from "lucide-react";
+import { OverflowText } from "@/components/ui/overflow-text";
 import type { ReactNode } from "react";
 import {
   InputGroup,
@@ -9,10 +10,11 @@ import {
 } from "@/components/ui/input-group";
 import { ListFilterMenu } from "@/components/list-filter-menu";
 import { InstanceStatus } from "./instance-status";
-import { toast } from "@/components/ui/notifications";
+import { AccountActions, type AccountControls } from "./account-actions";
+export type { AccountControls } from "./account-actions";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 type Account = {
   accountId: string;
@@ -36,8 +38,9 @@ export function useAccountSelection<T>(service: {
     setError("");
     try {
       const next = await service.listAccounts();
-      setAccounts(next);
-      setSelected((ids) => ids.filter((id) => next.some((a) => a.accountId === id && enabled(a))));
+      const normalized = next.map(account => ({ ...account, accountId: String(account.accountId) }));
+      setAccounts(normalized);
+      setSelected((ids) => ids.filter((id) => normalized.some((a) => a.accountId === id && enabled(a))));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -73,10 +76,6 @@ type Runtime = {
   pageCount?: number;
   paused?: boolean;
 };
-export type AccountControls = {
-  start: (id: string) => Promise<void>;
-  pause: (id: string, paused: boolean) => Promise<void>;
-};
 const enabled = (account: Account) => !account.status || account.status === "ON";
 
 export function AccountSelection({
@@ -101,32 +100,20 @@ export function AccountSelection({
   useNotification(s.error, "error", "账号读取失败");
   const radioName = useId();
   const single = selectionMode === "single";
-  const [pending, setPending] = useState<Set<string>>(() => new Set());
-  const controlAccount = async (id: string, action: () => Promise<void>) => {
-    if (pending.has(id)) return;
-    setPending((current) => new Set(current).add(id));
-    try {
-      await action();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setPending((current) => {
-        const next = new Set(current);
-        next.delete(id);
-        return next;
-      });
-    }
-  };
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState("all");
   const [runtimeFilter, setRuntimeFilter] = useState("all");
+  const [selectionFilter, setSelectionFilter] = useState("all");
+  const keywords = search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const runtimeMap = new Map(runtimes.map((runtime) => [runtime.accountId, runtime]));
+  const selectedIds = new Set(s.selected);
   const visible = s.accounts.filter((account) => {
     const runtime = runtimeMap.get(account.accountId);
     return (
-      `${account.accountName} ${account.accountId} ${account.loginAccount ?? ""}`
+      keywords.every(keyword => `${account.accountName} ${account.accountId} ${account.loginAccount ?? ""}`
         .toLocaleLowerCase()
-        .includes(search.trim().toLocaleLowerCase()) &&
+        .includes(keyword)) &&
+      (selectionFilter === "all" || selectedIds.has(account.accountId) === (selectionFilter === "selected")) &&
       (availability === "all" || enabled(account) === (availability === "enabled")) &&
       (runtimeFilter === "all" ||
         (runtimeFilter === "idle"
@@ -138,49 +125,28 @@ export function AccountSelection({
               : runtime?.launched && runtime.loginState === "login-required"))
     );
   });
-  const visibleIds = [...new Set(visible.filter(enabled).map((account) => account.accountId))];
-  const selectedCount = s.accounts.filter(
-    (account) => enabled(account) && s.selected.includes(account.accountId),
-  ).length;
-  const visibleSelected = visibleIds.filter((id) => s.selected.includes(id)).length;
-  const allSelected = visibleIds.length > 0 && visibleSelected === visibleIds.length;
-  const disabled = locked || s.fetching;
-  const filtered = Boolean(search || availability !== "all" || runtimeFilter !== "all");
+  const selectableIds = [...new Set(s.accounts.filter(enabled).map(account => account.accountId))];
+  const selectedCount = selectableIds.filter(id => selectedIds.has(id)).length;
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
+  const disabled = (locked && (!controls || single)) || s.fetching;
+  const filtered = Boolean(search.trim() || availability !== "all" || runtimeFilter !== "all" || selectionFilter !== "all");
   const reset = () => {
     setSearch("");
     setAvailability("all");
     setRuntimeFilter("all");
+    setSelectionFilter("all");
   };
-  const running = runtimes.filter((runtime) => runtime.launched).length;
   return (
-    <section aria-label="账号实例" aria-busy={s.fetching} className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 text-xs text-muted-foreground">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2" aria-live="polite">
-          <span>
-            共{" "}
-            <strong className="font-medium tabular-nums text-foreground">
-              {s.accounts.length}
-            </strong>{" "}
-            个账号
-          </span>
-          <span>
-            已选{" "}
-            <strong className="font-medium tabular-nums text-foreground">{selectedCount}</strong>
-          </span>
-          {!single && showRuntime && <span>
-            运行中 <strong className="font-medium tabular-nums text-foreground">{running}</strong>
-          </span>}
-        </div>
-        {locked && <span>{lockedLabel ?? (single ? "停止同步后可更换账号" : "停止服务后可更换账号")}</span>}
-      </div>
+    <section aria-label="账号实例" aria-busy={s.fetching} className="flex min-w-0 flex-col gap-2.5">
+      {locked && (!controls || single) && <p className="text-xs text-muted-foreground">{lockedLabel ?? (single ? "停止同步后可更换账号" : "停止服务后可更换账号")}</p>}
       <div className="flex flex-wrap items-center gap-2">
         <InputGroup className="h-7 w-full min-w-0 rounded-md sm:max-w-80 sm:flex-1">
           <InputGroupAddon>
-            <SearchIcon aria-hidden="true" />
+            <UserSearch aria-hidden="true" />
           </InputGroupAddon>
           <InputGroupInput
             aria-label="搜索实例"
-            placeholder="搜索账号名称、ID 或登录账号"
+            placeholder="搜索名称、ID、登录账号"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="text-xs"
@@ -194,7 +160,9 @@ export function AccountSelection({
           )}
         </InputGroup>
         <ListFilterMenu
-          label="筛选实例"
+          label="筛选"
+          showLabel
+          icon={<SlidersHorizontal aria-hidden="true" />}
           groups={[
             {
               key: "availability",
@@ -208,6 +176,18 @@ export function AccountSelection({
                 { value: "disabled", label: "已禁用" },
               ],
             },
+            ...(!single ? [{
+              key: "selection",
+              label: "选择状态",
+              value: selectionFilter,
+              defaultValue: "all",
+              onChange: setSelectionFilter,
+              options: [
+                { value: "all", label: "全部账号" },
+                { value: "selected", label: "已选账号" },
+                { value: "unselected", label: "未选账号" },
+              ],
+            }] : []),
             ...(!single && showRuntime ? [{
               key: "runtime",
               label: "运行状态",
@@ -224,6 +204,17 @@ export function AccountSelection({
             }] : []),
           ]}
         />
+        {!single && <Button type="button" size="sm" variant={allSelected ? "secondary" : "outline"}
+          className="h-7 gap-1.5 text-xs" aria-pressed={allSelected}
+          title={allSelected ? "取消全部选择" : "全选所有启用账号，包含筛选结果外的账号"}
+          disabled={disabled || !selectableIds.length}
+          onClick={() => s.setSelected(allSelected
+            ? []
+            : selectableIds)}>
+          {allSelected ? <CheckIcon className="size-3.5" aria-hidden="true" /> : <ListChecks className="size-3.5" aria-hidden="true" />}
+          {allSelected ? "已全选" : "全选"}
+        </Button>}
+
         <Button
           variant="outline"
           size="icon-sm"
@@ -232,43 +223,11 @@ export function AccountSelection({
           disabled={s.fetching}
           onClick={() => void s.refresh()}
         >
-          <RefreshCwIcon aria-hidden="true" />
+          <RotateCwIcon aria-hidden="true" className={s.fetching ? "motion-safe:animate-spin" : undefined} />
         </Button>
+        <span className="text-xs tabular-nums text-muted-foreground">已选 {selectedCount} / {s.accounts.length}</span>
         {actions && <div className="ml-auto flex flex-wrap gap-2">{actions}</div>}
       </div>
-      {!s.fetching && !s.error && s.accounts.length > 0 && (!single || filtered) && (
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          {!single && <label className="flex min-h-7 items-center gap-2">
-            <Checkbox
-              aria-label="全选当前结果中的启用账号"
-              checked={allSelected}
-              indeterminate={visibleSelected > 0 && !allSelected}
-              disabled={disabled || !visibleIds.length}
-              onCheckedChange={() =>
-                s.setSelected((ids) =>
-                  allSelected
-                    ? ids.filter((id) => !visibleIds.includes(id))
-                    : [...new Set([...ids, ...visibleIds])],
-                )
-              }
-            />
-            全选当前结果
-          </label>}
-          {!single && selectedCount > 0 && (
-            <Button size="sm" variant="ghost" disabled={disabled} onClick={() => s.setSelected([])}>
-              取消选择
-            </Button>
-          )}
-          {filtered && (
-            <Button size="sm" variant="ghost" onClick={reset}>
-              清除筛选
-            </Button>
-          )}
-          {filtered && (
-            <span className="ml-auto text-muted-foreground">匹配 {visible.length} 个账号</span>
-          )}
-        </div>
-      )}
       {s.fetching ? (
         <div className="space-y-3" role="status" aria-label="正在读取账号">
           {[0, 1, 2].map((key) => (
@@ -302,95 +261,71 @@ export function AccountSelection({
           )}
         </div>
       ) : (
-        <ul aria-label="实例列表" className="flex min-w-0 flex-col gap-1">
+        <ul aria-label="实例列表" className="flex min-w-0 flex-col divide-y divide-border/50 rounded-lg border border-border/60">
           {visible.map((account) => {
             const runtime = runtimeMap.get(account.accountId);
-            const selected = s.selected.includes(account.accountId);
+            const selected = selectedIds.has(account.accountId);
             return (
-              <li key={account.accountId} className={`flex min-w-0 items-start rounded-md ${selected ? "bg-muted/60" : "hover:bg-muted/30"}`}>
+              <li key={account.accountId} className={`grid min-w-0 grid-cols-1 items-center gap-x-4 px-3 py-2.5 md:grid-cols-[minmax(0,1fr)_auto] first:rounded-t-lg last:rounded-b-lg ${selected ? "bg-muted/40" : "hover:bg-muted/20"}`}>
                 <label
-                  className="flex min-w-0 flex-1 items-start gap-3 px-3 py-4"
+                  className="flex min-w-0 cursor-pointer items-center gap-3"
                 >
                   {single ? <input
                     type="radio"
                     name={radioName}
-                    className="mt-0.5 size-4 shrink-0 accent-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    className="size-4 shrink-0 accent-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     aria-label={`选择账号 ${account.accountName || account.accountId}`}
                     checked={selected}
                     disabled={disabled || !enabled(account)}
                     onChange={() => s.setSelected([account.accountId])}
                   /> : <Checkbox
-                    className="mt-0.5"
+                    className="shrink-0"
                     aria-label={`选择账号 ${account.accountName || account.accountId}`}
                     checked={selected}
                     disabled={disabled || !enabled(account)}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={(checked) => {
                       s.setSelected((ids) =>
                         checked
                           ? [...new Set([...ids, account.accountId])]
                           : ids.filter((id) => id !== account.accountId),
-                      )
-                    }
+                      );
+                    }}
                   />}
-                  <span className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <span className="min-w-0 space-y-1">
-                      <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                        <span className="break-all">
+                  <span className="min-w-0 flex-1">
+                    <span className="block w-full min-w-0 space-y-1">
+                      <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
+                        <OverflowText className="min-w-0 flex-1">
                           {account.accountName || account.accountId}
-                        </span>
-                        {!enabled(account) && (
+                        </OverflowText>
+                        {!enabled(account) && (single || !showRuntime) && (
                           <span className="text-xs font-normal text-muted-foreground">已禁用</span>
                         )}
                       </span>
-                      <span className="block break-all text-xs text-muted-foreground">
+                      <OverflowText className="text-xs text-muted-foreground">
                         ID {account.accountId}
                         {account.loginAccount ? ` / ${account.loginAccount}` : ""}
-                      </span>
+                      </OverflowText>
                     </span>
                   </span>
                 </label>
-                {!single && showRuntime && <div className="flex shrink-0 flex-col items-end gap-2 px-3 py-4">
-                  <span className="flex shrink-0 flex-wrap items-center gap-2">
+                {!single && showRuntime && <div className={`ml-7 mt-2 grid items-center gap-x-3 md:ml-0 md:mt-0 ${controls ? "grid-cols-[7rem_3rem_10.5rem]" : "grid-cols-[7rem_3rem]"}`}>
+                  <span className="flex min-w-0 items-center">
                     <InstanceStatus
+                      disabled={!enabled(account)}
                       launched={Boolean(runtime?.launched)}
                       loginState={runtime?.loginState}
                       label={account.runtimeLabel}
                       paused={runtime?.paused}
                     />
-                    {runtime?.launched && runtime.pageCount !== undefined && (
-                      <span className="text-xs text-muted-foreground">
-                        {runtime.pageCount} 个页面
-                      </span>
-                    )}
                   </span>
-                  {controls && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      aria-label={`${runtime?.launched ? (runtime.paused ? "恢复账号" : "暂停账号") : "启动账号"} ${account.accountName || account.accountId}`}
-                      disabled={pending.has(account.accountId) || s.fetching || !enabled(account)}
-                      title={
-                        runtime?.launched && !runtime.paused
-                          ? "停止领取新任务，已领取任务继续完成"
-                          : undefined
-                      }
-                      onClick={() =>
-                        void controlAccount(account.accountId, () =>
-                          runtime?.launched
-                            ? controls.pause(account.accountId, !runtime.paused)
-                            : controls.start(account.accountId),
-                        )
-                      }
-                    >
-                      {pending.has(account.accountId)
-                        ? "处理中…"
-                        : runtime?.launched
-                          ? runtime.paused
-                            ? "恢复"
-                            : "暂停"
-                          : "启动"}
-                    </Button>
-                  )}
+                  <span className="text-right text-xs tabular-nums text-muted-foreground">
+                    {runtime?.launched && runtime.pageCount !== undefined ? `${runtime.pageCount} 页` : "—"}
+                  </span>
+                  {controls && <AccountActions
+                    id={account.accountId} name={account.accountName || account.accountId}
+                    launched={Boolean(runtime?.launched)} paused={runtime?.paused}
+                    controls={controls} disabled={s.fetching || !enabled(account)}
+                  />}
                 </div>}
               </li>
             );

@@ -1,3 +1,4 @@
+import { cinematicPosterArtDirection } from "@dramabridge/media-assets";
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -12,7 +13,7 @@ import type {
   TaobaoDramaRuntimeOptions,
 } from "./types.js";
 
-const promptVersion = "taobao-local-collection-cover-v1";
+const promptVersion = "taobao-local-collection-cover-v2-cinematic";
 
 async function downloadSourceCover(url: string, outputDir: string) {
   const response = await fetch(url);
@@ -67,6 +68,7 @@ export async function prepareTaobaoCollectionCover(
         size: "1080x1800",
         watermark: false,
         prompt: [
+          cinematicPosterArtDirection(),
           "生成淘宝短剧合集3:5竖版商业封面，人物和核心冲突位于中央安全区，面部与手部完整",
           sourceFile ? "参考素材中的人物、服饰、场景和美术风格重新构图" : "根据剧名和剧情简介设计人物与场景",
           `清晰、准确地展示中文剧名“${metadata.title}”，不得错字、漏字或使用拼音替代`,

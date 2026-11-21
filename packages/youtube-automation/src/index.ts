@@ -4,6 +4,9 @@ import { randomBytes } from "node:crypto";
 import { access, cp, mkdir, rm, statfs } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
+export { YoutubeBrowserSessions, studioChannelId, youtubeVideoEditUrl } from "./browser-session.js";
+export type { YoutubeBrowserCredential, YoutubeBrowserStatus } from "./browser-session.js";
+export { applyYoutubeBrowserRights } from "./browser-rights.js";
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type YoutubeSettings = { proxy: string; paused: boolean };
@@ -23,6 +26,12 @@ export type YoutubeRuntimeOptions = {
   mediaDirectories: string[];
   settings: YoutubeSettings;
   netdisk: (request: { path: string; body: Json }) => Promise<Json>;
+  browser?: (request: {
+    action: string;
+    accountId: string;
+    taskId: string;
+    videoId?: string;
+  }) => Promise<Json>;
   saveSettings: (settings: Partial<YoutubeSettings>) => void;
   log: (message: string) => void;
   onExit?: () => void;
@@ -34,7 +43,7 @@ export function allowedYoutubeRequest(route: string, post: boolean) {
     return /^\/api\/(?:tasks(?:\/[a-f0-9-]+)?|accounts|oauth\/status|status|environment)$/.test(
       route,
     );
-  return /^\/api\/(?:tasks(?:\/[a-f0-9-]+\/(?:retry|cancel|pause|resume|delete))?|accounts(?:\/(?:default|[a-f0-9]{32})(?:\/delete)?)?|oauth\/(?:start|cancel|complete|test)|settings|netdisk\/start)$/.test(
+  return /^\/api\/(?:tasks(?:\/[a-f0-9-]+\/(?:retry|cancel|pause|resume|delete))?|accounts(?:\/(?:default|[a-f0-9]{32})(?:\/(?:delete|browser\/(?:check|start|save|cancel|forget)))?)?|oauth\/(?:start|cancel|complete|test)|settings|netdisk\/start)$/.test(
     route,
   );
 }
@@ -227,7 +236,7 @@ export class YoutubePythonRuntime {
           } else if (data.kind === "error")
             fail(new Error(typeof data.error === "string" ? data.error : "Python 服务启动失败"));
           else if (
-            (data.kind === "netdisk" || data.kind === "settings") &&
+            (data.kind === "netdisk" || data.kind === "settings" || data.kind === "browser") &&
             typeof data.id === "string"
           ) {
             void this.respond(child, options, data);
@@ -267,6 +276,24 @@ export class YoutubePythonRuntime {
         )
           throw new Error("无效的百度下载桥接请求");
         value = await options.netdisk({ path: payload.path, body: (payload.body ?? null) as Json });
+      } else if (data.kind === "browser") {
+        if (
+          !options.browser ||
+          !["check", "rights"].includes(String(payload.action)) ||
+          typeof payload.accountId !== "string" ||
+          !/^(?:default|[a-f0-9]{32})$/.test(payload.accountId) ||
+          typeof payload.taskId !== "string" ||
+          !/^[a-f0-9-]{36}$/.test(payload.taskId) ||
+          (payload.action === "rights" &&
+            (typeof payload.videoId !== "string" || !/^[A-Za-z0-9_-]{11}$/.test(payload.videoId)))
+        )
+          throw new Error("无效的 YouTube 浏览器请求");
+        value = await options.browser({
+          action: String(payload.action),
+          accountId: payload.accountId,
+          taskId: payload.taskId,
+          ...(typeof payload.videoId === "string" ? { videoId: payload.videoId } : {}),
+        });
       } else {
         const settings: Partial<YoutubeSettings> = {};
         if (typeof payload.proxy === "string") settings.proxy = payload.proxy;

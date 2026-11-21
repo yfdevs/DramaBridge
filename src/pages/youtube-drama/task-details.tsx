@@ -15,6 +15,7 @@ import { youtubeService, type YoutubeTask } from "@/platforms/youtube-drama/serv
 import { youtubeModeLabels } from "./task-status";
 import { YoutubeTaskProgress, youtubeDuration, youtubeStageLabels } from "./task-progress";
 import { youtubeTaskFailure } from "./task-failure";
+import { YoutubeEpisodeProgress } from "./episode-progress";
 
 export function YoutubeTaskDetails({
   task,
@@ -83,6 +84,7 @@ export function YoutubeTaskDetails({
               <section aria-label="任务进度" className="shrink-0">
                 <YoutubeTaskProgress task={current} showError={false} />
               </section>
+              <YoutubeEpisodeProgress task={current} />
               <dl className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-5 gap-y-3 text-sm">
                 <dt className="text-muted-foreground">处理方式</dt>
                 <dd>

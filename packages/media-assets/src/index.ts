@@ -5,6 +5,7 @@ import path from "node:path";
 import type { DramaAiClient } from "@dramabridge/ai";
 import sharp from "sharp";
 export { ensureRenamedPortraitPoster, ensureRenamedPortraitPosters, renamedPortraitPosterRecipe } from "./renamed-portrait-poster.js";
+export { cinematicPosterArtDirection } from "./poster-art-direction.js";
 
 import { classifyOwnershipProjectProofScreenshotWithAi } from "./ownership-project-proof-ai.js";
 import { removePathWithRetry, retryFileSystemOperation } from "./filesystem-retry.js";
@@ -785,6 +786,12 @@ export async function findOwnershipProjectProofFiles(options: {
   return selectOwnershipProjectProofFiles(classified, filesPerKind);
 }
 
+export function selectUniqueRootPortrait(files: LocalPosterImageFile[]): LocalPosterImageFile[] {
+  const portraits = files.filter(file => !/角色|头像|avatar/iu.test(file.name)
+    && (file.height ?? 0) > (file.width ?? 0));
+  return portraits.length === 1 ? portraits : [];
+}
+
 export async function listLocalPosterImages(options: {
   root: string;
   resourceName: string;
@@ -808,7 +815,7 @@ export async function listLocalPosterImages(options: {
     const namedMatches = entries.filter((entry) => /封面|海报|(?:^|[^a-z])(?:cover|poster)(?:[^a-z]|$)/i.test(entry.name));
     const fromFileName = namedMatches.length > 0;
     const fromDirectory = /封面|海报|(?:^|[^a-z])(?:cover|poster)(?:[^a-z]|$)/i.test(path.basename(dir));
-    const fromRoot = !fromFileName && !fromDirectory && dir === resourceDir && entries.length === 1
+    const fromRoot = !fromFileName && !fromDirectory && dir === resourceDir && entries.length > 0
       && !isOwnershipDirectoryName(path.basename(resourceDir)) && !/ai制作证明/i.test(path.basename(resourceDir));
     let selectedEntries = namedMatches;
     if (fromRoot) selectedEntries = entries;
@@ -847,10 +854,13 @@ export async function listLocalPosterImages(options: {
   const sortedNamedCandidates = sortCandidates(namedCandidates);
   const sortedDirectoryCandidates = sortCandidates(directoryCandidates).sort((left, right) =>
     Number((right.height ?? 0) > (right.width ?? 0)) - Number((left.height ?? 0) > (left.width ?? 0)));
+  const selectedRootCandidates = rootCandidates.length <= 1
+    ? rootCandidates.filter(file => !/角色|头像|avatar/iu.test(file.name))
+    : selectUniqueRootPortrait(rootCandidates);
   if (options.includeAllMatches) {
-    return [...sortedNamedCandidates, ...sortedDirectoryCandidates, ...rootCandidates];
+    return [...sortedNamedCandidates, ...sortedDirectoryCandidates, ...selectedRootCandidates];
   }
-  const selected = sortedNamedCandidates[0] ?? sortedDirectoryCandidates[0] ?? rootCandidates[0];
+  const selected = sortedNamedCandidates[0] ?? sortedDirectoryCandidates[0] ?? selectedRootCandidates[0];
   return selected ? [selected] : [];
 }
 

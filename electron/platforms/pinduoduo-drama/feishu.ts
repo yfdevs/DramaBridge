@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FeishuTables, TableSnapshot } from "@dramabridge/feishu";
 import type { PinduoduoUploadStore } from "@dramabridge/pinduoduo-drama-automation";
 import { PINDUODUO_DEFAULT_SOURCE_TABLE_URL } from "../../../src/platforms/pinduoduo-drama/defaults";
-import { PinduoduoSourceTable } from "./source-table";
+import { PinduoduoSourceTable, PINDUODUO_FULL_SOURCE_URL } from "./source-table";
 
 export const PINDUODUO_ACCOUNT_SHEET = "拼多多账号实例";
 export const PINDUODUO_TASK_SHEET = "拼多多传剧任务";
@@ -14,6 +14,12 @@ const statusLabels: Record<string, string> = {
 };
 
 export type PinduoduoFeishuAccount = { name: string; creatorName: string; phone: string; enabled: boolean };
+export function selectPinduoduoAccounts(accounts: PinduoduoFeishuAccount[], selectedIds: unknown) {
+  if (!Array.isArray(selectedIds) || !selectedIds.length || selectedIds.some(id => typeof id !== "string" || !id.trim())) throw new Error("请勾选需要启动的拼多多账号");
+  const ids = new Set<string>(selectedIds);
+  if ([...ids].some(id => !accounts.some(account => account.phone === id))) throw new Error("账号已变更，请刷新账号列表后重新勾选");
+  return accounts.filter(account => ids.has(account.phone));
+}
 function columns(table: TableSnapshot, names: string[]): Record<string, number> {
   const result: Record<string, number> = {};
   for (const name of names) {
@@ -25,7 +31,7 @@ function columns(table: TableSnapshot, names: string[]): Record<string, number> 
 }
 
 export function readPinduoduoAccounts(table: TableSnapshot): PinduoduoFeishuAccount[] {
-  const c = columns(table, ["账号名称", "主播名称", "是否启用", "登录状态", "手机号"]);
+  const c = columns(table, ["账号名称", "主播名称", "是否启用", "手机号"]);
   const names = new Set<string>(), phones = new Set<string>();
   return table.rows.filter(row => row.values[c["账号名称"]]?.trim()).map(row => {
     const value = (name: string) => row.values[c[name]]?.trim() ?? "";
@@ -71,19 +77,10 @@ export class PinduoduoFeishuTables {
     return result;
   }
   async accounts() { return readPinduoduoAccounts(await this.tables.read(this.url, PINDUODUO_ACCOUNT_SHEET)); }
-  async enabled(account: PinduoduoFeishuAccount) {
+  async available(account: PinduoduoFeishuAccount) {
     const current = (await this.accounts()).find(item => item.phone === account.phone);
     if (!current || current.name !== account.name || current.creatorName !== account.creatorName) throw new Error(`账号“${account.name}”已被修改，请停止并重新启动服务`);
-    return current.enabled;
-  }
-  async loginState(account: PinduoduoFeishuAccount, state: string) {
-    return this.serial(async () => {
-      const table = await this.tables.read(this.url, PINDUODUO_ACCOUNT_SHEET);
-      const c = columns(table, ["账号名称", "手机号", "登录状态"]);
-      const rows = table.rows.filter(row => row.values[c["手机号"]] === account.phone && row.values[c["账号名称"]] === account.name);
-      if (rows.length !== 1) throw new Error(`账号“${account.name}”已修改，无法回写登录状态`);
-      if (rows[0]!.values[c["登录状态"]] !== state) await this.tables.writeCells(table, rows[0]!.number, [{ column: c["登录状态"], value: state }]);
-    });
+    return true;
   }
   private async snapshot() {
     let table = await this.tables.read(this.url, PINDUODUO_TASK_SHEET);
@@ -110,8 +107,8 @@ export class PinduoduoFeishuTables {
     });
     return { table, c, rows };
   }
-  async prepare() { await this.source.read(); await this.serial(async () => { await this.accounts(); await this.snapshot(); }); }
-  private async write(table: TableSnapshot, row: number, c: Record<string, number>, meta: Meta) {
+  async prepare() { await Promise.all([this.source.read(), this.serial(async () => { await this.accounts(); await this.snapshot(); })]); }
+  private cells(c: Record<string, number>, meta: Meta) {
     const r = meta.record;
     const progress = Math.min((r.uploadedBatchCount ?? 0) * 50, r.episodeCount ?? 0);
     const values: Record<string, string> = {
@@ -121,8 +118,11 @@ export class PinduoduoFeishuTables {
       "更新时间": new Date(r.updatedAt).toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" }),
       [META_COLUMN]: JSON.stringify(meta),
     };
+    return Object.entries(values).map(([key, value]) => ({ column: c[key]!, value }));
+  }
+  private async write(table: TableSnapshot, row: number, c: Record<string, number>, meta: Meta) {
     await this.tables.ensureRows(table, row);
-    await this.tables.writeCells(table, row, Object.entries(values).map(([key, value]) => ({ column: c[key]!, value })));
+    await this.tables.writeCells(table, row, this.cells(c, meta));
   }
   async list() {
     const { rows } = await this.snapshot();
@@ -133,7 +133,10 @@ export class PinduoduoFeishuTables {
       const { table, c, rows } = await this.snapshot(); let reset = 0;
       for (const row of rows) {
         const meta = row.meta;
-        if (!meta || meta.confirmedRequired || meta.pendingPublishBatch || meta.record.status !== "FAILED") continue;
+        // Older clients made a bare 1080P rejection terminal before per-episode repair existed.
+        const legacyResolutionRejection = meta?.record.status === "REJECTED" &&
+          /^第\s*\d+\/\d+\s*批视频上传失败[：:]\s*视频分辨率不能低于1080P\s*$/i.test(meta.record.errorMessage ?? "");
+        if (!meta || meta.confirmedRequired || meta.pendingPublishBatch || (meta.record.status !== "FAILED" && !legacyResolutionRejection)) continue;
         if (account && meta.record.accountProfileName !== account || id !== undefined && meta.record.platformApplyId !== id) continue;
         Object.assign(meta.record, { status: "PENDING", attempts: 0, stage: undefined, errorMessage: undefined, updatedAt: new Date().toISOString() });
         await this.write(table, row.number, c, meta); reset++;
@@ -188,7 +191,7 @@ export class PinduoduoFeishuTables {
           await update(id, meta => {
             meta.record.demoUrl = resource.shareText; meta.record.resourceSource = "FEISHU";
             meta.record.resourceSourceRows = [resource.number];
-            meta.sourceTableUrl = this.source.url; meta.sourceRow = resource.number;
+            meta.sourceTableUrl = resource.sourceUrl ?? this.source.url; meta.sourceRow = resource.number;
           });
           return resource.shareText;
         } catch (error) {
@@ -201,14 +204,25 @@ export class PinduoduoFeishuTables {
         }
       },
       upsertFromApprovedList: async approved => this.serial(async () => {
+        if (!approved.length) return;
         const { table, c, rows } = await this.snapshot();
+        const byId = new Map<number, TaskRow[]>(), byTitle = new Map<string, TaskRow[]>(), manual = new Map<string, TaskRow[]>();
+        const append = <K>(index: Map<K, TaskRow[]>, key: K, row: TaskRow) => index.set(key, [...(index.get(key) ?? []), row]);
+        for (const row of rows) {
+          if (row.meta?.record.accountProfileName === account.name) {
+            append(byId, row.meta.record.platformApplyId, row);
+            append(byTitle, row.meta.record.title, row);
+          } else if (!row.meta && row.values[c["发布账号"]] === account.name) append(manual, row.values[c["剧名"]], row);
+        }
+        let nextRow = Math.max(1, ...rows.map(row => row.number)) + 1;
+        const changes: { row: number; cells: { column: number; value: string }[] }[] = [];
         for (const item of approved) {
           if (item.id === undefined) continue;
-          const byId = rows.filter(row => row.meta && row.meta.record.platformApplyId === item.id && row.meta.record.accountProfileName === account.name);
-          const manual = rows.filter(row => !row.meta && row.values[c["剧名"]] === item.title && row.values[c["发布账号"]] === account.name);
-          const sameTitle = rows.filter(row => row.meta?.record.title === item.title && row.meta.record.accountProfileName === account.name && row.meta.record.platformApplyId !== item.id);
-          if (byId.length > 1 || manual.length > 1 || sameTitle.length) throw new Error(`“${account.name}/${item.title}”存在重复或同名申报，无法自动匹配`);
-          const row = byId[0] ?? manual[0];
+          const idMatches = byId.get(item.id) ?? [], manualMatches = manual.get(item.title) ?? [];
+          const sameTitle = (byTitle.get(item.title) ?? []).filter(row => row.meta!.record.platformApplyId !== item.id);
+          if (idMatches.length > 1 || manualMatches.length > 1 || sameTitle.length) throw new Error(`“${account.name}/${item.title}”存在重复或同名申报，无法自动匹配`);
+          const row = idMatches[0] ?? manualMatches[0];
+          const previousMeta = row?.meta ? JSON.stringify(row.meta) : undefined;
           if (row?.meta && row.meta.record.title !== item.title) throw new Error(`平台申报“${item.id}”的剧名已变化，请人工核对飞书记录`);
           if (row && !row.meta && !["", "待处理", "失败"].includes(row.values[c["状态"]] ?? "")) continue;
           const time = new Date().toISOString();
@@ -216,19 +230,32 @@ export class PinduoduoFeishuTables {
           const r = meta.record;
           r.gmtCreate = item.gmtCreate;
           // Platform demoUrl is a five-episode preview, never a video source.
-          if (meta.sourceTableUrl !== this.source.url) {
+          if (meta.sourceTableUrl !== this.source.url && meta.sourceTableUrl !== PINDUODUO_FULL_SOURCE_URL) {
             r.demoUrl = undefined; r.resourceSource = "FEISHU"; meta.sourceRow = undefined;
           }
           r.episodeCount = item.episodeCount;
-          const number = row?.number ?? Math.max(1, ...rows.map(value => value.number)) + 1;
-          if (!row) rows.push({ number, values: [], meta });
+          const number = row?.number ?? nextRow++;
           // Do not overwrite status while synchronizing an existing task.
-          if (!row?.meta) await this.write(table, number, c, meta);
-          else await this.tables.writeCells(table, number, [
+          const cells = !row?.meta ? this.cells(c, meta) : [
             { column: c[META_COLUMN], value: JSON.stringify(meta) },
             { column: c["集数"], value: String(r.episodeCount ?? "") },
             { column: c["百度网盘链接"], value: r.demoUrl ?? "" },
-          ]);
+          ];
+          const changed = !row?.meta ? cells : cells.filter(cell => cell.column === c[META_COLUMN]
+            ? previousMeta !== JSON.stringify(meta)
+            : (row?.values[cell.column] ?? "") !== cell.value);
+          if (changed.length) changes.push({ row: number, cells: changed });
+          if (!row?.meta) {
+            const next = row ?? { number, values: [], meta };
+            next.meta = meta;
+            for (const cell of cells) next.values[cell.column] = cell.value;
+            append(byId, item.id, next); append(byTitle, item.title, next);
+            manual.delete(item.title);
+          }
+        }
+        if (changes.length) {
+          await this.tables.ensureRows(table, Math.max(...changes.map(change => change.row)));
+          await this.tables.writeRows(table, changes);
         }
       }),
       findProcessableRecords: async () => (await records()).filter(({ meta, label }) => !meta.confirmedRequired && !meta.pendingPublishBatch &&
@@ -252,7 +279,7 @@ export class PinduoduoFeishuTables {
       retainIncompleteCreatedTopics: async ids => (await records()).filter(({ meta }) => ids.includes(meta.record.platformApplyId) &&
         (meta.record.uploadedBatchCount ?? 0) < (meta.record.totalBatchCount ?? 0)).map(({ meta }) => meta.record.platformApplyId),
       markDownloading: async id => {
-        if (!await this.enabled(account)) throw new Error(`账号“${account.name}”已停用`);
+        await this.available(account);
         await update(id, meta => { meta.record.status = "DOWNLOADING"; meta.record.attempts++; meta.record.lastAttemptAt = new Date().toISOString(); meta.record.errorMessage = undefined; });
       },
       markResourceSource: (id, source, sourceRows, shareText) => update(id, meta => { meta.record.resourceSource = source; meta.record.resourceSourceRows = sourceRows; if (shareText) meta.record.demoUrl = shareText; }),
@@ -272,7 +299,7 @@ export class PinduoduoFeishuTables {
         }); return completed;
       },
       markPublishing: async (id, batch) => {
-        if (!await this.enabled(account)) throw new Error(`账号“${account.name}”已停用，已取消发布`);
+        await this.available(account);
         await update(id, meta => { if (meta.pendingPublishBatch || meta.confirmedRequired) throw new Error("上次发布结果待人工确认"); meta.pendingPublishBatch = batch; meta.record.stage = "PUBLISH"; });
       },
       markUploadBatchPublished: (id, count) => update(id, meta => { meta.record.uploadedBatchCount = count; meta.pendingPublishBatch = undefined; meta.confirmedRequired = false; }),

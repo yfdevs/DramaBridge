@@ -6,7 +6,7 @@ export async function baiduPageRequest<T>(
   timeoutMs = 30_000,
 ): Promise<T> {
   const readOnly = /^(GET|HEAD)$/i.test(init.method || "GET");
-  const attempts = readOnly ? 3 : 1;
+  const attempts = readOnly ? 5 : 1;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     if (init.signal?.aborted) throw init.signal.reason ?? new Error("百度网盘请求已取消");
     try {
@@ -21,9 +21,9 @@ export async function baiduPageRequest<T>(
     } catch (error) {
       if (init.signal?.aborted) throw init.signal.reason ?? error;
       const message = String(error instanceof Error ? error.message : error);
-      const retryable = /接口请求超时|Failed to fetch|fetch failed|NetworkError|network|HTTP (?:408|5\d\d)/i.test(message);
+      const retryable = /接口请求超时|Failed to fetch|fetch failed|NetworkError|network|HTTP (?:404|408|5\d\d)/i.test(message);
       if (!readOnly || !retryable || /BAIDU_NETDISK_(?:RISK|IDENTITY)/.test(message) || attempt === attempts) throw error;
-      console.log(`[baidu-request] 读取失败，准备第${attempt + 1}/3次请求：${new URL(url, location.href).pathname}`);
+      console.log(`[baidu-request] 读取失败，准备第${attempt + 1}/${attempts}次请求：${new URL(url, location.href).pathname}`);
       await new Promise(resolve => setTimeout(resolve, attempt * 800));
     }
   }

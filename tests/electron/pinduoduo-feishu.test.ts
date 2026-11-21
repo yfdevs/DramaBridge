@@ -1,15 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { FeishuTables, TableSnapshot } from "@dramabridge/feishu";
-import { PinduoduoFeishuTables, readPinduoduoAccounts } from "../../electron/platforms/pinduoduo-drama/feishu";
+import { PinduoduoFeishuTables, readPinduoduoAccounts, selectPinduoduoAccounts } from "../../electron/platforms/pinduoduo-drama/feishu";
+
+test("launches only checked accounts, including legacy disabled rows, and rejects stale or empty selections", () => {
+  const accounts = [
+    { name: "明星说", creatorName: "草莓漫剧", phone: "17732354154", enabled: false },
+    { name: "米苏", creatorName: "甜心漫剧", phone: "18027171189", enabled: true },
+  ];
+  assert.deepEqual(selectPinduoduoAccounts(accounts, [accounts[0]!.phone, accounts[0]!.phone]), [accounts[0]]);
+  for (const ids of [undefined, [], [null], ["missing"], [accounts[0]!.phone, "missing"]]) assert.throws(() => selectPinduoduoAccounts(accounts, ids));
+});
 
 function fixture() {
   const accountTable: TableSnapshot = {
     spreadsheet: "test", sheet: { sheet_id: "accounts", title: "拼多多账号实例", grid_properties: { row_count: 50, column_count: 20 } },
-    headers: ["账号名称", "主播名称", "是否启用", "登录状态", "手机号"],
+    headers: ["账号名称", "主播名称", "是否启用", "手机号"],
     rows: [
-      { number: 2, values: ["账号A", "主播A", "是", "待登录", "17732354154"] },
-      { number: 3, values: ["账号B", "主播B", "是", "待登录", "18027171189"] },
+      { number: 2, values: ["账号A", "主播A", "是", "17732354154"] },
+      { number: 3, values: ["账号B", "主播B", "是", "18027171189"] },
     ],
   };
   const taskTable: TableSnapshot = {
@@ -19,14 +28,19 @@ function fixture() {
   const sourceTable: TableSnapshot = {
     spreadsheet: "source", sheet: { sheet_id: "5d5b78", title: "拼多多-新剧", grid_properties: { row_count: 50, column_count: 4 } },
     headers: ["原剧名", "剧名", "网盘（原链接）", "网盘（拼多多）"],
-    rows: [{ number: 2, values: ["原名", "测试剧", "https://pan.baidu.com/s/original", "https://pan.baidu.com/s/full-episodes 提取码: 1234"] }],
+    rows: [{ number: 2, values: ["原名", "测试剧", "https://pan.baidu.com/s/full-episodes 提取码: 1234", "https://pan.baidu.com/s/unused"] }],
   };
   let failWrites = false;
+  let batchWrites = 0;
   const hidden: number[] = [];
   const tables = {
-    read: async (_url: string, title: string) => structuredClone(title === sourceTable.sheet.title ? sourceTable : title === accountTable.sheet.title ? accountTable : taskTable),
+    read: async (_url: string, title: string, options?: { sheetId?: string }) => options?.sheetId === "QeuDEm" ? { ...structuredClone(sourceTable), sheet: { ...sourceTable.sheet, sheet_id: "QeuDEm" }, headers: ["剧名", "全集链接"], rows: [] } : structuredClone(title === sourceTable.sheet.title ? sourceTable : title === accountTable.sheet.title ? accountTable : taskTable),
     hideColumn: async (_table: TableSnapshot, column: number) => { hidden.push(column); },
     ensureRows: async () => undefined,
+    writeRows: async (table: TableSnapshot, rows: { row: number; cells: { column: number; value: string }[] }[]) => {
+      batchWrites++;
+      for (const row of rows) await tables.writeCells(table, row.row, row.cells);
+    },
     writeCells: async (table: TableSnapshot, number: number, cells: { column: number; value: string }[]) => {
       assert.notEqual(table.sheet.sheet_id, "5d5b78", "source sheet must never receive a write");
       if (failWrites) throw new Error("模拟飞书断网");
@@ -41,9 +55,32 @@ function fixture() {
   } as unknown as FeishuTables;
   const cloud = new PinduoduoFeishuTables(tables, "https://example.feishu.cn/wiki/test");
   const accounts = readPinduoduoAccounts(accountTable);
-  return { cloud, a: cloud.forAccount(accounts[0]!), b: cloud.forAccount(accounts[1]!), accountTable, taskTable, sourceTable, hidden, fail: (value: boolean) => { failWrites = value; } };
+  return { cloud, a: cloud.forAccount(accounts[0]!), b: cloud.forAccount(accounts[1]!), accountTable, taskTable, sourceTable, hidden, batchWrites: () => batchWrites, fail: (value: boolean) => { failWrites = value; } };
 }
 const drama = { id: 7, title: "测试剧", episodeCount: 120, gmtCreate: 1791002365363, demoUrl: "https://pan.baidu.com/s/test" };
+
+test("manual retry revives legacy resolution-only rejections while retaining other platform rejections", async () => {
+  const f = fixture();
+  await f.a.upsertFromApprovedList([drama, { ...drama, id: 8, title: "其他错误" }]);
+  await f.a.markRejected(7, "第 1/1 批视频上传失败：视频分辨率不能低于1080P");
+  await f.a.markRejected(8, "第 1/1 批视频上传失败：视频分辨率不能低于1080P；视频时长不能低于30秒");
+  assert.equal(await f.cloud.resetFailed(), 1);
+  assert.deepEqual((await f.a.findProcessableRecords()).map(record => record.platformApplyId), [7]);
+  assert.equal((await f.cloud.list()).find(record => record.platformApplyId === 8)?.status, "REJECTED");
+});
+
+test("syncs a hundred approved dramas in one write batch and performs zero writes when unchanged", async () => {
+  const f = fixture();
+  const dramas = Array.from({ length: 100 }, (_, i) => ({ ...drama, id: i + 1, title: `剧${i + 1}` }));
+  await f.a.upsertFromApprovedList(dramas);
+  assert.equal(f.taskTable.rows.length, 100);
+  assert.equal(f.batchWrites(), 1);
+  await f.a.upsertFromApprovedList(dramas);
+  assert.equal(f.batchWrites(), 1);
+  await f.a.upsertFromApprovedList([{ ...dramas[0]!, episodeCount: 121 }]);
+  assert.equal(f.batchWrites(), 2);
+  assert.equal(f.taskTable.rows[0].values[1], "121");
+});
 
 test("Feishu separates identical platform IDs by account and serializes concurrent appends", async () => {
   const f = fixture(); await f.cloud.prepare();
@@ -84,11 +121,14 @@ test("published batches resume from the cloud; changed input files fail closed",
   await assert.rejects(f.a.prepareUploadBatches(7, 3, "different-files"), /素材或批次已变化/);
 });
 
-test("a Feishu write failure prevents marking publish intent, and disabling an account blocks publish", async () => {
+test("publication requires cloud writeback and unchanged identity while page selection overrides the legacy enabled flag", async () => {
   const f = fixture(); await f.a.upsertFromApprovedList([drama]); f.fail(true);
   await assert.rejects(f.a.markPublishing(7, 1), /断网/);
   f.fail(false); f.accountTable.rows[0]!.values[2] = "否";
-  await assert.rejects(f.a.markPublishing(7, 1), /停用/);
+  await f.a.markDownloading(7);
+  await f.a.markPublishing(7, 1);
+  f.accountTable.rows[0]!.values[1] = "已改名主播";
+  await assert.rejects(f.a.markPublishing(7, 2), /已被修改/);
 });
 
 test("reads the full-episode source column, writes it to the task, and rejects duplicate tasks", async () => {
@@ -104,11 +144,11 @@ test("reads the full-episode source column, writes it to the task, and rejects d
   await assert.rejects(f.a.markDownloading(7), /重复/);
 });
 
-test("never uses the platform preview or original-link column when the full source is missing", async () => {
-  const f = fixture(); f.sourceTable.rows[0]!.values[3] = "";
+test("rejects missing original links without using platform previews or Pinduoduo links", async () => {
+  const f = fixture(); f.sourceTable.rows[0]!.values[2] = "";
   await f.a.upsertFromApprovedList([drama]);
   assert.equal(f.taskTable.rows[0]!.values[3], "");
-  await assert.rejects(f.a.resolveResource(7), /网盘（拼多多）.*为空/);
+  await assert.rejects(f.a.resolveResource(7), /网盘（原链接）.*为空/);
   assert.equal(f.taskTable.rows[0]!.values[3], "");
   assert.equal(f.taskTable.rows[0]!.values[4], "失败");
 });
@@ -143,6 +183,6 @@ test("sync does not override a manually excluded cloud task", async () => {
 });
 
 test("account phone and name uniqueness are validated before launching browsers", () => {
-  const f = fixture(); f.accountTable.rows[1]!.values[4] = "17732354154";
+  const f = fixture(); f.accountTable.rows[1]!.values[3] = "17732354154";
   assert.throws(() => readPinduoduoAccounts(f.accountTable), /不能重复/);
 });

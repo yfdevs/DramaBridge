@@ -18,7 +18,23 @@ export class FeishuClient {
   ) {}
 
   private async json(url: string, init: RequestInit) {
-    const response = await this.transport(url, { ...init, signal: AbortSignal.timeout(30_000) });
+    const safeToRetry = !init.method || init.method === "GET" || url === "https://accounts.feishu.cn/oauth/v3/token";
+    let response: Response | undefined;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        response = await this.transport(url, { ...init, signal: AbortSignal.timeout(30_000) });
+        break;
+      } catch (cause) {
+        const code = (cause as { cause?: { code?: string }; code?: string })?.cause?.code ?? (cause as { code?: string })?.code;
+        const transient = ["ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"].includes(code ?? "") || (cause instanceof Error && cause.name === "TimeoutError");
+        if (!transient) throw cause;
+        if (safeToRetry && attempt < 2) {
+          await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 500 : 1500));
+          continue;
+        }
+        throw Object.assign(new Error(`飞书网络连接失败（${code ?? "超时"}），请检查网络或 DNS；任务将在稍后自动恢复。`), { cause });
+      }
+    }
     const body = (await response.json()) as Record<string, unknown>;
     if (!response.ok || (typeof body.code === "number" && body.code !== 0) || body.error) {
       throw new FeishuApiError(

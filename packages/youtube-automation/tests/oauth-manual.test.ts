@@ -9,10 +9,10 @@ test("manual desktop OAuth validates callback origin and state, and rejects repl
 import sys, tempfile, json
 from pathlib import Path
 sys.path.insert(0,sys.argv[1])
-from oauth_service import Authorization, SCOPE
+from oauth_service import Authorization, SCOPE, PARTNER_SCOPE
 saved=[]
 class Credentials:
-    granted_scopes=[SCOPE]
+    granted_scopes=[SCOPE, PARTNER_SCOPE]
     def to_json(self):return json.dumps({'refresh_token':'test-token'})
 class Flow:
     credentials=Credentials()

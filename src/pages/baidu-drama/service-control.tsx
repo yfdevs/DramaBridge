@@ -1,3 +1,4 @@
+import { FailureTooltip } from "@/components/ui/failure-tooltip";
 import { useAccountSelection, AccountSelection } from "@/pages/shared/account-selection"
 import { ServiceControlButtonPage, useServiceControl } from "@/pages/shared/service-control"
 import { baiduDramaService, type BaiduDramaServiceStatus } from "@/platforms/baidu-drama/service"
@@ -30,7 +31,18 @@ export function BaiduDramaServiceControlPage() {
     <ServiceControlButtonPage
       analyticsPlatform="baidu-drama"
       startDisabled={selection.startDisabled}
-      beforeBrowserInstances={<AccountSelection controls={baiduDramaService.accountControl} runtimes={serviceState.status.accounts} selection={selection} locked={serviceState.loading || serviceState.status.running} />}
+      beforeBrowserInstances={<>
+        <AccountSelection controls={baiduDramaService.accountControl} runtimes={serviceState.status.accounts} selection={selection} locked={serviceState.loading || serviceState.status.running} />
+        {serviceState.status.accounts.some(account => account.statusMessage) && (
+          <ul className="space-y-2 text-xs" aria-label="百度任务领取状态" aria-live="polite">
+            {serviceState.status.accounts.filter(account => account.statusMessage).map(account => (
+              <li key={account.accountId} className="min-w-0">
+                <FailureTooltip reason={account.runtimeError}><span className="block max-w-full truncate">{account.accountName}：{account.statusMessage}</span></FailureTooltip>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>}
       loading={serviceState.loading}
       pendingAction={serviceState.pendingAction}
       running={serviceState.status.running}

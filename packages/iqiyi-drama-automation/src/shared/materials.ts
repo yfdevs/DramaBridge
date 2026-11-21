@@ -1,3 +1,4 @@
+import { cinematicPosterArtDirection } from "@dramabridge/media-assets";
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -21,7 +22,7 @@ import type {
   IqiyiDramaTaskPayload,
 } from "./types.js";
 
-const landscapePromptVersion = "iqiyi-landscape-v5-poster-text";
+const landscapePromptVersion = "iqiyi-landscape-v6-cinematic";
 const iqiyiCoverMaximumBytes = 4_900_000;
 const iqiyiProofMaximumBytes = 20 * 1024 * 1024;
 
@@ -75,6 +76,7 @@ function iqiyiTitleArtDirection(playlet: IqiyiDramaTaskPayload) {
 export function buildIqiyiLandscapeCoverPrompt(playlet: IqiyiDramaTaskPayload) {
   const contentType = playlet.dramaType === "comic-drama" ? "漫剧" : "短剧";
   return [
+    cinematicPosterArtDirection(),
     `根据参考竖版封面，为爱奇艺${contentType}生成一张宽幅横向商业宣传海报`,
     "保持原封面的核心人物、人物关系、服饰、时代背景、色彩气质和作品辨识度",
     "将竖版画面自然扩展到左右两侧，补全真实一致的场景，不要简单拉伸、镜像、拼接或加边框",

@@ -10,6 +10,8 @@ import {
 import { createPortal } from "react-dom";
 
 type ToolbarContext = {
+  navigationHost: HTMLDivElement | null;
+  setNavigationHost: Dispatch<SetStateAction<HTMLDivElement | null>>;
   host: HTMLDivElement | null;
   setHost: Dispatch<SetStateAction<HTMLDivElement | null>>;
 };
@@ -18,7 +20,8 @@ const WorkspacePageContext = createContext(false);
 
 export function WorkspaceToolbarProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
-  const value = useMemo(() => ({ host, setHost }), [host]);
+  const [navigationHost, setNavigationHost] = useState<HTMLDivElement | null>(null);
+  const value = useMemo(() => ({ host, setHost, navigationHost, setNavigationHost }), [host, navigationHost]);
   return (
     <WorkspaceToolbarContext.Provider value={value}>{children}</WorkspaceToolbarContext.Provider>
   );
@@ -53,4 +56,16 @@ export function WorkspaceActions({ label, children }: { label: string; children:
 
 export function useWorkspacePageActive() {
   return useContext(WorkspacePageContext);
+}
+
+export function WorkspaceNavigationHost() {
+  const context = useContext(WorkspaceToolbarContext);
+  return <div ref={context?.setNavigationHost} className="flex min-w-0 items-center empty:hidden" />;
+}
+
+export function WorkspaceNavigation({ children, label }: { children: ReactNode; label: string }) {
+  const context = useContext(WorkspaceToolbarContext);
+  const active = useContext(WorkspacePageContext);
+  if (!active || !context?.navigationHost) return null;
+  return createPortal(<nav aria-label={label} className="flex shrink-0 items-center gap-0.5">{children}</nav>,context.navigationHost);
 }

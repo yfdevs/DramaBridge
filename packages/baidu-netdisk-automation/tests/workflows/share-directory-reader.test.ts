@@ -86,7 +86,7 @@ test("pagination carries root flags and aliases are published only after a compl
 });
 
 test("malformed and over-budget listings fail; risk responses propagate without retries", async () => {
-  for (const response of [{ errno: 0 }, { errno: 0, list: [], has_more: 1 }]) {
+  for (const response of [{ errno: 0 }, {list: []}, {errno: '',list: []}, { errno: 0, list: [], has_more: 1 }]) {
     const reader = factory({
       shareId: "123",
       shareUk: "456",
@@ -147,4 +147,12 @@ test("a full final page is followed by an empty-page check; repeated pages fail 
     else assert.equal((await reader.load('/成片')).length, 100);
     assert.equal(calls, 2);
   }
+});
+
+test("partially overlapping pages cannot silently drop a missing source file", async () => {
+  let calls = 0;
+  const reader = factory({shareId:'123',shareUk:'456',token:'',maxPages:3,fallbackRoots:[],request:async()=>++calls===1
+    ? {errno:0,list:[{fs_id:'1',path:'/1.mp4'}],has_more:1}
+    : {errno:0,list:[{fs_id:'1',path:'/1.mp4'},{fs_id:'3',path:'/3.mp4'}]}});
+  await assert.rejects(reader.load('/'),/分页重复/);
 });

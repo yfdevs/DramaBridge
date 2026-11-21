@@ -1,3 +1,4 @@
+import { OverflowText } from "@/components/ui/overflow-text";
 import type { YoutubeTask } from "@/platforms/youtube-drama/service";
 import { YoutubeTaskStatus, youtubeActiveStatuses } from "./task-status";
 import { youtubeTaskFailure } from "./task-failure";
@@ -76,20 +77,24 @@ export function YoutubeTaskProgress({
       ? `${youtubeStageLabels[progress.stage] ?? "处理中"}${progress.episodeIndex && progress.episodeCount ? ` ${progress.episodeIndex}/${progress.episodeCount} 集` : ""}`
       : "";
   const stalled = active && (progress?.lastAdvanceSeconds ?? 0) >= 30;
+  const episodes = task.payload.mode === "episodes" && task.result?.episodeCount
+    ? `已${task.payload.noUpload ? "处理" : "上传"} ${task.result.completedEpisodes ?? 0}/${task.result.episodeCount} 集`
+    : undefined;
   if (compact) {
     const label = task.status === "failed" ? (failure?.title ?? "处理失败") : stage;
     const secondary = stalled
       ? "进度暂无变化"
-      : progress?.stage === "downloading"
+      : episodes ?? (progress?.stage === "downloading"
         ? speed
         : progress?.etaText
           ? `剩余 ${progress.etaText}`
-          : undefined;
+          : undefined);
     return (
       <div
-        className="min-w-0 text-xs"
+        className={episodes ? "flex min-w-0 flex-col gap-1 text-xs" : "flex min-w-0 items-center gap-2 text-xs"}
         title={[
           stage,
+          episodes,
           failure ? `${failure.reason}\n${failure.action}` : progress?.message,
           transfer,
           speed,
@@ -99,18 +104,18 @@ export function YoutubeTaskProgress({
           .filter(Boolean)
           .join("\n")}
       >
-        <div className="flex h-5 min-w-0 items-center gap-2">
-          <span
+        <div className={`flex h-5 min-w-0 items-center gap-2 ${episodes ? "w-full" : "flex-1"}`}>
+          <OverflowText as="span"
             className={`min-w-0 flex-1 truncate ${task.error ? "text-destructive" : "text-muted-foreground"}`}
           >
             {label || "—"}
-          </span>
+          </OverflowText>
           {showProgress && percent !== null && (
             <span className="shrink-0 tabular-nums">{Number(percent.toFixed(1))}%</span>
           )}
         </div>
         {((showProgress && percent !== null) || secondary) && (
-          <div className="mt-1 flex h-4 min-w-0 items-center gap-2">
+          <div className={`flex h-4 min-w-0 items-center gap-2 ${episodes ? "w-full" : "flex-1"}`}>
             {showProgress && percent !== null && (
               <div
                 role="progressbar"
@@ -124,11 +129,11 @@ export function YoutubeTaskProgress({
               </div>
             )}
             {secondary && (
-              <span
+              <OverflowText as="span"
                 className={`truncate tabular-nums ${stalled ? "text-[var(--youtube-warning-text)]" : "text-muted-foreground"}`}
               >
                 {secondary}
-              </span>
+              </OverflowText>
             )}
           </div>
         )}
@@ -163,6 +168,7 @@ export function YoutubeTaskProgress({
       {progress?.stage && showDetails && <p className="mt-1.5 font-medium">{stage}</p>}
       {showDetails && (
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+          {episodes && <span>{episodes}</span>}
           {elapsed !== undefined && Number.isFinite(elapsed) && (
             <span>耗时 {youtubeDuration(elapsed)}</span>
           )}
@@ -186,13 +192,13 @@ export function YoutubeTaskProgress({
       {showError &&
         task.error &&
         (open ? (
-          <button
+          <OverflowText as="button"
             className="mt-1.5 block w-full truncate text-left text-destructive hover:underline"
             title={task.error}
             onClick={open}
           >
             {task.error}
-          </button>
+          </OverflowText>
         ) : (
           <p className="mt-1.5 break-words text-destructive">{task.error}</p>
         ))}

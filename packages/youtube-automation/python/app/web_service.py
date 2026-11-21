@@ -75,8 +75,8 @@ def validate_task(body):
     if privacy not in {"private", "unlisted", "public"}:
         raise ValueError("无效的视频可见性")
     mode = body.get("mode", "merge")
-    if mode not in {"merge", "mute"}:
-        raise ValueError("仅支持合并分离或合并静音，逐集分离已停用")
+    if mode not in {"merge", "mute", "episodes"}:
+        raise ValueError("仅支持合并人声版、合并静音版或逐集人声版")
     tags = body.get("tags", [])
     if not isinstance(tags, list) or any(not isinstance(x, str) for x in tags) or len(",".join(tags)) > 500:
         raise ValueError("标签总长度不得超过 500 个字符")
@@ -84,7 +84,7 @@ def validate_task(body):
     description = str(body.get("description", ""))
     if len(title) > 100 or len(description) > 5000:
         raise ValueError("标题最多 100 字，描述最多 5000 字")
-    for key in ("fast", "noUpload", "compress"):
+    for key in ("fast", "noUpload", "compress", "rightsManagement"):
         if key in body and not isinstance(body[key], bool):
             raise ValueError("无效的开关参数")
     if body.get("compress") and mode != "mute":
@@ -94,7 +94,8 @@ def validate_task(body):
         raise ValueError("请选择有效的上传账号")
     return dict(resourceName=name, shareText=share, episodeCount=count, timeoutSeconds=timeout,
                 title=title, description=description, tags=tags, privacy=privacy,
-                mode=mode, compress=body.get("compress", False), fast=body.get("fast", False), noUpload=body.get("noUpload", False), accountId=account_id)
+                mode=mode, compress=body.get("compress", False), fast=body.get("fast", False), noUpload=body.get("noUpload", False), accountId=account_id,
+                rightsManagement=body.get("rightsManagement", False))
 
 
 class Store:
@@ -234,15 +235,30 @@ class Store:
         for key in ("payload", "progress", "result", "timings"):
             item[key] = json.loads(item[key]) if item[key] else None
         legacy_exit = re.search(r'程序退出[，,]?\s*代码\s*(-?\d+)', item.get('error') or '')
-        if item['status'] == 'failed' and legacy_exit and not (item['progress'] or {}).get('failure'):
+        session_failure = '上传会话无法恢复' in (item.get('error') or '')
+        previous_failure = (item['progress'] or {}).get('failure') or {}
+        if item['status'] == 'failed' and previous_failure.get('code') in ('PROCESS_FAILED', 'QUOTA_EXCEEDED'):
             latest = (item.get('logs') or '').rsplit('开始 / 恢复任务', 1)[-1]
             progress = item['progress'] or {}
-            failure = describe_failure(latest, progress.get('stage'), int(legacy_exit[1]))
+            classified = describe_failure(previous_failure.get('detail', '') + '\n' + latest,
+                                          previous_failure.get('stage') or progress.get('stage'),
+                                          previous_failure.get('exitCode'))
+            if classified['code'] == 'UPLOAD_DAILY_QUOTA_EXCEEDED':
+                item['error'] = classified['title']
+                item['progress'] = {**progress, 'failure': classified}
+        if item['status'] == 'failed' and (legacy_exit or session_failure) and not (item['progress'] or {}).get('failure'):
+            latest = (item.get('logs') or '').rsplit('开始 / 恢复任务', 1)[-1]
+            progress = item['progress'] or {}
+            failure = describe_failure(item['error'] if session_failure else latest,
+                                       'uploading' if session_failure else progress.get('stage'),
+                                       int(legacy_exit[1]) if legacy_exit else None)
             item['error'] = failure['title']
             item['progress'] = {**progress, 'failure': failure}
         if not detail:
             item.pop("logs", None)
             item["payload"].pop("shareText", None)
+            if item['result']:
+                item['result'].pop('episodes', None)
         return item
 
     def get(self, task_id):
@@ -428,6 +444,8 @@ class Worker:
             delegate = self.children.get(task_id)
         if delegate:
             return delegate[0].control(task_id, action)
+        if action == 'delete':
+            return self.delete_task(task_id)
         with self.process_lock:
             task = self.store.action(task_id, action)
             if action in {"pause", "delete", "cancel"}:
@@ -436,6 +454,44 @@ class Worker:
                     self._terminate_locked()
         if action in {"pause", "delete", "cancel"}:
             self.pause_remote(task)
+        return task
+
+    def delete_task(self, task_id):
+        from storage_cleanup import StorageCleanup
+        with self.process_lock:
+            task = self.store.get(task_id)
+            if not task or task['status'] == 'deleted':
+                raise KeyError('任务不存在')
+            if task['status'] in {'queued', *ACTIVE}:
+                task = self.store.action(task_id, 'pause')
+            if self.current_id == task_id:
+                self.current_abort.set()
+                self._terminate_locked()
+        self.pause_remote(task)
+        deadline = time.monotonic() + 35
+        while True:
+            with self.process_lock:
+                active = self.current_id == task_id
+            if not active:
+                break
+            if time.monotonic() >= deadline:
+                raise ValueError('任务仍在停止中，资源尚未删除，请稍后重试')
+            time.sleep(.1)
+        previous = self.store.get(task_id)['status']
+        task = self.store.action(task_id, 'delete')
+        try:
+            workspace = TaskWorkspaces(self.store, ROOT).clean_task(task_id)
+            if workspace['errors']:
+                raise ValueError('；'.join(workspace['errors']))
+            resources = StorageCleanup(self.store, ROOT).clean_task(task_id)
+            if resources['errors']:
+                raise ValueError('；'.join(resources['errors']))
+        except Exception as error:
+            # Keep the record available for another cleanup attempt; never hide a failure.
+            with self.store.connect() as db:
+                db.execute("UPDATE tasks SET status=?,error=? WHERE id=? AND status='deleted'",
+                           (previous, '资源清理未完成：' + str(error), task_id))
+            raise ValueError('资源清理未完成，请重试删除：' + str(error)) from error
         return task
 
     def loop(self):
@@ -598,8 +654,8 @@ class Worker:
         try:
             if self.halted(task):
                 return
-            if task["payload"].get("mode", "merge") not in {"merge", "mute"}:
-                raise ValueError("逐集分离已停用，请使用合并分离或合并静音重新创建任务")
+            if task["payload"].get("mode", "merge") not in {"merge", "mute", "episodes"}:
+                raise ValueError("无效的处理方式，请重新创建任务")
             if self.store.settings()["paused"]:
                 self.store.update(task["id"], status="queued")
                 return
@@ -617,6 +673,8 @@ class Worker:
                         failure['title'] = '账号授权检查未完成'
                         failure['action'] = '检查网络、代理和授权文件后重试；本次未开始视频处理。'
                     raise PipelineFailure(failure)
+                if task['payload'].get('rightsManagement', False):
+                    self.check_browser_credentials(task)
             # A failed remote task is retried at most once per explicit local attempt.
             task["_retry_remote"] = bool(task["remote_id"])
             local = Path(task["local_path"]) if task["local_path"] else None
@@ -642,6 +700,9 @@ class Worker:
                         self.pipeline_gate.release()
                     break
             if not self.halted(task):
+                if task['payload'].get('rightsManagement', False) and not task['payload'].get('noUpload'):
+                    self.finish_browser_rights(task)
+            if not self.halted(task):
                 self.store.update(task["id"], status="completed", error=None, progress={"stage": "completed", "percent": 100})
         except Exception as exc:
             if not self.halted(task):
@@ -649,7 +710,9 @@ class Worker:
                 current = self.store.get(task['id'])
                 progress = current.get('progress') or {}
                 failure = exc.failure if isinstance(exc, PipelineFailure) else describe_failure(exc, progress.get('stage'))
-                self.store.update(task["id"], status="failed", error=failure['title'], progress={**progress, 'failure': failure})
+                from episode_progress import update_episode_result
+                result = update_episode_result(current.get('result'), {**progress, 'episodeStatus': 'failed'})
+                self.store.update(task["id"], status="failed", error=failure['title'], progress={**progress, 'failure': failure}, result=result)
         finally:
             finished = self.store.get(task['id'])
             if finished and (finished['status'] == 'completed' or
@@ -668,10 +731,47 @@ class Worker:
                 if self.current_id == task["id"]:
                     self.current_id = None
 
+    def check_browser_credentials(self, task):
+        raise ValueError('版权勾选需要部署端浏览器服务，请启动 DramaBridge 服务并在账号管理导入 Cookie')
+
+    def apply_browser_rights(self, task, video_id):
+        raise ValueError('浏览器版权自动化仅支持 DramaBridge 桌面服务')
+
+    def finish_browser_rights(self, task):
+        current = self.store.get(task['id'])
+        result = dict(current.get('result') or {})
+        videos = list(dict.fromkeys(result.get('videoUrls', [])))
+        if not videos:
+            raise ValueError('未找到已上传视频链接，无法执行版权勾选；请核对上传结果后重试')
+        completed = set(result.get('browserRightsVideoIds', []))
+        for url in videos:
+            match = re.fullmatch(r'https://youtu\.be/([A-Za-z0-9_-]{11})', url)
+            if not match:
+                raise ValueError('上传视频链接格式无效，停止浏览器操作')
+            video_id = match[1]
+            if video_id in completed:
+                continue
+            if self.halted(task):
+                return
+            self.store.update(task['id'], status='uploading', progress={
+                'stage': 'uploading', 'message': '视频已上传，正在浏览器中勾选并保存版权设置'})
+            try:
+                self.apply_browser_rights(task, video_id)
+            except Exception as exc:
+                raise PipelineFailure(dict(code='BROWSER_RIGHTS_FAILED', title='浏览器版权设置未完成',
+                    reason='视频已上传，网页版权选项尚未确认保存。',
+                    action='到账号管理上传新 Cookie，或检查视频编辑页选项后重试；已上传视频会复用。',
+                    detail=str(exc), stage='uploading')) from exc
+            if self.halted(task):
+                return
+            completed.add(video_id)
+            result['browserRightsVideoIds'] = sorted(completed)
+            self.store.update(task['id'], result=result)
+
     def run_pipeline(self, task, local):
         payload = task["payload"]
-        if payload.get("mode", "merge") not in {"merge", "mute"}:
-            raise ValueError("逐集分离已停用，请使用合并分离或合并静音重新创建任务")
+        if payload.get("mode", "merge") not in {"merge", "mute", "episodes"}:
+            raise ValueError("无效的处理方式，请重新创建任务")
         self.store.update(task["id"], status="processing",
                           progress={'stage': 'preparing', 'message': '准备工作目录并启动视频处理进程'}, error=None)
         self.store.log(task['id'], '准备工作目录，启动视频处理进程\n')
@@ -679,7 +779,7 @@ class Worker:
         workspace = TaskWorkspaces(self.store, ROOT).prepare(task['id'])
         args = [sys.executable, "-u", str(ROOT / "app" / "upload_to_youtube.py"), str(local),
                 "--work-dir", str(workspace), "--task-id", task['id'],
-                "--title", payload["title"], "--description", payload["description"],
+                "--title", payload["resourceName"] if payload["mode"] == "episodes" else payload["title"], "--description", payload["description"],
                 "--privacy", payload["privacy"]]
         if not payload['noUpload']:
             account_id = payload.get('accountId', 'default')
@@ -687,7 +787,8 @@ class Worker:
                      '--upload-log', str(self.store.account_log_path(account_id)), '--no-browser-auth']
         if local.is_dir():
             args.append("--recursive")
-        for enabled, flag in ((payload["mode"] == "merge" and local.is_dir(), "--merge"),
+        for enabled, flag in ((payload["mode"] == "episodes", "--episodes"),
+                              (payload["mode"] == "merge" and local.is_dir(), "--merge"),
                               (payload["mode"] == "mute", "--mute"),
                               (payload.get("compress", False), "--compress"),
                               (payload["mode"] != "mute" and payload["fast"], "--fast"), (payload["noUpload"], "--no-upload")):
@@ -762,15 +863,21 @@ class Worker:
                             break
                         if event.get('timing') == 'finish' and progress and progress.get('stage') != event['stage']:
                             continue
+                        # Legacy/native progress lines lack episode context.
+                        if progress and not event.get('episodeIndex'):
+                            event = {**{key: value for key, value in progress.items()
+                                        if key in {'episodeIndex', 'episodeCount', 'episodeTitle', 'episodeSource', 'etaScope'}}, **event}
                         progress = {**(progress or {}), **event} if progress and progress.get('stage') == event['stage'] else event
                         if event.get('timing') == 'finish' and event.get('outcome') == 'completed':
                             progress['percent'] = 100
+                        from episode_progress import update_episode_result
+                        result = update_episode_result(self.store.get(task['id']).get('result'), event)
                         self.store.update(task["id"], status="uploading" if event["stage"] in UPLOAD_STAGES else "processing",
-                                          progress=progress)
+                                          progress=progress, result=result)
                 urls = re.findall(r"https://youtu\.be/[A-Za-z0-9_-]+", line)
                 if urls:
                     current = self.store.get(task["id"])["result"] or {"videoUrls": []}
-                    current["videoUrls"] = list(dict.fromkeys(current["videoUrls"] + urls))
+                    current["videoUrls"] = list(dict.fromkeys(current.get("videoUrls", []) + urls))
                     self.store.update(task["id"], result=current)
             code = process.wait()
         finally:
@@ -980,7 +1087,7 @@ class Handler(BaseHTTPRequestHandler):
             elif re.fullmatch(r"/api/tasks/[^/]+/(retry|cancel|pause|resume|delete)", path):
                 _, _, _, task_id, action = path.split("/")
                 controller = getattr(self.server, "worker", None)
-                self.send_json(controller.control(task_id, action) if controller else self.store.action(task_id, action))
+                self.send_json((controller or Worker(self.store)).control(task_id, action))
             elif path == "/api/settings":
                 values = {}
                 if "netdiskUrl" in body:

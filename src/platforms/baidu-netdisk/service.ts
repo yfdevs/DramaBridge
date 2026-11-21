@@ -1,4 +1,9 @@
 export const BAIDU_NETDISK_DEFAULT_DOWNLOAD_DIR = "D:\\BaiduNetdiskDownload";
+export type BaiduNetdiskQuota = { used: number; total: number; checkedAt: string };
+export const getBaiduNetdiskQuota = () => requireIpcRenderer("网盘容量").invoke("baidu-netdisk:quota:get") as Promise<BaiduNetdiskQuota | null>;
+export type AutoCleanupStatus = { phase: "disabled" | "waiting" | "checking" | "cleaning" | "paused"; message: string; used?: number; total?: number; deleted: number; skipped: number; current?: string; checkedAt?: string; pauseKind?: "identity" | "risk" | "capacity" | "unknown"; batch?: { index: number; kind: "files" | "empty-directory"; count: number; bytes: number; confirmedBatches: number } };
+export const getBaiduAutoCleanupStatus = () => requireIpcRenderer("网盘自动清理").invoke("baidu-netdisk:auto-cleanup:status") as Promise<AutoCleanupStatus>;
+export const resumeBaiduAutoCleanup = () => requireIpcRenderer("网盘自动清理").invoke("baidu-netdisk:auto-cleanup:resume") as Promise<AutoCleanupStatus>;
 
 export type BaiduNetdiskConfig = {
   debugPort: string;

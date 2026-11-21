@@ -6,8 +6,12 @@ import { WebSocketServer } from "ws";
 import { saveShareToOwnNetdisk } from "../../src/workflows/download-baidu-folder.js";
 
 test("real injected transfer script uses fresh share metadata and rejects -9 before any cloud write", async () => {
-  for (const rootState of ["valid", "missing", "empty", "normalized", "root-cover"]) {
-    const hasOwnRoot = rootState === "normalized" || rootState === "root-cover";
+  for (const rootState of ["valid", "missing", "empty", "normalized", "root-cover", "mixed-root-covers"]) {
+    const hasRootImages = rootState === "root-cover" || rootState === "mixed-root-covers";
+    const hasOwnRoot = rootState === "normalized" || hasRootImages;
+    const rootImages = rootState === "root-cover" ? ["b45d282d3a0b4caa2413ff0af78b97d8.png"]
+      : rootState === "mixed-root-covers" ? ["3e1702c00857a6f7302180270d997fce.png", "6eb5e61c6393f75922480b7dc2b35b30.png",
+        "7d62a6ad7dab3427f642c77bf13b9ad6.png", "626fa0a02c9b5a1b2abbb89343ce37ab.png", "entity_16.png"] : [];
     const failRoot = rootState === "missing";
     const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
     await once(server, "listening");
@@ -86,8 +90,8 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
                               size: 10,
                               md5: "test-content",
                             },
-                            ...(rootState === "root-cover" ? [{ fs_id: 12, path: real + "/b45d282d3a0b4caa2413ff0af78b97d8.png",
-                              server_filename: "b45d282d3a0b4caa2413ff0af78b97d8.png", isdir: 0, size: 1400000 }] : []),
+                            ...rootImages.map((name, index) => ({ fs_id: 12 + index, path: real + "/" + name,
+                              server_filename: name, isdir: 0, size: 1400000 })),
                           ],
                         }),
                       };
@@ -96,10 +100,10 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
                       if (hasOwnRoot) return { ok: true, json: async () => ({ errno: 0,
                         list: url.searchParams.get("dir") === "/"
                           ? [{ fs_id: 20, isdir: 1, path: "/" + title, server_filename: title }]
-                          : [{ fs_id: 21, isdir: 0, path: "/" + title + "/" + (rootState === "root-cover" ? "第1集.mp4" : title + "-第1集.mp4"),
-                              server_filename: rootState === "root-cover" ? "第1集.mp4" : title + "-第1集.mp4", size: 10, md5: "test-content" },
-                            ...(rootState === "root-cover" ? [{ fs_id: 22, isdir: 0, path: "/" + title + "/b45d282d3a0b4caa2413ff0af78b97d8.png",
-                              server_filename: "b45d282d3a0b4caa2413ff0af78b97d8.png", size: 1400000 }] : [])] }) };
+                          : [{ fs_id: 21, isdir: 0, path: "/" + title + "/" + (hasRootImages ? "第1集.mp4" : title + "-第1集.mp4"),
+                              server_filename: hasRootImages ? "第1集.mp4" : title + "-第1集.mp4", size: 10, md5: "test-content" },
+                            ...rootImages.map((name, index) => ({ fs_id: 22 + index, isdir: 0, path: "/" + title + "/" + name,
+                              server_filename: name, size: 1400000 }))] }) };
                       throw new Error("confirmed correct source before transfer");
                     }
                     throw new Error("unexpected endpoint: " + url.pathname);
@@ -137,6 +141,12 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
           assert.equal(result.remotePosters.files.length, 1);
           assert.equal(result.remotePosters.files[0].name, "b45d282d3a0b4caa2413ff0af78b97d8.png");
         }
+        if (rootState === "mixed-root-covers") {
+          assert.equal(result.remotePosters.selection, "unique-root-portrait");
+          assert.equal(result.remotePosters.files.length, 5);
+          assert.ok(result.remotePosters.files.every(file => file.posterFileOnly));
+          assert.ok(result.remotePosters.files.some(file => file.name === "entity_16.png"));
+        }
       } else await assert.rejects(operation,
         failRoot
           ? /errno=-9.*request_id=987/
@@ -147,9 +157,9 @@ test("real injected transfer script uses fresh share metadata and rejects -9 bef
       assert.equal(writes, 0);
       assert.equal(
         calls.filter((endpoint) => endpoint === "/share/list").length,
-        ["valid", "normalized", "root-cover"].includes(rootState) ? 2 : 1,
+        ["valid", "normalized", "root-cover", "mixed-root-covers"].includes(rootState) ? 2 : 1,
       );
-      assert.equal(calls.includes("/api/list"), ["valid", "normalized", "root-cover"].includes(rootState));
+      assert.equal(calls.includes("/api/list"), ["valid", "normalized", "root-cover", "mixed-root-covers"].includes(rootState));
     } finally {
       for (const client of server.clients) client.terminate();
       await new Promise<void>((resolve, reject) =>

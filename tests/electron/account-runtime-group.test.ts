@@ -2,6 +2,42 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createAccountRuntimeGroup } from "../../electron/platforms/shared/account-runtime-group";
 
+test("individual close and restart preserve siblings and release the old runtime", async () => {
+  const closed: string[] = [];
+  const group = await createAccountRuntimeGroup(["a", "b"], async id => ({
+    getStatus: () => ({ running: true, accounts: [{ accountId: id, launched: true }] }),
+    stop: async () => { closed.push(id); },
+  }));
+  await group.stopAccount("a");
+  assert.deepEqual(closed, ["a"]);
+  assert.deepEqual(group.getStatus().accounts.map(a => a.accountId), ["b"]);
+  await group.addAccount("a");
+  assert.equal(group.getStatus().accounts.length, 2);
+  await group.stop();
+  assert.deepEqual(closed.sort(), ["a", "a", "b"]);
+});
+
+test("a pending addition never blocks starting or closing another account", async () => {
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const closed: string[] = [];
+  const group = await createAccountRuntimeGroup(["a"], async id => {
+    if (id === "waiting") await pending;
+    return {
+      getStatus: () => ({ running: true, accounts: [{ accountId: id, launched: true }] }),
+      stop: async () => { closed.push(id); },
+    };
+  });
+  const addition = group.addAccount("waiting");
+  try {
+    await group.stopAccount("a");
+    assert.deepEqual(closed, ["a"]);
+    assert.equal(group.getStatus().running, true, "pending startup must survive closing the last open sibling");
+    await group.addAccount("b");
+    assert.ok(group.getStatus().accounts.some(a => a.accountId === "b"));
+  } finally { finish(); await addition; await group.stop(); }
+});
+
 test("parallel account startup opens every sibling before an earlier account finishes login", { timeout: 3000 }, async () => {
   const started: string[] = [], stopped: string[] = [];
   let finishLogin!: () => void;

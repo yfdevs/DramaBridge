@@ -81,6 +81,8 @@ export const baiduDramaTaskPayloadSchema = z
   });
 
 export const claimedBaiduDramaTaskSchema = z.object({
+  workerId: z.string().trim().min(1).max(128),
+  attemptCount: z.coerce.number().int().positive(),
   accountTaskId: z.coerce.number().int().positive(),
   dramaId: z.coerce.number().int().positive().optional(),
   originalTitle: requiredText,
@@ -100,6 +102,8 @@ export type BaiduDramaApiConfig = {
 export type BaiduDramaRuntimeStatus = {
   platform: "baidu-drama";
   running: boolean;
+  statusMessage?: string;
+  runtimeError?: string;
   loginState: BaiduDramaLoginState;
   activeUrl?: string;
   createUrl: string;
@@ -116,6 +120,7 @@ export type BaiduDramaRuntimeStatus = {
 };
 
 export type BaiduDramaRuntimeOptions = {
+  workerId?: string;
   canClaimTask?: () => boolean;
   accountProfileName?: string;
   userDataDir?: string;

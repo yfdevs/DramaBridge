@@ -1,12 +1,21 @@
 import { createRoot } from "react-dom/client";
 import { useEffect } from "react";
-import { HashRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import {
+  HashRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Toaster } from "@/components/ui/notifications";
 import { MoonIcon, SunIcon } from "lucide-react";
 
 import appLogo from "@/assets/dramabridge-logo.png";
 import youtubeMark from "@/assets/youtube-mark.svg";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   WorkspaceToolbarProvider,
@@ -26,20 +35,27 @@ const navigation = [
 ];
 
 function WebNavigation() {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const active = pathname.startsWith("/youtube-drama/accounts") ? "accounts" : "service";
   return (
-    <nav aria-label="YouTube 页面" className="flex shrink-0 items-center gap-1">
-      {navigation.map(({ route, label }) => (
-        <NavLink
-          key={route}
-          to={`/youtube-drama/${route}`}
-          className={({ isActive }) =>
-            `flex min-h-9 items-center rounded-md px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${isActive ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`
-          }
-        >
-          {label}
-        </NavLink>
-      ))}
-    </nav>
+    <Tabs
+      value={active}
+      onValueChange={(value) => navigate(`/youtube-drama/${value}`)}
+      className="shrink-0"
+    >
+      <TabsList aria-label="YouTube 页面" activateOnFocus={false}>
+        {navigation.map(({ route, label }) => (
+          <TabsTrigger
+            key={route}
+            value={route}
+            className="px-3 transition-colors duration-250 ease-out"
+          >
+            {label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 

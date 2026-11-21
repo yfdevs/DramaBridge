@@ -2,7 +2,7 @@ import type { IpcRendererEvent } from "electron";
 import type { PlatformId } from "@/config/navigation";
 
 export function createAccountControl(platform: PlatformId) {
-  const request = async (action: "start" | "pause", id: string, paused?: boolean) => {
+  const request = async (action: "start" | "pause" | "stop", id: string, paused?: boolean) => {
     await requireIpcRenderer("账号实例控制").invoke(
       `${platform}:account:${action}`,
       id,
@@ -13,6 +13,7 @@ export function createAccountControl(platform: PlatformId) {
   return {
     start: (id: string) => request("start", id),
     pause: (id: string, paused: boolean) => request("pause", id, paused),
+    ...(!["wechat-drama", "wechat-miniprogram-drama"].includes(platform) ? { stop: (id: string) => request("stop", id) } : {}),
   };
 }
 
@@ -55,6 +56,8 @@ export type AppUpdateProgress = {
 };
 
 export type AppUpdateSourceId =
+  | "gh-proxy-v4"
+  | "gh-proxy-v6"
   | "accelerated"
   | "github"
   | "github-dpik-top"

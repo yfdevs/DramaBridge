@@ -1,3 +1,4 @@
+import { cinematicPosterArtDirection } from "./poster-art-direction.js";
 import type { DramaAiClient } from "@dramabridge/ai";
 import { analyzeImagesAsJson } from "@dramabridge/ai";
 import { createHash, randomUUID } from "node:crypto";
@@ -5,10 +6,11 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
-export const renamedPortraitPosterRecipe = "reference-title-portrait-v1";
+export const renamedPortraitPosterRecipe = "reference-title-portrait-v2-cinematic";
 
 export function renamedPortraitPosterPrompt(originalTitle: string, title: string) {
   return [
+    cinematicPosterArtDirection(),
     "请编辑提供的原版短剧海报，生成一张完整的9:16竖屏商业海报",
     "保留参考海报的人物身份、五官、服装、场景、色调和美术风格，按竖屏画幅自然延展背景和调整排版，不要裁掉人物面部或标题",
     `原版剧名（仅作待替换文字识别）：${JSON.stringify(originalTitle)}`,

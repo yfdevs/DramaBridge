@@ -152,6 +152,20 @@ test("uses content classification for a directory labeled with both Jianying and
   assert.deepEqual(selected, materials.slice(4).map((material) => material.file));
 });
 
+test("selects four explicitly labeled Jianying proofs before classifying generic ownership files", async () => {
+  const generic = Array.from({ length: 9 }, (_, i) => ({
+    file: `D:/素材/4.权属文件/权属工程文件${i + 1}.png`,
+    name: `权属工程文件${i + 1}.png`, size: 100,
+  }));
+  const jianying = Array.from({ length: 4 }, (_, i) => ({
+    file: `D:/素材/5.剪映工程截图/剪映工程截图${i + 1}.png`,
+    name: `剪映工程截图${i + 1}.png`, index: i + 1, size: 100,
+  }));
+  const selected = await selectDouyinJianyingProjectScreenshots([...generic, ...jianying], 4,
+    async () => { throw new Error("unrelated image classification must not run"); });
+  assert.deepEqual(selected, jianying.map(item => item.file));
+});
+
 test("rejects fewer than four Jianying screenshots", async () => {
   await assert.rejects(
     selectDouyinJianyingProjectScreenshots([

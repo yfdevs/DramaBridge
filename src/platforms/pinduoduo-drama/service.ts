@@ -1,4 +1,14 @@
 export type PinduoduoDramaLoginState = "login-required" | "logged-in" | "unknown";
+export type PinduoduoUploadProgress = {
+  title: string;
+  phase: "downloading" | "uploading" | "binding" | "publishing";
+  uploaded: number;
+  total: number;
+  published: number;
+  batch?: number;
+  batches?: number;
+};
+export type PinduoduoDramaAccount = { accountId: string; accountName: string; loginAccount: string; status: "ON" };
 
 export type PinduoduoDramaConfig = {
   sourceTableUrl: string;
@@ -48,7 +58,7 @@ export type PinduoduoDramaServiceStatus = {
   credentialStatePath?: string;
   logFilePath?: string;
   pid: number | null;
-  instances?: Array<{ id: string; name: string; launched: boolean; loginState: string }>;
+  instances?: Array<{ id: string; name: string; launched: boolean; loginState: string; uploadProgress?: PinduoduoUploadProgress }>;
   accountErrors?: Record<string, string>;
 };
 
@@ -61,6 +71,7 @@ export type PinduoduoUploadRecord = {
   stage?: string;
   errorMessage?: string;
   attempts?: number;
+  uploadedBatchCount?: number;
   rawJson?: string;
   resourceSource?: "FEISHU" | "LEGACY_XLSX_ORIGINAL" | "PINDUODUO_LIST";
   resourceSourceRows?: number[];
@@ -101,6 +112,9 @@ async function invokePinduoduoDrama<T>(channel: string, ...args: unknown[]): Pro
 }
 
 export const pinduoduoDramaService = {
+  listAccounts() {
+    return invokePinduoduoDrama<{ accounts: PinduoduoDramaAccount[]; selectedAccountIds: string[] }>("pinduoduo-drama:accounts:list");
+  },
   testSourceTable(url: string) {
     return invokePinduoduoDrama<{ sheetName: string; titleCount: number }>("pinduoduo-drama:config:test-source-table", url);
   },
@@ -134,8 +148,8 @@ export const pinduoduoDramaService = {
   status() {
     return invokePinduoduoDrama<PinduoduoDramaServiceStatus>("pinduoduo-drama:service:status");
   },
-  start() {
-    return invokePinduoduoDrama<PinduoduoDramaServiceStatus>("pinduoduo-drama:service:start");
+  start(selectedAccountIds: string[]) {
+    return invokePinduoduoDrama<PinduoduoDramaServiceStatus>("pinduoduo-drama:service:start", selectedAccountIds);
   },
   stop() {
     return invokePinduoduoDrama<PinduoduoDramaServiceStatus>("pinduoduo-drama:service:stop");

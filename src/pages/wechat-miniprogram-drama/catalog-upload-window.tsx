@@ -1,3 +1,7 @@
+import { FailureTooltip } from "@/components/ui/failure-tooltip";
+import { OverflowText } from "@/components/ui/overflow-text";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
 import { toast } from "@/components/ui/notifications";
@@ -372,21 +376,9 @@ export function WechatMiniProgramCatalogUploadWindow() {
 
   return (
     <main className="flex h-full min-h-0 flex-col bg-background text-foreground">
-      <header className="shrink-0 border-b px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <img
-                alt=""
-                className="size-5"
-                src={`${import.meta.env.BASE_URL}wechat-miniprogram.svg`}
-              />
-              <h1 className="text-base font-semibold">剧目前四集与封面入库</h1>
-            </div>
-          </div>
-          <div className="flex flex-wrap justify-end gap-2">
+          <WorkspaceActions label="素材入库操作">
             <Button
-              size="sm"
+              size="sm" className="h-7 px-3 text-xs" aria-label="获取全部剧目" title="获取全部剧目"
               variant="outline"
               disabled={pendingAction !== null || Boolean(workspace?.queue.running)}
               onClick={() =>
@@ -397,11 +389,10 @@ export function WechatMiniProgramCatalogUploadWindow() {
                 )
               }
             >
-              {pendingAction === "sync" || workspace?.sync.running ? <Spinner /> : null}
-              {workspace?.sync.running ? "正在获取全部剧目" : "获取全部剧目"}
+              {pendingAction === "sync" || workspace?.sync.running ? "获取中…" : "获取剧目"}
             </Button>
             <Button
-              size="sm"
+              size="sm" className="h-7 px-3 text-xs" aria-label="重试全部失败任务" title="重试全部失败任务"
               variant="outline"
               disabled={
                 pendingAction !== null ||
@@ -420,11 +411,10 @@ export function WechatMiniProgramCatalogUploadWindow() {
                 )
               }
             >
-              {pendingAction === "retry-all" ? <Spinner /> : null}
-              重试全部{retryableTasks.length ? ` (${retryableTasks.length})` : ""}
+              {pendingAction === "retry-all" ? "重试中…" : "重试全部"}
             </Button>
             <Button
-              size="sm"
+              size="sm" className="h-7 px-3 text-xs" aria-label={workspace?.queue.running ? "暂停接续" : "开始处理"} title={workspace?.queue.running ? "暂停接续" : "开始处理"}
               variant={workspace?.queue.running ? "outline" : "default"}
               disabled={pendingAction !== null || Boolean(workspace?.sync.running)}
               onClick={() =>
@@ -437,12 +427,11 @@ export function WechatMiniProgramCatalogUploadWindow() {
                 )
               }
             >
-              {pendingAction === "queue" ? <Spinner /> : null}
               {workspace?.queue.running ? "暂停接续" : "开始处理"}
             </Button>
             {workspace?.queue.activeTaskId ? (
               <Button
-                size="sm"
+                size="sm" className="h-7 px-3 text-xs" aria-label="终止当前剧目" title="终止当前剧目"
                 variant="destructive"
                 disabled={pendingAction !== null}
                 onClick={() =>
@@ -452,9 +441,9 @@ export function WechatMiniProgramCatalogUploadWindow() {
                 终止当前剧目
               </Button>
             ) : null}
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-xs">
+      </WorkspaceActions>
+      <header className="shrink-0 border-b px-5 py-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
           <span className="inline-flex items-center gap-1.5">
             <span
               aria-hidden="true"
@@ -479,14 +468,14 @@ export function WechatMiniProgramCatalogUploadWindow() {
             失败 {counts.failed}
           </span>
           {workspace?.queue.error ? (
-            <span className="max-w-96 truncate text-destructive" title={workspace.queue.error}>
+            <OverflowText as="span" className="max-w-96 truncate text-destructive" title={workspace.queue.error}>
               {workspace.queue.error}
-            </span>
+            </OverflowText>
           ) : null}
           {workspace?.sync.error ? (
-            <span className="max-w-96 truncate text-destructive" title={workspace.sync.error}>
+            <OverflowText as="span" className="max-w-96 truncate text-destructive" title={workspace.sync.error}>
               {workspace.sync.error}
-            </span>
+            </OverflowText>
           ) : null}
         </div>
       </header>
@@ -548,25 +537,25 @@ export function WechatMiniProgramCatalogUploadWindow() {
         {workspace?.tasks.length ? (
           filteredTasks.length ? (
             <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
-              <Table
+              <Table stickyActions
                 containerClassName="h-full overflow-auto overscroll-contain"
-                className="min-w-[1450px] table-fixed"
+                className="min-w-[1280px] table-fixed"
               >
                 <TableHeader className="sticky top-0 z-10 bg-muted">
                   <TableRow className="bg-muted/80 hover:bg-muted/80">
-                    <TableHead className="h-9 w-20">剧 ID</TableHead>
-                    <TableHead className="h-9 w-24">微信 ID</TableHead>
-                    <TableHead className="h-9 w-52">剧目</TableHead>
-                    <TableHead className="h-9 w-16 text-right">总集数</TableHead>
-                    <TableHead className="h-9 w-28">网盘资源</TableHead>
-                    <TableHead className="h-9 w-32">前四集</TableHead>
-                    <TableHead className="h-9 w-32">封面</TableHead>
-                    <TableHead className="h-9 w-28">生命周期</TableHead>
-                    <TableHead className="h-9 w-24">发布状态</TableHead>
-                    <TableHead className="h-9 w-32">处理状态</TableHead>
-                    <TableHead className="h-9 w-56">异常信息</TableHead>
-                    <TableHead className="h-9 w-28">最近更新</TableHead>
-                    <TableHead className="h-9 w-20 text-right">操作</TableHead>
+                    <TableHead className="h-8 w-16">剧 ID</TableHead>
+                    <TableHead className="h-8 w-24">微信 ID</TableHead>
+                    <TableHead className="h-8">剧目</TableHead>
+                    <TableHead className="h-8 w-16 text-right">总集数</TableHead>
+                    <TableHead className="h-8 w-20">网盘资源</TableHead>
+                    <TableHead className="h-8 w-32">前四集</TableHead>
+                    <TableHead className="h-8 w-32">封面</TableHead>
+                    <TableHead className="h-8 w-22">生命周期</TableHead>
+                    <TableHead className="h-8 w-20">发布状态</TableHead>
+                    <TableHead className="h-8 w-24">处理状态</TableHead>
+                    <TableHead className="h-8">异常信息</TableHead>
+                    <TableHead className="h-8 w-28">最近更新</TableHead>
+                    <TableHead className="h-8 w-20 text-left">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -581,21 +570,21 @@ export function WechatMiniProgramCatalogUploadWindow() {
                     const error = task.error ?? task.coverError ?? episodeError;
                     return (
                       <TableRow key={task.id} className={active ? "bg-sky-500/5" : undefined}>
-                        <TableCell className="py-2 text-xs tabular-nums text-muted-foreground">
+                        <TableCell className="py-1.5 text-xs tabular-nums text-muted-foreground">
                           {task.dramaId}
                         </TableCell>
-                        <TableCell className="py-2 text-xs tabular-nums text-muted-foreground">
+                        <TableCell className="py-1.5 text-xs tabular-nums text-muted-foreground">
                           {task.wxDramaId ?? "—"}
                         </TableCell>
-                        <TableCell className="min-w-0 py-2">
-                          <div className="truncate font-medium" title={task.dramaName}>
+                        <TableCell className="min-w-0 py-1.5">
+                          <OverflowText as="div" className="truncate font-medium" title={task.dramaName}>
                             {task.dramaName}
-                          </div>
+                          </OverflowText>
                         </TableCell>
-                        <TableCell className="py-2 text-right text-xs tabular-nums">
+                        <TableCell className="py-1.5 text-right text-xs tabular-nums">
                           {task.episodeCount}
                         </TableCell>
-                        <TableCell className="py-2">
+                        <TableCell className="py-1.5">
                           <div
                             className={`flex items-center gap-1.5 text-xs ${task.baiduNetdiskUrl ? "text-muted-foreground" : "text-amber-700 dark:text-amber-300"}`}
                             title={task.baiduNetdiskUrl}
@@ -607,8 +596,8 @@ export function WechatMiniProgramCatalogUploadWindow() {
                             {task.baiduNetdiskUrl ? "已关联" : "缺少链接"}
                           </div>
                         </TableCell>
-                        <TableCell className="py-2">
-                          <div className="grid gap-0.5 text-xs">
+                        <TableCell className="py-1.5">
+                          <div className="flex items-center gap-1.5 text-xs">
                             <span
                               className={
                                 episodeComplete
@@ -626,8 +615,8 @@ export function WechatMiniProgramCatalogUploadWindow() {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="py-2">
-                          <div className="grid min-w-0 gap-0.5 text-xs">
+                        <TableCell className="py-1.5">
+                          <div className="flex min-w-0 items-center gap-1.5 text-xs">
                             <span
                               className={
                                 isCoverComplete
@@ -643,7 +632,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
                                   ? "上传失败"
                                   : "待入库"}
                             </span>
-                            <span
+                            <OverflowText as="span"
                               className="truncate text-muted-foreground"
                               title={task.coverFileName}
                             >
@@ -652,22 +641,22 @@ export function WechatMiniProgramCatalogUploadWindow() {
                                 : task.coverStatus === "uploaded"
                                   ? (task.coverFileName ?? "本次上传")
                                   : "—"}
-                            </span>
+                            </OverflowText>
                           </div>
                         </TableCell>
-                        <TableCell className="truncate py-2 text-xs" title={task.lifecycleStatus}>
+                        <TableCell className="truncate py-1.5 text-xs" title={task.lifecycleStatus}>
                           {lifecycleLabel(task.lifecycleStatus)}
                         </TableCell>
                         <TableCell
-                          className="truncate py-2 text-xs"
+                          className="truncate py-1.5 text-xs"
                           title={task.actualPublishStatus}
                         >
                           {publishStatusLabels[task.actualPublishStatus ?? ""] ??
                             task.actualPublishStatus ??
                             "—"}
                         </TableCell>
-                        <TableCell className="py-2">
-                          <Badge
+                        <TableCell className="py-1.5">
+                          <FailureTooltip reason={error}><Badge
                             variant={stateVariant(task.state)}
                             className={stateClassName(task.state)}
                             title={task.retryCount > 0 ? `已重试 ${task.retryCount} 次` : undefined}
@@ -680,18 +669,18 @@ export function WechatMiniProgramCatalogUploadWindow() {
                               <DangerTriangle className="size-3" />
                             ) : null}
                             {taskStateLabel(task)}
-                          </Badge>
+                          </Badge></FailureTooltip>
                         </TableCell>
                         <TableCell
-                          className={`truncate py-2 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}
+                          className={`truncate py-1.5 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}
                           title={error}
                         >
                           {error ?? "—"}
                         </TableCell>
-                        <TableCell className="py-2 text-xs tabular-nums text-muted-foreground">
+                        <TableCell className="py-1.5 text-xs tabular-nums text-muted-foreground">
                           {formatDateTime(task.updatedAt)}
                         </TableCell>
-                        <TableCell className="py-2 text-right">
+                        <TableCell className="py-1.5 text-right">
                           {["failed", "interrupted"].includes(task.state) &&
                           task.baiduNetdiskUrl ? (
                             <Button
@@ -740,7 +729,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
             <div className="max-w-md">
               <h2 className="text-sm font-medium">还没有剧目入库记录</h2>
               <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                点击“获取全部剧目”，系统会一次操作自动读取全部分页，并统一更新剧目和后台状态
+                点击右上角获取剧目
               </p>
             </div>
           </div>
@@ -765,42 +754,46 @@ export function WechatMiniProgramCatalogUploadWindow() {
             <div className="flex items-center gap-1">
               <Button
                 type="button"
-                size="sm"
+                size="icon-sm"
                 variant="ghost"
                 disabled={currentPage === 1}
+                aria-label="首页" title="首页"
                 onClick={() => setCurrentPage(1)}
               >
-                首页
+                <ChevronsLeft />
               </Button>
               <Button
                 type="button"
-                size="sm"
+                size="icon-sm"
                 variant="outline"
                 disabled={currentPage === 1}
+                aria-label="上一页" title="上一页"
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               >
-                上一页
+                <ChevronLeft />
               </Button>
               <span className="min-w-20 text-center tabular-nums text-foreground">
                 {currentPage} / {totalPages}
               </span>
               <Button
                 type="button"
-                size="sm"
+                size="icon-sm"
                 variant="outline"
                 disabled={currentPage === totalPages}
+                aria-label="下一页" title="下一页"
                 onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
               >
-                下一页
+                <ChevronRight />
               </Button>
               <Button
                 type="button"
-                size="sm"
+                size="icon-sm"
                 variant="ghost"
                 disabled={currentPage === totalPages}
+                aria-label="末页" title="末页"
                 onClick={() => setCurrentPage(totalPages)}
               >
-                末页
+                <ChevronsRight />
               </Button>
             </div>
           </div>

@@ -10,6 +10,7 @@ export const platformLogIds = [
   "taobao-drama",
   "kuaishou-drama",
   "qq-drama",
+  "weibo-drama",
   "tencent-huolong-drama",
   "iqiyi-drama",
   "baidu-drama",

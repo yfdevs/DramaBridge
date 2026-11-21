@@ -11,30 +11,41 @@ export async function getTargets(port: number) {
   return getJson<CdpTarget[]>(`http://${debugHost}:${port}/json/list`);
 }
 
-async function isBaiduCdpPort(port: number) {
+async function isBaiduCdpPort(port: number, onFailure: (error: unknown) => void) {
   try {
     const version = await getJson<{ "User-Agent"?: string }>(
       `http://${debugHost}:${port}/json/version`,
     );
-    const targets = await getTargets(port);
     const userAgent = version["User-Agent"] ?? "";
+    if (/baidunetdisk/i.test(userAgent)) return true;
+    const targets = await getTargets(port);
     const hasBaiduTarget = targets.some(
       (target) =>
         target.url.includes("BaiduNetdisk") ||
         target.url.includes("core.asar") ||
         target.url.includes("pan.baidu.com"),
     );
-    return /baidunetdisk/i.test(userAgent) || hasBaiduTarget;
-  } catch {
+    if (!hasBaiduTarget) onFailure(new Error(`端口 ${port} 不是可用百度网盘 CDP；服务标识：${userAgent || "缺失"}`));
+    return hasBaiduTarget;
+  } catch (error) {
+    onFailure(error);
     return false;
   }
 }
 
 export async function ensureBaiduCdpPort(port: number) {
-  if (await isBaiduCdpPort(port)) return;
-  throw new Error(
-    `端口 ${port} 不是可用百度网盘 CDP。请在百度网盘服务页点击“启动并连接”或“重启连接”`,
-  );
+  // Probe reads only: a busy/reloading client must not fail a task on one
+  // transient HTTP error. Never replay share saves or native download actions.
+  let lastProbeError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await isBaiduCdpPort(port, error => { lastProbeError = error; })) return;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new CdpConnectionError({
+    message: 'BAIDU_NETDISK_CLIENT_RESTART_REQUIRED: 无法连接百度网盘客户端，暂时不能下载素材。请点击软件顶部的“网盘”状态，打开连接管理，点击“启动并连接”；若客户端已打开，点击“重启连接”。完成网盘登录，确认显示“已连接”后，再重试失败任务。无需修改发布账号',
+    port,
+    cause: lastProbeError,
+  });
 }
 
 export class CdpPage {

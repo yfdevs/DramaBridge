@@ -181,6 +181,7 @@ export async function ensureDouyinNetdiskResource(
     // definitive image-content classification and still requires four Jianying
     // screenshots before platform automation starts.
     requiredOwnership: douyinNetdiskOwnershipDownloadRequirements,
+    requireAllDiscoveredAssets: true,
     requiredPosterImages: 1,
     posterFallback: {
       title: task.playlet.title,

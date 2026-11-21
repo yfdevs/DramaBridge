@@ -106,8 +106,18 @@ export async function saveBaiduDramaCredentialState(
   await context.storageState({ path: options.credentialStatePath });
 }
 
-export async function openBaiduDramaCreatePage(page: Page) {
-  await page.goto(BAIDU_DRAMA_CREATE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+async function navigateBaiduDramaPage(page: Page, url: string, options: BaiduDramaRuntimeOptions) {
+  try {
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  } catch (error) {
+    if (!(error instanceof Error) || error.name !== "TimeoutError" || page.isClosed()) throw error;
+    // The document may already show a usable login screen while navigation is pending.
+    warn(options, "[baidu-drama] 页面加载超时，保留浏览器继续检查登录状态", { error }, "browser");
+  }
+}
+
+export async function openBaiduDramaCreatePage(page: Page, options: BaiduDramaRuntimeOptions = {}) {
+  await navigateBaiduDramaPage(page, BAIDU_DRAMA_CREATE_URL, options);
 }
 
 function isBaiduDramaCreatePageUrl(url: string) {
@@ -130,12 +140,19 @@ function compactPageText(text: string) {
 async function waitForBaiduDramaCreatePageReadyOnce(
   page: Page,
   timeoutMs: number,
+  options: BaiduDramaRuntimeOptions,
 ) {
   const readyTexts = ["选择短剧类型", "非真人短剧", "下一步"];
-  const deadline = Date.now() + timeoutMs;
+  let deadline = Date.now() + timeoutMs;
   let lastBodyText = "";
 
   while (Date.now() < deadline) {
+    // Unknown URLs can be a normal redirect; do not interrupt it with a login navigation.
+    if (baiduDramaLoginStateFromUrl(page.url()) === "login-required") {
+      await waitForBaiduDramaLogin(page, page.context(), options);
+      await openBaiduDramaCreatePage(page, options);
+      deadline = Date.now() + timeoutMs;
+    }
     lastBodyText = await page.locator("body").innerText({ timeout: 2_000 }).catch(() => "");
     if (
       isBaiduDramaCreatePageUrl(page.url()) &&
@@ -159,7 +176,7 @@ export async function waitForBaiduDramaCreatePageReady(
   options: BaiduDramaRuntimeOptions = {},
 ) {
   try {
-    await waitForBaiduDramaCreatePageReadyOnce(page, timeoutMs);
+    await waitForBaiduDramaCreatePageReadyOnce(page, timeoutMs, options);
   } catch (error) {
     if (
       !(error instanceof Error) ||
@@ -169,7 +186,7 @@ export async function waitForBaiduDramaCreatePageReady(
 
     warn(options, "[baidu-drama] 创建页未准备完成，刷新页面后重试一次", { error }, "browser");
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
-    await waitForBaiduDramaCreatePageReadyOnce(page, timeoutMs);
+    await waitForBaiduDramaCreatePageReadyOnce(page, timeoutMs, options);
   }
 }
 
@@ -177,7 +194,7 @@ export async function ensureBaiduDramaCreatePage(
   page: Page,
   options: BaiduDramaRuntimeOptions,
 ) {
-  await openBaiduDramaCreatePage(page);
+  await openBaiduDramaCreatePage(page, options);
   await waitForBaiduDramaCreatePageReady(page, undefined, options);
   log(options, "[baidu-drama] 百度短剧创建页已就绪，开始领取任务", undefined, "browser");
 }
@@ -187,12 +204,12 @@ export async function waitForBaiduDramaLogin(
   context: BrowserContext,
   options: BaiduDramaRuntimeOptions,
 ) {
-  if (baiduDramaLoginStateFromUrl(page.url()) !== "login-required") return false;
+  if (baiduDramaLoginStateFromUrl(page.url()) === "logged-in") return false;
 
   log(options, "[baidu-drama] 百度短剧平台需要登录，请在浏览器中完成登录", undefined, "browser");
   await page.bringToFront();
-  if (!page.url().startsWith(BAIDU_DRAMA_LOGIN_URL)) {
-    await page.goto(BAIDU_DRAMA_LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  if (baiduDramaLoginStateFromUrl(page.url()) === "login-required" && !page.url().startsWith(BAIDU_DRAMA_LOGIN_URL)) {
+    await navigateBaiduDramaPage(page, BAIDU_DRAMA_LOGIN_URL, options);
   }
 
   const deadline = Date.now() + 120 * 60 * 1000;
@@ -206,10 +223,18 @@ export async function waitForBaiduDramaLogin(
     if (await workbenchButton.isVisible().catch(() => false)) {
       await workbenchButton.click().catch(() => undefined);
       await page.waitForTimeout(1_000);
-      await openBaiduDramaCreatePage(page).catch(() => undefined);
+      await openBaiduDramaCreatePage(page, options).catch(() => undefined);
       continue;
     }
     await page.waitForTimeout(3_000);
   }
   throw new Error("BAIDU_DRAMA_LOGIN_TIMEOUT");
+}
+
+// Task pages validate the actual form before publishing. Idle polling only needs
+// a logged-in session, so creation-page copy cannot block every queued task.
+export async function prepareBaiduDramaTaskPolling(page: Page, context: BrowserContext, options: BaiduDramaRuntimeOptions) {
+  await openBaiduDramaCreatePage(page, options);
+  await waitForBaiduDramaLogin(page, context, options);
+  log(options, "[baidu-drama] 登录检查完成，开始领取任务", undefined, "browser");
 }

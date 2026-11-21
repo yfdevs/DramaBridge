@@ -132,6 +132,13 @@ export const runConfig = {
       input: packageBuildInputs("qq-drama-automation"),
       output: ["packages/qq-drama-automation/dist/**"],
     },
+    "pkg:weibo:build": {
+      command: "vp pack",
+      cwd: "packages/weibo-drama-automation",
+      dependsOn: ["pkg:browser-window:build", "pkg:logging:build"],
+      input: packageBuildInputs("weibo-drama-automation"),
+      output: ["packages/weibo-drama-automation/dist/**"],
+    },
     "pkg:taobao:build": {
       command: "vp pack",
       cwd: "packages/taobao-drama-automation",
@@ -207,6 +214,7 @@ export const runConfig = {
         "pkg:meituan:build",
         "pkg:kuaishou:build",
         "pkg:qq:build",
+        "pkg:weibo:build",
         "pkg:taobao:build",
         "pkg:tencent-huolong:build",
         "pkg:iqiyi:build",
@@ -276,6 +284,11 @@ export const runConfig = {
     "pkg:qq:check": {
       command: "tsc --noEmit",
       cwd: "packages/qq-drama-automation",
+      output: [],
+    },
+    "pkg:weibo:check": {
+      command: "tsc --noEmit",
+      cwd: "packages/weibo-drama-automation",
       output: [],
     },
     "pkg:taobao:check": {

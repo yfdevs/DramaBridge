@@ -1,18 +1,14 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  Activity,
-  Chrome,
-  CloudDownload,
-  Grid,
-  HardDrive,
-} from "@mynaui/icons-react";
+import { Activity, CloudDownload, HardDrive } from "@mynaui/icons-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   getBaiduNetdiskStatus,
+  getBaiduNetdiskQuota,
   type BaiduNetdiskCdpStatus,
+  type BaiduNetdiskQuota,
 } from "@/platforms/baidu-netdisk/service";
 import { openBaiduNetdiskDialog } from "@/platforms/baidu-netdisk/dialog";
 
@@ -99,18 +95,7 @@ function diskIconClass(percent: number | null) {
   return "text-cyan-500";
 }
 
-function runningPlatformIconClass(runningCount: number) {
-  return runningCount > 0 ? "text-violet-500" : "text-muted-foreground/70";
-}
-
-function browserIconClass(browserInstanceCount: number) {
-  return browserInstanceCount > 0 ? "text-sky-500" : "text-muted-foreground/70";
-}
-
-function baiduNetdiskIconClass(
-  status: BaiduNetdiskCdpStatus | null,
-  error: string | null,
-) {
+function baiduNetdiskIconClass(status: BaiduNetdiskCdpStatus | null, error: string | null) {
   if (error || (status && !status.ready)) {
     return "text-rose-500";
   }
@@ -186,7 +171,7 @@ function ensureTitlebarMemoryHost() {
 
 type TitlebarMetricProps = {
   ariaLabel: string;
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
   value: ReactNode;
 };
@@ -206,6 +191,8 @@ export function AppTitlebarMemory() {
   const [runtimeStatus, setRuntimeStatus] = useState<AppRuntimeStatus | null>(null);
   const [baiduStatus, setBaiduStatus] = useState<BaiduNetdiskCdpStatus | null>(null);
   const [baiduError, setBaiduError] = useState<string | null>(null);
+  const [baiduQuota, setBaiduQuota] = useState<BaiduNetdiskQuota | null>(null);
+  const baiduReady = baiduStatus?.ready === true && !baiduError;
 
   useEffect(() => {
     let disposed = false;
@@ -298,6 +285,33 @@ export function AppTitlebarMemory() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!baiduReady) {
+      setBaiduQuota(null);
+      return;
+    }
+    let disposed = false,
+      reading = false;
+    const refresh = async () => {
+      if (reading) return;
+      reading = true;
+      try {
+        const quota = await getBaiduNetdiskQuota();
+        if (!disposed) setBaiduQuota(quota);
+      } catch {
+        if (!disposed) setBaiduQuota(null);
+      } finally {
+        reading = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 30_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [baiduReady]);
+
   if (!host) {
     return null;
   }
@@ -308,10 +322,6 @@ export function AppTitlebarMemory() {
   const storageDrive = runtimeStatus?.disk?.storageDrive ?? null;
   const storageDrivePercent = storageDrive?.usedPercent ?? null;
   const storageDrivePercentText = formatPercent(storageDrivePercent);
-  const browserInstanceCount = runtimeStatus?.browserInstanceCount ?? 0;
-  const runningPlatformCount = runtimeStatus?.runningPlatformCount ?? 0;
-  const totalPlatformCount = runtimeStatus?.totalPlatformCount ?? 5;
-  const runningPlatformText = `${runningPlatformCount}/${totalPlatformCount}`;
   const memoryText = memory
     ? `${formatBytes(memory.systemUsedBytes)} / ${formatBytes(memory.systemTotalBytes)}（${percentText}）`
     : "读取中";
@@ -321,6 +331,16 @@ export function AppTitlebarMemory() {
       ? "无法读取素材目录所在磁盘"
       : "读取中";
   const baiduSummary = baiduNetdiskSummary(baiduStatus, baiduError);
+  const baiduConnectionHint = baiduError || (baiduStatus && !baiduStatus.ready)
+    ? baiduStatus?.supported === false
+      ? "当前系统暂不支持网盘自动下载"
+      : "点击连接并登录网盘，即可自动下载素材"
+    : null;
+  const baiduPercent =
+    baiduQuota && baiduQuota.total > 0 ? (baiduQuota.used / baiduQuota.total) * 100 : null;
+  const baiduCapacity = baiduQuota
+    ? `已用 ${formatBytes(baiduQuota.used)} / 总量 ${formatBytes(baiduQuota.total)}`
+    : "容量暂不可用";
 
   return createPortal(
     <div className="flex h-7 items-center gap-1.5 overflow-hidden whitespace-nowrap px-1 text-[11px] leading-none text-muted-foreground">
@@ -347,51 +367,38 @@ export function AppTitlebarMemory() {
           label="素材盘"
           value={storageDrivePercentText}
         />
-        <TitlebarMetric
-          ariaLabel={`运行平台：${runningPlatformText}`}
-          icon={
-            <Grid
-              className={`size-3.5 shrink-0 ${runningPlatformIconClass(runningPlatformCount)}`}
+        <Tooltip>
+          <TooltipTrigger
+            aria-label={`打开百度网盘 CDP 控制：${baiduSummary}；${baiduCapacity}`}
+            render={
+              <button
+                type="button"
+                className={`${titlebarIconButtonClass} w-auto gap-1.5 px-2`}
+                onClick={openBaiduNetdiskDialog}
+              />
+            }
+          >
+            <CloudDownload
+              className={`size-3.5 shrink-0 ${baiduNetdiskIconClass(baiduStatus, baiduError)}`}
               aria-hidden="true"
             />
-          }
-          label="平台"
-          value={runningPlatformText}
-        />
-        <TitlebarMetric
-          ariaLabel={`浏览器实例：${browserInstanceCount} 个`}
-          icon={
-            <Chrome
-              className={`size-3.5 shrink-0 ${browserIconClass(browserInstanceCount)}`}
-              aria-hidden="true"
-            />
-          }
-          label="页面"
-          value={browserInstanceCount}
-        />
+            <span>网盘</span>
+            {baiduConnectionHint ? (
+              <span className="text-[11px] font-normal text-muted-foreground">
+                {baiduConnectionHint}
+              </span>
+            ) : (
+              <span className="font-medium tabular-nums text-foreground">
+                {baiduPercent === null ? "--" : `${baiduPercent.toFixed(1)}%`}
+              </span>
+            )}
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="end" sideOffset={8} className="z-[100000]">
+            百度网盘：{baiduSummary} · {baiduCapacity}
+            {baiduConnectionHint && <span className="mt-1 block">点击此处，在连接管理中选择“启动并连接”或“重启连接”，完成客户端登录后即可自动下载素材。</span>}
+          </TooltipContent>
+        </Tooltip>
       </div>
-      <div className="h-4 w-px shrink-0 bg-border" aria-hidden="true" />
-      <Tooltip>
-        <TooltipTrigger
-          aria-label={`打开百度网盘 CDP 控制：${baiduSummary}`}
-          render={
-            <button
-              type="button"
-              className={`${titlebarIconButtonClass} w-auto gap-1.5 px-2`}
-              onClick={openBaiduNetdiskDialog}
-            />
-          }
-        >
-          <CloudDownload
-            className={`size-3.5 shrink-0 ${baiduNetdiskIconClass(baiduStatus, baiduError)}`}
-            aria-hidden="true"
-          />
-          <span>网盘</span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="end" sideOffset={8} className="z-[100000]">
-          百度网盘：{baiduSummary}
-        </TooltipContent>
-      </Tooltip>
     </div>,
     host,
   );

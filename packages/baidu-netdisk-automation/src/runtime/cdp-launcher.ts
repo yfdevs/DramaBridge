@@ -90,7 +90,12 @@ async function prepare(sourceExecutable: string, cacheRoot: string) {
     throw new Error("BAIDU_CDP_LAUNCHER_UNSUPPORTED_ENTRY: 百度客户端入口不在应用包内");
   }
   const rootEntries = await readdir(sourceDir, { withFileTypes: true });
-  const runtimeFiles = rootEntries.filter(entry => entry.isFile() && !/\.old$|\.log$|LICENSE/i.test(entry.name));
+  // Client settings (AppSettingApp.dat, *.ini) change during normal startup.
+  // Copy only runtime assets; settings must neither invalidate the snapshot
+  // nor be copied into our independent runtime directory.
+  const runtimeFiles = rootEntries.filter(entry => entry.isFile()
+    && (/\.(exe|dll|pak|bin)$/i.test(entry.name)
+      || /^(icudtl\.dat|vk_swiftshader_icd\.json)$/i.test(entry.name)));
   const identities = await Promise.all(runtimeFiles.map(entry => fingerprintFile(path.join(sourceDir, entry.name))));
   const sourceHash = await sha256(sourceExecutable);
   const fingerprint = createHash("sha256").update(JSON.stringify({

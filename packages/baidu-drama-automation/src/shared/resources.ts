@@ -1,3 +1,4 @@
+import { cinematicPosterArtDirection } from "@dramabridge/media-assets";
 import { analyzeImagesAsJson, type DramaAiClient } from "@dramabridge/ai";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -25,7 +26,7 @@ export const BAIDU_DRAMA_PORTRAIT_COVER_SIZE = {
 
 type BaiduCoverKind = "landscape" | "portrait";
 
-const baiduAiCoverPromptVersion = "baidu-counterpart-cover-v3-commercial-copy";
+const baiduAiCoverPromptVersion = "baidu-counterpart-cover-v4-cinematic";
 const baiduAiTransientRetryAttempts = 5;
 const baiduAiTransientRetryBaseDelayMs = 1_000;
 const activeAiCoverGenerations = new Map<string, Promise<string>>();
@@ -200,6 +201,7 @@ function baiduCounterpartCoverPrompt(options: {
       ? "纵向"
       : "通用";
   return [
+    cinematicPosterArtDirection(),
     `根据参考的${sourceDescription}封面，为百度短剧生成一张${target.promptLabel}封面`,
     "保持参考图中的核心人物、人物关系、服饰、时代背景、色彩气质和作品辨识度",
     `重新构图并自然扩展画面，使最终画面适合${target.promptLabel}展示；不要简单拉伸、镜像、重复拼接、裁掉主体或添加边框`,

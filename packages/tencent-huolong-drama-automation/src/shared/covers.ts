@@ -1,3 +1,4 @@
+import { cinematicPosterArtDirection } from "@dramabridge/media-assets";
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -12,7 +13,7 @@ export type TencentHuolongCoverFiles = {
   card: string;
 };
 
-const COVER_PROMPT_VERSION = "2026-09-11-commercial-copy-v3";
+const COVER_PROMPT_VERSION = "2026-11-16-cinematic-v4";
 
 const targets = {
   landscape: {
@@ -104,6 +105,7 @@ async function generateCover(
         size: generationSize,
         watermark: false,
         prompt: [
+          cinematicPosterArtDirection(),
           `以参考封面中的人物身份、服饰、场景和整体美术风格为依据，重新构图生成腾讯火龙漫剧${target.label}`,
           `目标成图比例和构图必须适配 ${target.width}×${target.height}；这是一张独立设计的版式，不是对其他尺寸封面的机械裁切`,
           target.composition,

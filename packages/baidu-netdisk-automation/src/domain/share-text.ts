@@ -6,7 +6,7 @@ import { DEFAULT_BAIDU_NETDISK_SHARE_NAME } from "./constants.js";
 import type { BaiduNetdiskShareInfo } from "./types.js";
 
 function trimShareLink(value: string) {
-  return value.replace(/[),，。；;、\]]+$/g, "");
+  return value.replace(/&(?:amp|#0*38|#x0*26);/gi, "&").replace(/[),，。；;、\]]+$/g, "");
 }
 
 export function sanitizeWindowsName(value: string) {

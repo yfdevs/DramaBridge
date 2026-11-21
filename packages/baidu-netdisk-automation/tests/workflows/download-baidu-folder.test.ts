@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
+import { join } from "node:path";
 
 import {
   areBaiduNetdiskFilesStrictlyIdentical,
@@ -48,10 +49,21 @@ test("serialized poster detection accepts the unique root cover in 一元餐盒�
   assert.deepEqual([...select(root).names], [hashed]);
   assert.equal(select({ ...root, isResourceRoot: false }).names.length, 0);
   assert.equal(select({ ...root, excludedScope: true, directoryName: "权属", imageNames: ["海报工程截图.png"] }).names.length, 0);
-  assert.equal(select({ ...root, imageNames: [hashed, "头像.png"] }).names.length, 0);
+  assert.deepEqual([...select({ ...root, imageNames: [hashed, "头像.png"] }).names], [hashed, "头像.png"], "root images are candidates, not a final cover choice");
   assert.equal(select({ ...root, imageNames: [hashed, "cover_9x16.png"] }).kind, "named");
   assert.deepEqual([...select({ ...root, imageNames: [hashed, "cover_9x16.png"] }).names], ["cover_9x16.png"]);
   assert.equal(select({ ...root, directoryName: "poster", isResourceRoot: false }).kind, "directory");
+});
+
+test("root screenshot and poster mixtures retain every candidate for local validation", () => {
+  const select = runInNewContext(`(${selectBaiduPosterCandidates.toString()})`) as typeof selectBaiduPosterCandidates;
+  const names = ['3e1702c00857a6f7302180270d997fce.png', '6eb5e61c6393f75922480b7dc2b35b30.png',
+    '7d62a6ad7dab3427f642c77bf13b9ad6.png', '626fa0a02c9b5a1b2abbb89343ce37ab.png', 'entity_16.png'];
+  const options = { imageNames: names, directoryName: '大旱将至：我把祖宅三百块卖了', isResourceRoot: true, excludedScope: false };
+  assert.equal(select(options).kind, 'root');
+  assert.deepEqual([...select(options).names], names);
+  assert.equal(select({ ...options, isResourceRoot: false }).names.length, 0);
+  assert.equal(select({ ...options, excludedScope: true }).names.length, 0);
 });
 
 test("serialized Baidu page name sanitization preserves full-width drama punctuation", () => {
@@ -130,7 +142,7 @@ test("isolates generic asset directories under each drama download root", () => 
   assert.equal(first, "D:\\短剧素材\\剧目甲");
   assert.equal(second, "D:\\短剧素材\\剧目乙");
   assert.notEqual(first, second);
-  assert.equal(resolveBaiduAssetDownloadRoot("/Users/test/Downloads", "剧目甲"), "/Users/test/Downloads/剧目甲");
+  assert.equal(resolveBaiduAssetDownloadRoot("/Users/test/Downloads", "剧目甲"), join("/Users/test/Downloads", "剧目甲"));
 });
 
 test("downloads a poster as an individual file when it shares the video root in asset-only mode", () => {
@@ -249,6 +261,7 @@ test("recognizes deleted and expired Baidu share pages before waiting for a file
     "分享文件已过期",
   );
   assert.equal(baiduShareFailureText("全部文件 正在加载"), "");
+  assert.equal(baiduShareFailureText("全部文件\n分享文件已过期.mp4\n100 MB"), "");
 });
 
 test("recognizes labeled ownership screenshots from Baidu filenames", () => {

@@ -123,6 +123,10 @@ export function createElectronPlugin(rootDir: string) {
               replacement: path.join(rootDir, "packages/qq-drama-automation/src/index.ts"),
             },
             {
+              find: /^@dramabridge\/weibo-drama-automation$/,
+              replacement: path.join(rootDir, "packages/weibo-drama-automation/src/index.ts"),
+            },
+            {
               find: /^@dramabridge\/taobao-drama-automation$/,
               replacement: path.join(rootDir, "packages/taobao-drama-automation/src/index.ts"),
             },

@@ -20,3 +20,12 @@ test("old messages from earlier attempts do not mislabel the latest failure", ()
   const structured = {code:"NETWORK_ERROR",title:"连接失败",reason:"网络中断",action:"检查代理"};
   assert.deepEqual(youtubeTaskFailure({...task,progress:{failure:structured}}), structured);
 });
+
+test("a legacy upload-session title retains its category and recovery instructions", () => {
+  const task = {error:"上传会话无法恢复",logs:"开始 / 恢复任务\ninvalid_grant"} as YoutubeTask;
+  const failure=youtubeTaskFailure(task)!;
+  assert.equal(failure.code,"UPLOAD_SESSION_INVALID");
+  assert.equal(failure.stage,"uploading");
+  assert.match(failure.action,/YouTube Studio/);
+  assert.match(failure.action,/避免重复上传/);
+});

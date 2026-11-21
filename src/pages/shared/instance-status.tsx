@@ -1,55 +1,20 @@
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import { toast } from "@/components/ui/notifications";
-import type { AccountControls } from "./account-selection";
-
-function InstanceControlButton({
-  id,
-  name,
-  launched,
-  paused,
-  controls,
-}: {
-  id: string;
-  name: string;
-  launched: boolean;
-  paused?: boolean;
-  controls: AccountControls;
-}) {
-  const [pending, setPending] = useState(false);
-  return (
-    <Button
-      size="sm"
-      variant="outline"
-      disabled={pending}
-      aria-label={`${launched ? (paused ? "恢复账号" : "暂停账号") : "启动账号"} ${name}`}
-      title={launched && !paused ? "停止领取新任务，已领取任务继续完成" : undefined}
-      onClick={() => {
-        if (pending) return;
-        setPending(true);
-        void (launched ? controls.pause(id, !paused) : controls.start(id))
-          .catch((error) => toast.error(error instanceof Error ? error.message : String(error)))
-          .finally(() => setPending(false));
-      }}
-    >
-      {pending ? "处理中…" : launched ? (paused ? "恢复" : "暂停") : "启动"}
-    </Button>
-  );
-}
+import { AccountActions, type AccountControls } from "./account-actions";
 
 export function InstanceStatus({
   launched,
   loginState,
   label,
   paused = false,
+  disabled = false,
 }: {
   launched: boolean;
   loginState?: string;
   label?: string;
   paused?: boolean;
+  disabled?: boolean;
 }) {
-  const state = !launched
+  const state = disabled ? "idle" : !launched
     ? "idle"
     : paused
       ? "waiting"
@@ -57,8 +22,8 @@ export function InstanceStatus({
         ? "ready"
         : loginState === "login-required"
           ? "waiting"
-          : "open";
-  const text = !launched
+          : "ready";
+  const text = disabled ? "已禁用" : !launched
     ? "未启动"
     : paused
       ? "已暂停领取"
@@ -146,7 +111,7 @@ export function RuntimeInstances({
                 {instance.launched && instance.pageCount !== undefined && (
                   <span className="text-xs text-muted-foreground">{instance.pageCount} 个页面</span>
                 )}
-                {controls && <InstanceControlButton {...instance} controls={controls} />}
+                {controls && <AccountActions {...instance} controls={controls} />}
               </div>
             </li>
           ))}

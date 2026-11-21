@@ -10,6 +10,8 @@ from urllib.parse import parse_qs, urlsplit
 from project_paths import credential_path
 
 SCOPE = 'https://www.googleapis.com/auth/youtube.upload'
+SCOPES = [SCOPE]
+PARTNER_SCOPE = 'https://www.googleapis.com/auth/youtubepartner'  # Accepted only for existing authorizations.
 UPLOAD_SCOPES = {SCOPE, 'https://www.googleapis.com/auth/youtube',
                  'https://www.googleapis.com/auth/youtube.force-ssl',
                  'https://www.googleapis.com/auth/youtubepartner'}
@@ -104,7 +106,7 @@ def test_authorization(path, proxy):
                 return result('invalid', '当前授权缺少 YouTube 上传权限，请更新授权信息并允许上传权限')
         if Path(path).read_text(encoding='utf-8-sig') != content:
             return result('error', '测试期间授权文件已变化，请重新测试')
-        return result('valid', '授权有效：令牌可刷新，且具有 YouTube 上传权限。实际上传仍受频道状态和配额限制')
+        return result('valid', '上传授权有效；网页版权勾选使用单独保存的浏览器凭证')
     except requests.RequestException:
         return result('error', '无法连接 Google，请检查服务器网络和已保存的 YouTube 代理设置后重试')
     except (ValueError, TypeError, OSError):
@@ -119,7 +121,7 @@ def make_flow(path, redirect_uri):
             or client.get('auth_uri') != 'https://accounts.google.com/o/oauth2/auth'
             or client.get('token_uri') not in {'https://oauth2.googleapis.com/token', 'https://accounts.google.com/o/oauth2/token'}):
         raise ValueError('请先上传 Google 桌面应用客户端凭据 client_secret.json')
-    return Flow.from_client_config(config, scopes=[SCOPE], redirect_uri=redirect_uri,
+    return Flow.from_client_config(config, scopes=SCOPES, redirect_uri=redirect_uri,
                                    autogenerate_code_verifier=True)
 
 
@@ -235,9 +237,12 @@ class Authorization:
                     self.saver('token', content)
                 self.session = None
                 self.result = {'status': 'succeeded', 'message': '授权信息已更新'}
-        except Exception:
+        except Exception as exc:
+            message = ('缺少 YouTube 上传权限，请重新授权并允许上传权限；原授权文件保留'
+                       if str(exc) == 'missing upload scope' else
+                       '授权保存失败，请检查代理后重试；原授权文件保留')
             with self.lock:
                 if self.session is session:
                     self.session = None
-                    self.result = {'status': 'error', 'message': '授权保存失败，请检查代理后重试；原授权文件保留'}
-            raise ValueError('授权未更新，请回到服务设置查看状态并重试') from None
+                    self.result = {'status': 'error', 'message': message}
+            raise ValueError(message) from None

@@ -1,3 +1,4 @@
+import { FailureTooltip } from "@/components/ui/failure-tooltip";
 import { Badge } from "@/components/ui/badge";
 
 export const youtubeTaskLabels: Record<string, string> = {
@@ -15,12 +16,12 @@ export const youtubeTaskLabels: Record<string, string> = {
 export const youtubeModeLabels: Record<string, string> = {
   merge: "合并人声版",
   mute: "合并静音版",
-  episodes: "逐集分离（已停用）",
+  episodes: "逐集人声版",
 };
 
 export const youtubeActiveStatuses = ["downloading", "processing", "uploading", "waiting"];
 
-export function YoutubeTaskStatus({ status }: { status: string }) {
+export function YoutubeTaskStatus({ status, reason }: { status: string; reason?: string | null }) {
   const color =
     status === "completed"
       ? "bg-[var(--youtube-success-bg)] text-[var(--youtube-success-text)]"
@@ -30,8 +31,8 @@ export function YoutubeTaskStatus({ status }: { status: string }) {
           ? "bg-[var(--youtube-warning-bg)] text-[var(--youtube-warning-text)]"
           : "bg-muted text-foreground";
   return (
-    <Badge variant="secondary" className={`text-xs ${color}`}>
+    <FailureTooltip reason={reason}><Badge variant="secondary" className={`text-xs ${color}`}>
       {youtubeTaskLabels[status] ?? status}
-    </Badge>
+    </Badge></FailureTooltip>
   );
 }

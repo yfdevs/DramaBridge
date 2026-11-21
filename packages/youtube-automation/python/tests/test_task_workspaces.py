@@ -250,6 +250,73 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(queue.get(task['id'])['remote_id'], 'new-download')
         self.assert_protected()
 
+    def test_delete_removes_task_workspace_and_exclusive_source(self):
+        import web_service
+        queue = web_service.Store(self.root / 'data')
+        task = queue.create({'resourceName': 'delete', 'shareText': 'https://pan.baidu.com/s/test', 'noUpload': True})
+        queue.update(task['id'], status='processing', local_path=str(self.source))
+        workspace = TaskWorkspaces(queue, self.root).prepare(task['id'])
+        (workspace / 'output.mp4').write_bytes(b'output')
+        queue.update(task['id'], status='completed')
+        with patch.object(web_service, 'ROOT', self.root):
+            web_service.Worker(queue).control(task['id'], 'delete')
+        self.assertEqual(queue.get(task['id'])['status'], 'deleted')
+        self.assertFalse(workspace.exists())
+        self.assertFalse(self.source.exists())
+        self.assertTrue(self.credential.exists())
+
+    def test_delete_preserves_another_tasks_source(self):
+        import web_service
+        queue = web_service.Store(self.root / 'data')
+        tasks = [queue.create({'resourceName': str(i), 'shareText': 'https://pan.baidu.com/s/test', 'noUpload': True}) for i in range(2)]
+        for task in tasks:
+            queue.update(task['id'], status='completed', local_path=str(self.source))
+        with patch.object(web_service, 'ROOT', self.root):
+            web_service.Worker(queue).control(tasks[0]['id'], 'delete')
+        self.assertEqual(queue.get(tasks[1]['id'])['status'], 'completed')
+        self.assert_protected()
+        with patch.object(web_service, 'ROOT', self.root):
+            web_service.Worker(queue).control(tasks[1]['id'], 'delete')
+        self.assertFalse(self.source.exists())
+
+    def test_delete_cleanup_failure_keeps_task_visible_for_retry(self):
+        import web_service
+        queue = web_service.Store(self.root / 'data')
+        task = queue.create({'resourceName': 'delete-failure', 'shareText': 'https://pan.baidu.com/s/test', 'noUpload': True})
+        queue.update(task['id'], status='completed', local_path=str(self.source))
+        with patch.object(web_service, 'ROOT', self.root), patch.object(TaskWorkspaces, 'clean_task', return_value={'errors':['locked'], 'removedBytes':0}):
+            with self.assertRaisesRegex(ValueError, '资源清理未完成'):
+                web_service.Worker(queue).control(task['id'], 'delete')
+        self.assertEqual(queue.get(task['id'])['status'], 'completed')
+        self.assert_protected()
+
+    def test_delete_preserves_queued_sibling_without_local_path(self):
+        import web_service
+        queue = web_service.Store(self.root / 'data')
+        body = {'resourceName': 'shared', 'shareText': 'https://pan.baidu.com/s/shared', 'noUpload': True}
+        task = queue.create(body)
+        queue.update(task['id'], status='completed', local_path=str(self.source))
+        sibling = queue.create(body)
+        with patch.object(web_service, 'ROOT', self.root):
+            web_service.Worker(queue).control(task['id'], 'delete')
+        self.assertEqual(queue.get(sibling['id'])['status'], 'queued')
+        self.assert_protected()
+
+    def test_delete_does_not_clean_unrelated_deleted_task(self):
+        import web_service
+        queue = web_service.Store(self.root / 'data')
+        other_source = self.source.parent / 'other.mp4'
+        other_source.write_bytes(b'keep-other')
+        task = queue.create({'resourceName': 'target', 'shareText': 'https://pan.baidu.com/s/target', 'noUpload': True})
+        other = queue.create({'resourceName': 'other', 'shareText': 'https://pan.baidu.com/s/other', 'noUpload': True})
+        queue.update(task['id'], status='completed', local_path=str(self.source))
+        queue.update(other['id'], local_path=str(other_source))
+        queue.action(other['id'], 'delete')
+        with patch.object(web_service, 'ROOT', self.root):
+            web_service.Worker(queue).control(task['id'], 'delete')
+        self.assertFalse(self.source.exists())
+        self.assertEqual(other_source.read_bytes(), b'keep-other')
+
     def test_base_worker_cleanup_also_preserves_original_materials(self):
         import web_service
         queue = web_service.Store(self.root / 'data')
