@@ -4,7 +4,6 @@ import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
-import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import path from "node:path";
 
 import {
@@ -438,11 +437,6 @@ async function startAccountRuntime(selectedAccountIds: unknown, canClaimTask: ()
 
 export function registerIqiyiDramaPlatformHandlers() {
   registerAccountControl({ platform: "iqiyi-drama", controller: runtimeController, start: startRuntime, status });
-  registerTaskAnalyticsHandler({
-    platform: "iqiyi-drama",
-    apiBaseUrl: () => readConfig().apiBaseUrl,
-    apiPrefix: "/dramaAiRpa/iqiyi",
-  });
   registerIqiyiRuntimeAssetCleanup();
   ipcMain.handle("iqiyi-drama:config:get", () => ({
     config: readConfig(),

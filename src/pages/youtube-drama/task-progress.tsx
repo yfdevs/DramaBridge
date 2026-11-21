@@ -77,6 +77,11 @@ export function YoutubeTaskProgress({
       ? `${youtubeStageLabels[progress.stage] ?? "处理中"}${progress.episodeIndex && progress.episodeCount ? ` ${progress.episodeIndex}/${progress.episodeCount} 集` : ""}`
       : "";
   const stalled = active && (progress?.lastAdvanceSeconds ?? 0) >= 30;
+  const shimmerStage =
+    !stalled &&
+    !task.error &&
+    Boolean(stage) &&
+    ["downloading", "processing", "uploading"].includes(task.status);
   const episodes = task.payload.mode === "episodes" && task.result?.episodeCount
     ? `已${task.payload.noUpload ? "处理" : "上传"} ${task.result.completedEpisodes ?? 0}/${task.result.episodeCount} 集`
     : undefined;
@@ -106,7 +111,7 @@ export function YoutubeTaskProgress({
       >
         <div className={`flex h-5 min-w-0 items-center gap-2 ${episodes ? "w-full" : "flex-1"}`}>
           <OverflowText as="span"
-            className={`min-w-0 flex-1 truncate ${task.error ? "text-destructive" : "text-muted-foreground"}`}
+            className={`min-w-0 flex-1 truncate ${task.error ? "text-destructive" : "text-muted-foreground"} ${shimmerStage ? "motion-safe:shimmer" : ""}`}
           >
             {label || "—"}
           </OverflowText>
@@ -165,7 +170,11 @@ export function YoutubeTaskProgress({
           <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
         </div>
       )}
-      {progress?.stage && showDetails && <p className="mt-1.5 font-medium">{stage}</p>}
+      {progress?.stage && showDetails && (
+        <p className="mt-1.5 font-medium">
+          <span className={shimmerStage ? "motion-safe:shimmer" : undefined}>{stage}</span>
+        </p>
+      )}
       {showDetails && (
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
           {episodes && <span>{episodes}</span>}

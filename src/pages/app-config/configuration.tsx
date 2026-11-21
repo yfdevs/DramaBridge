@@ -1,21 +1,24 @@
-import { ExternalLink } from "@mynaui/icons-react";
-import { useRef, useState } from "react";
+import { ExternalLinkIcon as ExternalLink } from "@/components/ui/solar-icons";
+import { useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/notifications";
 
 import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { returnRouteFromLocationState, routePath } from "@/config/navigation";
 import {
   ConfigSection,
+  ConfigPanelSection,
   ConfigurationPageFrame,
   type ConfigSectionDefinition,
   usePlatformConfig,
 } from "@/pages/shared/configuration-page";
-import { globalAppConfigService, type GlobalAppConfig } from "@/platforms/app-config/service";
+import { globalAppConfigService, type AppTheme, type GlobalAppConfig } from "@/platforms/app-config/service";
 import { ExternalApiConfiguration } from "./external-api";
 import { BaiduAutoCleanupStatus } from "./baidu-auto-cleanup";
 import { FeishuGlobalConfiguration, type FeishuConfigFields } from "@/pages/feishu/tables";
 import { feishuService } from "@/platforms/feishu/service";
+import { cn } from "@/lib/utils";
 
 const emptyConfig: GlobalAppConfig = {
   theme: "system",
@@ -33,33 +36,15 @@ const emptyConfig: GlobalAppConfig = {
   localMaterialRoot: "",
 };
 
-const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
-  {
-    title: "外观与主题",
-    description: "",
-    layout: "compact",
-    fields: [
-      {
-        kind: "select",
-        key: "theme",
-        label: "主题",
-        description: "保存后生效",
-        options: [
-          { value: "system", label: "跟随系统" },
-          { value: "light", label: "浅色" },
-          { value: "dark", label: "深色" },
-        ],
-      },
-    ],
-  },
-  {
+const sections = {
+  storage: {
     title: "文件存储",
-    description: "两个目录须位于同一磁盘。选择并保存后统一用于各平台；未设置时，已有平台可能沿用原目录",
+    description: "两个目录须位于同一磁盘。保存后各平台共用这些目录，留空时已有平台可能沿用原目录",
     fields: [
       {
         key: "runDataRoot",
         label: "运行数据目录",
-        description: "保存各平台的登录信息、日志和缓存",
+        description: "存放登录信息、日志和缓存",
         directory: true,
       },
       {
@@ -70,14 +55,14 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
       },
     ],
   },
-  {
+  baidu: {
     title: "百度网盘",
     description: "",
     fields: [
       {
         key: "baiduNetdiskDownloadTimeoutMinutes",
         label: "下载时限",
-        description: "单个资源的最长下载时间，超时则任务失败",
+        description: "单个资源下载超时后，任务失败",
         type: "number",
         suffix: "分钟",
         min: 1,
@@ -85,22 +70,22 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
       {
         kind: "switch",
         key: "baiduNetdiskCleanupPlayletAfterTaskSuccess",
-        label: "成功后清理网盘文件",
-        description: "任务成功后清理本次网盘文件；开启容量自动清理时，此项不生效",
+        label: "任务成功后清理文件",
+        description: "仅清理本次任务的网盘文件。开启容量自动清理后，由容量规则接管",
         activeLabel: "自动清理",
         inactiveLabel: "保留文件",
       },
       {
         kind: "switch",
         key: "baiduNetdiskAutoCleanupEnabled",
-        label: "容量超过 80% 自动清理",
-        description: "超过 80% 后清理所有符合条件的非当天目录，不因容量下降而停止。保留当天素材和使用中的目录；不清空回收站。",
+        label: "按容量自动清理",
+        description: "用量超过 80% 时，清理所有符合条件的旧目录，直至本轮清理完成。当天素材、使用中的目录和回收站内容会保留",
         activeLabel: "已开启",
         inactiveLabel: "已关闭",
       },
     ],
   },
-  {
+  ocr: {
     title: "本机图片识别",
     description: "用于区分剪映和 AI 剧创工程截图",
     fields: [
@@ -108,20 +93,20 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
         kind: "switch",
         key: "ownershipLocalOcrEnabled",
         label: "优先使用本机识别",
-        description: "需要识别截图内容时先在电脑上处理，无法确认时自动使用 AI",
+        description: "本机识别不了时，改用 AI",
         activeLabel: "已开启",
         inactiveLabel: "已关闭",
       },
     ],
   },
-  {
+  ai: {
     title: "AI 服务",
-    description: "各平台共用，用于图片识别和封面生成",
+    description: "各平台共用的识图和封面生成服务",
     fields: [
       {
         key: "aiBaseURL",
         label: "接口地址",
-        description: "填写服务商提供的 OpenAI 兼容接口地址",
+        description: "服务商提供的 OpenAI 兼容地址",
         type: "url",
       },
       {
@@ -133,25 +118,25 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
       {
         key: "aiModel",
         label: "图文识别模型",
-        description: "填写模型 ID，用于识别图片和处理文本",
+        description: "用于识图和处理文本的模型 ID",
       },
       {
         key: "aiImageModel",
         label: "封面生成模型",
-        description: "填写用于生成封面的模型 ID",
+        description: "支持图片生成的模型 ID",
       },
       {
         kind: "switch",
         key: "aiPosterFallbackEnabled",
         label: "自动补全封面",
-        description: "缺少封面时，根据剧名和简介用 AI 生成",
+        description: "缺少封面时，按剧名和简介生成",
         activeLabel: "已开启",
         inactiveLabel: "已关闭",
       },
       {
         key: "aiCoverGenerationRetryAttempts",
         label: "封面生成重试次数",
-        description: "生成失败后的额外重试次数，填 0 不重试",
+        description: "填 0 时，生成失败后不重试",
         type: "number",
         suffix: "次",
         min: 0,
@@ -159,7 +144,87 @@ const sections: ConfigSectionDefinition<GlobalAppConfig>[] = [
       },
     ],
   },
-];
+} satisfies Record<string, ConfigSectionDefinition<GlobalAppConfig>>;
+
+const themeOptions = [
+  { value: "system", label: "跟随系统", previews: ["light", "dark"] },
+  { value: "light", label: "浅色", previews: ["light"] },
+  { value: "dark", label: "深色", previews: ["dark"] },
+] as const;
+
+function ThemeConfiguration({
+  theme,
+  disabled,
+  onChange,
+}: {
+  theme: AppTheme;
+  disabled: boolean;
+  onChange: (theme: AppTheme) => void;
+}) {
+  return (
+    <ConfigPanelSection title="外观与主题" description="保存后生效">
+      <RadioGroup
+        aria-label="界面主题"
+        aria-description="保存后生效"
+        className="max-w-[25rem] grid-cols-[repeat(auto-fit,minmax(min(100%,5.5rem),1fr))] gap-3"
+        disabled={disabled}
+        value={theme}
+        onValueChange={(value) => {
+          if (value === "system" || value === "light" || value === "dark") onChange(value);
+        }}
+      >
+        {themeOptions.map((option) => (
+          <label key={option.value} className="block cursor-pointer rounded-sm has-[[data-disabled]]:cursor-not-allowed has-[[data-disabled]]:opacity-60 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
+            <span className="flex h-12 overflow-hidden rounded-sm border border-black/10 bg-white dark:border-white/15" aria-hidden="true">
+              {option.previews.map((preview) => (
+                <span
+                  key={preview}
+                  className={cn(
+                    "grid min-w-0 flex-1 grid-cols-[24%_1fr]",
+                    preview === "dark" ? "bg-neutral-900 text-white" : "bg-white text-black",
+                  )}
+                >
+                  <span className="flex min-w-0 flex-col gap-[3px] border-r border-current/10 bg-current/5 px-1 py-[7px]">
+                    <span className="size-[5px] rounded-[1px] bg-current/35" />
+                    <span className="h-0.5 w-full rounded-full bg-current/20" />
+                    <span className="h-0.5 w-2/3 rounded-full bg-current/15" />
+                  </span>
+                  <span className="flex min-w-0 flex-col gap-1 px-1.5 py-[7px]">
+                    <span className="h-[3px] w-1/2 rounded-full bg-current/40" />
+                    <span className="h-2.5 rounded-[2px] border border-current/10 bg-current/5" />
+                    <span className="h-2.5 rounded-[2px] border border-current/10 bg-current/5" />
+                  </span>
+                </span>
+              ))}
+            </span>
+            <span className="flex items-center justify-between gap-1.5 pt-1.5 text-xs">
+              {option.label}
+              <RadioGroupItem value={option.value} className="size-3.5" />
+            </span>
+          </label>
+        ))}
+      </RadioGroup>
+    </ConfigPanelSection>
+  );
+}
+
+function ConfigurationCategory({ title, children }: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-label={title} className="space-y-2 not-first:border-t not-first:border-border/60 not-first:pt-3">
+      <p aria-hidden="true" className="text-xs text-muted-foreground">{title}</p>
+      <div className="grid gap-3.5">{children}</div>
+    </section>
+  );
+}
+
+const globalConfigurationStyles = cn(
+  "[&_[data-slot=field-content]]:min-w-0 [&_[data-slot=field-content]]:gap-1",
+  "[&_[data-slot=field-description]]:mt-0 [&_[data-slot=field-description]]:text-xs [&_[data-slot=field-description]]:leading-[1.55]",
+  "[&_[data-slot=config-section-footer]:not(:empty)]:mt-1 [&_[data-slot=config-section-footer]:not(:empty)]:border-t [&_[data-slot=config-section-footer]:not(:empty)]:border-border/60 [&_[data-slot=config-section-footer]:not(:empty)]:pt-2",
+);
 
 export function GlobalConfigurationPage() {
   const [defaultDirectories, setDefaultDirectories] = useState<
@@ -285,11 +350,72 @@ export function GlobalConfigurationPage() {
     }
   };
 
+  const renderSection = (key: keyof typeof sections) => {
+    const section: ConfigSectionDefinition<GlobalAppConfig> = sections[key];
+    return (
+      <ConfigSection
+        config={configState.config}
+        fields={section.fields.map((field) =>
+          field.key === "runDataRoot" || field.key === "localMaterialRoot"
+            ? { ...field, placeholder: defaultDirectories[field.key] }
+            : field,
+        )}
+        footer={
+          key === "baidu" ? <BaiduAutoCleanupStatus enabled={String(configState.config.baiduNetdiskAutoCleanupEnabled) === "true"} /> : key === "ai" ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                className="w-fit"
+                onClick={() => {
+                  void globalAppConfigService.openArkApiKeyPage();
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <ExternalLink aria-hidden="true" className="size-3.5" data-icon="inline-start" />
+                <span className="leading-none">获取火山方舟密钥</span>
+              </Button>
+              <Button
+                className="w-fit"
+                disabled={configState.loading || testing}
+                onClick={() => {
+                  void testConnection();
+                }}
+                size="sm"
+                variant="outline"
+              >
+                {testing ? "连接中…" : "测试连接"}
+              </Button>
+            </div>
+          ) : key === "ocr" ? (
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <p role="status" className="text-sm text-muted-foreground">
+                {ocrMessage}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={configState.loading || testingOcr}
+                onClick={() => {
+                  void testLocalOcr();
+                }}
+              >
+                {testingOcr ? "测试中…" : "测试本机识别"}
+              </Button>
+            </div>
+          ) : undefined
+        }
+        section={section}
+        onChange={configState.updateConfig}
+        onSelectDirectory={selectDirectory}
+      />
+    );
+  };
+
   return (
     <ConfigurationPageFrame
+      className={globalConfigurationStyles}
       hasChanges={configState.hasChanges}
       loading={configState.loading}
-      restartRequired={configState.restartRequired}
       title="全局配置"
       onClose={() => {
         void navigate(routePath(returnRoute));
@@ -297,71 +423,30 @@ export function GlobalConfigurationPage() {
       onDiscard={configState.discardChanges}
       onSave={configState.persistConfig}
     >
-      {sections.map((section) => (
-        <ConfigSection
-          key={section.title}
-          config={configState.config}
-          fields={section.fields.map((field) =>
-            field.key === "runDataRoot" || field.key === "localMaterialRoot"
-              ? { ...field, placeholder: defaultDirectories[field.key] }
-              : field,
-          )}
-          footer={
-            section.title === "百度网盘" ? <BaiduAutoCleanupStatus enabled={String(configState.config.baiduNetdiskAutoCleanupEnabled) === "true"} /> : section.title === "AI 服务" ? (
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  className="w-fit"
-                  onClick={() => {
-                    void globalAppConfigService.openArkApiKeyPage();
-                  }}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <ExternalLink aria-hidden="true" className="size-3.5" data-icon="inline-start" />
-                  <span className="leading-none">获取火山方舟密钥</span>
-                </Button>
-                <Button
-                  className="w-fit"
-                  disabled={configState.loading || testing}
-                  onClick={() => {
-                    void testConnection();
-                  }}
-                  size="sm"
-                  variant="outline"
-                >
-                  {testing ? "连接中…" : "测试连接"}
-                </Button>
-              </div>
-            ) : section.title === "本机图片识别" ? (
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <p role="status" className="text-sm text-muted-foreground">
-                  {ocrMessage}
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={configState.loading || testingOcr}
-                  onClick={() => {
-                    void testLocalOcr();
-                  }}
-                >
-                  {testingOcr ? "测试中…" : "测试本机识别"}
-                </Button>
-              </div>
-            ) : undefined
-          }
-          section={section}
-          onChange={configState.updateConfig}
-          onSelectDirectory={selectDirectory}
+      <ConfigurationCategory title="通用设置">
+        <ThemeConfiguration
+          theme={configState.config.theme}
+          disabled={configState.loading}
+          onChange={(theme) => configState.updateConfig("theme", theme)}
         />
-      ))}
-      <ExternalApiConfiguration />
-      <FeishuGlobalConfiguration
-        config={configState.config}
-        onChange={configState.updateConfig}
-        disabled={configState.loading}
-        hasChanges={configState.hasChanges}
-      />
+        {renderSection("storage")}
+      </ConfigurationCategory>
+      <ConfigurationCategory title="下载与网盘">
+        {renderSection("baidu")}
+        <ExternalApiConfiguration />
+      </ConfigurationCategory>
+      <ConfigurationCategory title="识别与生成">
+        {renderSection("ocr")}
+        {renderSection("ai")}
+      </ConfigurationCategory>
+      <ConfigurationCategory title="数据连接">
+        <FeishuGlobalConfiguration
+          config={configState.config}
+          onChange={configState.updateConfig}
+          disabled={configState.loading}
+          hasChanges={configState.hasChanges}
+        />
+      </ConfigurationCategory>
     </ConfigurationPageFrame>
   );
 }

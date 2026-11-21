@@ -29,7 +29,7 @@ export function WeiboDramaServiceControlPage() {
 
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="weibo-drama"
+
       startDisabled={selection.startDisabled}
       beforeBrowserInstances={
         <AccountSelection

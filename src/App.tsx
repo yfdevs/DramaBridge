@@ -6,7 +6,6 @@ import { WorkspaceToolbarProvider } from "@/components/workspace-toolbar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppRuntimeProvider } from "@/platforms/app-runtime/context";
 import { AppTitlebarMemory } from "@/components/app-titlebar-memory";
-import { BaiduNetdiskDialogProvider } from "@/platforms/baidu-netdisk/dialog";
 import { Toaster as BaseToaster } from "@/components/ui/notifications";
 import { useAppTheme } from "@/platforms/app-config/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -41,30 +40,28 @@ function AppContent() {
   const youtube = useLocation().pathname.startsWith("/youtube-drama/");
   return (
     <TooltipProvider delay={120} closeDelay={0} timeout={250}>
-      <BaiduNetdiskDialogProvider>
-        <AppRuntimeProvider>
-          <SidebarProvider
-            open={true}
-            keyboardShortcutEnabled={false}
-            className="app-desktop-shell h-full min-h-0"
-            style={{ "--sidebar-width": "208px" } as React.CSSProperties}
-          >
-            <AppTitlebarMemory />
-            <AppSidebar />
-            <WorkspaceToolbarProvider>
-              <div
-                className={`${youtube ? "youtube-theme " : ""}app-workspace flex min-w-0 flex-1 flex-col overflow-hidden bg-background`}
-              >
-                <AppWorkspaceHeader />
-                <div className="app-page-scroll min-h-0 flex-1 overflow-auto">
-                  <AppRoutes />
-                </div>
+      <AppRuntimeProvider>
+        <SidebarProvider
+          open={true}
+          keyboardShortcutEnabled={false}
+          className="app-desktop-shell h-full min-h-0"
+          style={{ "--sidebar-width": "208px" } as React.CSSProperties}
+        >
+          <AppTitlebarMemory />
+          <AppSidebar />
+          <WorkspaceToolbarProvider>
+            <div
+              className={`${youtube ? "youtube-theme " : ""}app-workspace flex min-w-0 flex-1 flex-col overflow-hidden bg-background`}
+            >
+              <AppWorkspaceHeader />
+              <div className="app-page-scroll min-h-0 flex-1 scroll-fade-y overflow-auto">
+                <AppRoutes />
               </div>
-            </WorkspaceToolbarProvider>
-            <Toaster position="bottom-right" />
-          </SidebarProvider>
-        </AppRuntimeProvider>
-      </BaiduNetdiskDialogProvider>
+            </div>
+          </WorkspaceToolbarProvider>
+          <Toaster position="bottom-right" />
+        </SidebarProvider>
+      </AppRuntimeProvider>
     </TooltipProvider>
   );
 }

@@ -116,7 +116,6 @@ export function QqDramaConfigurationPage() {
     hasChanges,
     loading,
     persistConfig,
-    restartRequired,
     updateConfig,
   } = usePlatformConfig({
     emptyConfig,
@@ -128,7 +127,6 @@ export function QqDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={hasChanges}
       loading={loading}
-      restartRequired={restartRequired}
       title="QQ 配置"
       onDiscard={discardChanges}
       onSave={persistConfig}

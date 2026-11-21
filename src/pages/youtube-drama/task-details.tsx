@@ -8,7 +8,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon } from "@/components/ui/solar-icons";
 import { Link } from "react-router-dom";
 import { useWorkspacePageActive } from "@/components/workspace-toolbar";
 import { youtubeService, type YoutubeTask } from "@/platforms/youtube-drama/service";

@@ -1,6 +1,5 @@
-import { OverflowText } from "@/components/ui/overflow-text";
 import { useEffect, useState } from "react";
-import { Folder } from "@mynaui/icons-react";
+import { FolderIcon as Folder } from "@/components/ui/solar-icons";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,15 +23,6 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function baiduNetdiskSummary(status: BaiduNetdiskCdpStatus | null, error: string | null) {
-  if (error) return "连接失败";
-  if (!status) return "正在检查";
-  if (status.ready) return "已连接";
-  if (!status.appRunning) return "客户端未启动";
-  if (!status.cdpRunning) return "需要重新连接";
-  return "暂时无法连接";
-}
-
 export function BaiduNetdiskPanel() {
   const [status, setStatus] = useState<BaiduNetdiskCdpStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -46,7 +36,6 @@ export function BaiduNetdiskPanel() {
   const [installPathMessage, setInstallPathMessage] = useState<string | null>(null);
   const [installPathError, setInstallPathError] = useState<string | null>(null);
 
-  const summary = baiduNetdiskSummary(status, statusError);
   const shouldRestart = Boolean(status?.appRunning);
   const showClientSetup = Boolean(statusError || (status && !status.ready));
 
@@ -174,49 +163,33 @@ export function BaiduNetdiskPanel() {
   };
 
   return (
-    <div className="bg-background">
-      <div className="grid gap-2.5 p-3">
-        <div className="flex min-h-8 items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span
-              className={`ml-0.5 size-2 shrink-0 rounded-full ring-2 ${
-                status?.ready
-                  ? "bg-emerald-500 ring-emerald-500/10"
-                  : statusError || status
-                    ? "bg-rose-500 ring-rose-500/10"
-                    : "bg-muted-foreground/40 ring-muted-foreground/10"
-              }`}
-              aria-hidden="true"
-            />
-            <span className="sr-only">连接状态：</span>
-            <OverflowText as="span" className="truncate text-xs font-medium">{summary}</OverflowText>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+    <div className="border-t border-border/60 pt-3">
+      <div className="grid gap-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {status ? (
             <Button
               type="button"
               size="xs"
-              variant="ghost"
-              disabled={statusRefreshing || actionPending !== null}
-              onClick={() => void refreshStatus()}
+              disabled={
+                actionPending !== null ||
+                installPathPending !== null ||
+                installPath !== savedInstallPath ||
+                status.supported === false
+              }
+              onClick={() => handleStart(shouldRestart)}
             >
-              {statusRefreshing ? "检查中" : "检查"}
+              {actionPending ? "连接中…" : shouldRestart ? "重启连接" : "启动并连接"}
             </Button>
-            {status ? (
-              <Button
-                type="button"
-                size="xs"
-                disabled={
-                  actionPending !== null ||
-                  installPathPending !== null ||
-                  installPath !== savedInstallPath ||
-                  status.supported === false
-                }
-                onClick={() => handleStart(shouldRestart)}
-              >
-                {actionPending ? "连接中…" : shouldRestart ? "重启连接" : "启动并连接"}
-              </Button>
-            ) : null}
-          </div>
+          ) : null}
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={statusRefreshing || actionPending !== null}
+            onClick={() => void refreshStatus()}
+          >
+            {statusRefreshing ? "检查中…" : "检查连接"}
+          </Button>
         </div>
 
         {status?.os === "darwin" ? (

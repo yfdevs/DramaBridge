@@ -26,7 +26,7 @@ export function TencentHuolongDramaServiceControlPage() {
   })
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="tencent-huolong-drama"
+
       startDisabled={selection.startDisabled}
       beforeBrowserInstances={<AccountSelection controls={tencentHuolongDramaService.accountControl} runtimes={state.status.accounts} selection={selection} locked={state.loading || state.status.running} />}
       loading={state.loading}

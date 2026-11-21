@@ -1,5 +1,5 @@
 import type { useYoutubePagination } from "./use-youtube-pagination";
-import { YoutubeFilterSelect } from "./filter-controls";
+import { YoutubePageSizeSelect } from "./filter-controls";
 import {
   Pagination,
   PaginationContent,
@@ -30,7 +30,7 @@ export function YoutubeListPagination({
           `，当前 ${(list.page - 1) * list.pageSize + 1}–${Math.min(list.page * list.pageSize, list.total)} 条`}
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <YoutubeFilterSelect
+        <YoutubePageSizeSelect
           label="每页条数"
           value={String(list.pageSize)}
           onChange={(value) => list.setPageSize(Number(value))}

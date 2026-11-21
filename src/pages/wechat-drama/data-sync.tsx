@@ -1,4 +1,7 @@
-import { CircleAlert } from "lucide-react";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { ManagementTableSkeleton } from "@/pages/shared/management-skeleton";
+import { managementContentClass } from "@/pages/shared/management-layout";
+import { CircleAlertIcon as CircleAlert } from "@/components/ui/solar-icons";
 import { FailureTooltip } from "@/components/ui/failure-tooltip";
 import { OverflowText } from "@/components/ui/overflow-text";
 import { useCallback, useEffect, useState } from "react";
@@ -237,7 +240,7 @@ export function WechatDataSyncPage() {
           后台配置
         </Button>
       </WorkspaceActions>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-5 sm:px-8">
+      <div className={managementContentClass}>
         {error && (
           <div
             role="alert"
@@ -246,7 +249,7 @@ export function WechatDataSyncPage() {
             <span>{error}</span>
             {!busy && (
               <Button size="sm" variant="outline" disabled={pending} onClick={() => void load()}>
-                重新读取
+                重试
               </Button>
             )}
           </div>
@@ -260,7 +263,7 @@ export function WechatDataSyncPage() {
             return (
               <div
                 key={task.mode}
-                className="grid gap-3 px-4 py-4 md:grid-cols-[180px_minmax(0,1fr)_64px] md:items-center"
+                className="grid gap-3 px-3 py-2.5 @min-[680px]:grid-cols-[180px_minmax(0,1fr)_64px] @min-[680px]:items-center"
               >
                 <div>
                   <h2 className="text-sm font-medium">{task.title}</h2>
@@ -320,7 +323,7 @@ export function WechatDataSyncPage() {
         </p>
         <section aria-labelledby="sync-records">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 id="sync-records" className="text-sm font-semibold">
+            <h2 id="sync-records" className="text-sm font-medium">
               处理记录{" "}
               <span className="font-normal text-muted-foreground">{state.records.length} 条</span>
             </h2>
@@ -349,12 +352,12 @@ export function WechatDataSyncPage() {
                   });
                 }}
               >
-                {confirmClear ? "确认清空" : "清空记录"}
+                {confirmClear ? "清空" : "清空记录"}
               </Button>
             </div>
           </div>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
+          <div className="overflow-x-auto">
+            <Table aria-busy={loading}>
               <TableHeader>
                 <TableRow>
                   <TableHead>视频号</TableHead>
@@ -364,11 +367,13 @@ export function WechatDataSyncPage() {
                   <TableHead>时间</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {!state.records.length && (
+              <TableBody data-skeleton-transition>
+                {loading && !state.records.length ? (
+                  <ManagementTableSkeleton columns={["w-24", "w-32", "h-4 w-14 rounded-full", "w-10", "w-24"]} rows={4} rowClassName="h-9" />
+                ) : !state.records.length && (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-28 text-center text-muted-foreground">
-                      {loading ? "正在读取记录…" : "暂无记录，开始任务后显示结果"}
+                    <TableCell colSpan={5} className="p-3">
+                      <EmptyStateCard title="暂无同步记录" description="开始任务后，可在这里查看同步结果" />
                     </TableCell>
                   </TableRow>
                 )}

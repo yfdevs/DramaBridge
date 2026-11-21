@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ConfigurationPageFrame, ConfigPanelSection } from "@/pages/shared/configuration-page";
-import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
+import { CheckCircleIcon as CheckCircle, DangerTriangleIcon as DangerTriangle } from "@/components/ui/solar-icons";
 import {
   youtubeService,
   type YoutubeConfig,
@@ -24,9 +24,9 @@ function ConfigRow({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-3 py-4 @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-8">
+    <div className="grid gap-2 py-2.5 @min-[620px]:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)] @min-[620px]:gap-x-6">
       <div className="space-y-1">
-        <p className="text-sm font-medium">{title}</p>
+        <p className="text-sm">{title}</p>
         {description && <p className="text-xs leading-5 text-muted-foreground">{description}</p>}
       </div>
       <div className="min-w-0 space-y-2">{children}</div>
@@ -136,7 +136,6 @@ export function YoutubeConfigurationPage() {
       hasChanges={changed}
       loading={loading || model.busy}
       saveDisabled={locked || status.running || Boolean(loadError)}
-      restartRequired={false}
       onDiscard={() => {
         setConfig(saved);
         setProxyPort(savedPort);

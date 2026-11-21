@@ -1,3 +1,4 @@
+import { managementContentClass } from "@/pages/shared/management-layout";
 import { useNotification } from "@/hooks/use-notification";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -46,11 +47,11 @@ export function KuaishouAccountSyncPage() {
   const locked = busy || state.running || state.stopping;
   const hasError = Boolean(error || state.error || accountsError);
   const statusLabel = state.stopping ? "正在停止" : hasError ? "连接异常" : state.running ? "同步中" : "未运行";
-  return <main className="account-sync-workspace mx-auto flex w-full max-w-[1120px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+  return <main className={`account-sync-workspace ${managementContentClass}`}>
     <WorkspaceActions label="账号同步操作"><Button size="sm" className="account-sync-action h-7 min-w-20 gap-1.5 px-3 text-xs" aria-busy={busy || state.stopping} disabled={busy || state.stopping || (!state.running && (fetching || !!accountsError || !selected.length))} onClick={() => void toggle()}>
       {state.stopping ? "正在停止…" : busy ? "处理中…" : state.running ? "停止同步" : "开始同步"}
     </Button></WorkspaceActions>
-    <header className="flex items-center justify-between gap-3"><h1 className="text-sm font-semibold">来源账号</h1>
+    <header className="flex items-center justify-between gap-3"><h1 className="text-sm font-medium">来源账号</h1>
       <span className="shrink-0 text-xs text-muted-foreground">{statusLabel}</span>
     </header>
     <AccountSelection showRuntime={false} lockedLabel="停止同步后可更换账号" locked={locked} selection={{ accounts, selected, setSelected, fetching, error: accountsError, refresh }} />

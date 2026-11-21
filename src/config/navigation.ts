@@ -1,6 +1,6 @@
 import { platformIcons } from "@/assets/platform-icons";
-import type { Icon } from "@mynaui/icons-react";
-import { ChartBar, CloudUpload, FineTune, List, Terminal } from "@mynaui/icons-react";
+import type { SolarIcon } from "@/components/ui/solar-icons";
+import { ChartBarIcon as ChartBar, CloudUploadIcon as CloudUpload, FineTuneIcon as FineTune, ListIcon as List, TerminalIcon as Terminal } from "@/components/ui/solar-icons";
 
 export type PlatformId =
   | "wechat-drama"
@@ -21,7 +21,6 @@ export type PlatformId =
 export type AppRoute =
   | "tools/jianying"
   | "tools/video-separation"
-  | `${PlatformId}/statistics`
   | `${PlatformId}/logs`
   | "app/updates"
   | "app/config"
@@ -76,7 +75,6 @@ const appRoutes = [
   "youtube-drama/accounts",
   "youtube-drama/service",
   "youtube-drama/config",
-  "youtube-drama/statistics",
   "youtube-drama/logs",
   "tools/video-separation",
   "app/updates",
@@ -84,7 +82,6 @@ const appRoutes = [
   "wechat-drama/data-sync",
   "wechat-drama/publish",
   "wechat-drama/config",
-  "wechat-drama/statistics",
   "wechat-drama/logs",
   "wechat-drama/accounts",
   "wechat-drama/service",
@@ -92,22 +89,18 @@ const appRoutes = [
   "wechat-miniprogram-drama/config",
   "wechat-miniprogram-drama/baidu-upload",
   "wechat-miniprogram-drama/catalog-upload",
-  "wechat-miniprogram-drama/statistics",
   "wechat-miniprogram-drama/logs",
   "meituan-drama/service",
   "meituan-drama/config",
-  "meituan-drama/statistics",
   "meituan-drama/logs",
   "taobao-drama/service",
   "taobao-drama/config",
-  "taobao-drama/statistics",
   "taobao-drama/logs",
   "kuaishou-drama/service",
   "wechat-drama/recreation",
   "kuaishou-drama/recreation",
   "kuaishou-drama/account-sync",
   "kuaishou-drama/config",
-  "kuaishou-drama/statistics",
   "kuaishou-drama/logs",
   "kuaishou-drama/projects",
   "kuaishou-drama/schedule",
@@ -115,44 +108,36 @@ const appRoutes = [
   "kuaishou-drama/settings",
   "weibo-drama/service",
   "weibo-drama/config",
-  "weibo-drama/statistics",
   "weibo-drama/logs",
   "qq-drama/service",
   "qq-drama/config",
-  "qq-drama/statistics",
   "qq-drama/logs",
   "tencent-huolong-drama/service",
   "tencent-huolong-drama/config",
-  "tencent-huolong-drama/statistics",
   "tencent-huolong-drama/logs",
   "iqiyi-drama/service",
   "iqiyi-drama/config",
-  "iqiyi-drama/statistics",
   "iqiyi-drama/logs",
   "baidu-drama/service",
   "baidu-drama/config",
-  "baidu-drama/statistics",
   "baidu-drama/logs",
   "douyin-drama/service",
   "douyin-drama/config",
-  "douyin-drama/statistics",
   "douyin-drama/logs",
   "tiktok-drama/service",
   "tiktok-drama/netdisk",
   "tiktok-drama/config",
-  "tiktok-drama/statistics",
   "tiktok-drama/logs",
   "pinduoduo-drama/service",
   "pinduoduo-drama/records",
   "pinduoduo-drama/config",
-  "pinduoduo-drama/statistics",
   "pinduoduo-drama/logs",
 ] as const satisfies readonly AppRoute[];
 
 export type NavigationItem = {
   title: string;
   route: AppRoute;
-  icon: Icon;
+  icon: SolarIcon;
 };
 
 export type NavigationGroup = {
@@ -329,11 +314,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "wechat-drama/config",
         icon: FineTune,
       },
-      {
-        title: "发布统计",
-        route: "wechat-drama/statistics",
-        icon: ChartBar,
-      },
     ],
   },
   {
@@ -359,11 +339,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "wechat-miniprogram-drama/config",
         icon: FineTune,
       },
-      {
-        title: "发布统计",
-        route: "wechat-miniprogram-drama/statistics",
-        icon: ChartBar,
-      },
     ],
   },
   {
@@ -379,11 +354,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "meituan-drama/config",
         icon: FineTune,
       },
-      {
-        title: "发布统计",
-        route: "meituan-drama/statistics",
-        icon: ChartBar,
-      },
     ],
   },
   {
@@ -398,11 +368,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         title: "配置管理",
         route: "taobao-drama/config",
         icon: FineTune,
-      },
-      {
-        title: "发布统计",
-        route: "taobao-drama/statistics",
-        icon: ChartBar,
       },
     ],
   },
@@ -425,11 +390,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "kuaishou-drama/config",
         icon: FineTune,
       },
-      {
-        title: "发布统计",
-        route: "kuaishou-drama/statistics",
-        icon: ChartBar,
-      },
     ],
   },
   {
@@ -444,11 +404,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         title: "配置管理",
         route: "qq-drama/config",
         icon: FineTune,
-      },
-      {
-        title: "发布统计",
-        route: "qq-drama/statistics",
-        icon: ChartBar,
       },
     ],
   },
@@ -465,11 +420,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "weibo-drama/config",
         icon: FineTune,
       },
-      {
-        title: "发布统计",
-        route: "weibo-drama/statistics",
-        icon: ChartBar,
-      },
     ],
   },
   {
@@ -484,11 +434,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         title: "配置管理",
         route: "tencent-huolong-drama/config",
         icon: FineTune,
-      },
-      {
-        title: "发布统计",
-        route: "tencent-huolong-drama/statistics",
-        icon: ChartBar,
       },
     ],
   },
@@ -505,11 +450,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "iqiyi-drama/config",
         icon: FineTune,
       },
-      {
-        title: "发布统计",
-        route: "iqiyi-drama/statistics",
-        icon: ChartBar,
-      },
     ],
   },
   {
@@ -525,11 +465,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "baidu-drama/config",
         icon: FineTune,
       },
-      {
-        title: "发布统计",
-        route: "baidu-drama/statistics",
-        icon: ChartBar,
-      },
     ],
   },
   {
@@ -544,11 +479,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         title: "配置管理",
         route: "douyin-drama/config",
         icon: FineTune,
-      },
-      {
-        title: "发布统计",
-        route: "douyin-drama/statistics",
-        icon: ChartBar,
       },
     ],
   },
@@ -566,11 +496,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         route: "tiktok-drama/config",
         icon: FineTune,
       },
-      {
-        title: "发布统计",
-        route: "tiktok-drama/statistics",
-        icon: ChartBar,
-      },
     ],
   },
   {
@@ -585,11 +510,6 @@ const platformNavigationGroups: NavigationGroup[] = [
         title: "配置管理",
         route: "pinduoduo-drama/config",
         icon: FineTune,
-      },
-      {
-        title: "发布统计",
-        route: "pinduoduo-drama/statistics",
-        icon: ChartBar,
       },
     ],
   },

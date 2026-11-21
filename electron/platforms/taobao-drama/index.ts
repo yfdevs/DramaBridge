@@ -21,7 +21,6 @@ import {
   resolveGlobalPlatformDirectories,
 } from "../../global-app-config";
 import { registerRuntimeAssetCleanupRoot } from "../../runtime-asset-cleanup";
-import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import { cleanupBaiduNetdiskPlayletAfterTaskSuccess, ensureBaiduNetdiskShareDownloaded } from "../baidu-netdisk";
 import {
   directoryDefaultPath,
@@ -290,7 +289,6 @@ export function registerTaobaoDramaPlatformHandlers() {
   registerAccountControl({ platform: "taobao-drama", controller: controller, start: startRuntime, status, onStarted: () => configStore().set("selectedAccountIds", controller.current?.getStatus().accounts.filter(account => account.launched).map(account => account.accountId) ?? []) });
   taskMonitor();
   ipcMain.handle("taobao-drama:tasks:cleanup", () => taskMonitor().sweep());
-  registerTaskAnalyticsHandler({ platform: "taobao-drama", apiBaseUrl: () => readConfig().apiBaseUrl, apiPrefix: "/dramaAiRpa/taobao" });
   registerRuntimeAssetCleanupRoot({ platform: "taobao-drama", rootPath: path.join(storagePaths().runDataDir, "assets"), maxDepth: 2, retentionMs: 3 * 60 * 60 * 1_000 });
   ipcMain.handle("taobao-drama:config:get", () => ({ config: readConfig(), path: configStore().path, storagePaths: storagePaths(), restartRequired: false }));
   ipcMain.handle("taobao-drama:config:save", (_event, value: TaobaoDramaConfig) => {

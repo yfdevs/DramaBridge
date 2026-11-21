@@ -1,3 +1,4 @@
+import { managementContentClass } from "@/pages/shared/management-layout";
 type PageShellProps = {
   title: string
   description?: string
@@ -5,11 +6,11 @@ type PageShellProps = {
 
 export function PageShell({ title, description }: PageShellProps) {
   return (
-    <main className="flex min-h-svh flex-1 flex-col bg-transparent p-6">
+    <main className={`${managementContentClass} min-h-full`}>
       <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-normal">{title}</h1>
+        <h1 className="text-sm font-medium">{title}</h1>
         {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
         ) : null}
       </div>
     </main>

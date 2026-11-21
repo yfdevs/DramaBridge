@@ -1,6 +1,8 @@
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkspaceActionHost, WorkspaceNavigationHost } from "@/components/workspace-toolbar";
 import { NavLink, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import {
   defaultRoute,
   isAppRoute,
@@ -9,7 +11,6 @@ import {
   routePath,
   toolNavigation,
 } from "@/config/navigation";
-import { cn } from "@/lib/utils";
 
 export function AppWorkspaceHeader() {
   const location = useLocation();
@@ -20,26 +21,27 @@ export function AppWorkspaceHeader() {
   const tool = toolNavigation.find((item) => item.route === route);
   if (route === "app/updates") return null;
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-      {route === "app/config" && <h1 className="text-sm font-semibold">全局配置</h1>}
-      {tool && route !== "tools/video-separation" && route !== "tools/jianying" && <h1 className="px-2 text-sm font-medium">{tool.title}</h1>}
+    <header className={cn(
+      "flex shrink-0 items-center gap-1.5 border-b border-border/60 px-2 font-workspace [&_[data-slot=button]]:text-xs [&_[data-slot=tabs-list][data-orientation=horizontal]]:h-7 [&_[data-slot=tabs-trigger]]:px-2 [&_[data-slot=tabs-trigger]]:text-xs",
+      route === "app/config" ? "@container min-h-10 flex-wrap py-1" : "h-10",
+    )}>
+      {route === "app/config" && <h1 className="shrink-0 text-xs font-medium whitespace-nowrap">全局配置</h1>}
+      {tool && route !== "tools/video-separation" && route !== "tools/jianying" && <h1 className="text-xs font-medium">{tool.title}</h1>}
       {!route.startsWith("app/") && !tool && (
-        <nav aria-label="当前平台页面" className="flex shrink-0 items-center gap-0.5">
-          {pages.map((page) => (
-            <NavLink
-              key={page.route}
-              to={routePath(page.route)}
-              className={({ isActive }) =>
-                cn(
-                  "inline-flex h-7 items-center rounded-lg px-2.5 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring",
-                  isActive && "bg-foreground/5 text-foreground hover:bg-foreground/5",
-                )
-              }
-            >
-              {page.title}
-            </NavLink>
-          ))}
-        </nav>
+        <Tabs value={route} className="shrink-0">
+          <TabsList aria-label="当前平台页面" activateOnFocus={false}>
+            {pages.map((page) => (
+              <TabsTrigger
+                key={page.route}
+                value={page.route}
+                nativeButton={false}
+                render={<NavLink to={routePath(page.route)} />}
+              >
+                {page.title}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       )}
       {(route === "tools/jianying" || route === "tools/video-separation") && <WorkspaceNavigationHost />}
       {route === "tools/video-separation" && <Separator orientation="vertical" className="mx-2 h-5 data-vertical:self-center" />}

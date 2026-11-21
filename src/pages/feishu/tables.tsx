@@ -28,14 +28,15 @@ export function FeishuGlobalConfiguration({
     title: "飞书表格",
     description: "连接各平台共用的任务表",
     fields: [
-      { key: "feishuAppId", label: "应用 ID" },
+      { key: "feishuAppId", label: "应用 ID", description: "在飞书开放平台查看" },
       {
         key: "feishuAppSecret",
         label: "应用密钥",
+        description: "留空时保留已保存的密钥",
         type: "password",
         placeholder: config.feishuHasSecret ? "已保存，留空保留原密钥" : "输入 App Secret",
       },
-      { key: "feishuTableUrl", label: "表格链接", type: "url" },
+      { key: "feishuTableUrl", label: "任务表链接", description: "使用飞书多维表格链接", type: "url" },
     ],
   };
   const test = async () => {
@@ -72,12 +73,12 @@ export function FeishuGlobalConfiguration({
                 {message}
               </p>
             )}
-            {hasChanges && <p className="text-xs text-muted-foreground">保存更改后可测试连接</p>}
+            {hasChanges && <p className="text-xs text-muted-foreground">保存后可测试连接</p>}
             <Button
               size="sm"
               variant="outline"
               disabled={disabled || testing || hasChanges || !config.feishuHasSecret}
-              title={hasChanges ? "请先保存配置" : undefined}
+              title={hasChanges ? "请先保存" : undefined}
               onClick={() => void test()}
             >
               {testing ? "连接中…" : "测试连接"}

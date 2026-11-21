@@ -32,7 +32,7 @@ export function WechatMiniProgramServiceControlPage() {
 
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="wechat-miniprogram-drama"
+
       loading={loading}
       pendingAction={pendingAction}
       running={status.running}

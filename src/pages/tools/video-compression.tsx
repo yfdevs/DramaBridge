@@ -1,5 +1,7 @@
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from "@/components/ui/table";
 import { useEffect, useState } from "react";
-import { FolderOpen } from "lucide-react";
+import { FolderOpenIcon as FolderOpen } from "@/components/ui/solar-icons";
 import { Button } from "@/components/ui/button";
 import { OverflowText } from "@/components/ui/overflow-text";
 import { Input } from "@/components/ui/input";
@@ -12,7 +14,7 @@ const size = (bytes: number) => `${(bytes / mb).toLocaleString("zh-CN", { maximu
 const labels = { ready: "待压缩", queued: "等待中", running: "压缩中", success: "已完成", "target-unmet": "未达标", failed: "失败", cancelled: "已停止" };
 
 export function VideoCompressionPage() {
-  const [state, setState] = useState<CompressionState>({ status: "idle", items: [], message: "添加视频后开始压缩。" });
+  const [state, setState] = useState<CompressionState>({ status: "idle", items: [], message: "添加视频后开始压缩" });
   const [targetMB, setTargetMB] = useState("10");
   const [strictLossless, setStrictLossless] = useState(false);
   const [ready, setReady] = useState(false);
@@ -66,34 +68,32 @@ export function VideoCompressionPage() {
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums"><span>{items.length} 个视频</span><span className="text-muted-foreground">共 {size(originalBytes)}</span>{savedBytes > 0 && <span className="text-muted-foreground">已节省 {size(savedBytes)}</span>}</p>
         <Button size="sm" variant="ghost" disabled={disabled} onClick={() => void action(() => service.remove())}>清空列表</Button>
       </div>
-      <div className="min-h-0 overflow-auto rounded-lg border">
-        <table className="table-sticky-actions w-full min-w-[760px] table-fixed text-left text-xs leading-4">
-          <caption className="sr-only">批量视频压缩进度与结果</caption>
-          <colgroup><col /><col className="w-24" /><col className="w-24" /><col className="w-64" /><col className="w-16" /></colgroup>
-          <thead className="bg-muted text-muted-foreground"><tr><th scope="col" className="h-8 px-2 py-1 font-medium">视频</th><th scope="col" className="h-8 px-2 py-1 text-right font-medium">原大小</th><th scope="col" className="h-8 px-2 py-1 text-right font-medium">输出大小</th><th scope="col" className="h-8 px-2 py-1 font-medium">状态</th><th scope="col" className="h-8 px-2 py-1 font-medium">操作</th></tr></thead>
-          <tbody>{items.map(item => {
-            const active = item.status === "running";
-            const percent = Math.min(100, Math.max(0, item.progress?.percent ?? 0));
-            const note = active ? item.message.replace(/^第一遍：/, "分析：").replace(/^第二遍：/, "编码：")
-              : item.status === "failed" || item.status === "target-unmet" ? item.message.replace(/[。.]$/, "")
-              : item.result?.method === "原样复制" ? "已原样保存" : "";
-            return <tr key={item.id} className="h-9 border-t">
-              <td className="px-2 py-1.5 align-middle"><div title={`${item.file}${item.source ? `\n${item.source.width} × ${item.source.height}，${Math.round(item.source.duration)} 秒` : ""}`}><OverflowText>{item.name}</OverflowText></div></td>
-              <td className="px-2 py-1.5 text-right align-middle tabular-nums">{item.source ? size(item.source.bytes) : "—"}</td>
-              <td className="px-2 py-1.5 text-right align-middle tabular-nums">{item.result ? size(item.result.outputBytes) : "—"}</td>
-              <td className="px-2 py-1.5 align-middle">
-                <div className="flex h-6 min-w-0 flex-col justify-center" title={note || undefined}>
-                  <div className="flex h-5 shrink-0 items-center justify-between gap-2"><span className={`min-w-0 truncate ${item.status === "failed" || item.status === "target-unmet" ? "text-destructive" : ""}`}>{active ? note : labels[item.status]}</span><span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground">{active && item.progress?.percent !== undefined ? `${Math.floor(percent)}%` : ""}</span></div>
-                  <div role="progressbar" aria-label={`${item.name} 当前步骤进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress?.percent === undefined ? undefined : percent} aria-hidden={!active} className={`h-1 shrink-0 overflow-hidden rounded-full bg-muted ${active ? "visible" : "invisible"}`}>
-                    <div className="h-full rounded-full bg-primary transition-[width] duration-250 ease-out motion-reduce:transition-none" style={{ width: `${percent}%` }} />
-                  </div>
+      <Table stickyActions className="min-w-[680px] table-fixed" containerClassName="min-h-0 overflow-auto">
+        <TableCaption className="sr-only">批量视频压缩进度与结果</TableCaption>
+        <colgroup><col /><col className="w-24" /><col className="w-24" /><col className="w-64" /><col className="w-16" /></colgroup>
+        <TableHeader><TableRow><TableHead scope="col">视频</TableHead><TableHead scope="col" className="text-right">原大小</TableHead><TableHead scope="col" className="text-right">输出大小</TableHead><TableHead scope="col">状态</TableHead><TableHead scope="col">操作</TableHead></TableRow></TableHeader>
+        <TableBody>{items.map(item => {
+          const active = item.status === "running";
+          const percent = Math.min(100, Math.max(0, item.progress?.percent ?? 0));
+          const note = active ? item.message.replace(/^第一遍：/, "分析：").replace(/^第二遍：/, "编码：")
+            : item.status === "failed" || item.status === "target-unmet" ? item.message.replace(/[。.]$/, "")
+            : item.result?.method === "原样复制" ? "已原样保存" : "";
+          return <TableRow key={item.id}>
+            <TableCell><div title={`${item.file}${item.source ? `\n${item.source.width} × ${item.source.height}，${Math.round(item.source.duration)} 秒` : ""}`}><OverflowText>{item.name}</OverflowText></div></TableCell>
+            <TableCell className="text-right tabular-nums">{item.source ? size(item.source.bytes) : "—"}</TableCell>
+            <TableCell className="text-right tabular-nums">{item.result ? size(item.result.outputBytes) : "—"}</TableCell>
+            <TableCell>
+              <div className="flex h-6 min-w-0 flex-col justify-center" title={note || undefined}>
+                <div className="flex h-5 shrink-0 items-center justify-between gap-2"><span className={`min-w-0 truncate ${item.status === "failed" || item.status === "target-unmet" ? "text-destructive" : ""}`}>{active ? note : labels[item.status]}</span><span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground">{active && item.progress?.percent !== undefined ? `${Math.floor(percent)}%` : ""}</span></div>
+                <div role="progressbar" aria-label={`${item.name} 当前步骤进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress?.percent === undefined ? undefined : percent} aria-hidden={!active} className={`h-1 shrink-0 overflow-hidden rounded-full bg-muted ${active ? "visible" : "invisible"}`}>
+                  <div className="h-full rounded-full bg-primary transition-[width] duration-250 ease-out motion-reduce:transition-none" style={{ width: `${percent}%` }} />
                 </div>
-              </td>
-              <td className="px-2 py-1.5 align-middle"><Button size="xs" variant="ghost" disabled={disabled} aria-label={`移除 ${item.name}`} onClick={() => void action(() => service.remove(item.id))}>移除</Button></td>
-            </tr>;
-          })}{!items.length && <tr><td colSpan={5} className="p-12 text-center text-muted-foreground">添加需要压缩的视频</td></tr>}</tbody>
-        </table>
-      </div>
+              </div>
+            </TableCell>
+            <TableCell><Button size="xs" variant="ghost" disabled={disabled} aria-label={`移除 ${item.name}`} onClick={() => void action(() => service.remove(item.id))}>移除</Button></TableCell>
+          </TableRow>;
+        })}{!items.length && <TableRow><TableCell colSpan={5} className="p-3"><EmptyStateCard title="暂无视频" description="添加需要压缩的视频" /></TableCell></TableRow>}</TableBody>
+      </Table>
       <p role="status" aria-live="polite" className="text-sm text-muted-foreground">{running ? `已完成 ${completed} / ${items.length} 个` : state.message.replace(/[。.]$/, "")}</p>
     </section>
   </main>;

@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { AccountActions, type AccountControls } from "./account-actions";
 
 export function InstanceStatus({
@@ -14,10 +15,10 @@ export function InstanceStatus({
   paused?: boolean;
   disabled?: boolean;
 }) {
-  const state = disabled ? "idle" : !launched
+  const state = disabled ? "disabled" : !launched
     ? "idle"
     : paused
-      ? "waiting"
+      ? "paused"
       : loginState === "logged-in"
         ? "ready"
         : loginState === "login-required"
@@ -36,9 +37,8 @@ export function InstanceStatus({
     <Badge
       variant="secondary"
       data-state={state}
-      className="instance-status shrink-0 gap-1.5 text-xs font-normal"
+      className="instance-status shrink-0 text-xs font-normal"
     >
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
       {text}
     </Badge>
   );
@@ -117,9 +117,10 @@ export function RuntimeInstances({
           ))}
         </ul>
       ) : (
-        <p role="status" className="py-12 text-center text-sm text-muted-foreground">
-          {running ? "暂无可用实例，请检查后台账号配置" : "启动服务后显示账号实例"}
-        </p>
+        <EmptyStateCard
+          title="暂无可用实例"
+          description={running ? "请检查后台账号配置" : "启动服务后，可在这里查看账号实例"}
+        />
       )}
     </section>
   );

@@ -6,7 +6,7 @@ function Table({ className, containerClassName, stickyActions = false, ...props 
   return (
     <div
       data-slot="table-container"
-      className={cn("relative w-full overflow-x-auto", containerClassName)}
+      className={cn("@container relative w-full min-w-0 max-w-full overflow-x-auto bg-background", containerClassName)}
     >
       <table
         data-slot="table"
@@ -55,7 +55,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b motion-safe:transition-colors",
         className
       )}
       {...props}

@@ -6,7 +6,6 @@ import Store from "electron-store";
 import { randomUUID } from "node:crypto";
 import { getBaiduWorkerId } from "./worker-identity";
 import { createValidatedStore } from "../../core/config-store";
-import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import cron, { type ScheduledTask } from "node-cron";
 import { existsSync, statSync } from "node:fs";
 import { lstat, readdir, rm, stat } from "node:fs/promises";
@@ -587,11 +586,6 @@ export function openBaiduDramaLogDir() {
 
 export function registerBaiduDramaPlatformHandlers() {
   registerAccountControl({ platform: "baidu-drama", controller: runtimeController, start: startRuntime, status });
-  registerTaskAnalyticsHandler({
-    platform: "baidu-drama",
-    apiBaseUrl: () => readConfig().apiBaseUrl,
-    apiPrefix: "/dramaAiRpa/baidu",
-  });
   registerBaiduRuntimeAssetCleanup();
   scheduleBaiduTemporaryAssetCleanup();
 

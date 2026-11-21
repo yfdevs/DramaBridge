@@ -2,7 +2,6 @@ import { app, BrowserWindow } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
-import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -485,12 +484,6 @@ export function registerPinduoduoDramaPlatformHandlers() {
     const source = new PinduoduoSourceTable(configuredFeishuTables(), input.trim());
     const index = await source.read();
     return { sheetName: "拼多多-新剧", titleCount: index.size };
-  });
-  registerTaskAnalyticsHandler({
-    platform: "pinduoduo-drama",
-    apiPrefix: "/pinduoduoDramaRpa",
-    accountIdField: "pinduoduoAccountId",
-    statusField: "rpaStatus",
   });
   ipcMain.handle("pinduoduo-drama:config:get", () => ({
     config: readConfig(),

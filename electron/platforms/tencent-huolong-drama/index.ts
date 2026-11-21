@@ -4,7 +4,6 @@ import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
-import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import path from "node:path";
 import {
   assertGlobalDirectoriesConfigured,
@@ -341,11 +340,6 @@ export function openTencentHuolongDramaLogDir() {
 
 export function registerTencentHuolongDramaPlatformHandlers() {
   registerAccountControl({ platform: "tencent-huolong-drama", controller: controller, start: startRuntime, status });
-  registerTaskAnalyticsHandler({
-    platform: "tencent-huolong-drama",
-    apiBaseUrl: () => readConfig().apiBaseUrl,
-    apiPrefix: "/dramaAiRpa/tencent",
-  });
   registerRuntimeAssetCleanupRoot({
     platform: "tencent-huolong-drama",
     rootPath: path.join(storagePaths().runDataDir, "assets"),

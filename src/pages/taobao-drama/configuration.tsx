@@ -81,7 +81,6 @@ export function TaobaoDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={state.hasChanges}
       loading={state.loading}
-      restartRequired={state.restartRequired}
       title="淘宝配置"
       onDiscard={state.discardChanges}
       onSave={state.persistConfig}

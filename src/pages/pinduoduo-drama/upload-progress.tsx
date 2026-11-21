@@ -1,3 +1,4 @@
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import type { PinduoduoDramaServiceStatus } from "@/platforms/pinduoduo-drama/service";
@@ -10,9 +11,11 @@ export function PinduoduoUploadProgressCard({ status }: { status: PinduoduoDrama
     <section aria-label="当前上传进度" className="rounded-lg border px-5 py-4">
       <h2 className="text-sm font-medium">当前上传进度</h2>
       {!active.length ? (
-        <p role="status" className="mt-2 text-sm text-muted-foreground">
-          {status.running ? "暂无上传任务，等待新任务" : "勾选账号并启动后查看进度"}
-        </p>
+        <EmptyStateCard
+          className="mt-3 border-0"
+          title={status.running ? "等待上传任务" : "暂无上传任务"}
+          description={status.running ? undefined : "勾选账号并启动后查看进度"}
+        />
       ) : (
         <div className="mt-4 divide-y">{active.map(instance => {
           const progress = instance.uploadProgress!;

@@ -10,7 +10,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { Toaster } from "@/components/ui/notifications";
-import { MoonIcon, SunIcon } from "lucide-react";
+import { MoonIcon, SunIcon } from "@/components/ui/solar-icons";
 
 import appLogo from "@/assets/dramabridge-logo.png";
 import youtubeMark from "@/assets/youtube-mark.svg";
@@ -102,7 +102,7 @@ export function YoutubeWebApp() {
             <div className="youtube-theme flex min-h-svh min-w-0 flex-col bg-background text-foreground">
               <div className="flex min-w-0 flex-1 flex-col">
                 <header className="sticky top-0 z-20 border-b bg-background">
-                  <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center gap-3 px-4 sm:gap-4 sm:px-6 lg:px-8">
+                  <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center gap-3 px-2.5 sm:gap-4">
                     <WebBrand />
                     <WebNavigation />
                     <div className="ml-auto flex shrink-0 items-center gap-2">

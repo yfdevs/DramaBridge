@@ -71,7 +71,7 @@ export function YoutubeCreateTaskPage({
         : rightsManagement &&
             (!accounts.find((account) => account.id === accountId)?.browser?.saved ||
               accounts.find((account) => account.id === accountId)?.browser?.needsLogin)
-          ? "请先在账号管理完成浏览器登录并确认保存"
+          ? "请先在账号管理完成浏览器登录并保存"
           : !name.trim()
             ? "请填写剧名"
             : !share.trim()
@@ -188,7 +188,7 @@ export function YoutubeCreateTaskPage({
             {mode === "episodes" && (
               <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
                 按文件名中的数字顺序逐集分离人声，每集处理完成后上传。标题为“{name.trim() || "剧名"}
-                -第1集”，描述、标签和可见性应用到每集。
+                -第1集”，描述、标签和可见性应用到每集
               </p>
             )}
             {mode === "mute" && (
@@ -258,7 +258,7 @@ export function YoutubeCreateTaskPage({
                   id="youtube-rights-description"
                   className="text-xs leading-5 text-muted-foreground"
                 >
-                  上传完成后打开视频编辑页，使用此账号保存的浏览器登录状态勾选版权选项并保存。仅对本任务生效，默认关闭；可用选项取决于账号权限。
+                  上传完成后打开视频编辑页，使用此账号保存的浏览器登录状态勾选版权选项并保存。仅对本任务生效，默认关闭；可用选项取决于账号权限
                 </p>
               </div>
               <Switch

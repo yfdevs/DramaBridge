@@ -65,7 +65,6 @@ export function TencentHuolongDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={state.hasChanges}
       loading={state.loading}
-      restartRequired={state.restartRequired}
       title="火龙漫剧配置"
       onDiscard={state.discardChanges}
       onSave={state.persistConfig}

@@ -113,7 +113,6 @@ export function WeiboDramaConfigurationPage() {
     hasChanges,
     loading,
     persistConfig,
-    restartRequired,
     updateConfig,
   } = usePlatformConfig({
     emptyConfig,
@@ -125,7 +124,6 @@ export function WeiboDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={hasChanges}
       loading={loading}
-      restartRequired={restartRequired}
       title="微博 配置"
       onDiscard={discardChanges}
       onSave={persistConfig}

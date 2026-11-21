@@ -1,5 +1,9 @@
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FilterSearchField, FilterToolbar } from "@/components/filter-controls";
+import { managementContentClass } from "@/pages/shared/management-layout";
 import { OverflowText } from "@/components/ui/overflow-text";
-import { ChevronDown, ChevronRight, Folder, Pause, Play, Search, Trash } from "@mynaui/icons-react";
+import { ChevronDownIcon as ChevronDown, ChevronRightIcon as ChevronRight, FolderIcon as Folder, PauseIcon as Pause, PlayIcon as Play, TrashIcon as Trash } from "@/components/ui/solar-icons";
 import {
   memo,
   startTransition,
@@ -25,9 +29,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { CodeOutput } from "@/components/code-output";
-import { ArrowDownIcon, XIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowDownToLineIcon } from "@/components/ui/solar-icons";
 import { ListFilterMenu } from "@/components/list-filter-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PlatformId } from "@/config/navigation";
@@ -429,54 +432,18 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
   return (
     <main
       className={cn(
-        "platform-log-viewer @container flex h-full min-w-0 min-h-[400px] flex-col gap-4 px-4 py-5 sm:px-6",
+        managementContentClass,
+        "platform-log-viewer h-full min-h-[400px]",
         platform === "youtube-drama" && "youtube-theme youtube-log",
       )}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <div
-          className="flex min-w-28 max-w-52 shrink items-center gap-2"
-          title={`${statusMessage}${filePath ? `，${filePath}` : ""}`}
-        >
-          <span
-            className={cn(
-              "size-1.5 shrink-0 rounded-full",
-              status === "live" && "bg-[var(--log-ready)]",
-              status === "connecting" && "bg-[var(--log-info)] motion-safe:animate-pulse",
-              status === "waiting" && "bg-[var(--log-warn)]",
-              status === "error" && "bg-[var(--log-error)]",
-            )}
-            role="status"
-            aria-label={statusMessage}
-          />
-          <OverflowText as="span" className="min-w-0 truncate text-xs text-muted-foreground">
-            {status === "live"
-              ? paused
-                ? `已暂停${pendingCount ? `，${pendingCount} 条待更新` : ""}`
-                : "实时接收中"
-              : statusMessage}
-          </OverflowText>
-        </div>
-        <div className="relative min-w-48 flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="h-7 rounded-md pl-8 pr-8"
-            placeholder="搜索账号、任务、范围或错误码"
-            aria-label="搜索日志"
-          />
-          {query && (
-            <button
-              type="button"
-              aria-label="清空日志搜索"
-              className="absolute right-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-              onClick={() => setQuery("")}
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          )}
-        </div>
+      <FilterToolbar label="日志筛选">
+        <FilterSearchField
+          label="搜索日志"
+          placeholder="搜索账号、任务、范围或错误码"
+          value={query}
+          onChange={setQuery}
+        />
         <ListFilterMenu
           label="筛选日志"
           groups={[
@@ -500,7 +467,8 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
           <TooltipTrigger
             render={
               <Button
-                variant={paused ? "secondary" : "outline"}
+                variant="state"
+                data-active={paused ? "" : undefined}
                 size="icon-sm"
                 aria-label={paused ? "继续刷新日志" : "暂停刷新日志"}
                 aria-pressed={paused}
@@ -516,14 +484,48 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
               : "暂停刷新"}
           </TooltipContent>
         </Tooltip>
-        <Button
-          variant={follow && !paused ? "secondary" : "outline"}
-          size="sm"
-          aria-pressed={follow && !paused}
-          onClick={() => (follow && !paused ? setFollow(false) : followLatest())}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="state"
+                data-active={follow && !paused ? "" : undefined}
+                size="icon-sm"
+                aria-label="跟随最新日志"
+                aria-pressed={follow && !paused}
+                onClick={() => (follow && !paused ? setFollow(false) : followLatest())}
+              />
+            }
+          >
+            <ArrowDownToLineIcon />
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="end" sideOffset={8}>
+            {follow && !paused ? "正在跟随最新日志，点击停止跟随" : "跟随最新日志"}
+          </TooltipContent>
+        </Tooltip>
+        <div
+          className="flex min-w-28 max-w-52 shrink items-center gap-2"
+          title={`${statusMessage}${filePath ? `，${filePath}` : ""}`}
         >
-          {follow && !paused ? "正在跟随" : "跟随最新"}
-        </Button>
+          <span
+            className={cn(
+              "size-1.5 shrink-0 rounded-full",
+              status === "live" && "bg-[var(--log-ready)]",
+              status === "connecting" && "bg-[var(--log-info)] motion-safe:animate-pulse",
+              status === "waiting" && "bg-[var(--log-warn)]",
+              status === "error" && "bg-[var(--log-error)]",
+            )}
+            role="status"
+            aria-label={statusMessage}
+          />
+          <OverflowText as="span" className="min-w-0 truncate text-xs text-muted-foreground">
+            {status === "live"
+              ? paused
+                ? `已暂停${pendingCount ? `，${pendingCount} 条待更新` : ""}`
+                : "实时接收中"
+              : statusMessage}
+          </OverflowText>
+        </div>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
           {filteredEntries.length === entries.length
             ? `${entries.length} 条`
@@ -564,7 +566,7 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
             清理当前日志
           </TooltipContent>
         </Tooltip>
-      </div>
+      </FilterToolbar>
 
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <OverflowText
@@ -590,6 +592,7 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
       <section
         className="relative min-h-0 flex-1 overflow-hidden"
         aria-label="日志内容"
+        data-skeleton-transition
         onWheelCapture={(event) => {
           if (event.deltaY < 0) setFollow(false);
         }}
@@ -629,19 +632,18 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
               />
             )}
           />
+        ) : status === "connecting" && !entries.length ? (
+          <LogSkeleton />
         ) : (
-          <div className="flex h-full min-h-64 flex-col items-center justify-center px-6 text-center">
-            <p className="text-sm font-medium">
-              {entries.length > 0 ? "没有匹配的日志" : "暂无日志"}
-            </p>
-            <p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-              {entries.length > 0
-                ? "请调整搜索词或清除筛选"
-                : status === "waiting"
-                  ? "平台开始运行后，新日志会自动出现在这里"
-                  : "正在读取最近日志并连接实时日志流"}
-            </p>
-          </div>
+          <EmptyStateCard
+            className="h-full border-0"
+            title={entries.length > 0 ? "没有匹配的日志" : "暂无日志"}
+            description={entries.length > 0
+              ? "请调整搜索词或清除筛选"
+              : status === "waiting"
+                ? "平台开始运行后，新日志会自动出现在这里"
+                : "正在读取最近日志并连接实时日志流"}
+          />
         )}
         {!follow && filteredEntries.length > 0 && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
@@ -675,12 +677,27 @@ function PlatformLogViewer({ platform }: { platform: PlatformId }) {
                 void clearLog();
               }}
             >
-              {clearing ? "正在清理…" : "确认清空"}
+              {clearing ? "清空中…" : "清空"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </main>
+  );
+}
+
+function LogSkeleton() {
+  return (
+    <div role="status" aria-label="正在读取日志" className="divide-y divide-border/40">
+      {Array.from({ length: 7 }, (_, index) => (
+        <div key={index} aria-hidden="true" className="grid h-9 grid-cols-[64px_48px_minmax(0,1fr)] items-center gap-2 px-3 @min-[650px]:grid-cols-[64px_48px_minmax(0,1fr)_84px_16px]">
+          <Skeleton className="h-2.5 w-12" />
+          <Skeleton className="h-3 w-8 rounded-full opacity-75" />
+          <Skeleton className={cn("h-2.5 max-w-96", index % 2 === 0 ? "w-4/5" : "w-3/5")} />
+          <Skeleton className="hidden h-2 w-14 justify-self-end opacity-75 @min-[650px]:block" />
+        </div>
+      ))}
+    </div>
   );
 }
 

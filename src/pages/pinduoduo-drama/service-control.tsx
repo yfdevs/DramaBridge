@@ -51,7 +51,7 @@ export function PinduoduoDramaServiceControlPage() {
 
   return (
       <ServiceControlButtonPage
-        analyticsPlatform="pinduoduo-drama"
+
         loading={loading}
         pendingAction={pendingAction}
         running={status.running}

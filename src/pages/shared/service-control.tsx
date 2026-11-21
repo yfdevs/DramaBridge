@@ -1,9 +1,9 @@
+import { managementContentClass } from "@/pages/shared/management-layout";
 import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "@/components/ui/notifications";
 
 import { Button } from "@/components/ui/button";
-import type { TaskAnalyticsPlatform } from "@/platforms/task-analytics/service";
 
 type RuntimeStatus = {
   running: boolean;
@@ -129,7 +129,7 @@ export function ServiceControlButtonPage({
   pendingAction,
   running,
   startLabel = "启动服务",
-  stopLabel = "停止",
+  stopLabel = "停止服务",
   additionalAction,
   startDisabled = false,
   beforeBrowserInstances,
@@ -145,7 +145,6 @@ export function ServiceControlButtonPage({
   startDisabled?: boolean;
   beforeBrowserInstances?: ReactNode;
   children?: ReactNode;
-  analyticsPlatform?: TaskAnalyticsPlatform;
   onToggle: () => void;
 }) {
   const connected = Boolean(window.ipcRenderer);
@@ -165,17 +164,16 @@ export function ServiceControlButtonPage({
           aria-pressed={running}
           aria-label={label}
           title={label}
-          className="h-7 min-w-20 gap-1.5 px-3 text-xs"
+          className="h-7 min-w-20 px-3 text-xs"
           size="sm"
           disabled={loading || !connected || (!running && startDisabled)}
           variant={running ? "secondary" : "default"}
           onClick={onToggle}
         >
-          {running && <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[var(--instance-ready)]" />}
           <span>{label}</span>
         </Button>
       </WorkspaceActions>
-      <div className="mx-auto flex w-full min-w-0 max-w-[1120px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+      <div className={`${managementContentClass} flex-1`}>
         {additionalAction}
         {!connected && (
           <p

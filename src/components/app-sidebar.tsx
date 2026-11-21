@@ -2,7 +2,7 @@ import jianyingIcon from "@/assets/platform-icons/jianying.png";
 import { OverflowText } from "@/components/ui/overflow-text";
 import { useEffect, useState, type ComponentProps } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Circle, Cog, GitBranch, Refresh, Scissors } from "@mynaui/icons-react";
+import { CircleIcon as Circle, SettingsIcon as Cog, GitBranchIcon as GitBranch, RefreshIcon as Refresh, ScissorsIcon as Scissors } from "@/components/ui/solar-icons";
 import { version as bundledVersion } from "../../package.json";
 import { clickUpdateVersion } from "@/lib/update-source-access";
 import {

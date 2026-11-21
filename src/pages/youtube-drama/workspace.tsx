@@ -1,3 +1,5 @@
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { ManagementListSkeleton, ManagementTableSkeleton } from "@/pages/shared/management-skeleton";
 import { OverflowText } from "@/components/ui/overflow-text";
 import { YoutubeTaskProgress as TaskProgress, youtubeDuration } from "./task-progress";
 import { ListFilterMenu } from "@/components/list-filter-menu";
@@ -5,7 +7,7 @@ import { Fragment, useMemo, useState } from "react";
 import { YoutubeAddTaskButton } from "./add-task-button";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
-import { YoutubeSearchField } from "./filter-controls";
+import { FilterSearchField, FilterToolbar } from "@/components/filter-controls";
 import {
   Table,
   TableHeader,
@@ -14,8 +16,7 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { List } from "@mynaui/icons-react";
-import { PauseIcon, PlayIcon, RefreshCwIcon } from "lucide-react";
+import { PauseIcon, PlayIcon, RefreshIcon as RefreshCwIcon } from "@/components/ui/solar-icons";
 import { youtubeService, isYoutubeWeb, type YoutubeTask } from "@/platforms/youtube-drama/service";
 import { useYoutubeRuntime, type YoutubeModel } from "./use-youtube-runtime";
 import {
@@ -58,7 +59,7 @@ function TaskActions({
   showDetails?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-start gap-1">
+    <div className="flex flex-wrap items-center justify-start gap-1">
       {showDetails && (
         <Button size="sm" variant="ghost" onClick={onDetails}>
           详情
@@ -87,7 +88,7 @@ function TaskActions({
           <AlertDialogHeader>
             <AlertDialogTitle>删除任务？</AlertDialogTitle>
             <AlertDialogDescription>
-              将停止“{task.payload.resourceName}”并删除任务及其本地下载资源、处理缓存。其他任务引用的资源会保留，不会删除已上传的 YouTube 视频。
+              将停止“{task.payload.resourceName}”并删除任务及其本地下载资源、处理缓存。其他任务引用的资源会保留，不会删除已上传的 YouTube 视频
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -112,28 +113,19 @@ function TaskEmptyState({
   reset: () => void;
 }) {
   return (
-    <div className="py-12 text-center" role="status">
-      <List aria-hidden="true" className="mx-auto mb-3 size-6 text-muted-foreground" />
-      <p className="text-sm font-medium">
-        {filtered ? "没有符合条件的任务" : "还没有任务"}
-      </p>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {filtered
-          ? "调整搜索词或筛选条件后重试"
-          : running
-            ? "添加任务后，可在这里跟踪处理与上传进度"
-            : isYoutubeWeb
-              ? "请在桌面端添加任务"
-              : "添加任务后，可在这里查看处理记录"}
-      </p>
-      {filtered ? (
-        <Button className="mt-3" size="sm" variant="outline" onClick={reset}>
-          清除筛选
-        </Button>
-      ) : running ? (
-        <YoutubeAddTaskButton className="mt-3" />
-      ) : null}
-    </div>
+    <EmptyStateCard
+      title={filtered ? "没有符合条件的任务" : "还没有任务"}
+      description={filtered
+        ? "调整搜索词或筛选条件后重试"
+        : running
+          ? "添加任务后，可在这里跟踪处理与上传进度"
+          : isYoutubeWeb
+            ? "请在桌面端添加任务"
+            : "添加任务后，可在这里查看处理记录"}
+      action={filtered ? (
+        <Button size="sm" variant="outline" onClick={reset}>清除筛选</Button>
+      ) : running ? <YoutubeAddTaskButton /> : null}
+    />
   );
 }
 export function YoutubeWorkspacePage() {
@@ -196,20 +188,13 @@ export function YoutubeWorkspacePage() {
         )}
         <section aria-label="YouTube 任务列表" className="min-w-0">
           {isYoutubeWeb && (
-            <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-3">
-              <h1 className="flex items-center gap-2 text-sm font-semibold">任务列表 <span className="text-xs font-normal tabular-nums text-muted-foreground">{tasks.length}</span></h1>
-              <div aria-label="按任务状态筛选" className="flex min-w-0 items-center gap-1 overflow-x-auto">
-                {[["", "全部"], ["active", "进行中"], ["queued", "排队"], ["paused", "暂停"], ["completed", "完成"], ["failed", "失败"]].map(([value, label]) => (
-                  <Button key={value} size="sm" variant={taskStatus === value ? "secondary" : "ghost"} aria-pressed={taskStatus === value}
-                    onClick={() => { setTaskStatus(value); list.reset(); }}>
-                    {label}<span className="tabular-nums text-muted-foreground">{tasks.filter(task => !value || (value === "active" ? activeStatuses.includes(task.status) : task.status === value)).length}</span>
-                  </Button>
-                ))}
-              </div>
-            </div>
+            <h1 className="mb-3 flex items-center gap-2 text-sm font-medium">
+              任务列表
+              <span className="text-xs font-normal tabular-nums text-muted-foreground">{tasks.length}</span>
+            </h1>
           )}
-          <div className="flex flex-wrap items-center gap-2 pb-4">
-            <YoutubeSearchField
+          <FilterToolbar label="任务筛选" className="pb-3">
+            <FilterSearchField
               label="搜索任务"
               placeholder="搜索剧名、标题或任务编号"
               value={keyword}
@@ -238,7 +223,12 @@ export function YoutubeWorkspacePage() {
                     { value: "completed", label: "已完成" },
                     { value: "failed", label: "失败" },
                     { value: "cancelled", label: "已取消" },
-                  ],
+                  ].map((option) => isYoutubeWeb ? {
+                    ...option,
+                    count: tasks.filter((task) => !option.value || (
+                      option.value === "active" ? activeStatuses.includes(task.status) : task.status === option.value
+                    )).length,
+                  } : option),
                 },
                 {
                   key: "mode",
@@ -286,7 +276,8 @@ export function YoutubeWorkspacePage() {
               </Button>
               <Button
                 size="icon-sm"
-                variant={paused ? "secondary" : "outline"}
+                variant="state"
+                data-active={paused ? "" : undefined}
                 aria-label={paused ? "恢复队列" : "暂停队列"}
                 title={paused ? "恢复队列" : "暂停队列"}
                 disabled={locked || !status.running}
@@ -297,13 +288,11 @@ export function YoutubeWorkspacePage() {
                 {paused ? <PlayIcon aria-hidden="true" /> : <PauseIcon aria-hidden="true" />}
               </Button>
             </div>
-          </div>
+          </FilterToolbar>
           {isYoutubeWeb && (
-            <div className="sm:hidden" aria-busy={loading}>
+            <div className="lg:hidden" aria-busy={loading} data-skeleton-transition>
               {loading ? (
-                <p role="status" className="py-12 text-center text-sm text-muted-foreground">
-                  正在读取任务…
-                </p>
+                <ManagementListSkeleton label="正在读取任务" />
               ) : list.items.length ? (
                 list.items.map((task) => (
                   <article
@@ -346,37 +335,34 @@ export function YoutubeWorkspacePage() {
             </div>
           )}
           <Table stickyActions
-            containerClassName={isYoutubeWeb ? "hidden sm:block" : undefined}
+            containerClassName={isYoutubeWeb ? "hidden lg:block" : undefined}
             className={
               isYoutubeWeb
-                ? "min-w-[1120px] table-fixed text-xs"
-                : "min-w-[720px] table-fixed text-xs"
+                ? "min-w-[1024px] table-fixed"
+                : "min-w-[620px] table-fixed xl:min-w-[760px]"
             }
             aria-busy={loading}
           >
-            <TableHeader className="bg-muted/30">
+            <TableHeader>
               <TableRow>
-                <TableHead className={isYoutubeWeb ? "min-w-48 pl-3" : "pl-3"}>剧名</TableHead>
+                <TableHead className="pl-3">剧名</TableHead>
                 <TableHead className={`${accountColumn} w-32`}>上传账号</TableHead>
                 <TableHead className="w-18">状态</TableHead>
                 {isYoutubeWeb && <TableHead className="w-28">处理方式</TableHead>}
                 <TableHead className={isYoutubeWeb ? "w-56" : "w-48"}>进度</TableHead>
                 {isYoutubeWeb && <TableHead className="w-28">创建时间</TableHead>}
                 <TableHead className="w-18">耗时</TableHead>
-                <TableHead className={`${isYoutubeWeb ? "w-36" : "w-48"} pr-3 text-left`}>操作</TableHead>
+                <TableHead className={`${isYoutubeWeb ? "w-36" : "w-40"} pr-3 text-left`}>操作</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody className={isYoutubeWeb ? "[&_td]:py-3" : "[&_td]:py-1.5 [&_tr]:border-0"}>
+            <TableBody data-skeleton-transition>
               {loading
-                ? Array.from({ length: 5 }, (_, index) => (
-                    <TableRow key={index}>
-                      {Array.from({ length: isYoutubeWeb ? 8 : 6 }, (_, cell) => (
-                        <TableCell key={cell} className={`px-3 ${cell === 1 ? accountColumn : ""}`}>
-                          <div className="h-4 rounded bg-muted motion-safe:animate-pulse" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
+                ? <ManagementTableSkeleton
+                    columns={isYoutubeWeb
+                      ? ["w-3/4 max-w-40", "w-20", "h-4 w-12 rounded-full", "w-16", "h-1.5 w-4/5 rounded-full", "w-20", "w-10", "h-5 w-16"]
+                      : ["w-3/4 max-w-40", { placeholder: "w-20", cell: accountColumn }, "h-4 w-12 rounded-full", "h-1.5 w-4/5 rounded-full", "w-10", "h-5 w-20"]}
+                    rowClassName="h-9"
+                  />
                 : list.items.map((task) => {
                     const elapsed = youtubeTaskElapsed(task);
                     return (
@@ -423,7 +409,7 @@ export function YoutubeWorkspacePage() {
                         </TableCell>
                       </TableRow>
                       {isYoutubeWeb && task.status === "failed" && (
-                        <TableRow className="hover:bg-transparent">
+                        <TableRow>
                           <TableCell colSpan={8} className="whitespace-normal px-3 !pt-0">
                             <YoutubeWebTaskFailure task={task} />
                           </TableCell>
@@ -434,7 +420,7 @@ export function YoutubeWorkspacePage() {
                   })}
               {!loading && !list.total && (
                 <TableRow>
-                  <TableCell colSpan={isYoutubeWeb ? 8 : 6} className="py-16 text-center">
+                  <TableCell colSpan={isYoutubeWeb ? 8 : 6} className="p-3">
                     <TaskEmptyState filtered={hasFilters} running={status.running} reset={reset} />
                   </TableCell>
                 </TableRow>

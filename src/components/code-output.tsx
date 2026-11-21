@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { WrapTextIcon } from "lucide-react";
+import { WrapTextIcon } from "@/components/ui/solar-icons";
 import { Button } from "@/components/ui/button";
 import {
   CodeBlock,
@@ -28,7 +28,8 @@ export function CodeOutput({
           <Button
             type="button"
             size="icon-xs"
-            variant="ghost"
+            variant="state"
+            data-active={wrap ? "" : undefined}
             aria-label="自动换行"
             title="自动换行"
             aria-pressed={wrap}

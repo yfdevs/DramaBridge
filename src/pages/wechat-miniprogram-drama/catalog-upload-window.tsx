@@ -1,9 +1,12 @@
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { ManagementStatusSkeleton, ManagementTableSkeleton } from "@/pages/shared/management-skeleton";
+import { FilterSearchField, FilterToolbar } from "@/components/filter-controls";
 import { FailureTooltip } from "@/components/ui/failure-tooltip";
 import { OverflowText } from "@/components/ui/overflow-text";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ChevronLeftIcon as ChevronLeft, ChevronRightIcon as ChevronRight, ChevronsLeftIcon as ChevronsLeft, ChevronsRightIcon as ChevronsRight } from "@/components/ui/solar-icons";
 import { WorkspaceActions } from "@/components/workspace-toolbar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
+import { CheckCircleIcon as CheckCircle, DangerTriangleIcon as DangerTriangle } from "@/components/ui/solar-icons";
 import { toast } from "@/components/ui/notifications";
 
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -366,21 +368,15 @@ export function WechatMiniProgramCatalogUploadWindow() {
     }
   };
 
-  if (loading && !workspace) {
-    return (
-      <main className="grid h-full place-items-center bg-background text-sm text-muted-foreground">
-        <Spinner /> 正在读取入库记录
-      </main>
-    );
-  }
+  const initialLoading = loading && !workspace;
 
   return (
-    <main className="flex h-full min-h-0 flex-col bg-background text-foreground">
+    <main className="flex h-full min-h-0 flex-col bg-background font-workspace text-sm text-foreground [&_[data-slot=button]]:text-xs">
           <WorkspaceActions label="素材入库操作">
             <Button
               size="sm" className="h-7 px-3 text-xs" aria-label="获取全部剧目" title="获取全部剧目"
               variant="outline"
-              disabled={pendingAction !== null || Boolean(workspace?.queue.running)}
+              disabled={initialLoading || pendingAction !== null || Boolean(workspace?.queue.running)}
               onClick={() =>
                 void runAction(
                   "sync",
@@ -416,7 +412,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
             <Button
               size="sm" className="h-7 px-3 text-xs" aria-label={workspace?.queue.running ? "暂停接续" : "开始处理"} title={workspace?.queue.running ? "暂停接续" : "开始处理"}
               variant={workspace?.queue.running ? "outline" : "default"}
-              disabled={pendingAction !== null || Boolean(workspace?.sync.running)}
+              disabled={initialLoading || pendingAction !== null || Boolean(workspace?.sync.running)}
               onClick={() =>
                 void runAction(
                   "queue",
@@ -442,56 +438,55 @@ export function WechatMiniProgramCatalogUploadWindow() {
               </Button>
             ) : null}
       </WorkspaceActions>
-      <header className="shrink-0 border-b px-5 py-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className={`size-2 rounded-full ${workspace?.queue.running ? "bg-sky-500" : "bg-muted-foreground/40"}`}
-            />
-            {workspace?.queue.running ? "队列运行中" : "队列已暂停"}
-          </span>
-          <span className="text-muted-foreground">
-            {workspace?.sync.running
-              ? `同步第 ${Math.min((workspace.sync.currentPage ?? 0) + 1, workspace.sync.totalPages ?? 1)}/${workspace.sync.totalPages ?? "—"} 页，已读取 ${workspace.sync.syncedCount} 部`
-              : `剧目 ${workspace?.tasks.length ?? 0} 部${workspace?.sync.lastSyncedAt ? `，更新于 ${formatDateTime(workspace.sync.lastSyncedAt)}` : ""}`}
-          </span>
-          {workspace?.queue.totalCount ? (
-            <span className="text-muted-foreground">
-              处理进度 {workspace.queue.processedCount}/{workspace.queue.totalCount}
+      <header className="shrink-0 border-b p-3" data-skeleton-transition>
+        {initialLoading ? (
+          <ManagementStatusSkeleton label="正在读取入库记录" />
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className={`size-2 rounded-full ${workspace?.queue.running ? "bg-sky-500" : "bg-muted-foreground/40"}`}
+              />
+              {workspace?.queue.running ? "队列运行中" : "队列已暂停"}
             </span>
-          ) : null}
-          <span>前四集已入库 {counts.episodesComplete}</span>
-          <span>封面已入库 {counts.coversComplete}</span>
-          <span className="text-muted-foreground">缺链接 {counts.missing}</span>
-          <span className={counts.failed ? "text-destructive" : "text-muted-foreground"}>
-            失败 {counts.failed}
-          </span>
-          {workspace?.queue.error ? (
-            <OverflowText as="span" className="max-w-96 truncate text-destructive" title={workspace.queue.error}>
-              {workspace.queue.error}
-            </OverflowText>
-          ) : null}
-          {workspace?.sync.error ? (
-            <OverflowText as="span" className="max-w-96 truncate text-destructive" title={workspace.sync.error}>
-              {workspace.sync.error}
-            </OverflowText>
-          ) : null}
-        </div>
+            <span className="text-muted-foreground">
+              {workspace?.sync.running
+                ? `同步第 ${Math.min((workspace.sync.currentPage ?? 0) + 1, workspace.sync.totalPages ?? 1)}/${workspace.sync.totalPages ?? "—"} 页，已读取 ${workspace.sync.syncedCount} 部`
+                : `剧目 ${workspace?.tasks.length ?? 0} 部${workspace?.sync.lastSyncedAt ? `，更新于 ${formatDateTime(workspace.sync.lastSyncedAt)}` : ""}`}
+            </span>
+            {workspace?.queue.totalCount ? (
+              <span className="text-muted-foreground">
+                处理进度 {workspace.queue.processedCount}/{workspace.queue.totalCount}
+              </span>
+            ) : null}
+            <span>前四集已入库 {counts.episodesComplete}</span>
+            <span>封面已入库 {counts.coversComplete}</span>
+            <span className="text-muted-foreground">缺链接 {counts.missing}</span>
+            <span className={counts.failed ? "text-destructive" : "text-muted-foreground"}>
+              失败 {counts.failed}
+            </span>
+            {workspace?.queue.error ? (
+              <OverflowText as="span" className="max-w-96 truncate text-destructive" title={workspace.queue.error}>
+                {workspace.queue.error}
+              </OverflowText>
+            ) : null}
+            {workspace?.sync.error ? (
+              <OverflowText as="span" className="max-w-96 truncate text-destructive" title={workspace.sync.error}>
+                {workspace.sync.error}
+              </OverflowText>
+            ) : null}
+          </div>
+        )}
       </header>
 
-      <section className="flex min-h-0 flex-1 flex-col gap-3 px-5 py-4">
-        <div
-          className="flex shrink-0 flex-wrap items-center gap-2"
-          role="search"
-          aria-label="筛选剧目"
-        >
-          <Input
-            className="h-7 w-full text-xs sm:w-64"
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
+      <section className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+        <FilterToolbar label="剧目筛选" className="shrink-0">
+          <FilterSearchField
+            label="搜索剧目"
             placeholder="搜索剧名、剧 ID 或网盘链接"
-            aria-label="搜索剧目"
+            value={keyword}
+            onChange={setKeyword}
           />
           <ListFilterMenu
             label="筛选剧目"
@@ -533,16 +528,16 @@ export function WechatMiniProgramCatalogUploadWindow() {
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
             显示 {filteredTasks.length} / {workspace?.tasks.length ?? 0} 部
           </span>
-        </div>
-        {workspace?.tasks.length ? (
-          filteredTasks.length ? (
-            <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
-              <Table stickyActions
+        </FilterToolbar>
+        {initialLoading || workspace?.tasks.length ? (
+          initialLoading || filteredTasks.length ? (
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <Table stickyActions aria-busy={initialLoading}
                 containerClassName="h-full overflow-auto overscroll-contain"
                 className="min-w-[1280px] table-fixed"
               >
-                <TableHeader className="sticky top-0 z-10 bg-muted">
-                  <TableRow className="bg-muted/80 hover:bg-muted/80">
+                <TableHeader className="sticky top-0 z-10">
+                  <TableRow>
                     <TableHead className="h-8 w-16">剧 ID</TableHead>
                     <TableHead className="h-8 w-24">微信 ID</TableHead>
                     <TableHead className="h-8">剧目</TableHead>
@@ -558,9 +553,15 @@ export function WechatMiniProgramCatalogUploadWindow() {
                     <TableHead className="h-8 w-20 text-left">操作</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody data-skeleton-transition>
+                  {initialLoading && (
+                    <ManagementTableSkeleton
+                      columns={["w-9", "w-14", "w-3/4 max-w-36", "ml-auto w-6", "w-12", "w-20", "w-20", "w-12", "w-12", "h-4 w-14 rounded-full", "w-3/4", "w-16", "h-5 w-12"]}
+                      rowClassName="h-9"
+                    />
+                  )}
                   {pagedTasks.map((task) => {
-                    const active = workspace.queue.activeTaskId === task.id;
+                    const active = workspace?.queue.activeTaskId === task.id;
                     const episodeComplete = episodesComplete(task);
                     const episodeFailed = episodesFailed(task);
                     const isCoverComplete = coverComplete(task);
@@ -569,7 +570,7 @@ export function WechatMiniProgramCatalogUploadWindow() {
                     )?.error;
                     const error = task.error ?? task.coverError ?? episodeError;
                     return (
-                      <TableRow key={task.id} className={active ? "bg-sky-500/5" : undefined}>
+                      <TableRow key={task.id} data-active={active || undefined}>
                         <TableCell className="py-1.5 text-xs tabular-nums text-muted-foreground">
                           {task.dramaId}
                         </TableCell>
@@ -706,33 +707,14 @@ export function WechatMiniProgramCatalogUploadWindow() {
               </Table>
             </div>
           ) : (
-            <div className="grid min-h-0 flex-1 place-items-center rounded-lg border border-dashed px-6 text-center">
-              <div className="max-w-sm">
-                <h2 className="text-sm font-medium">没有符合条件的剧目</h2>
-                <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                  尝试调整关键词或筛选条件
-                </p>
-                <Button
-                  className="mt-3"
-                  size="sm"
-                  variant="outline"
-                  type="button"
-                  onClick={resetFilters}
-                >
-                  清除筛选
-                </Button>
-              </div>
-            </div>
+            <EmptyStateCard
+              title="没有符合条件的剧目"
+              description="尝试调整关键词或筛选条件"
+              action={<Button size="sm" variant="outline" type="button" onClick={resetFilters}>清除筛选</Button>}
+            />
           )
         ) : (
-          <div className="grid min-h-0 flex-1 place-items-center rounded-lg border border-dashed px-6 text-center">
-            <div className="max-w-md">
-              <h2 className="text-sm font-medium">还没有剧目入库记录</h2>
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                点击右上角获取剧目
-              </p>
-            </div>
-          </div>
+          <EmptyStateCard title="还没有剧目入库记录" description="点击右上角获取剧目" />
         )}
         {filteredTasks.length ? (
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">

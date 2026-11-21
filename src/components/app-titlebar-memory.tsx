@@ -1,16 +1,18 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Activity, CloudDownload, HardDrive } from "@mynaui/icons-react";
+import { ActivityIcon as Activity, CloudDownloadIcon as CloudDownload, HardDriveIcon as HardDrive } from "@/components/ui/solar-icons";
 
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
+import { BaiduNetdiskPanel } from "@/pages/baidu-netdisk/window";
 import {
   getBaiduNetdiskStatus,
   getBaiduNetdiskQuota,
   type BaiduNetdiskCdpStatus,
   type BaiduNetdiskQuota,
 } from "@/platforms/baidu-netdisk/service";
-import { openBaiduNetdiskDialog } from "@/platforms/baidu-netdisk/dialog";
 
 type AppRuntimeStatus = {
   browserInstanceCount: number;
@@ -39,7 +41,7 @@ const titlebarIconButtonClass =
   "app-chrome-control inline-flex size-6 cursor-pointer select-none items-center justify-center rounded-md [-webkit-app-region:no-drag]";
 
 function formatBytes(bytes: number) {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
+  if (!Number.isFinite(bytes) || bytes < 0) {
     return "-";
   }
 
@@ -61,6 +63,44 @@ function formatPercent(percent: number | null) {
   }
 
   return `${Math.round(Math.min(Math.max(percent, 0), 100))}%`;
+}
+
+function formatCheckedAt(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function CapacityDetails({ label, used, total, available, percent }: {
+  label: string;
+  used: number;
+  total: number;
+  available: number;
+  percent: number;
+}) {
+  const value = Math.min(100, Math.max(0, Number.isFinite(percent) ? percent : 0));
+  const indicatorClass = value >= 90
+    ? "[&_[data-slot=progress-indicator]]:bg-rose-500"
+    : value >= 80
+      ? "[&_[data-slot=progress-indicator]]:bg-amber-500"
+      : "[&_[data-slot=progress-indicator]]:bg-primary";
+
+  return (
+    <div className="space-y-2.5 rounded-lg bg-muted/40 p-3">
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="text-muted-foreground">已使用</span>
+        <span className="font-medium tabular-nums">{formatBytes(used)} / {formatBytes(total)}</span>
+      </div>
+      <Progress value={value} aria-label={`${label}已使用 ${formatPercent(value)}`} className={indicatorClass} />
+      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>可用 {formatBytes(available)}</span>
+        <span className="tabular-nums">{formatPercent(value)}</span>
+      </div>
+    </div>
+  );
 }
 
 function memoryIconClass(percent: number | null) {
@@ -117,7 +157,7 @@ function baiduNetdiskSummary(status: BaiduNetdiskCdpStatus | null, error: string
   }
 
   if (status.ready) {
-    return "CDP 已连接";
+    return "已连接";
   }
 
   if (!status.appRunning) {
@@ -341,6 +381,7 @@ export function AppTitlebarMemory() {
   const baiduCapacity = baiduQuota
     ? `已用 ${formatBytes(baiduQuota.used)} / 总量 ${formatBytes(baiduQuota.total)}`
     : "容量暂不可用";
+  const baiduCheckedAt = baiduQuota ? formatCheckedAt(baiduQuota.checkedAt) : null;
 
   return createPortal(
     <div className="flex h-7 items-center gap-1.5 overflow-hidden whitespace-nowrap px-1 text-[11px] leading-none text-muted-foreground">
@@ -356,25 +397,47 @@ export function AppTitlebarMemory() {
           label="内存"
           value={percentText}
         />
-        <TitlebarMetric
-          ariaLabel={`素材盘容量：${storageDriveText}`}
-          icon={
-            <HardDrive
-              className={`size-3.5 shrink-0 ${diskIconClass(storageDrivePercent)}`}
-              aria-hidden="true"
-            />
-          }
-          label="素材盘"
-          value={storageDrivePercentText}
-        />
-        <Tooltip>
-          <TooltipTrigger
-            aria-label={`打开百度网盘 CDP 控制：${baiduSummary}；${baiduCapacity}`}
+        <HoverCard>
+          <HoverCardTrigger
+            delay={150}
+            closeDelay={150}
+            aria-label={`素材盘容量：${storageDriveText}`}
+            render={<button type="button" className={`${titlebarMetricClass} cursor-pointer`} />}
+          >
+            <HardDrive className={`size-3.5 shrink-0 ${diskIconClass(storageDrivePercent)}`} aria-hidden="true" />
+            <span className="font-medium text-muted-foreground max-[840px]:hidden">素材盘</span>
+            <span className="font-medium tabular-nums text-foreground">{storageDrivePercentText}</span>
+          </HoverCardTrigger>
+          <HoverCardContent side="bottom" align="end" sideOffset={8} className="w-72 max-w-[calc(100vw-1rem)] space-y-3 p-3.5">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/70">
+                <HardDrive className={`size-4 ${diskIconClass(storageDrivePercent)}`} aria-hidden="true" />
+              </span>
+              <div className="space-y-0.5">
+                <div className="text-xs font-medium">素材盘</div>
+                <div className="text-[11px] text-muted-foreground">素材目录所在磁盘</div>
+              </div>
+            </div>
+            {storageDrive && storageDrivePercent !== null ? (
+              <>
+                <CapacityDetails label="素材盘" used={storageDrive.usedBytes} total={storageDrive.totalBytes} available={storageDrive.availableBytes} percent={storageDrivePercent} />
+                <div className="space-y-1 text-xs">
+                  <div className="text-muted-foreground">素材目录</div>
+                  <div className="break-all leading-relaxed" title={storageDrive.directory}>{storageDrive.directory}</div>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs leading-relaxed text-muted-foreground">{storageDriveText}</p>
+            )}
+          </HoverCardContent>
+        </HoverCard>
+        <Popover>
+          <PopoverTrigger
+            aria-label={`百度网盘：${baiduSummary}；${baiduCapacity}`}
             render={
               <button
                 type="button"
                 className={`${titlebarIconButtonClass} w-auto gap-1.5 px-2`}
-                onClick={openBaiduNetdiskDialog}
               />
             }
           >
@@ -384,7 +447,7 @@ export function AppTitlebarMemory() {
             />
             <span>网盘</span>
             {baiduConnectionHint ? (
-              <span className="text-[11px] font-normal text-muted-foreground">
+              <span className="text-[11px] font-normal text-amber-700 dark:text-amber-400">
                 {baiduConnectionHint}
               </span>
             ) : (
@@ -392,12 +455,33 @@ export function AppTitlebarMemory() {
                 {baiduPercent === null ? "--" : `${baiduPercent.toFixed(1)}%`}
               </span>
             )}
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="end" sideOffset={8} className="z-[100000]">
-            百度网盘：{baiduSummary} · {baiduCapacity}
-            {baiduConnectionHint && <span className="mt-1 block">点击此处，在连接管理中选择“启动并连接”或“重启连接”，完成客户端登录后即可自动下载素材。</span>}
-          </TooltipContent>
-        </Tooltip>
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="end" sideOffset={8} className="w-80 max-w-[calc(100vw-1rem)] gap-3 p-3.5">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/70">
+                <CloudDownload className={`size-4 ${baiduNetdiskIconClass(baiduStatus, baiduError)}`} aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <PopoverTitle className="text-xs">百度网盘</PopoverTitle>
+                <div className="text-[11px] text-muted-foreground">素材下载与云端容量</div>
+              </div>
+              <span className={`rounded-full px-2 py-1 text-[11px] ${baiduReady ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
+                {baiduReady ? "已连接" : baiduError || baiduStatus ? "未连接" : "读取中"}
+              </span>
+            </div>
+            {baiduReady && baiduQuota && baiduPercent !== null ? (
+              <>
+                <CapacityDetails label="百度网盘" used={baiduQuota.used} total={baiduQuota.total} available={Math.max(0, baiduQuota.total - baiduQuota.used)} percent={baiduPercent} />
+                {baiduCheckedAt && <p className="text-[11px] text-muted-foreground">容量更新于 {baiduCheckedAt}</p>}
+              </>
+            ) : (
+              <p className="break-words text-xs leading-relaxed text-muted-foreground">
+                {baiduReady ? baiduCapacity : baiduStatus?.supported === false ? "当前系统暂不支持网盘自动下载" : baiduSummary}
+              </p>
+            )}
+            <BaiduNetdiskPanel />
+          </PopoverContent>
+        </Popover>
       </div>
     </div>,
     host,

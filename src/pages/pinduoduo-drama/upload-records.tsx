@@ -1,7 +1,9 @@
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { ManagementTableSkeleton } from "@/pages/shared/management-skeleton";
 import { FailureTooltip } from "@/components/ui/failure-tooltip";
 import { OverflowText } from "@/components/ui/overflow-text";
 import { useCallback, useEffect, useState } from "react";
-import { Refresh } from "@mynaui/icons-react";
+import { RefreshIcon as Refresh } from "@/components/ui/solar-icons";
 import { toast } from "@/components/ui/notifications";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +16,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FilterToolbar } from "@/components/filter-controls";
+import { ListFilterMenu } from "@/components/list-filter-menu";
 import { cn } from "@/lib/utils";
 import {
   pinduoduoDramaService,
@@ -22,9 +25,9 @@ import {
   type PinduoduoUploadRecordsSummary,
 } from "@/platforms/pinduoduo-drama/service";
 
-type StatusTab = "all" | "PENDING" | "IN_PROGRESS" | "UPLOADED" | "FAILED";
+type StatusFilter = "all" | "PENDING" | "IN_PROGRESS" | "UPLOADED" | "FAILED";
 
-const statusTabs: Array<{ value: StatusTab; label: string }> = [
+const statusOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "全部" },
   { value: "PENDING", label: "待处理" },
   { value: "IN_PROGRESS", label: "进行中" },
@@ -32,8 +35,8 @@ const statusTabs: Array<{ value: StatusTab; label: string }> = [
   { value: "FAILED", label: "失败" },
 ];
 
-function statusFilterForTab(tab: StatusTab) {
-  switch (tab) {
+function statusQueryValue(filter: StatusFilter) {
+  switch (filter) {
     case "all":
       return undefined;
     case "IN_PROGRESS":
@@ -41,7 +44,7 @@ function statusFilterForTab(tab: StatusTab) {
     case "FAILED":
       return "FAILED,REJECTED,CONFIRM_REQUIRED";
     default:
-      return tab;
+      return filter;
   }
 }
 
@@ -170,7 +173,7 @@ const emptySummary: PinduoduoUploadRecordsSummary = {
 export function PinduoduoDramaUploadRecordsPage() {
   const [records, setRecords] = useState<PinduoduoUploadRecord[]>([]);
   const [summary, setSummary] = useState<PinduoduoUploadRecordsSummary>(emptySummary);
-  const [activeTab, setActiveTab] = useState<StatusTab>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
   const [retryingRecordId, setRetryingRecordId] = useState<number | null>(null);
@@ -182,7 +185,7 @@ export function PinduoduoDramaUploadRecordsPage() {
 
       try {
         const result = await pinduoduoDramaService.listUploadRecords({
-          status: statusFilterForTab(activeTab),
+          status: statusQueryValue(statusFilter),
           limit: 200,
         });
         setRecords(result.records);
@@ -198,7 +201,7 @@ export function PinduoduoDramaUploadRecordsPage() {
         if (!silent) setLoading(false);
       }
     },
-    [activeTab],
+    [statusFilter],
   );
 
   useEffect(() => {
@@ -276,13 +279,13 @@ export function PinduoduoDramaUploadRecordsPage() {
   };
 
   return (
-    <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
+    <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent font-workspace text-sm [&_[data-slot=button]]:text-xs">
       <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col">
-        <header className="shrink-0 border-b bg-background/80 px-6 py-4">
+        <header className="shrink-0 border-b bg-background p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <div className="flex items-baseline gap-2">
-                <h1 className="text-lg font-semibold tracking-normal">审核与上传状态</h1>
+                <h1 className="text-sm font-medium">审核与上传状态</h1>
                 <span className="text-xs tabular-nums text-muted-foreground">
                   共 {summary.total} 部
                 </span>
@@ -292,7 +295,7 @@ export function PinduoduoDramaUploadRecordsPage() {
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <span className="text-[11px] tabular-nums text-muted-foreground">
+              <span className="text-xs tabular-nums text-muted-foreground">
                 {lastRefreshedAt
                   ? `${lastRefreshedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 已刷新`
                   : "等待刷新"}
@@ -310,21 +313,21 @@ export function PinduoduoDramaUploadRecordsPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-y py-2.5 text-xs text-muted-foreground">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-y py-2 text-xs text-muted-foreground">
             <span>
-              待处理 <strong className="ml-1 font-semibold tabular-nums text-foreground">{summary.pending}</strong>
+              待处理 <strong className="ml-1 font-medium tabular-nums text-foreground">{summary.pending}</strong>
             </span>
             <span>
-              进行中 <strong className="ml-1 font-semibold tabular-nums text-sky-700">{summary.uploading}</strong>
+              进行中 <strong className="ml-1 font-medium tabular-nums text-sky-700 dark:text-sky-300">{summary.uploading}</strong>
             </span>
             <span>
-              已上传 <strong className="ml-1 font-semibold tabular-nums text-emerald-700">{summary.uploaded}</strong>
+              已上传 <strong className="ml-1 font-medium tabular-nums text-emerald-700 dark:text-emerald-300">{summary.uploaded}</strong>
             </span>
             <span>
               失败{" "}
               <strong
                 className={cn(
-                  "ml-1 font-semibold tabular-nums",
+                  "ml-1 font-medium tabular-nums",
                   summary.failed > 0 ? "text-destructive" : "text-foreground",
                 )}
               >
@@ -333,19 +336,18 @@ export function PinduoduoDramaUploadRecordsPage() {
             </span>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <Tabs
-              value={activeTab}
-              onValueChange={(value) => setActiveTab(String(value ?? "all") as StatusTab)}
-            >
-              <TabsList>
-                {statusTabs.map((tab) => (
-                  <TabsTrigger key={tab.value} value={tab.value} className="px-3 text-xs">
-                    {tab.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+          <FilterToolbar label="记录筛选" className="mt-3 justify-between">
+            <ListFilterMenu
+              label="筛选记录"
+              groups={[{
+                key: "status",
+                label: "上传状态",
+                value: statusFilter,
+                defaultValue: "all",
+                options: statusOptions,
+                onChange: (value) => setStatusFilter(value as StatusFilter),
+              }]}
+            />
             <Button
               type="button"
               size="sm"
@@ -355,20 +357,20 @@ export function PinduoduoDramaUploadRecordsPage() {
             >
               {retrying
                 ? "正在重试…"
-                : `全部重试失败${summary.failed > 0 ? `（${summary.failed}）` : ""}`}
+                : `重试失败任务${summary.failed > 0 ? `（${summary.failed}）` : ""}`}
             </Button>
-          </div>
+          </FilterToolbar>
         </header>
 
-        <section className="min-h-0 flex-1 p-6 pt-4">
-          {records.length > 0 ? (
-            <div className="h-full min-h-0 overflow-hidden rounded-lg border bg-background">
-              <Table stickyActions
+        <section className="min-h-0 flex-1 p-3" data-skeleton-transition>
+          {records.length > 0 || loading ? (
+            <div className="h-full min-h-0 overflow-hidden bg-background">
+              <Table stickyActions aria-busy={loading}
                 containerClassName="h-full overflow-auto overscroll-contain"
                 className="min-w-[1160px] table-fixed"
               >
-              <TableHeader className="sticky top-0 z-10 bg-muted">
-                <TableRow className="bg-muted/80 hover:bg-muted/80">
+              <TableHeader className="sticky top-0 z-10">
+                <TableRow>
                   <TableHead className="h-8">剧名</TableHead>
                   <TableHead className="h-8 w-20">状态</TableHead>
                   <TableHead className="h-8 w-32">资源来源</TableHead>
@@ -381,6 +383,12 @@ export function PinduoduoDramaUploadRecordsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {loading && !records.length && (
+                  <ManagementTableSkeleton
+                    columns={["w-3/4 max-w-40", "h-4 w-12 rounded-full", "w-20", "w-3/4", "ml-auto w-6", "ml-auto w-16", "ml-auto w-16", "ml-auto w-16", "h-5 w-16"]}
+                    rowClassName="h-9"
+                  />
+                )}
                 {records.map((record) => (
                   <TableRow key={`${record.accountProfileName}:${record.platformApplyId}`} className="h-9">
                     <TableCell className="max-w-0 py-1.5">
@@ -420,13 +428,13 @@ export function PinduoduoDramaUploadRecordsPage() {
                     <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground">
                       {record.attempts ?? 0}
                     </TableCell>
-                    <TableCell className="py-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground">
                       {formatDateTime(record.createdAt)}
                     </TableCell>
-                    <TableCell className="py-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground">
                       {formatDateTime(record.uploadedAt)}
                     </TableCell>
-                    <TableCell className="py-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                    <TableCell className="py-1.5 text-right text-xs tabular-nums text-muted-foreground">
                       {formatDateTime(record.updatedAt)}
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
@@ -455,16 +463,11 @@ export function PinduoduoDramaUploadRecordsPage() {
               </Table>
             </div>
           ) : (
-            <div className="grid h-full min-h-48 place-items-center rounded-lg border border-dashed bg-background/60 px-6 text-center">
-              <div>
-                <div className="text-sm font-medium">
-                  {loading ? "正在加载上传记录…" : "暂无上传记录"}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {loading ? "请稍候" : "启动拼多多服务后，将自动同步审核通过的短剧"}
-                </div>
-              </div>
-            </div>
+            <EmptyStateCard
+              className="h-full min-h-48"
+              title="暂无上传记录"
+              description="启动拼多多服务后，将自动同步审核通过的短剧"
+            />
           )}
         </section>
       </div>

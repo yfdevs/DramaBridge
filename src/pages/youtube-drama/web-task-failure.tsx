@@ -20,7 +20,7 @@ export function YoutubeWebTaskFailure({ task }: { task: YoutubeTask }) {
       </div>
       {messages.length ? messages.map((message, index) => (
         <p key={index} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message}</p>
-      )) : <p>该任务未记录具体错误原因，请查看任务详情或重试。</p>}
+      )) : <p>该任务未记录具体错误原因，请查看任务详情或重试</p>}
     </section>
   );
 }

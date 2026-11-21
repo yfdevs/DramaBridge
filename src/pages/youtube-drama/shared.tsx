@@ -1,3 +1,5 @@
+import { managementContentClass } from "@/pages/shared/management-layout";
+import { cn } from "@/lib/utils";
 import { youtubeService, isYoutubeWeb } from "@/platforms/youtube-drama/service";
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -12,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { WorkspaceActions } from "@/components/workspace-toolbar";
-import { DangerTriangle, Chrome } from "@mynaui/icons-react";
+import { DangerTriangleIcon as DangerTriangle, BrowserIcon as Chrome } from "@/components/ui/solar-icons";
 import type { YoutubeModel } from "./use-youtube-runtime";
 
 export function YoutubePageContent({
@@ -24,7 +26,7 @@ export function YoutubePageContent({
 }) {
   if (isYoutubeWeb) {
     return (
-      <div className="@container mx-auto flex w-full max-w-[1440px] flex-col px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="@container mx-auto flex w-full max-w-[1440px] flex-col p-3">
         <div
           className={`flex min-w-0 flex-col gap-6 ${variant === "form" ? "max-w-[880px]" : variant === "accounts" ? "max-w-[1120px]" : ""}`}
         >
@@ -35,7 +37,7 @@ export function YoutubePageContent({
   }
   return (
     <div
-      className={`mx-auto flex w-full flex-col p-4 sm:p-6 ${variant === "form" ? "max-w-[920px] gap-6" : "max-w-[1440px] gap-5"}`}
+      className={cn(managementContentClass, variant === "form" && "max-w-[920px]")}
     >
       {children}
     </div>

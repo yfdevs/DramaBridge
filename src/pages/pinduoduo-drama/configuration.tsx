@@ -34,7 +34,7 @@ const sections: ConfigSectionDefinition<PinduoduoDramaConfig>[] = [
     fields: [{
       key: "sourceTableUrl",
       label: "飞书表格链接",
-      description: "按剧名查找全集链接，表格只需可读权限。",
+      description: "按剧名查找全集链接，表格只需可读权限",
     }],
   },
   {
@@ -113,7 +113,6 @@ export function PinduoduoDramaConfigurationPage() {
     hasChanges,
     loading,
     persistConfig,
-    restartRequired,
     updateConfig,
   } = usePlatformConfig<PinduoduoDramaConfig, PinduoduoDramaConfigResult>({
     emptyConfig,
@@ -140,7 +139,6 @@ export function PinduoduoDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={hasChanges}
       loading={loading}
-      restartRequired={restartRequired}
       title="拼多多配置"
       onDiscard={discardChanges}
       onSave={persistConfig}

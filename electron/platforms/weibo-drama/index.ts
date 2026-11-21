@@ -4,7 +4,6 @@ import { app } from "electron";
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
-import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import cron, { type ScheduledTask } from "node-cron";
 import { lstat, readdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -663,11 +662,6 @@ export function registerWeiboDramaPlatformHandlers() {
     controller: runtimeController,
     start: startRuntime,
     status,
-  });
-  registerTaskAnalyticsHandler({
-    platform: "weibo-drama",
-    apiBaseUrl: () => readConfig().apiBaseUrl,
-    apiPrefix: "/dramaAiRpa/weibo",
   });
   registerWeiboRuntimeAssetCleanup();
   scheduleWeiboCopyrightProofCleanup();

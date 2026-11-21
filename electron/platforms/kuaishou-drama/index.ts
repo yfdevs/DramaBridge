@@ -16,7 +16,6 @@ import { registerKuaishouAccountSyncHandlers, stopKuaishouAccountSync } from "./
 import { trpcIpc as ipcMain } from "../../ipc";
 import Store from "electron-store";
 import { createValidatedStore } from "../../core/config-store";
-import { registerTaskAnalyticsHandler } from "../shared/task-analytics";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import {
@@ -671,11 +670,6 @@ export function registerKuaishouDramaPlatformHandlers() {
       const paths = storagePaths(readConfig(), id);
       return { ...paths, accountId: account.accountId, accountName: account.accountName };
     },
-  });
-  registerTaskAnalyticsHandler({
-    platform: "kuaishou-drama",
-    apiBaseUrl: () => readConfig().apiBaseUrl,
-    apiPrefix: "/dramaAiRpa/kuaishou",
   });
   registerKuaishouRuntimeAssetCleanup();
   ipcMain.handle("kuaishou-drama:config:get", () => ({

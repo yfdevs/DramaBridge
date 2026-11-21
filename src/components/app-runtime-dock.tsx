@@ -1,5 +1,5 @@
 import { OverflowText } from "@/components/ui/overflow-text";
-import { Chrome, CircleDashed, Cog, Globe, Info } from "@mynaui/icons-react";
+import { BrowserIcon as Chrome, CircleDashedIcon as CircleDashed, SettingsIcon as Cog, GlobeIcon as Globe, InfoIcon as Info } from "@/components/ui/solar-icons";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 

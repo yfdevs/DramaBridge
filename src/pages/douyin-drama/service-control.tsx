@@ -29,7 +29,7 @@ export function DouyinDramaServiceControlPage() {
 
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="douyin-drama"
+
       startDisabled={selection.startDisabled}
       beforeBrowserInstances={<AccountSelection controls={douyinDramaService.accountControl} runtimes={serviceState.status.accounts} selection={selection} locked={serviceState.loading || serviceState.status.running} />}
       loading={serviceState.loading}

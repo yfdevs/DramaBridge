@@ -32,17 +32,16 @@ export function AccountActions({ id, name, launched, paused, controls, disabled 
   };
   const canStop = launched && Boolean(controls.stop);
   const label = canStop ? "停止" : launched ? (paused ? "继续领任务" : "暂停领任务") : "启动";
-  return <div className="grid w-42 shrink-0 grid-cols-[4rem_6rem] items-center gap-2" role="group" aria-label={`${name}的操作`}>
+  return <div className="flex min-w-0 flex-wrap items-center gap-2 @min-[620px]:w-42" role="group" aria-label={`${name}的操作`}>
     <Button size="sm" variant={canStop ? "secondary" : "outline"}
-      className="w-full text-xs"
+      className="min-w-16 text-xs"
       aria-busy={pending !== null}
       disabled={pending !== null || (!launched && disabled)}
       title={canStop ? "停止此账号浏览器，其他账号继续运行" : launched ? "暂停只停止领取新任务，当前任务继续完成" : "打开此账号浏览器，登录后自动开始任务"}
       onClick={() => void run(canStop ? "stop" : launched ? "pause" : "start")}>
-      {launched && <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${paused ? "bg-amber-500" : "bg-[var(--instance-ready)]"}`} />}
       {pending === "start" ? "启动中…" : pending === "stop" ? "停止中…" : pending === "pause" ? "处理中…" : label}
     </Button>
-    {canStop && <Button size="sm" variant="ghost" className="w-full text-xs"
+    {canStop && <Button size="sm" variant="ghost" className="text-xs"
       disabled={pending !== null} onClick={() => void run("pause")}>
       {pending === "pause" ? "处理中…" : paused ? "继续领任务" : "暂停领任务"}
     </Button>}

@@ -1,13 +1,13 @@
 import { OverflowText } from "@/components/ui/overflow-text";
 import {
-  CheckCircle,
-  DangerTriangle,
-  Download,
-  Power,
-  Refresh,
-  SpinnerOne,
-  StopCircle,
-} from "@mynaui/icons-react";
+  CheckCircleIcon as CheckCircle,
+  DangerTriangleIcon as DangerTriangle,
+  DownloadIcon as Download,
+  PowerIcon as Power,
+  RefreshIcon as Refresh,
+  LoaderIcon as SpinnerOne,
+  StopCircleIcon as StopCircle,
+} from "@/components/ui/solar-icons";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { clickUpdateVersion, subscribeUpdateSourceAccess, updateSourcesVisible } from "@/lib/update-source-access";
 import { toast } from "@/components/ui/notifications";

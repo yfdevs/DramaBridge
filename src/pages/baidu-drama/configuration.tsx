@@ -109,7 +109,6 @@ export function BaiduDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={configState.hasChanges}
       loading={configState.loading}
-      restartRequired={configState.restartRequired}
       title="百度配置"
       onDiscard={configState.discardChanges}
       onSave={configState.persistConfig}

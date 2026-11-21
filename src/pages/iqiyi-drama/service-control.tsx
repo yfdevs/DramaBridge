@@ -36,7 +36,7 @@ export function IqiyiDramaServiceControlPage() {
 
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="iqiyi-drama"
+
       startDisabled={selection.startDisabled}
       beforeBrowserInstances={<AccountSelection controls={iqiyiDramaService.accountControl} runtimes={control.status.accounts} selection={selection} locked={control.loading || control.status.running} />}
       loading={control.loading}

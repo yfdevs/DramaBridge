@@ -9,17 +9,33 @@
 @custom-variant win (&:is(.platform-win *));
 @custom-variant linux (&:is(.platform-linux *));
 
-.service-workspace {
+@media (prefers-reduced-motion: no-preference) {
+  [data-skeleton-transition] {
+    opacity: 1;
+    transition: opacity 220ms ease-out;
+  }
+
+  [data-skeleton-transition]:has([data-slot="skeleton"]) {
+    opacity: 0.6;
+    transition: none;
+  }
+}
+
+.instance-status {
   --instance-ready: #218358;
   --instance-ready-bg: #e6f6eb;
   --instance-waiting: #ad5700;
   --instance-waiting-bg: #fff1d6;
+  --instance-paused: #6d28d9;
+  --instance-paused-bg: #ede9fe;
 }
-.dark .service-workspace {
+.dark .instance-status {
   --instance-ready: #3dd68c;
   --instance-ready-bg: #132d21;
   --instance-waiting: #ffca16;
   --instance-waiting-bg: #302008;
+  --instance-paused: #c4b5fd;
+  --instance-paused-bg: #2e1b52;
 }
 .instance-status[data-state="ready"] {
   color: var(--instance-ready);
@@ -28,6 +44,15 @@
 .instance-status[data-state="waiting"] {
   color: var(--instance-waiting);
   background: var(--instance-waiting-bg);
+}
+.instance-status[data-state="paused"] {
+  color: var(--instance-paused);
+  background: var(--instance-paused-bg);
+}
+.instance-status[data-state="disabled"] {
+  color: var(--muted-foreground);
+  background: transparent;
+  border-color: var(--border);
 }
 
 .platform-log-viewer {
@@ -47,6 +72,7 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
+  --font-workspace: "HarmonyOS Sans SC", sans-serif;
   --font-sans:
     "Geist Variable", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif,
     system-ui, sans-serif;
@@ -119,6 +145,7 @@
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
+  --menu-selected: color-mix(in srgb, var(--sidebar) 93.5%, black);
   --sidebar-foreground: oklch(0 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -153,6 +180,7 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
+  --menu-selected: color-mix(in srgb, var(--sidebar) 90%, white);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -404,25 +432,52 @@ html .tst-viewport .tst[data-type="loading"] .tst-svg path:first-child {
 html .tst-title, html .tst-desc { overflow-wrap: anywhere; }
 html .tst-desc { max-height: min(30vh, 200px); overflow-y: auto; }
 
+/* Give the full row and its fixed cells the same opaque surface. */
+[data-slot="table"] {
+  --table-row-hover: color-mix(in oklab, var(--muted) 36%, var(--background));
+  --table-row-active: color-mix(in oklab, var(--muted) 65%, var(--background));
+  background-color: var(--background);
+}
+
+[data-slot="table"] > thead {
+  background-color: color-mix(in oklab, var(--muted) 38%, var(--background));
+}
+
+[data-slot="table"] > thead > tr {
+  background-color: inherit;
+}
+
+[data-slot="table"] > tbody > tr {
+  background-color: var(--background);
+}
+
+[data-slot="table"] > tbody > tr:not([aria-hidden]):not(:has(> :only-child[colspan])):hover,
+[data-slot="table"] > tbody > tr:has([aria-expanded="true"]) {
+  background-color: var(--table-row-hover);
+}
+
+[data-slot="table"] > tbody > tr:is([data-state="selected"], [data-active="true"]) {
+  background-color: var(--table-row-active);
+}
+
 /* Keep actions reachable while wide task tables scroll horizontally. */
 .table-sticky-actions > thead > tr > th:last-child,
 .table-sticky-actions > tbody > tr > td:last-child:not([colspan]) {
   position: sticky;
-  right: 0;
-  text-align: left;
+  inset-inline-end: 0;
   z-index: 1;
-  background-color: var(--background);
-  box-shadow: -1px 0 0 var(--border);
-}
-.table-sticky-actions > thead > tr > th:last-child {
-  z-index: 2;
-  background-color: color-mix(in oklab, var(--muted) 70%, var(--background));
-}
-.table-sticky-actions > tbody > tr:hover > td:last-child:not([colspan]),
-.table-sticky-actions > tbody > tr[data-state="selected"] > td:last-child:not([colspan]) {
-  background-color: color-mix(in oklab, var(--muted) 50%, var(--background));
+  background-color: inherit;
 }
 
+.table-sticky-actions > thead > tr > th:last-child {
+  z-index: 2;
+}
+
+[data-slot="table-container"] td[colspan] > [data-slot="empty"] {
+  position: sticky;
+  inset-inline-start: 0.75rem;
+  max-inline-size: calc(100cqi - 1.5rem);
+}
 
 /* Radix Gray steps 1, 3, 6–8, 11–12; Red 11 for errors. Scoped to compression. */
 .video-compression-theme {

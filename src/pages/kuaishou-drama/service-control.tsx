@@ -55,7 +55,7 @@ export function KuaishouDramaServiceControlPage() {
   }, [loadAccounts]);
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="kuaishou-drama"
+
       loading={state.loading}
       pendingAction={state.pendingAction}
       running={state.status.running}

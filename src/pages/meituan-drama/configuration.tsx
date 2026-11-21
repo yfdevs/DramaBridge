@@ -85,7 +85,6 @@ export function MeituanCreationConfigurationPage() {
     hasChanges,
     loading,
     persistConfig,
-    restartRequired,
     updateConfig,
   } = usePlatformConfig({
     emptyConfig,
@@ -97,7 +96,6 @@ export function MeituanCreationConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={hasChanges}
       loading={loading}
-      restartRequired={restartRequired}
       title="美团配置"
       onDiscard={discardChanges}
       onSave={persistConfig}

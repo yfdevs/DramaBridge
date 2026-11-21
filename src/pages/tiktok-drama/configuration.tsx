@@ -58,7 +58,6 @@ export function TiktokDramaCenterConfigurationPage() {
     hasChanges,
     loading,
     persistConfig,
-    restartRequired,
     updateConfig,
   } = usePlatformConfig({
     emptyConfig,
@@ -70,7 +69,6 @@ export function TiktokDramaCenterConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={hasChanges}
       loading={loading}
-      restartRequired={restartRequired}
       title="TikTok 配置"
       onDiscard={discardChanges}
       onSave={persistConfig}

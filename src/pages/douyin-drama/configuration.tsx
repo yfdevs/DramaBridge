@@ -150,7 +150,6 @@ export function DouyinDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={configState.hasChanges}
       loading={configState.loading}
-      restartRequired={configState.restartRequired}
       title="抖音配置"
       onDiscard={configState.discardChanges}
       onSave={configState.persistConfig}

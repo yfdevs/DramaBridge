@@ -1,0 +1,6 @@
+Solar Icons by Damir Tuarshe (480 Design)
+Source: https://github.com/480-Design/Solar-Icon-Set
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+
+DramaBridge uses the Solar Linear icons via the Iconify distribution.

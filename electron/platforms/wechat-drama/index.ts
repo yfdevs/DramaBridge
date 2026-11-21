@@ -9,7 +9,6 @@ import { app } from 'electron'
 import { emitIpcEvent, trpcIpc as ipcMain } from '../../ipc'
 import Store from 'electron-store'
 import { createValidatedStore } from '../../core/config-store'
-import { registerTaskAnalyticsHandler } from '../shared/task-analytics'
 import cron, { type ScheduledTask } from 'node-cron'
 import { mkdirSync, readdirSync, statSync } from 'node:fs'
 import { lstat, readdir, rm } from 'node:fs/promises'
@@ -602,14 +601,6 @@ export function registerWechatVideoPlatformHandlers() {
   registerWechatRecreationHandlers(readConfig);
   ipcMain.handle("wechat-drama:tasks:cleanup", () => staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl }).sweep());
   staleTaskMonitor("wechat-drama", { apiBaseUrl: () => readConfig().apiBaseUrl });
-  registerTaskAnalyticsHandler({
-    platform: 'wechat-drama',
-    apiBaseUrl: () => readConfig().apiBaseUrl,
-    apiPrefix: '/dramaAiRpa',
-    accountConfigPath: '/dramaAiRpa/videoAccountConfig/page',
-    accountIdField: 'videoAccountId',
-    statusField: 'rpaStatus',
-  })
   registerWechatRuntimeAssetCleanup()
   scheduleWechatCopyrightProofCleanup()
 

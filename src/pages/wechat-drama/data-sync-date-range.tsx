@@ -2,7 +2,7 @@ import { useState } from "react";
 import { format, isValid, parseISO } from "date-fns";
 import { zhCN } from "react-day-picker/locale";
 import type { DateRange } from "react-day-picker";
-import { CalendarDays } from "lucide-react";
+import { CalendarIcon as CalendarDays } from "@/components/ui/solar-icons";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

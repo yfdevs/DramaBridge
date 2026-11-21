@@ -1,3 +1,5 @@
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { ManagementTableSkeleton } from "@/pages/shared/management-skeleton";
 import { useYoutubeRuntime } from "./use-youtube-runtime";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -21,7 +23,7 @@ import {
   DrawerDescription,
   DrawerFooter,
 } from "@/components/ui/drawer";
-import { YoutubeSearchField } from "./filter-controls";
+import { FilterSearchField, FilterToolbar } from "@/components/filter-controls";
 import { ListFilterMenu } from "@/components/list-filter-menu";
 import { YoutubeListPagination } from "./list-controls";
 import { useYoutubePagination } from "./use-youtube-pagination";
@@ -152,7 +154,7 @@ export function YoutubeAccountsPage() {
           >
             <h3 className="text-sm font-semibold">完成视频上传授权</h3>
             <p className="text-xs leading-5 text-muted-foreground">
-              若跳转页面无法打开，请粘贴地址栏的完整地址。
+              若跳转页面无法打开，请粘贴地址栏的完整地址
             </p>
             {authorizationUrl && (
               <a
@@ -191,8 +193,8 @@ export function YoutubeAccountsPage() {
           </section>
         )}
         <section aria-label="YouTube 账号列表" aria-busy={model.loading} className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2 pb-4">
-            <YoutubeSearchField
+          <FilterToolbar label="账号筛选" className="pb-3">
+            <FilterSearchField
               label="搜索账号"
               placeholder="搜索账号名称"
               value={keyword}
@@ -215,8 +217,8 @@ export function YoutubeAccountsPage() {
                   },
                   options: [
                     { value: "all", label: "全部状态" },
-                    { value: "authorized", label: "已授权视频上传" },
-                    { value: "unauthorized", label: "未授权视频上传" },
+                    { value: "authorized", label: "已授权" },
+                    { value: "unauthorized", label: "未授权" },
                   ],
                 },
               ]}
@@ -236,8 +238,8 @@ export function YoutubeAccountsPage() {
             >
               添加账号
             </Button>
-          </div>
-          <Table aria-label="YouTube 账号列表" className="min-w-[900px]">
+          </FilterToolbar>
+          <Table aria-label="YouTube 账号列表" aria-busy={model.loading} className="min-w-[720px] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[28%]">账号名称</TableHead>
@@ -246,23 +248,24 @@ export function YoutubeAccountsPage() {
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {(model.loading || !filtered.length) && (
+            <TableBody data-skeleton-transition>
+              {model.loading && !list.items.length ? (
+                <ManagementTableSkeleton
+                  columns={["w-3/5 max-w-32", "h-4 w-16 rounded-full", "h-4 w-16 rounded-full", "ml-auto h-5 w-20"]}
+                  rowClassName="h-12"
+                />
+              ) : !filtered.length && (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
-                    {model.loading
-                      ? "正在读取…"
-                      : keyword || authorization !== "all"
-                        ? "无匹配账号"
-                        : "暂无账号"}
+                  <TableCell colSpan={4} className="p-3">
+                    <EmptyStateCard title={keyword || authorization !== "all" ? "无匹配账号" : "暂无账号"} />
                   </TableCell>
                 </TableRow>
               )}
               {list.items.map((account) => (
                 <TableRow key={account.id}>
-                  <TableCell className="py-3">
+                  <TableCell>
                     {editing === account.id ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Input
                           aria-label="修改账号名称"
                           autoFocus
@@ -298,12 +301,12 @@ export function YoutubeAccountsPage() {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="py-3">
-                    <div className="flex items-center gap-2">
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary" className="shrink-0 text-xs">
                         {account.authorized ? "已授权" : "未授权"}
                       </Badge>
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <Button
                           size="sm"
                           variant="outline"
@@ -345,8 +348,8 @@ export function YoutubeAccountsPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="py-3">
-                    <div className="flex items-center gap-2">
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary" className="shrink-0 text-xs">
                         {account.browser?.needsLogin
                           ? "已失效"
@@ -354,7 +357,7 @@ export function YoutubeAccountsPage() {
                             ? "已保存"
                             : "未授权"}
                       </Badge>
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <Button
                           size="sm"
                           variant="outline"
@@ -374,7 +377,7 @@ export function YoutubeAccountsPage() {
                           disabled={disabled || account.browser?.busy || !account.browser?.saved}
                           title={
                             !account.browser?.saved
-                              ? "请先完成浏览器登录并确认保存"
+                              ? "请先完成浏览器登录并保存"
                               : "验证登录状态及绑定频道"
                           }
                           onClick={() => {
@@ -393,8 +396,8 @@ export function YoutubeAccountsPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="py-3 [&>div]:justify-end">
-                    <div className="flex shrink-0 items-center gap-1">
+                  <TableCell className="[&>div]:justify-end">
+                    <div className="flex flex-wrap items-center gap-1">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -539,13 +542,13 @@ export function YoutubeAccountsPage() {
             <DrawerTitle>浏览器登录</DrawerTitle>
             <DrawerDescription>
               账号：{loginAccount?.name}。请在运行 DramaBridge
-              的电脑上完成登录，登录状态仅保存在该电脑。
+              的电脑上完成登录，登录状态仅保存在该电脑
             </DrawerDescription>
           </DrawerHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-5">
             <p className="text-sm leading-6 text-muted-foreground">
               电脑需安装 Google Chrome。打开浏览器后，在 Google 页面手动登录，切换到目标频道并进入
-              YouTube Studio，再点击“确认保存”。同一 Google 账号下的其他频道可以复用已有登录。
+              YouTube Studio，再点击“保存”。同一 Google 账号下的其他频道可以复用已有登录
             </p>
             {!accounts.find((account) => account.id === loginAccount?.id)?.browser?.saved && (
               <div className="space-y-2">
@@ -577,7 +580,7 @@ export function YoutubeAccountsPage() {
             )}
             {loginOpened && (
               <p role="status" className="text-sm">
-                浏览器已打开。完成登录并进入目标频道的 Studio 后，确认保存。
+                浏览器已打开。完成登录并进入目标频道的 Studio 后，点击“保存”
               </p>
             )}
             {loginError && (
@@ -587,7 +590,7 @@ export function YoutubeAccountsPage() {
             )}
             <p className="text-xs leading-5 text-muted-foreground">
               视频上传仍需单独完成 Google
-              官方上传授权。登录失效或遇到安全验证时，请在浏览器内手动处理。
+              官方上传授权。登录失效或遇到安全验证时，请在浏览器内手动处理
             </p>
             <Button
               variant="ghost"
@@ -614,7 +617,7 @@ export function YoutubeAccountsPage() {
               disabled={disabled || loginBusy || !loginOpened}
               onClick={() => browserAction("save")}
             >
-              确认保存
+              保存
             </Button>
           </DrawerFooter>
         </DrawerContent>

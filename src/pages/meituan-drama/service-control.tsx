@@ -40,7 +40,7 @@ export function MeituanCreationServiceControlPage() {
 
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="meituan-drama"
+
       startDisabled={selection.startDisabled}
       beforeBrowserInstances={<AccountSelection controls={meituanCreationService.accountControl} runtimes={status.accounts} selection={selection} locked={loading || status.running} />}
       loading={loading}

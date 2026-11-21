@@ -1,7 +1,9 @@
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { ManagementStatusSkeleton, ManagementTableSkeleton } from "@/pages/shared/management-skeleton";
 import { FailureTooltip } from "@/components/ui/failure-tooltip";
 import { OverflowText } from "@/components/ui/overflow-text";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { CheckCircle, DangerTriangle } from "@mynaui/icons-react";
+import { CheckCircleIcon as CheckCircle, DangerTriangleIcon as DangerTriangle } from "@/components/ui/solar-icons";
 import { toast } from "@/components/ui/notifications";
 
 import { WorkspaceActions, useWorkspacePageActive } from "@/components/workspace-toolbar";
@@ -177,19 +179,11 @@ export function WechatMiniProgramBaiduUploadWindow() {
     }
   };
 
-  if (loading && !workspace) {
-    return (
-      <main className="grid h-full place-items-center bg-background">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner /> 正在读取直传任务
-        </div>
-      </main>
-    );
-  }
+  const initialLoading = loading && !workspace;
 
   return (
-    <main className="flex h-full min-h-0 flex-col bg-background text-foreground">
-          <WorkspaceActions label="百度直传操作">
+    <main className="flex h-full min-h-0 flex-col bg-background font-workspace text-sm text-foreground [&_[data-slot=button]]:text-xs">
+          {!initialLoading && <WorkspaceActions label="百度直传操作">
             <Button type="button" size="sm" className="h-7 px-3 text-xs" aria-label="新建任务" title="新建任务" onClick={() => setDrawerOpen(true)}>新建任务</Button>
             <Button
               type="button"
@@ -259,45 +253,49 @@ export function WechatMiniProgramBaiduUploadWindow() {
                 终止当前任务
               </Button>
             ) : null}
-          </WorkspaceActions>
-      <header className="shrink-0 border-b px-5 py-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className={`size-2 rounded-full ${
-                workspace?.browser.loginState === "logged-in"
-                  ? "bg-emerald-500"
-                  : workspace?.browser.loginState === "login-required"
-                    ? "bg-amber-500"
-                    : "bg-muted-foreground/40"
-              }`}
-            />
-            {workspace ? browserLabel(workspace) : "正在检查浏览器"}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className={`size-2 rounded-full ${workspace?.queue.running ? "bg-sky-500" : "bg-muted-foreground/40"}`}
-            />
-            {workspace?.queue.running ? "队列运行中" : "队列已暂停"}
-          </span>
-          <span className="text-muted-foreground">待处理 {queuedTaskCount} 个</span>
-          {workspace?.queue.error ? (
-            <OverflowText as="span" className="max-w-64 truncate text-destructive" title={workspace.queue.error}>
-              {workspace.queue.error}
-            </OverflowText>
-          ) : null}
+          </WorkspaceActions>}
+      <header className="shrink-0 border-b p-3" data-skeleton-transition>
+        {initialLoading ? (
+          <ManagementStatusSkeleton label="正在读取直传任务" />
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className={`size-2 rounded-full ${
+                  workspace?.browser.loginState === "logged-in"
+                    ? "bg-emerald-500"
+                    : workspace?.browser.loginState === "login-required"
+                      ? "bg-amber-500"
+                      : "bg-muted-foreground/40"
+                }`}
+              />
+              {workspace ? browserLabel(workspace) : "正在检查浏览器"}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className={`size-2 rounded-full ${workspace?.queue.running ? "bg-sky-500" : "bg-muted-foreground/40"}`}
+              />
+              {workspace?.queue.running ? "队列运行中" : "队列已暂停"}
+            </span>
+            <span className="text-muted-foreground">待处理 {queuedTaskCount} 个</span>
+            {workspace?.queue.error ? (
+              <OverflowText as="span" className="max-w-64 truncate text-destructive" title={workspace.queue.error}>
+                {workspace.queue.error}
+              </OverflowText>
+            ) : null}
 
-        </div>
+          </div>
+        )}
       </header>
 
-      <section className="min-h-0 flex-1 overflow-auto px-5 py-4">
-        {workspace && workspace.tasks.length > 0 ? (
-          <div className="overflow-hidden rounded-lg border">
-            <Table stickyActions className="min-w-[820px] table-fixed">
+      <section className="min-h-0 flex-1 overflow-auto p-3" data-skeleton-transition>
+        {initialLoading || Boolean(workspace?.tasks.length) ? (
+          <div className="overflow-hidden">
+            <Table stickyActions aria-busy={initialLoading} className="min-w-[820px] table-fixed">
               <TableHeader>
-                <TableRow className="hover:bg-background">
+                <TableRow>
                   <TableHead className="w-12 text-center">序号</TableHead>
                   <TableHead>剧目</TableHead>
                   <TableHead className="w-16">集数</TableHead>
@@ -308,10 +306,16 @@ export function WechatMiniProgramBaiduUploadWindow() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {workspace.tasks.map((task) => {
+                {initialLoading && (
+                  <ManagementTableSkeleton
+                    columns={["mx-auto w-5", "w-3/4 max-w-36", "w-9", "h-4 w-14 rounded-full", "h-1.5 w-4/5 rounded-full", "w-16", "h-5 w-12"]}
+                    rowClassName="h-9"
+                  />
+                )}
+                {workspace?.tasks.map((task) => {
                   const active = workspace.queue.activeTaskId === task.id;
                   return (
-                    <TableRow key={task.id} className={active ? "bg-muted/45" : undefined}>
+                    <TableRow key={task.id} data-active={active || undefined}>
                       <TableCell className="text-center text-xs tabular-nums text-muted-foreground">
                         {task.queueOrder}
                       </TableCell>
@@ -383,17 +387,16 @@ export function WechatMiniProgramBaiduUploadWindow() {
             </Table>
           </div>
         ) : (
-          <div className="grid min-h-64 place-items-center rounded-lg border border-dashed px-6 text-center">
-            <div className="max-w-sm">
-              <h2 className="text-sm font-medium">还没有直传任务</h2>
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                填写剧名和百度分享链接即可添加
-              </p>
-              <Button className="mt-4" size="sm" type="button" onClick={() => setDrawerOpen(true)}>
+          <EmptyStateCard
+            className="min-h-64"
+            title="还没有直传任务"
+            description="填写剧名和百度分享链接即可添加"
+            action={
+              <Button size="sm" type="button" onClick={() => setDrawerOpen(true)}>
                 新建第一个任务
               </Button>
-            </div>
-          </div>
+            }
+          />
         )}
       </section>
 

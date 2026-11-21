@@ -40,7 +40,7 @@ export function QqDramaServiceControlPage() {
 
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="qq-drama"
+
       startDisabled={selection.startDisabled}
       beforeBrowserInstances={<AccountSelection controls={qqDramaService.accountControl} runtimes={status.accounts} selection={selection} locked={loading || status.running} />}
       loading={loading}

@@ -29,7 +29,7 @@ export function BaiduDramaServiceControlPage() {
 
   return (
     <ServiceControlButtonPage
-      analyticsPlatform="baidu-drama"
+
       startDisabled={selection.startDisabled}
       beforeBrowserInstances={<>
         <AccountSelection controls={baiduDramaService.accountControl} runtimes={serviceState.status.accounts} selection={selection} locked={serviceState.loading || serviceState.status.running} />

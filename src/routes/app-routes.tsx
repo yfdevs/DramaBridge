@@ -6,7 +6,6 @@ import { YoutubeCreateTaskPage } from "@/pages/youtube-drama/create-task";
 import { WechatRecreationTransferPage } from "@/pages/wechat-drama/netdisk-transfer";
 import { TiktokNetdiskTransferPage } from "@/pages/tiktok-drama/netdisk-transfer";
 import { AppUpdateControl } from "@/components/app-update-control";
-import { TaskStatisticsPage } from "@/pages/shared/task-statistics-page";
 import { PlatformLogPage } from "@/pages/shared/platform-log-page";
 import { WorkspacePageActivity } from "@/components/workspace-toolbar";
 import { useEffect, useState, type ComponentType } from "react";
@@ -108,28 +107,12 @@ const appRouteComponents: Record<AppRoute, ComponentType> = {
   "youtube-drama/create": YoutubeCreateTaskPage,
   "youtube-drama/accounts": YoutubeAccountsPage,
   "youtube-drama/config": YoutubeConfigurationPage,
-  "youtube-drama/statistics": YoutubeWorkspacePage,
   "tiktok-drama/service": TiktokDramaCenterServiceControlPage,
   "tiktok-drama/netdisk": TiktokNetdiskTransferPage,
   "tiktok-drama/config": TiktokDramaCenterConfigurationPage,
   "pinduoduo-drama/service": PinduoduoDramaServiceControlPage,
   "pinduoduo-drama/records": PinduoduoDramaUploadRecordsPage,
   "pinduoduo-drama/config": PinduoduoDramaConfigurationPage,
-  "wechat-drama/statistics": () => <TaskStatisticsPage platform="wechat-drama" />,
-  "wechat-miniprogram-drama/statistics": () => (
-    <TaskStatisticsPage platform="wechat-miniprogram-drama" />
-  ),
-  "meituan-drama/statistics": () => <TaskStatisticsPage platform="meituan-drama" />,
-  "taobao-drama/statistics": () => <TaskStatisticsPage platform="taobao-drama" />,
-  "kuaishou-drama/statistics": () => <TaskStatisticsPage platform="kuaishou-drama" />,
-  "qq-drama/statistics": () => <TaskStatisticsPage platform="qq-drama" />,
-  "weibo-drama/statistics": () => <TaskStatisticsPage platform="weibo-drama" />,
-  "tencent-huolong-drama/statistics": () => <TaskStatisticsPage platform="tencent-huolong-drama" />,
-  "iqiyi-drama/statistics": () => <TaskStatisticsPage platform="iqiyi-drama" />,
-  "baidu-drama/statistics": () => <TaskStatisticsPage platform="baidu-drama" />,
-  "douyin-drama/statistics": () => <TaskStatisticsPage platform="douyin-drama" />,
-  "tiktok-drama/statistics": () => <TaskStatisticsPage platform="tiktok-drama" />,
-  "pinduoduo-drama/statistics": () => <TaskStatisticsPage platform="pinduoduo-drama" />,
   ...platformLogRouteComponents,
 };
 
@@ -166,7 +149,7 @@ export function AppRoutes() {
         const active = activeRoute === typedRoute;
 
         return (
-          <div key={route} className={active ? "contents" : "hidden"}>
+          <div key={route} className={active ? "app-route-enter contents" : "hidden"}>
             <WorkspacePageActivity active={active}>
               <Page />
             </WorkspacePageActivity>

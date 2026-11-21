@@ -277,7 +277,6 @@ export function WechatMiniProgramConfigurationPage() {
       title="微信小程序配置"
       hasChanges={state.hasChanges}
       loading={state.loading}
-      restartRequired={state.restartRequired}
       onDiscard={state.discardChanges}
       onSave={state.persistConfig}
     >

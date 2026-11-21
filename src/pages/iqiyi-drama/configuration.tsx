@@ -102,7 +102,6 @@ export function IqiyiDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={state.hasChanges}
       loading={state.loading}
-      restartRequired={state.restartRequired}
       title="爱奇艺配置"
       onDiscard={state.discardChanges}
       onSave={state.persistConfig}

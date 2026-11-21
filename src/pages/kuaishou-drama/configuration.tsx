@@ -116,7 +116,6 @@ export function KuaishouDramaConfigurationPage() {
     hasChanges,
     loading,
     persistConfig,
-    restartRequired,
     updateConfig,
   } = usePlatformConfig({
     emptyConfig,
@@ -128,7 +127,6 @@ export function KuaishouDramaConfigurationPage() {
     <ConfigurationPageFrame
       hasChanges={hasChanges}
       loading={loading}
-      restartRequired={restartRequired}
       title="快手配置"
       onDiscard={discardChanges}
       onSave={persistConfig}

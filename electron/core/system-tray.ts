@@ -21,6 +21,7 @@ export function initializeSystemTray(iconPath: string) {
   const icon = process.platform === "darwin"
     ? nativeImage.createFromPath(path.join(path.dirname(iconPath), "mac-tray.png"))
     : nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  if (process.platform === "darwin") icon.setTemplateImage(true);
   tray = new Tray(icon);
   tray.setToolTip("DramaBridge · 右键菜单可退出");
   tray.setContextMenu(Menu.buildFromTemplate([
